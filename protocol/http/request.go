@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -14,7 +15,10 @@ import (
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/scenarigo/protocol/http/marshaler"
 	"github.com/zoncoen/scenarigo/protocol/http/unmarshaler"
+	"github.com/zoncoen/scenarigo/version"
 )
+
+var defaultUserAgent = fmt.Sprintf("scenarigo/%s", version.String())
 
 // Request represents a request.
 type Request struct {
@@ -119,6 +123,9 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 				header.Add(k, v)
 			}
 		}
+	}
+	if header.Get("User-Agent") == "" {
+		header.Set("User-Agent", defaultUserAgent)
 	}
 
 	var reader io.Reader

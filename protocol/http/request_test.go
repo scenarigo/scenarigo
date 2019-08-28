@@ -242,3 +242,57 @@ func TestRequest_Invoke(t *testing.T) {
 		}
 	})
 }
+
+func TestRequest_buildRequest(t *testing.T) {
+	tests := map[string]struct {
+		req        *Request
+		expectReq  func(*testing.T) *http.Request
+		expectBody interface{}
+	}{
+		"empty request": {
+			req: &Request{},
+			expectReq: func(t *testing.T) *http.Request {
+				req, err := http.NewRequest(http.MethodGet, "", nil)
+				if err != nil {
+					t.Fatalf("unexpected error: %s", err)
+				}
+				req.Header.Set("User-Agent", defaultUserAgent)
+				return req
+			},
+		},
+		"with User-Agent": {
+			req: &Request{
+				Header: map[string]string{"User-Agent": "custom/0.0.1"},
+			},
+			expectReq: func(t *testing.T) *http.Request {
+				req, err := http.NewRequest(http.MethodGet, "", nil)
+				if err != nil {
+					t.Fatalf("unexpected error: %s", err)
+				}
+				req.Header.Set("User-Agent", "custom/0.0.1")
+				return req
+			},
+		},
+	}
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			ctx := context.FromT(t)
+			req, body, err := test.req.buildRequest(ctx)
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			if diff := cmp.Diff(test.expectReq(t), req, cmp.FilterPath(func(path cmp.Path) bool {
+				if path.String() == "ctx" {
+					return true
+				}
+				return false
+			}, cmp.Ignore())); diff != "" {
+				t.Errorf("request differs (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(test.expectBody, body); diff != "" {
+				t.Errorf("body differs (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
