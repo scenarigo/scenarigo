@@ -9,15 +9,17 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/fatih/structtag v1.0.0 // indirect
+	github.com/go-language-server/jsonrpc2 v0.3.0
+	github.com/go-language-server/protocol v0.6.0
 	github.com/goccy/go-yaml v1.2.0
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
-	github.com/google/go-cmp v0.3.0
+	github.com/google/go-cmp v0.3.2-0.20190829225427-b1c9c4891a65
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/kubernetes-sigs/yaml v1.1.0
 	github.com/lestrrat-go/backoff v1.0.0
 	github.com/mattn/go-isatty v0.0.12 // indirect
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.8.2-0.20190227000051-27936f6d90f9
 	github.com/spf13/cobra v0.0.5
 	github.com/zoncoen/goprotoyamltag v0.0.0-20190614090358-19b914992920
 	github.com/zoncoen/gotypenames v0.0.0-20181208050024-287fd4bbbaee
