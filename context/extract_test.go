@@ -35,8 +35,8 @@ func TestContext_ExtractKey(t *testing.T) {
 					"test": p,
 				})
 			},
-			query:  "plugins.test.Name",
-			expect: "simple",
+			query:  "plugins.test.String",
+			expect: "string",
 		},
 		"vars": {
 			ctx: func(ctx *Context) *Context {

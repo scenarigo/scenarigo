@@ -33,8 +33,11 @@ type plug plugin.Plugin
 // ExtractByKey implements query.KeyExtractor interface.
 func (p *plug) ExtractByKey(key string) (interface{}, bool) {
 	if sym, err := ((*plugin.Plugin)(p)).Lookup(key); err == nil {
-		// sym is a pointer to a variable or function.
-		return reflect.ValueOf(sym).Elem().Interface(), true
+		// If sym is a pointer to a variable, return the actual variable for convenience.
+		if v := reflect.ValueOf(sym); v.Kind() == reflect.Ptr {
+			return v.Elem().Interface(), true
+		}
+		return sym, true
 	}
 	return nil, false
 }
