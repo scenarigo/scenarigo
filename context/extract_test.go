@@ -35,8 +35,8 @@ func TestContext_ExtractKey(t *testing.T) {
 					"test": p,
 				})
 			},
-			query:  "plugins.test",
-			expect: (*plug)(p),
+			query:  "plugins.test.Name",
+			expect: "simple",
 		},
 		"vars": {
 			ctx: func(ctx *Context) *Context {
@@ -79,7 +79,7 @@ func TestContext_ExtractKey(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
-			if diff := cmp.Diff(test.expect, got, cmp.AllowUnexported(plug{})); diff != "" {
+			if diff := cmp.Diff(test.expect, got); diff != "" {
 				t.Errorf("differs: (-want +got)\n%s", diff)
 			}
 		})

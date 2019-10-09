@@ -2,6 +2,7 @@ package context
 
 import (
 	"plugin"
+	"reflect"
 )
 
 // Plugins represents plugins.
@@ -32,7 +33,8 @@ type plug plugin.Plugin
 // ExtractByKey implements query.KeyExtractor interface.
 func (p *plug) ExtractByKey(key string) (interface{}, bool) {
 	if sym, err := ((*plugin.Plugin)(p)).Lookup(key); err == nil {
-		return sym, true
+		// sym is a pointer to a variable or function.
+		return reflect.ValueOf(sym).Elem().Interface(), true
 	}
 	return nil, false
 }
