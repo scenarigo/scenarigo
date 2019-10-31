@@ -21,6 +21,7 @@ steps:
     body:
       messageId: "{{request.messageId}}"
       messageBody: "{{request.messageBody}}"
+      nullableString: null
 
 ---
 title: Unauthenticated

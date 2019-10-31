@@ -24,4 +24,10 @@ message EchoResponse {
     string message_id = 1;
     string message_body = 2;
     int64 received_at = 3;
+    StringValue nullable_string = 11;
+}
+
+// ref. google/protobuf/wrappers.proto
+message StringValue {
+    string value = 1;
 }

@@ -15,6 +15,10 @@ func Equal(q *query.Query, expected interface{}) Assertion {
 			return nil
 		}
 
+		if isNil(v) && isNil(expected) {
+			return nil
+		}
+
 		if t := reflect.TypeOf(v); t != reflect.TypeOf(expected) {
 			// handle enumeration strings
 			if s, ok := expected.(string); ok {
@@ -49,4 +53,15 @@ func convert(v interface{}, t reflect.Type) (result interface{}, resErr error) {
 	}()
 	result = reflect.ValueOf(v).Convert(t).Interface()
 	return
+}
+
+func isNil(i interface{}) bool {
+	defer func() {
+		// return false if IsNil panics
+		recover()
+	}()
+	if i == nil {
+		return true
+	}
+	return reflect.ValueOf(i).IsNil()
 }

@@ -10,12 +10,28 @@ import (
 )
 
 func TestEqual(t *testing.T) {
+	s := "string"
 	type myString string
 	tests := map[string]struct {
 		expected interface{}
 		ok       interface{}
 		ng       interface{}
 	}{
+		"nil": {
+			expected: nil,
+			ok:       nil,
+			ng:       &s,
+		},
+		"nil (got typed nil)": {
+			expected: nil,
+			ok:       (*string)(nil),
+			ng:       &s,
+		},
+		"nil (expect typed nil)": {
+			expected: (*string)(nil),
+			ok:       nil,
+			ng:       &s,
+		},
 		"integer": {
 			expected: 1,
 			ok:       1,
@@ -87,6 +103,39 @@ func TestConvert(t *testing.T) {
 			}
 			if !test.ok && err == nil {
 				t.Fatal("expected error but no error")
+			}
+		})
+	}
+}
+
+func TestIsNil(t *testing.T) {
+	s := "string"
+	tests := map[string]struct {
+		v      interface{}
+		expect bool
+	}{
+		"nil": {
+			v:      nil,
+			expect: true,
+		},
+		"nil (string pointer)": {
+			v:      (*string)(nil),
+			expect: true,
+		},
+		"not nil (string pointer)": {
+			v:      &s,
+			expect: false,
+		},
+		"not nullable (reflect.Value.IsNil() panics)": {
+			v:      s,
+			expect: false,
+		},
+	}
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			if got, expect := isNil(test.v), test.expect; got != expect {
+				t.Fatalf("expect %t but got %t", expect, got)
 			}
 		})
 	}
