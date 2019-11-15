@@ -38,3 +38,22 @@ steps:
       - aaa
   expect:
     code: Unauthenticated
+- title: Echo with status
+  protocol: grpc
+  request:
+    client: '{{plugins.grpc.CreateClient(ctx, env.TEST_ADDR)}}'
+    method: Echo
+    metadata:
+      token:
+        - aaa
+  expect:
+    status:
+      code: Unauthenticated
+      message: invalid token
+      details:
+        - google.rpc.LocalizedMessage:
+            locale: ja-JP
+        - google.rpc.LocalizedMessage:
+            locale: en-US
+            message: NG
+        - google.rpc.DebugInfo:

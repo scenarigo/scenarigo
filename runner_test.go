@@ -12,6 +12,8 @@ import (
 	"os"
 	"testing"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/protocol"
@@ -73,7 +75,20 @@ func (s *testGRPCServer) Echo(ctx gocontext.Context, req *test.EchoRequest) (*te
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
 	if _, ok := s.users[ts[0]]; !ok {
-		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
+		sts, err := status.New(codes.Unauthenticated, "invalid token").
+			WithDetails(&errdetails.LocalizedMessage{
+				Locale:  "ja-JP",
+				Message: "だめ",
+			}, &errdetails.LocalizedMessage{
+				Locale:  "en-US",
+				Message: "NG",
+			}, &errdetails.DebugInfo{
+				Detail: "test",
+			})
+		if err != nil {
+			return nil, err
+		}
+		return nil, sts.Err()
 	}
 	return &test.EchoResponse{
 		MessageId:   req.MessageId,

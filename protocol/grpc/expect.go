@@ -1,9 +1,12 @@
 package grpc
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"google.golang.org/grpc/status"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -11,13 +14,20 @@ import (
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/protocol"
 	"github.com/zoncoen/yaml"
-	"google.golang.org/grpc/status"
 )
 
 // Expect represents expected response values.
 type Expect struct {
-	Code string                          `yaml:"code"`
-	Body yaml.KeyOrderPreservedInterface `yaml:"body"`
+	Code   string                          `yaml:"code"`
+	Body   yaml.KeyOrderPreservedInterface `yaml:"body"`
+	Status ExpectStatus                    `yaml:"status"`
+}
+
+// ExpectStatus represents expected gRPC status
+type ExpectStatus struct {
+	Code    string          `yaml:"code"`
+	Message string          `yaml:"message"`
+	Details []yaml.MapSlice `yaml:"details"`
 }
 
 // Build implements protocol.AssertionBuilder interface.
@@ -33,7 +43,13 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if err != nil {
 			return err
 		}
-		if err := e.assertCode(callErr); err != nil {
+		if err := e.assertStatusCode(callErr); err != nil {
+			return err
+		}
+		if err := e.assertStatusMessage(callErr); err != nil {
+			return err
+		}
+		if err := e.assertStatusDetails(callErr); err != nil {
 			return err
 		}
 		if err := assertion.Assert(message); err != nil {
@@ -43,38 +59,111 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	}), nil
 }
 
-func (e *Expect) assertCode(err error) error {
-	stErr, ok := status.FromError(err)
-	if !ok {
-		return errors.Errorf(`second return value is unknown type "%T"`, err)
-	}
-
+func (e *Expect) assertStatusCode(stErr error) error {
 	expectedCode := "OK"
 	if e.Code != "" {
 		expectedCode = e.Code
 	}
-	if got, expected := stErr.Code().String(), expectedCode; got == expected {
+	if e.Status.Code != "" {
+		expectedCode = e.Status.Code
+	}
+
+	sts, ok := status.FromError(stErr)
+	if !ok {
+		return errors.Errorf(`expected code is "%s" but got non status error: %T "%s"`, expectedCode, stErr, stErr.Error())
+	}
+
+	if got, expected := sts.Code().String(), expectedCode; got == expected {
 		return nil
 	}
-	if got, expected := strconv.Itoa(int(int32(stErr.Code()))), expectedCode; got == expected {
+	if got, expected := strconv.Itoa(int(int32(sts.Code()))), expectedCode; got == expected {
 		return nil
 	}
 
+	return errors.Errorf(`expected code is "%s" but got "%s": message="%s": details=[ %s ]`, expectedCode, sts.Code().String(), sts.Message(), detailsString(sts))
+}
+
+func (e *Expect) assertStatusMessage(stErr error) error {
+	if e.Status.Message == "" {
+		return nil
+	}
+
+	sts, ok := status.FromError(stErr)
+	if !ok {
+		return errors.Errorf(`expected status.message is "%s" but got non status error: %T "%s"`, e.Status.Message, stErr, stErr.Error())
+	}
+
+	if sts.Message() == e.Status.Message {
+		return nil
+	}
+
+	return errors.Errorf(`expected status.message is "%s" but got "%s": code="%s": details=[ %s ]`, e.Status.Message, sts.Message(), sts.Code().String(), detailsString(sts))
+}
+
+func (e *Expect) assertStatusDetails(stErr error) error {
+	if len(e.Status.Details) == 0 {
+		return nil
+	}
+
+	sts, ok := status.FromError(stErr)
+	if !ok {
+		return errors.Errorf(`expected status.message is "%s" but got non status error: %T "%s"`, e.Status.Message, stErr, stErr.Error())
+	}
+
+	actualDetails := sts.Details()
+
+	for i, mapSlice := range e.Status.Details {
+		if i >= len(actualDetails) {
+			return errors.Errorf(`expected status.details[%d] is not found: details=[ %s ]`, i, detailsString(sts))
+		}
+
+		if len(mapSlice) != 1 {
+			return errors.Errorf("invalid yaml: expect status.details[%d]:"+
+				"An element of status.details list must be a map of size 1 with the detail message name as the key and the value as the detail message object.", i)
+		}
+
+		expect := mapSlice[0]
+		expectName, ok := expect.Key.(string)
+		if !ok {
+			return errors.Errorf("invalid yaml: expect status.details[%d]: A key of status.details[%d] must be a string protobuf message name", i, i)
+		}
+
+		actual, ok := actualDetails[i].(proto.Message)
+		if !ok {
+			return errors.Errorf(`expected status.details[%d] is "%s" but got detail is not a proto message: "%#v"`, i, expectName, actualDetails[i])
+		}
+
+		if name := proto.MessageName(actual); name != expectName {
+			return errors.Errorf(`expected status.details[%d] is "%s" but got detail is "%s": details=[ %s ]`, i, expectName, name, detailsString(sts))
+		}
+
+		if err := protocol.CreateAssertion(expect.Value).Assert(actual); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func detailsString(sts *status.Status) string {
+	format := "%s: {%s}"
 	var details []string
-	for _, i := range stErr.Details() {
-		d, ok := i.(interface{ String() string })
-		if ok {
-			details = append(details, d.String())
+
+	for _, i := range sts.Details() {
+		if pb, ok := i.(proto.Message); ok {
+			details = append(details, fmt.Sprintf(format, proto.MessageName(pb), pb.String()))
 			continue
 		}
-		e, ok := i.(interface{ Error() string })
-		if ok {
-			details = append(details, e.Error())
+
+		if e, ok := i.(interface{ Error() string }); ok {
+			details = append(details, fmt.Sprintf(format, "<non proto message>", e.Error()))
 			continue
 		}
+
+		details = append(details, fmt.Sprintf(format, "<non proto message>", fmt.Sprintf("{%#v}", i)))
 	}
 
-	return errors.Errorf(`expected code is "%s" but got "%s": %s: %s`, expectedCode, stErr.Code().String(), err, strings.Join(details, ", "))
+	return strings.Join(details, ", ")
 }
 
 func extract(v interface{}) (proto.Message, error, error) {
