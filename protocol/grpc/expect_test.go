@@ -74,26 +74,20 @@ func TestExpect_Build(t *testing.T) {
 					Status: ExpectStatus{
 						Code:    "InvalidArgument",
 						Message: "invalid argument",
-						Details: []yaml.MapSlice{
-							yaml.MapSlice{
-								yaml.MapItem{
-									Key: "google.rpc.LocalizedMessage",
-									Value: yaml.MapSlice{
-										yaml.MapItem{
-											Key:   "locale",
-											Value: "ja-JP",
-										},
+						Details: []map[string]yaml.MapSlice{
+							{
+								"google.rpc.LocalizedMessage": yaml.MapSlice{
+									yaml.MapItem{
+										Key:   "locale",
+										Value: "ja-JP",
 									},
 								},
 							},
-							yaml.MapSlice{
-								yaml.MapItem{
-									Key: "google.rpc.DebugInfo",
-									Value: yaml.MapSlice{
-										yaml.MapItem{
-											Key:   "detail",
-											Value: "debug",
-										},
+							{
+								"google.rpc.DebugInfo": yaml.MapSlice{
+									yaml.MapItem{
+										Key:   "detail",
+										Value: "debug",
 									},
 								},
 							},
@@ -274,15 +268,12 @@ func TestExpect_Build(t *testing.T) {
 			"wrong status details: name is wrong": {
 				expect: &Expect{
 					Status: ExpectStatus{
-						Details: []yaml.MapSlice{
-							yaml.MapSlice{
-								yaml.MapItem{
-									Key: "google.rpc.Invalid",
-									Value: yaml.MapSlice{
-										yaml.MapItem{
-											Key:   "detail",
-											Value: "debug",
-										},
+						Details: []map[string]yaml.MapSlice{
+							{
+								"google.rpc.Invalid": yaml.MapSlice{
+									yaml.MapItem{
+										Key:   "detail",
+										Value: "debug",
 									},
 								},
 							},
@@ -307,15 +298,12 @@ func TestExpect_Build(t *testing.T) {
 			"wrong status details: value is wrong": {
 				expect: &Expect{
 					Status: ExpectStatus{
-						Details: []yaml.MapSlice{
-							yaml.MapSlice{
-								yaml.MapItem{
-									Key: "google.rpc.DebugInfo",
-									Value: yaml.MapSlice{
-										yaml.MapItem{
-											Key:   "detail",
-											Value: "unknown",
-										},
+						Details: []map[string]yaml.MapSlice{
+							{
+								"google.rpc.DebugInfo": yaml.MapSlice{
+									yaml.MapItem{
+										Key:   "detail",
+										Value: "unknown",
 									},
 								},
 							},

@@ -25,9 +25,9 @@ type Expect struct {
 
 // ExpectStatus represents expected gRPC status
 type ExpectStatus struct {
-	Code    string          `yaml:"code"`
-	Message string          `yaml:"message"`
-	Details []yaml.MapSlice `yaml:"details"`
+	Code    string                     `yaml:"code"`
+	Message string                     `yaml:"message"`
+	Details []map[string]yaml.MapSlice `yaml:"details"`
 }
 
 // Build implements protocol.AssertionBuilder interface.
@@ -97,20 +97,22 @@ func (e *Expect) assertStatusDetails(sts *status.Status) error {
 
 	actualDetails := sts.Details()
 
-	for i, mapSlice := range e.Status.Details {
+	for i, expecteDetailMap := range e.Status.Details {
 		if i >= len(actualDetails) {
 			return errors.Errorf(`expected status.details[%d] is not found: details=[ %s ]`, i, detailsString(sts))
 		}
 
-		if len(mapSlice) != 1 {
+		if len(expecteDetailMap) != 1 {
 			return errors.Errorf("invalid yaml: expect status.details[%d]:"+
 				"An element of status.details list must be a map of size 1 with the detail message name as the key and the value as the detail message object.", i)
 		}
 
-		expect := mapSlice[0]
-		expectName, ok := expect.Key.(string)
-		if !ok {
-			return errors.Errorf("invalid yaml: expect status.details[%d]: A key of status.details[%d] must be a string protobuf message name", i, i)
+		var expectName string
+		var expectDetail interface{}
+		for k, v := range expecteDetailMap {
+			expectName = k
+			expectDetail = v
+			break
 		}
 
 		actual, ok := actualDetails[i].(proto.Message)
@@ -122,7 +124,7 @@ func (e *Expect) assertStatusDetails(sts *status.Status) error {
 			return errors.Errorf(`expected status.details[%d] is "%s" but got detail is "%s": details=[ %s ]`, i, expectName, name, detailsString(sts))
 		}
 
-		if err := protocol.CreateAssertion(expect.Value).Assert(actual); err != nil {
+		if err := protocol.CreateAssertion(expectDetail).Assert(actual); err != nil {
 			return err
 		}
 	}
