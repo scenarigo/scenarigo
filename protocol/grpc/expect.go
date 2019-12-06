@@ -39,17 +39,17 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	assertion := protocol.CreateAssertion(expectBody)
 
 	return assert.AssertionFunc(func(v interface{}) error {
-		message, callErr, err := extract(v)
+		message, stErr, err := extract(v)
 		if err != nil {
 			return err
 		}
-		if err := e.assertStatusCode(callErr); err != nil {
+		if err := e.assertStatusCode(stErr); err != nil {
 			return err
 		}
-		if err := e.assertStatusMessage(callErr); err != nil {
+		if err := e.assertStatusMessage(stErr); err != nil {
 			return err
 		}
-		if err := e.assertStatusDetails(callErr); err != nil {
+		if err := e.assertStatusDetails(stErr); err != nil {
 			return err
 		}
 		if err := assertion.Assert(message); err != nil {
@@ -59,18 +59,13 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	}), nil
 }
 
-func (e *Expect) assertStatusCode(stErr error) error {
+func (e *Expect) assertStatusCode(sts *status.Status) error {
 	expectedCode := "OK"
 	if e.Code != "" {
 		expectedCode = e.Code
 	}
 	if e.Status.Code != "" {
 		expectedCode = e.Status.Code
-	}
-
-	sts, ok := status.FromError(stErr)
-	if !ok {
-		return errors.Errorf(`expected code is "%s" but got non status error: %T "%s"`, expectedCode, stErr, stErr.Error())
 	}
 
 	if got, expected := sts.Code().String(), expectedCode; got == expected {
@@ -83,14 +78,9 @@ func (e *Expect) assertStatusCode(stErr error) error {
 	return errors.Errorf(`expected code is "%s" but got "%s": message="%s": details=[ %s ]`, expectedCode, sts.Code().String(), sts.Message(), detailsString(sts))
 }
 
-func (e *Expect) assertStatusMessage(stErr error) error {
+func (e *Expect) assertStatusMessage(sts *status.Status) error {
 	if e.Status.Message == "" {
 		return nil
-	}
-
-	sts, ok := status.FromError(stErr)
-	if !ok {
-		return errors.Errorf(`expected status.message is "%s" but got non status error: %T "%s"`, e.Status.Message, stErr, stErr.Error())
 	}
 
 	if sts.Message() == e.Status.Message {
@@ -100,14 +90,9 @@ func (e *Expect) assertStatusMessage(stErr error) error {
 	return errors.Errorf(`expected status.message is "%s" but got "%s": code="%s": details=[ %s ]`, e.Status.Message, sts.Message(), sts.Code().String(), detailsString(sts))
 }
 
-func (e *Expect) assertStatusDetails(stErr error) error {
+func (e *Expect) assertStatusDetails(sts *status.Status) error {
 	if len(e.Status.Details) == 0 {
 		return nil
-	}
-
-	sts, ok := status.FromError(stErr)
-	if !ok {
-		return errors.Errorf(`expected status.message is "%s" but got non status error: %T "%s"`, e.Status.Message, stErr, stErr.Error())
 	}
 
 	actualDetails := sts.Details()
@@ -166,7 +151,7 @@ func detailsString(sts *status.Status) string {
 	return strings.Join(details, ", ")
 }
 
-func extract(v interface{}) (proto.Message, error, error) {
+func extract(v interface{}) (proto.Message, *status.Status, error) {
 	vs, ok := v.([]reflect.Value)
 	if !ok {
 		return nil, nil, errors.Errorf("expected []reflect.Value but got %T", v)
@@ -194,6 +179,13 @@ func extract(v interface{}) (proto.Message, error, error) {
 			return nil, nil, errors.Errorf("expected second return value is error but %T", vs[1].Interface())
 		}
 	}
+	var sts *status.Status
+	if ok {
+		sts, ok = status.FromError(callErr)
+		if !ok {
+			return nil, nil, errors.Errorf(`expected error is status but got %T: "%s"`, callErr, callErr.Error())
+		}
+	}
 
-	return message, callErr, nil
+	return message, sts, nil
 }

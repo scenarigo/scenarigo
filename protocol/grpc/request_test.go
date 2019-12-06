@@ -52,7 +52,7 @@ func TestRequest_Invoke(t *testing.T) {
 				t.Errorf("differs: (-want +got)\n%s", diff)
 			}
 			if serr != nil {
-				t.Fatalf("unexpected error: %s", serr)
+				t.Fatalf("unexpected error: %v", serr)
 			}
 
 			// ensure that ctx.WithRequest and ctx.WithResponse are called
@@ -92,9 +92,8 @@ func TestRequest_Invoke(t *testing.T) {
 				t.Fatalf("unexpected error: %s", err)
 			}
 
-			sterr := status.Convert(serr)
-			if sterr.Code() != codes.Unauthenticated {
-				t.Fatalf("expected code is %s but got %s", codes.Unauthenticated.String(), sterr.Code().String())
+			if serr.Code() != codes.Unauthenticated {
+				t.Fatalf("expected code is %s but got %s", codes.Unauthenticated.String(), serr.Code().String())
 			}
 
 			// ensure that ctx.WithRequest and ctx.WithResponse are called
