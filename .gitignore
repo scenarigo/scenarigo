@@ -1,4 +1,4 @@
 vendor
 .envrc
 .bin
-testdata/gen
+*.so
