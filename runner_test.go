@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -243,7 +244,11 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 							t.Fatalf("failed to parse form: %s", err)
 						}
 						w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-						w.Write([]byte(r.Form.Get("message")))
+						w.Write([]byte(strings.Join([]string{
+							r.Form.Get("id"),
+							r.Form.Get("message"),
+							r.Form.Get("bool"),
+						}, ", ")))
 					default:
 						body := map[string]string{}
 						d := json.NewDecoder(r.Body)

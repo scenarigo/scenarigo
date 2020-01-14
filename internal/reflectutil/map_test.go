@@ -21,6 +21,14 @@ func TestConvertStringsMap(t *testing.T) {
 				v:      map[string][]string{"A": {"a"}},
 				expect: map[string][]string{"A": {"a"}},
 			},
+			"map[int]int": {
+				v:      map[int]int{0: 0},
+				expect: map[string][]string{"0": {"0"}},
+			},
+			"map[bool]bool": {
+				v:      map[bool]bool{true: true},
+				expect: map[string][]string{"true": {"true"}},
+			},
 		}
 		for name, test := range tests {
 			test := test
@@ -44,12 +52,6 @@ func TestConvertStringsMap(t *testing.T) {
 			},
 			"int": {
 				v: 555,
-			},
-			"map[int]int": {
-				v: map[int]int{0: 0},
-			},
-			"map[string]int": {
-				v: map[string]int{"0": 0},
 			},
 		}
 		for name, test := range tests {
@@ -77,6 +79,22 @@ func TestConvertStrings(t *testing.T) {
 				v:      []string{"1", "2"},
 				expect: []string{"1", "2"},
 			},
+			"int": {
+				v:      1,
+				expect: []string{"1"},
+			},
+			"[]interface": {
+				v: []interface{}{
+					true, false,
+					1, int8(2), int16(3), int32(4), int64(5),
+					uint(6), uint8(7), uint16(8), uint32(9), uint64(10),
+				},
+				expect: []string{
+					"true", "false",
+					"1", "2", "3", "4", "5",
+					"6", "7", "8", "9", "10",
+				},
+			},
 		}
 		for name, test := range tests {
 			test := test
@@ -98,14 +116,11 @@ func TestConvertStrings(t *testing.T) {
 			"nil": {
 				v: nil,
 			},
-			"int": {
-				v: 555,
-			},
 			"nil (string pointer)": {
 				v: (*string)(nil),
 			},
-			"[]int": {
-				v: []int{1},
+			"float64": {
+				v: 1.2,
 			},
 			"[]interface{}": {
 				v: []interface{}{nil},

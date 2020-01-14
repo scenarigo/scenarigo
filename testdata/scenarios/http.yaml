@@ -21,8 +21,6 @@ steps:
 title: /echo (application/x-www-form-urlencoded)
 steps:
 - title: POST /echo
-  vars:
-    message: hello
   protocol: http
   request:
     method: POST
@@ -31,10 +29,12 @@ steps:
       Authorization: "Bearer {{env.TEST_TOKEN}}"
       Content-Type: application/x-www-form-urlencoded
     body:
-      message: "{{vars.message}}"
+      id: 123
+      message: hello
+      bool: true
   expect:
     code: 200
-    body: "{{request.message}}"
+    body: "123, hello, true"
 
 ---
 title: not found
