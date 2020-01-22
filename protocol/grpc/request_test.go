@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"bytes"
 	gocontext "context"
 	"reflect"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/internal/testutil"
+	"github.com/zoncoen/scenarigo/reporter"
 	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
 	"github.com/zoncoen/yaml"
 	"google.golang.org/grpc"
@@ -154,6 +157,64 @@ func TestRequest_Invoke(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestRequest_Invoke_Log(t *testing.T) {
+	req := &test.EchoRequest{MessageId: "1", MessageBody: "hello"}
+	resp := &test.EchoResponse{MessageId: "1", MessageBody: "hello"}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := test.NewMockTestClient(ctrl)
+	client.EXPECT().Echo(gomock.Any(), req, gomock.Any()).Return(resp, nil)
+
+	r := &Request{
+		Client: "{{vars.client}}",
+		Method: "Echo",
+		Metadata: map[string]string{
+			"version": "1.0.0",
+		},
+		Body: yaml.MapSlice{
+			yaml.MapItem{Key: "messageId", Value: "1"},
+			yaml.MapItem{Key: "messageBody", Value: "hello"},
+		},
+	}
+
+	var b bytes.Buffer
+	reporter.Run(func(rptr reporter.Reporter) {
+		rptr.Run("test.yaml", func(rptr reporter.Reporter) {
+			ctx := context.New(rptr).WithVars(map[string]interface{}{
+				"client": client,
+			})
+			if _, _, err := r.Invoke(ctx); err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+		})
+	}, reporter.WithWriter(&b), reporter.WithVerboseLog())
+
+	expect := `
+=== RUN   test.yaml
+--- PASS: test.yaml (0.00s)
+    request:
+        method: Echo
+        metadata:
+          version:
+          - 1.0.0
+        body:
+          messageId: "1"
+          messageBody: hello
+    response:
+        header: {}
+        trailer: {}
+        body:
+          messageId: "1"
+          messageBody: hello
+PASS
+ok  	test.yaml	0.000s
+`
+	if diff := cmp.Diff(expect, "\n"+testutil.ResetDuration(b.String())); diff != "" {
+		t.Errorf("differs (-want +got):\n%s", diff)
+	}
 }
 
 func TestValidateMethod(t *testing.T) {

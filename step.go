@@ -1,43 +1,13 @@
 package scenarigo
 
 import (
-	"github.com/k0kubun/pp"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/plugin"
 	"github.com/zoncoen/scenarigo/schema"
-	"github.com/zoncoen/yaml"
 )
 
-func init() {
-	pp.ColoringEnabled = false
-}
-
-func dumpReqResp(ctx *context.Context) func() {
-	return func() {
-		if req := ctx.Request(); req != nil {
-			if b, err := yaml.Marshal(req); err == nil {
-				ctx.Reporter().Logf("request:\n%s", string(b))
-			} else {
-				ctx.Reporter().Logf("request:\n%s", pp.Sprint(req))
-			}
-		}
-		if resp := ctx.Response(); resp != nil {
-			if b, err := yaml.Marshal(resp); err == nil {
-				ctx.Reporter().Logf("response:\n%s", string(b))
-			} else {
-				ctx.Reporter().Logf("response:\n%s", pp.Sprint(resp))
-			}
-		}
-	}
-}
-
-func runStep(ctx *context.Context, s *schema.Step, debug *func()) *context.Context {
-	// set the function which adds the request and response to log for debugging
-	defer func() {
-		*debug = dumpReqResp(ctx)
-	}()
-
+func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 	if s.Vars != nil {
 		vars, err := ctx.ExecuteTemplate(s.Vars)
 		if err != nil {

@@ -16,17 +16,23 @@ import (
 	"github.com/zoncoen/scenarigo/protocol/http/marshaler"
 	"github.com/zoncoen/scenarigo/protocol/http/unmarshaler"
 	"github.com/zoncoen/scenarigo/version"
+	"github.com/zoncoen/yaml"
 )
 
 var defaultUserAgent = fmt.Sprintf("scenarigo/%s", version.String())
 
 // Request represents a request.
 type Request struct {
-	Client string      `yaml:"client"`
+	Client string      `yaml:"client,omitempty"`
 	Method string      `yaml:"method"`
 	URL    string      `yaml:"url"`
-	Header interface{} `yaml:"header"`
-	Body   interface{} `yaml:"body"`
+	Header interface{} `yaml:"header,omitempty"`
+	Body   interface{} `yaml:"body,omitempty"`
+}
+
+type response struct {
+	Header interface{} `yaml:"header,omitempty"`
+	Body   interface{} `yaml:"body,omitempty"`
 }
 
 // Invoke implements protocol.Invoker interface.
@@ -39,7 +45,18 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 	if err != nil {
 		return ctx, nil, err
 	}
+
 	ctx = ctx.WithRequest(reqBody)
+	if b, err := yaml.Marshal(Request{
+		Method: req.Method,
+		URL:    req.URL.String(),
+		Header: req.Header,
+		Body:   reqBody,
+	}); err == nil {
+		ctx.Reporter().Logf("request:\n%s", string(b))
+	} else {
+		ctx.Reporter().Logf("failed to dump request:\n%s", err)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -71,7 +88,16 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		if err := unmarshaler.Unmarshal(b, &respBody); err != nil {
 			return ctx, nil, errors.Errorf("failed to unmarshal response body as %s: %s: %s", unmarshaler.MediaType(), string(b), err)
 		}
+
 		ctx = ctx.WithResponse(respBody)
+		if b, err := yaml.Marshal(response{
+			Header: resp.Header,
+			Body:   respBody,
+		}); err == nil {
+			ctx.Reporter().Logf("response:\n%s", string(b))
+		} else {
+			ctx.Reporter().Logf("failed to dump response:\n%s", err)
+		}
 	}
 
 	return ctx, newResult(resp, respBody), nil

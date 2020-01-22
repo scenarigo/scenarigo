@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/internal/testutil"
+	"github.com/zoncoen/scenarigo/reporter"
 )
 
 type transport struct {
@@ -91,6 +94,7 @@ func TestRequest_Invoke(t *testing.T) {
 			}
 		})
 		srv := httptest.NewServer(m)
+		defer srv.Close()
 
 		tests := map[string]struct {
 			vars    interface{}
@@ -241,6 +245,77 @@ func TestRequest_Invoke(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestRequest_Invoke_Log(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		m := http.NewServeMux()
+		m.HandleFunc("/echo", func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodPost {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			d := json.NewDecoder(req.Body)
+			defer req.Body.Close()
+			body := map[string]string{}
+			if err := d.Decode(&body); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(fmt.Sprintf(`{"message": "%s"}`, body["message"])))
+		})
+		srv := httptest.NewServer(m)
+		defer srv.Close()
+
+		var b bytes.Buffer
+		reporter.Run(func(rptr reporter.Reporter) {
+			rptr.Run("test.yaml", func(rptr reporter.Reporter) {
+				ctx := context.New(rptr)
+				req := &Request{
+					Method: http.MethodPost,
+					URL:    srv.URL + "/echo",
+					Body:   map[string]string{"message": "hey"},
+				}
+				if _, _, err := req.Invoke(ctx); err != nil {
+					t.Fatalf("failed to invoke: %s", err)
+				}
+			})
+		}, reporter.WithWriter(&b), reporter.WithVerboseLog())
+
+		expect := fmt.Sprintf(`
+=== RUN   test.yaml
+--- PASS: test.yaml (0.00s)
+    request:
+        method: POST
+        url: %s/echo
+        header:
+          User-Agent:
+          - %s
+        body:
+          message: hey
+    response:
+        header:
+          Content-Length:
+          - "18"
+          Content-Type:
+          - application/json
+        body:
+          message: hey
+PASS
+ok  	test.yaml	0.000s
+`, srv.URL, defaultUserAgent)
+		if diff := cmp.Diff(expect, "\n"+testutil.ResetDuration(removeDateHeader(b.String()))); diff != "" {
+			t.Errorf("differs (-want +got):\n%s", diff)
+		}
+	})
+}
+
+var dateHeaderPattern = regexp.MustCompile(`\s+Date:\n.+`)
+
+func removeDateHeader(str string) string {
+	return dateHeaderPattern.ReplaceAllString(str, "")
 }
 
 func TestRequest_buildRequest(t *testing.T) {

@@ -11,15 +11,22 @@ import (
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/yaml"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
 // Request represents a request.
 type Request struct {
-	Client   string      `yaml:"client"`
+	Client   string      `yaml:"client,omitempty"`
 	Method   string      `yaml:"method"`
-	Metadata interface{} `yaml:"metadata"`
-	Body     interface{} `yaml:"body"`
+	Metadata interface{} `yaml:"metadata,omitempty"`
+	Body     interface{} `yaml:"body,omitempty"`
+}
+
+type response struct {
+	Header  interface{} `yaml:"header,omitempty"`
+	Trailer interface{} `yaml:"trailer,omitempty"`
+	Body    interface{} `yaml:"body,omitempty"`
 }
 
 // Invoke implements protocol.Invoker interface.
@@ -87,13 +94,41 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 			if err := buildRequestBody(ctx, req, r.Body); err != nil {
 				return ctx, nil, errors.Errorf("failed to build request body: %s", err)
 			}
+
 			ctx = ctx.WithRequest(req)
+			reqMD, _ := metadata.FromOutgoingContext(reqCtx)
+			if b, err := yaml.Marshal(Request{
+				Method:   r.Method,
+				Metadata: reqMD,
+				Body:     req,
+			}); err == nil {
+				ctx.Reporter().Logf("request:\n%s", string(b))
+			} else {
+				ctx.Reporter().Logf("failed to dump request:\n%s", err)
+			}
+
 			in = append(in, reflect.ValueOf(req))
 		}
 	}
 
+	var header, trailer metadata.MD
+	in = append(in,
+		reflect.ValueOf(grpc.Header(&header)),
+		reflect.ValueOf(grpc.Trailer(&trailer)),
+	)
+
 	vs := method.Call(in)
-	ctx = ctx.WithResponse(vs[0].Interface())
+	resp := vs[0].Interface()
+	ctx = ctx.WithResponse(resp)
+	if b, err := yaml.Marshal(response{
+		Header:  header,
+		Trailer: trailer,
+		Body:    resp,
+	}); err == nil {
+		ctx.Reporter().Logf("response:\n%s", string(b))
+	} else {
+		ctx.Reporter().Logf("failed to dump response:\n%s", err)
+	}
 
 	return ctx, vs, nil
 }
