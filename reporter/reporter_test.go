@@ -512,22 +512,95 @@ func TestPrint(t *testing.T) {
 		f      func(*testing.T, *reporter)
 		expect string
 	}{
-		"simple": {
+		"ok": {
+			f: func(t *testing.T, r *reporter) {
+				r.Run("a", func(r Reporter) {
+					rptr := pr(t, r)
+					rptr.duration = 1234 * time.Millisecond
+				})
+			},
+			expect: `
+ok  	a	1.234s
+`,
+		},
+		"FAIL": {
 			f: func(t *testing.T, r *reporter) {
 				r.Run("a", func(r Reporter) {
 					rptr := pr(t, r)
 					rptr.Error("error!")
-					rptr.duration = 1230 * time.Millisecond
+					rptr.duration = 1234 * time.Millisecond
+				})
+			},
+			expect: `
+--- FAIL: a (1.23s)
+    error!
+FAIL
+FAIL	a	1.234s
+FAIL
+`,
+		},
+		"ok nest": {
+			f: func(t *testing.T, r *reporter) {
+				r.Run("a", func(r Reporter) {
+					r.Run("b", func(r Reporter) {
+						r.Run("c", func(r Reporter) {
+							r.Log("ok!")
+						})
+					})
+				})
+			},
+			expect: `
+ok  	a	0.000s
+`,
+		},
+		"FAIL nest": {
+			f: func(t *testing.T, r *reporter) {
+				r.Run("a", func(r Reporter) {
+					r.Run("b", func(r Reporter) {
+						r.Run("c", func(r Reporter) {
+							rptr := pr(t, r)
+							rptr.Error("error!")
+							rptr.duration = 1230 * time.Millisecond
+						})
+					})
+				})
+			},
+			expect: `
+--- FAIL: a (0.00s)
+    --- FAIL: a/b (0.00s)
+        --- FAIL: a/b/c (1.23s)
+            error!
+FAIL
+FAIL	a	0.000s
+FAIL
+`,
+		},
+		"ok nest verbose": {
+			f: func(t *testing.T, r *reporter) {
+				r.context.verbose = true
+				r.Run("a", func(r Reporter) {
+					r.Run("b", func(r Reporter) {
+						r.Run("c", func(r Reporter) {
+							r.Log("ok!")
+						})
+					})
 				})
 			},
 			expect: `
 === RUN   a
---- FAIL: a (1.23s)
-    error!
+=== RUN   a/b
+=== RUN   a/b/c
+--- PASS: a (0.00s)
+    --- PASS: a/b (0.00s)
+        --- PASS: a/b/c (0.00s)
+            ok!
+PASS
+ok  	a	0.000s
 `,
 		},
-		"nest": {
+		"FAIL nest verbose": {
 			f: func(t *testing.T, r *reporter) {
+				r.context.verbose = true
 				r.Run("a", func(r Reporter) {
 					r.Run("b", func(r Reporter) {
 						r.Run("c", func(r Reporter) {
@@ -546,6 +619,9 @@ func TestPrint(t *testing.T) {
     --- FAIL: a/b (0.00s)
         --- FAIL: a/b/c (1.23s)
             error!
+FAIL
+FAIL	a	0.000s
+FAIL
 `,
 		},
 		"multi line log": {
@@ -555,20 +631,21 @@ func TestPrint(t *testing.T) {
 						r.Run("c", func(r Reporter) {
 							rptr := pr(t, r)
 							rptr.Log("1\n2\n3")
+							rptr.FailNow()
 						})
 					})
 				})
 			},
 			expect: `
-=== RUN   a
-=== RUN   a/b
-=== RUN   a/b/c
---- PASS: a (0.00s)
-    --- PASS: a/b (0.00s)
-        --- PASS: a/b/c (0.00s)
+--- FAIL: a (0.00s)
+    --- FAIL: a/b (0.00s)
+        --- FAIL: a/b/c (0.00s)
             1
                 2
                 3
+FAIL
+FAIL	a	0.000s
+FAIL
 `,
 		},
 	}
@@ -579,7 +656,6 @@ func TestPrint(t *testing.T) {
 			Run(func(r Reporter) {
 				rptr := pr(t, r)
 				test.f(t, rptr)
-				print(rptr)
 			}, WithWriter(&b))
 			if diff := cmp.Diff(test.expect, "\n"+b.String()); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)

@@ -110,13 +110,15 @@ func (r *reporter) log(s string) {
 }
 
 // Log formats its arguments using default formatting, analogous to fmt.Print,
-// and records the text in the error log.
+// and records the text in the log.
+// The text will be printed only if the test fails or the --verbose flag is set.
 func (r *reporter) Log(args ...interface{}) {
 	r.log(fmt.Sprint(args...))
 }
 
 // Logf formats its arguments according to the format, analogous to fmt.Printf, and
-// records the text in the error log.
+// records the text in the log.
+// The text will be printed only if the test fails or the --verbose flag is set.
 func (r *reporter) Logf(format string, args ...interface{}) {
 	r.log(fmt.Sprintf(format, args...))
 }
@@ -180,12 +182,16 @@ func (r *reporter) Parallel() {
 	r.duration += time.Since(r.start)
 	r.m.Unlock()
 
-	r.context.printf("=== PAUSE %s\n", r.name)
+	if r.context.verbose {
+		r.context.printf("=== PAUSE %s\n", r.name)
+	}
 	r.done <- true     // Release calling test.
 	<-r.parent.barrier // Wait for the parent test to complete.
 	r.context.waitParallel()
 
-	r.context.printf("=== CONT  %s\n", r.name)
+	if r.context.verbose {
+		r.context.printf("=== CONT  %s\n", r.name)
+	}
 	r.start = time.Now()
 }
 
@@ -232,7 +238,9 @@ func (r *reporter) Run(name string, f func(t Reporter)) bool {
 	child.parent = r
 	child.name = name
 	child.depth = r.depth + 1
-	r.context.printf("=== RUN   %s\n", child.name)
+	if r.context.verbose {
+		r.context.printf("=== RUN   %s\n", child.name)
+	}
 	go child.run(f)
 	<-child.done
 	r.appendChild(child)
@@ -295,25 +303,45 @@ func (r *reporter) run(f func(r Reporter)) {
 func print(r *reporter) {
 	results := collectOutput(r)
 	r.context.printf("%s\n", strings.Join(results, "\n"))
+	if r.Failed() {
+		r.context.printf("FAIL\n")
+	}
 }
 
 func collectOutput(r *reporter) []string {
-	prefix := strings.Repeat("    ", r.depth-1)
-	status := "PASS"
-	if r.Failed() {
-		status = "FAIL"
-	} else if r.Skipped() {
-		status = "SKIP"
-	}
-	results := []string{
-		fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.name, r.duration.Seconds()),
-	}
-	for _, l := range r.logs {
-		padding := fmt.Sprintf("%s    ", prefix)
-		results = append(results, pad(l, padding))
+	var results []string
+	if r.Failed() || r.context.verbose {
+		prefix := strings.Repeat("    ", r.depth-1)
+		status := "PASS"
+		if r.Failed() {
+			status = "FAIL"
+		} else if r.Skipped() {
+			status = "SKIP"
+		}
+		results = []string{
+			fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.name, r.duration.Seconds()),
+		}
+		for _, l := range r.logs {
+			padding := fmt.Sprintf("%s    ", prefix)
+			results = append(results, pad(l, padding))
+		}
 	}
 	for _, child := range r.children {
 		results = append(results, collectOutput(child)...)
+	}
+	if r.depth == 1 {
+		if r.Failed() {
+			results = append(results,
+				fmt.Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.name, r.duration.Seconds()),
+			)
+		} else {
+			if r.context.verbose {
+				results = append(results, fmt.Sprintf("PASS"))
+			}
+			results = append(results,
+				fmt.Sprintf("ok  \t%s\t%.3fs", r.name, r.duration.Seconds()),
+			)
+		}
 	}
 	return results
 }

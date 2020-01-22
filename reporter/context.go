@@ -23,6 +23,13 @@ func WithWriter(w io.Writer) Option {
 	}
 }
 
+// WithVerboseLog returns an option to enable verbose log.
+func WithVerboseLog() Option {
+	return func(ctx *testContext) {
+		ctx.verbose = true
+	}
+}
+
 // testContext holds all fields that are common to all tests.
 type testContext struct {
 	m sync.Mutex
@@ -41,6 +48,9 @@ type testContext struct {
 
 	// maxParallel is a copy of the parallel flag.
 	maxParallel int
+
+	// verbose indicates that prints verbose log or not.
+	verbose bool
 }
 
 func newTestContext(opts ...Option) *testContext {

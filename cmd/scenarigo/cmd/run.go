@@ -15,7 +15,12 @@ var (
 	ErrTestFailed = errors.New("test failed")
 )
 
+var (
+	verbose bool
+)
+
 func init() {
+	runCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
 	rootCmd.AddCommand(runCmd)
 }
 
@@ -37,11 +42,19 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	reporterOpts := []reporter.Option{
+		reporter.WithWriter(os.Stdout),
+	}
+	if verbose {
+		reporterOpts = append(reporterOpts, reporter.WithVerboseLog())
+	}
+
 	success := reporter.Run(
 		func(rptr reporter.Reporter) {
 			r.Run(context.New(rptr))
 		},
-		reporter.WithWriter(os.Stdout),
+		reporterOpts...,
 	)
 	if !success {
 		return ErrTestFailed

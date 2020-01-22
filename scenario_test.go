@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/internal/testutil"
 	"github.com/zoncoen/scenarigo/reporter"
 	"github.com/zoncoen/scenarigo/schema"
 )
@@ -19,6 +20,7 @@ func TestRunScenario_PrintDebugInfo(t *testing.T) {
 	}{
 		"success": {
 			scenario: &schema.Scenario{
+				Title: "test",
 				Steps: []*schema.Step{
 					{
 						Request: schema.Request{
@@ -37,14 +39,15 @@ func TestRunScenario_PrintDebugInfo(t *testing.T) {
 				},
 			},
 			expect: `
-=== RUN   
---- PASS:  (0.00s)
+ok  	test.yaml	0.000s
 `,
 		},
 		"no debug info": {
 			scenario: &schema.Scenario{
+				Title: "test",
 				Steps: []*schema.Step{
 					{
+						Title: "1",
 						Request: schema.Request{
 							Invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
 								return nil, nil, errors.New("failed")
@@ -59,15 +62,21 @@ func TestRunScenario_PrintDebugInfo(t *testing.T) {
 				},
 			},
 			expect: `
-=== RUN   
---- FAIL:  (0.00s)
-    failed
+--- FAIL: test.yaml (0.00s)
+    --- FAIL: test.yaml/test (0.00s)
+        --- FAIL: test.yaml/test/1 (0.00s)
+            failed
+FAIL
+FAIL	test.yaml	0.000s
+FAIL
 `,
 		},
 		"request": {
 			scenario: &schema.Scenario{
+				Title: "test",
 				Steps: []*schema.Step{
 					{
+						Title: "1",
 						Request: schema.Request{
 							Invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
 								ctx = ctx.WithRequest(map[string]string{"type": "request"})
@@ -83,17 +92,23 @@ func TestRunScenario_PrintDebugInfo(t *testing.T) {
 				},
 			},
 			expect: `
-=== RUN   
---- FAIL:  (0.00s)
-    failed
-    request:
-        type: request
+--- FAIL: test.yaml (0.00s)
+    --- FAIL: test.yaml/test (0.00s)
+        --- FAIL: test.yaml/test/1 (0.00s)
+            failed
+            request:
+                type: request
+FAIL
+FAIL	test.yaml	0.000s
+FAIL
 `,
 		},
 		"request and response": {
 			scenario: &schema.Scenario{
+				Title: "test",
 				Steps: []*schema.Step{
 					{
+						Title: "1",
 						Request: schema.Request{
 							Invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
 								ctx = ctx.WithRequest(map[string]string{"type": "request"})
@@ -110,13 +125,17 @@ func TestRunScenario_PrintDebugInfo(t *testing.T) {
 				},
 			},
 			expect: `
-=== RUN   
---- FAIL:  (0.00s)
-    failed
-    request:
-        type: request
-    response:
-        type: response
+--- FAIL: test.yaml (0.00s)
+    --- FAIL: test.yaml/test (0.00s)
+        --- FAIL: test.yaml/test/1 (0.00s)
+            failed
+            request:
+                type: request
+            response:
+                type: response
+FAIL
+FAIL	test.yaml	0.000s
+FAIL
 `,
 		},
 	}
@@ -125,9 +144,13 @@ func TestRunScenario_PrintDebugInfo(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
 			reporter.Run(func(rptr reporter.Reporter) {
-				runScenario(context.New(rptr), test.scenario)
+				rptr.Run("test.yaml", func(rptr reporter.Reporter) {
+					rptr.Run(test.scenario.Title, func(rptr reporter.Reporter) {
+						runScenario(context.New(rptr), test.scenario)
+					})
+				})
 			}, reporter.WithWriter(&b))
-			if diff := cmp.Diff(test.expect, "\n"+b.String()); diff != "" {
+			if diff := cmp.Diff(test.expect, "\n"+testutil.ResetDuration(b.String())); diff != "" {
 				t.Errorf("differs (-want +got):\n%s", diff)
 			}
 		})
