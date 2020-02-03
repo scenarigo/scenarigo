@@ -41,27 +41,66 @@ func (p *Parser) next() {
 }
 
 func (p *Parser) parseExpr() ast.Expr {
-	return p.parseBinaryExpr()
+	return p.parseBinaryExpr(token.LowestPrec + 1)
 }
 
-func (p *Parser) parseBinaryExpr() ast.Expr {
+func (p *Parser) parseBinaryExpr(prec int) ast.Expr {
 	x := p.parseOperand()
 L:
 	for {
+		if p.tok == token.LINE_BREAK {
+			return x
+		}
+
+		oprec := p.tok.Precedence()
+		if oprec < prec {
+			return x
+		}
+
 		switch p.tok {
 		case token.ADD:
 			pos := p.pos
 			p.next()
-			y := p.parseOperand()
+			y := p.parseBinaryExpr(oprec + 1)
 			x = &ast.BinaryExpr{
 				X:     x,
 				OpPos: pos,
 				Op:    token.ADD,
 				Y:     y,
 			}
+		case token.CALL:
+			pos := p.pos
+			p.next()
+			args := make([]ast.Expr, 0, 1)
+			if y := p.parseExpr(); y != nil {
+				args = append(args, y)
+			}
+			x = &ast.CallExpr{
+				Fun:    x,
+				Lparen: pos,
+				Args:   args,
+				Rparen: pos,
+			}
+		case token.LARROW:
+			pos := p.pos
+			p.next()
+			x = &ast.LeftArrowExpr{
+				Fun:     x,
+				Larrow:  pos,
+				Rdbrace: p.expect(token.RDBRACE),
+				Arg:     p.parseExpr(),
+			}
+			if p.tok == token.LINE_BREAK {
+				if p.lit != "" {
+					p.tok = token.STRING
+					return x
+				}
+				p.next()
+				return x
+			}
 		case token.LDBRACE, token.STRING:
 			pos := p.pos
-			y := p.parseOperand()
+			y := p.parseBinaryExpr(oprec + 1)
 			x = &ast.BinaryExpr{
 				X:     x,
 				OpPos: pos,
@@ -145,6 +184,11 @@ func (p *Parser) parseParameter() ast.Expr {
 	}
 	p.next()
 	param.X = p.parseExpr()
+
+	if lae, ok := param.X.(*ast.LeftArrowExpr); ok {
+		param.Rdbrace = lae.Rdbrace
+		return param
+	}
 	param.Rdbrace = p.expect(token.RDBRACE)
 	return param
 }

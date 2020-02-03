@@ -73,6 +73,14 @@ type (
 		Args   []Expr
 		Rparen int
 	}
+
+	// A LeftArrowExpr node represents an expression followed by an argument.
+	LeftArrowExpr struct {
+		Fun     Expr
+		Larrow  int
+		Rdbrace int
+		Arg     Expr
+	}
 )
 
 // Pos implements Node.
@@ -84,6 +92,7 @@ func (e *Ident) Pos() int         { return e.NamePos }
 func (e *SelectorExpr) Pos() int  { return e.Sel.Pos() }
 func (e *IndexExpr) Pos() int     { return e.Lbrack }
 func (e *CallExpr) Pos() int      { return e.Lparen }
+func (e *LeftArrowExpr) Pos() int { return e.Larrow }
 
 // exprNode implements Expr.
 func (e *BadExpr) exprNode()       {}
@@ -93,4 +102,5 @@ func (e *ParameterExpr) exprNode() {}
 func (e *Ident) exprNode()         {}
 func (e *SelectorExpr) exprNode()  {}
 func (e *IndexExpr) exprNode()     {}
+func (e *LeftArrowExpr) exprNode() {}
 func (e *CallExpr) exprNode()      {}

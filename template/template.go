@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+
 	"github.com/zoncoen/scenarigo/template/ast"
 	"github.com/zoncoen/scenarigo/template/parser"
 	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/zoncoen/yaml"
 )
 
 // Template is the representation of a parsed template.
@@ -56,6 +58,30 @@ func (t *Template) executeExpr(expr ast.Expr, data interface{}) (interface{}, er
 		return lookup(e, data)
 	case *ast.CallExpr:
 		return t.executeFuncCall(e, data)
+	case *ast.LeftArrowExpr:
+		v, err := t.executeExpr(e.Fun, data)
+		if err != nil {
+			return nil, err
+		}
+		f, ok := v.(Func)
+		if !ok {
+			return nil, errors.Errorf(`expect template function but got %T`, e)
+		}
+		v, err = t.executeExpr(e.Arg, data)
+		if err != nil {
+			return nil, err
+		}
+		argStr, ok := v.(string)
+		if !ok {
+			return nil, errors.Errorf(`expect string but got %T`, e)
+		}
+		arg, err := f.UnmarshalArg(func(v interface{}) error {
+			return yaml.Unmarshal([]byte(argStr), v)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return f.Exec(arg)
 	default:
 		return nil, errors.Errorf(`unknown expression "%T"`, e)
 	}
@@ -94,18 +120,22 @@ func (t *Template) executeBinaryExpr(e *ast.BinaryExpr, data interface{}) (inter
 	}
 	switch e.Op {
 	case token.ADD:
-		strX, ok := x.(string)
-		if !ok {
-			return nil, errors.Errorf(`invalid operation: %#v + %#v`, x, y)
-		}
-		strY, ok := y.(string)
-		if !ok {
-			return nil, errors.Errorf(`invalid operation: %#v + %#v`, x, y)
-		}
-		return strX + strY, nil
+		return t.add(x, y)
 	default:
 		return nil, errors.Errorf(`unknown operation "%s"`, e.Op.String())
 	}
+}
+
+func (t *Template) add(x, y interface{}) (interface{}, error) {
+	strX, ok := x.(string)
+	if !ok {
+		return nil, errors.Errorf(`invalid operation: %#v + %#v`, x, y)
+	}
+	strY, ok := y.(string)
+	if !ok {
+		return nil, errors.Errorf(`invalid operation: %#v + %#v`, x, y)
+	}
+	return strX + strY, nil
 }
 
 func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interface{}, error) {
@@ -131,4 +161,9 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 		return nil, errors.Errorf("function should return a value")
 	}
 	return vs[0].Interface(), nil
+}
+
+type Func interface {
+	Exec(arg interface{}) (interface{}, error)
+	UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error)
 }

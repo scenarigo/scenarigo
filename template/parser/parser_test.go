@@ -196,6 +196,195 @@ func TestParser_Parse(t *testing.T) {
 					Rdbrace: 12,
 				},
 			},
+			"function call with YAML arg": {
+				src: strings.Trim(`
+{{echo <-}}:
+  message: '{{message}}'
+`, "\n"),
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.LeftArrowExpr{
+						Fun: &ast.Ident{
+							NamePos: 3,
+							Name:    "echo",
+						},
+						Larrow:  8,
+						Rdbrace: 10,
+						Arg: &ast.BinaryExpr{
+							X: &ast.BasicLit{
+								ValuePos: 13,
+								Kind:     token.STRING,
+								Value:    "\n  message: ",
+							},
+							OpPos: 26,
+							Op:    token.ADD,
+							Y: &ast.ParameterExpr{
+								Ldbrace: 26,
+								X: &ast.Ident{
+									NamePos: 28,
+									Name:    "message",
+								},
+								Rdbrace: 35,
+							},
+						},
+					},
+					Rdbrace: 10,
+				},
+			},
+			"function call with YAML arg (nest)": {
+				src: strings.Trim(`
+{{echo <-}}:
+  message: |
+    {{echo <-}}:
+      message: '{{message}}'
+`, "\n"),
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.LeftArrowExpr{
+						Fun: &ast.Ident{
+							NamePos: 3,
+							Name:    "echo",
+						},
+						Larrow:  8,
+						Rdbrace: 10,
+						Arg: &ast.BinaryExpr{
+							X: &ast.BasicLit{
+								ValuePos: 13,
+								Kind:     token.STRING,
+								Value:    "\n  message: |\n    ",
+							},
+							OpPos: 31,
+							Op:    token.ADD,
+							Y: &ast.ParameterExpr{
+								Ldbrace: 31,
+								X: &ast.LeftArrowExpr{
+									Fun: &ast.Ident{
+										NamePos: 33,
+										Name:    "echo",
+									},
+									Larrow:  38,
+									Rdbrace: 40,
+									Arg: &ast.BinaryExpr{
+										X: &ast.BasicLit{
+											ValuePos: 43,
+											Kind:     token.STRING,
+											Value:    "\n      message: ",
+										},
+										OpPos: 60,
+										Op:    token.ADD,
+										Y: &ast.ParameterExpr{
+											Ldbrace: 60,
+											X: &ast.Ident{
+												NamePos: 62,
+												Name:    "message",
+											},
+											Rdbrace: 69,
+										},
+									},
+								},
+								Rdbrace: 40,
+							},
+						},
+					},
+					Rdbrace: 10,
+				},
+			},
+			"function call with YAML arg (complex)": {
+				src: strings.Trim(`
+{{join <-}}:
+  prefix: preout-
+  text: |-
+    {{join <-}}:
+      prefix: prein-
+      text: '{{text}}'
+      suffix: -sufin
+  suffix: -sufout
+`, "\n"),
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.LeftArrowExpr{
+						Fun: &ast.Ident{
+							NamePos: 3,
+							Name:    "join",
+						},
+						Larrow:  8,
+						Rdbrace: 10,
+						Arg: &ast.BinaryExpr{
+							X: &ast.BinaryExpr{
+								X: &ast.BinaryExpr{
+									X: &ast.BasicLit{
+										ValuePos: 13,
+										Kind:     token.STRING,
+										Value: `
+  prefix: preout-
+  text: |-
+    `,
+									},
+									OpPos: 47,
+									Op:    token.ADD,
+									Y: &ast.ParameterExpr{
+										Ldbrace: 47,
+										X: &ast.LeftArrowExpr{
+											Fun: &ast.Ident{
+												NamePos: 49,
+												Name:    "join",
+											},
+											Larrow:  54,
+											Rdbrace: 56,
+											Arg: &ast.BinaryExpr{
+												X: &ast.BinaryExpr{
+													X: &ast.BasicLit{
+														ValuePos: 59,
+														Kind:     token.STRING,
+														Value: `
+      prefix: prein-
+      text: `,
+													},
+													OpPos: 94,
+													Op:    token.ADD,
+													Y: &ast.ParameterExpr{
+														Ldbrace: 94,
+														X: &ast.Ident{
+															NamePos: 96,
+															Name:    "text",
+														},
+														Rdbrace: 100,
+													},
+												},
+												OpPos: 103,
+												Op:    token.ADD,
+												Y: &ast.BasicLit{
+													ValuePos: 103,
+													Kind:     token.STRING,
+													Value: `
+      suffix: -sufin
+  `,
+												},
+											},
+										},
+										Rdbrace: 56,
+									},
+								},
+								OpPos: 124,
+								Op:    token.ADD,
+								Y: &ast.BasicLit{
+									ValuePos: 124,
+									Kind:     token.STRING,
+									Value:    "\n  ",
+								},
+							},
+							OpPos: 127,
+							Op:    token.ADD,
+							Y: &ast.BasicLit{
+								ValuePos: 127,
+								Kind:     token.STRING,
+								Value:    "suffix: -sufout",
+							},
+						},
+					},
+					Rdbrace: 10,
+				},
+			},
 			"add": {
 				src: `{{"foo"+"-"+"1"}}`,
 				expected: &ast.ParameterExpr{

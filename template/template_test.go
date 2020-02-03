@@ -1,6 +1,8 @@
 package template
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -83,6 +85,47 @@ func TestTemplate_Execute(t *testing.T) {
 				"f": func(s string) string { return s }},
 			expect: "ok",
 		},
+		"function call with YAML arg": {
+			str: strings.Trim(`
+{{echo <-}}:
+  message: '{{message}}'
+`, "\n"),
+			data: map[string]interface{}{
+				"echo":    &echoFunc{},
+				"message": "hello",
+			},
+			expect: "hello",
+		},
+		"function call with YAML arg (nest)": {
+			str: strings.Trim(`
+{{echo <-}}:
+  message: |
+    {{echo <-}}:
+      message: '{{message}}'
+`, "\n"),
+			data: map[string]interface{}{
+				"echo":    &echoFunc{},
+				"message": "hello",
+			},
+			expect: "hello",
+		},
+		"function call with YAML arg (complex)": {
+			str: strings.Trim(`
+{{join <-}}:
+  prefix: preout-
+  text: |-
+    {{join <-}}:
+      prefix: prein-
+      text: '{{text}}'
+      suffix: -sufin
+  suffix: -sufout
+`, "\n"),
+			data: map[string]interface{}{
+				"join": &joinFunc{},
+				"text": "test",
+			},
+			expect: "preout-prein-test-sufin-sufout",
+		},
 		"not found": {
 			str:         "{{a.b[1]}}",
 			expectError: true,
@@ -107,4 +150,52 @@ func TestTemplate_Execute(t *testing.T) {
 			}
 		})
 	}
+}
+
+var _ Func = &echoFunc{}
+
+type echoFunc struct{}
+
+type echoArg struct {
+	Message string `yaml:"message"`
+}
+
+func (_ *echoFunc) Exec(in interface{}) (interface{}, error) {
+	arg, ok := in.(echoArg)
+	if !ok {
+		return nil, errors.New("arg must be a echoArg")
+	}
+	return arg.Message, nil
+}
+
+func (_ *echoFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+	var arg echoArg
+	if err := unmarshal(&arg); err != nil {
+		return nil, err
+	}
+	return arg, nil
+}
+
+type joinFunc struct{}
+
+type joinArg struct {
+	Prefix string `yaml:"prefix"`
+	Text   string `yaml:"text"`
+	Suffix string `yaml:"suffix"`
+}
+
+func (_ *joinFunc) Exec(in interface{}) (interface{}, error) {
+	arg, ok := in.(*joinArg)
+	if !ok {
+		return nil, errors.New("arg must be a joinArg")
+	}
+	return arg.Prefix + arg.Text + arg.Suffix, nil
+}
+
+func (_ *joinFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+	var arg joinArg
+	if err := unmarshal(&arg); err != nil {
+		return nil, err
+	}
+	return &arg, nil
 }
