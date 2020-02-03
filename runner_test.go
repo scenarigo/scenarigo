@@ -324,6 +324,46 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				}
 			},
 		},
+		"complex": {
+			ok: "testdata/scenarios/complex.yaml",
+			setup: func(t *testing.T) func() {
+				t.Helper()
+				mux := http.NewServeMux()
+				mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusNotFound)
+				})
+				mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+					body := map[string]string{}
+					d := json.NewDecoder(r.Body)
+					defer r.Body.Close()
+					if err := d.Decode(&body); err != nil {
+						t.Fatalf("failed to decode request body: %s", err)
+					}
+					var msg string
+					if m, ok := body["message"]; ok {
+						msg = m
+					}
+					b, err := json.Marshal(map[string]string{
+						"message": msg,
+					})
+					if err != nil {
+						t.Fatalf("failed to marshal: %s", err)
+					}
+					w.Header().Set("Content-Type", "application/json")
+					w.Write(b)
+				})
+
+				s := httptest.NewServer(mux)
+				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
+					t.Fatalf("unexpected error: %s", err)
+				}
+
+				return func() {
+					s.Close()
+					os.Unsetenv("TEST_ADDR")
+				}
+			},
+		},
 	}
 
 	for name, tc := range tests {

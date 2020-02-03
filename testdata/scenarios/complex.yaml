@@ -1,0 +1,26 @@
+---
+title: call template func with YAML arg
+plugins:
+  complex: complex.so
+steps:
+- title: POST /echo
+  vars:
+    message: |-
+      {{plugins.complex.Join <-}}:
+        prefix: preout-
+        text: |-
+          {{plugins.complex.Join <-}}:
+            prefix: prein-
+            text: test
+            suffix: -sufin
+        suffix: -sufout
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/echo"
+    body:
+      message: "{{vars.message}}"
+  expect:
+    code: 200
+    body:
+      message: preout-prein-test-sufin-sufout

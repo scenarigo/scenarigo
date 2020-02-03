@@ -3,10 +3,14 @@ package plugin
 import (
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/schema"
+	"github.com/zoncoen/scenarigo/template"
 )
 
 // Context represents a scenarigo context.
 type Context = context.Context
+
+// LeftArrowFunc represents a left arrow function.
+type LeftArrowFunc = template.Func
 
 // Step represents a step plugin.
 type Step interface {

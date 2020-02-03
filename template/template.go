@@ -163,6 +163,7 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 	return vs[0].Interface(), nil
 }
 
+// Func represents a left arrow function.
 type Func interface {
 	Exec(arg interface{}) (interface{}, error)
 	UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error)
