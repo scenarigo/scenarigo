@@ -3,9 +3,12 @@ package parser
 import (
 	"bufio"
 	"io"
+	"io/ioutil"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/goccy/go-yaml/lexer"
 
 	"github.com/zoncoen/scenarigo/template/token"
 )
@@ -18,6 +21,10 @@ type scanner struct {
 	pos                int
 	buf                []rune
 	isReadingParameter bool
+
+	// for left arrow expression
+	expectColon bool
+	yamlScanner *yamlScanner
 }
 
 func newScanner(r io.Reader) *scanner {
@@ -43,6 +50,9 @@ func (s *scanner) read() rune {
 }
 
 func (s *scanner) unread(ch rune) {
+	if ch == eof {
+		return
+	}
 	s.buf = append(s.buf, ch)
 	s.pos--
 }
@@ -82,7 +92,8 @@ scan:
 			b.WriteRune(ch)
 		}
 	}
-	return s.pos - b.Len(), token.STRING, b.String()
+	str := b.String()
+	return s.pos - runesLen(str), token.STRING, str
 }
 
 func (s *scanner) scanString() (int, token.Token, string) {
@@ -100,7 +111,8 @@ scan:
 			b.WriteRune(ch)
 		}
 	}
-	return s.pos - b.Len() - 2, token.STRING, b.String()
+	str := b.String()
+	return s.pos - runesLen(str) - 2, token.STRING, str
 }
 
 func (s *scanner) scanInt(head rune) (int, token.Token, string) {
@@ -140,11 +152,37 @@ scan:
 		s.unread(ch)
 		break scan
 	}
-	return s.pos - b.Len(), token.IDENT, b.String()
+	str := b.String()
+	return s.pos - runesLen(str), token.IDENT, str
 }
 
 func (s *scanner) scan() (int, token.Token, string) {
+	if s.yamlScanner != nil {
+		pos, tok, lit := s.yamlScanner.scan()
+		if tok == token.EOF {
+			s.yamlScanner = nil
+			return pos, token.LINE_BREAK, lit
+		}
+		return pos, tok, lit
+	}
+
 	if !s.isReadingParameter {
+		if s.expectColon {
+			s.expectColon = false
+			if ch := s.read(); ch != ':' {
+				return s.pos - 1, token.ILLEGAL, string(ch)
+			}
+			b, err := ioutil.ReadAll(s.r)
+			if err != nil {
+				return s.pos, token.ILLEGAL, err.Error()
+			}
+			s.yamlScanner = &yamlScanner{
+				tokens: lexer.Tokenize(string(b)),
+				pos:    s.pos,
+			}
+			return s.scan()
+		}
+
 		pos, tok, lit := s.scanRawString()
 		if tok == token.LDBRACE {
 			s.isReadingParameter = true
@@ -178,6 +216,13 @@ func (s *scanner) scan() (int, token.Token, string) {
 		return s.pos - 1, token.PERIOD, "."
 	case '+':
 		return s.pos - 1, token.ADD, "+"
+	case '<':
+		next := s.read()
+		if next == '-' {
+			s.expectColon = true
+			return s.pos - 2, token.LARROW, "<-"
+		}
+		s.unread(next)
 	default:
 		if ch == '"' {
 			return s.scanString()
@@ -198,4 +243,8 @@ func isLetter(ch rune) bool {
 
 func isDigit(ch rune) bool {
 	return '0' <= ch && ch <= '9' || ch >= utf8.RuneSelf && unicode.IsDigit(ch)
+}
+
+func runesLen(s string) int {
+	return len([]rune(s))
 }

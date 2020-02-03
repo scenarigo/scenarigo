@@ -395,6 +395,151 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
+			"function call with YAML arg": {
+				src: strings.Trim(`
+{{test <-}}:
+  foo: one
+  bar: '{{2}}'
+  baz: 3
+`, "\n"),
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.IDENT,
+						lit: "test",
+					},
+					{
+						pos: 8,
+						tok: token.LARROW,
+						lit: "<-",
+					},
+					{
+						pos: 10,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+					{
+						pos: 13,
+						tok: token.STRING,
+						lit: `
+  foo: one
+  bar: `,
+					},
+					{
+						pos: 33,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 35,
+						tok: token.INT,
+						lit: "2",
+					},
+					{
+						pos: 36,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+					{
+						pos: 39,
+						tok: token.STRING,
+						lit: `
+  baz: 3`,
+					},
+					{
+						pos: 48,
+						tok: token.LINE_BREAK,
+						lit: "",
+					},
+				},
+			},
+			"function call with YAML arg (nest)": {
+				src: strings.Trim(`
+{{foo <-}}:
+  a: 1
+  b: |
+    {{bar <-}}:
+      c: 3
+  d: 4
+`, "\n"),
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.IDENT,
+						lit: "foo",
+					},
+					{
+						pos: 7,
+						tok: token.LARROW,
+						lit: "<-",
+					},
+					{
+						pos: 9,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+					{
+						pos: 12,
+						tok: token.STRING,
+						lit: `
+  a: 1
+  b: |
+    `,
+					},
+					{
+						pos: 31,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 33,
+						tok: token.IDENT,
+						lit: "bar",
+					},
+					{
+						pos: 37,
+						tok: token.LARROW,
+						lit: "<-",
+					},
+					{
+						pos: 39,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+					{
+						pos: 42,
+						tok: token.STRING,
+						lit: `
+      c: 3
+  `,
+					},
+					{
+						pos: 56,
+						tok: token.LINE_BREAK,
+						lit: "",
+					},
+					{
+						pos: 56,
+						tok: token.STRING,
+						lit: `d: 4`,
+					},
+					{
+						pos: 60,
+						tok: token.LINE_BREAK,
+						lit: "",
+					},
+				},
+			},
 			"add": {
 				src: `{{"test"+"1"}}`,
 				expected: []result{
@@ -432,16 +577,19 @@ func TestScanner_Scan(t *testing.T) {
 				for i, e := range test.expected {
 					pos, tok, lit := s.scan()
 					if tok == token.EOF {
-						t.Fatalf("[%d] unexpected EOF", i)
+						t.Errorf("[%d] unexpected EOF", i)
 					}
 					if got, expected := pos, e.pos; got != expected {
-						t.Fatalf(`[%d] expected %d but got %d`, i, expected, got)
+						t.Errorf(`[%d] expected %d but got %d`, i, expected, got)
 					}
 					if got, expected := tok, e.tok; got != expected {
-						t.Fatalf(`[%d] expected "%s" but got "%s"`, i, expected, got)
+						t.Errorf(`[%d] expected "%s" but got "%s"`, i, expected, got)
 					}
 					if got, expected := lit, e.lit; got != expected {
-						t.Fatalf(`[%d] expected "%s" but got "%s"`, i, expected, got)
+						t.Errorf(`[%d] expected "%s" but got "%s"`, i, expected, got)
+					}
+					if t.Failed() {
+						t.FailNow()
 					}
 				}
 				pos, tok, lit := s.scan()

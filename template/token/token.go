@@ -11,16 +11,19 @@ const (
 	INT    // 123
 	IDENT  // vars
 
-	ADD // +
+	ADD  // +
+	CALL // }}:\n
 
-	LPAREN  // (
-	RPAREN  // )
-	LBRACK  // [
-	RBRACK  // ]
-	LDBRACE // {{
-	RDBRACE // }}
-	COMMA   // ,
-	PERIOD  // .
+	LPAREN     // (
+	RPAREN     // )
+	LBRACK     // [
+	RBRACK     // ]
+	LDBRACE    // {{
+	RDBRACE    // }}
+	COMMA      // ,
+	PERIOD     // .
+	LARROW     // <-
+	LINE_BREAK // end of a larrow expression argument
 )
 
 // String returns t as string.
@@ -52,6 +55,28 @@ func (t Token) String() string {
 		return "comma"
 	case PERIOD:
 		return "period"
+	case LARROW:
+		return "<-"
+	case LINE_BREAK:
+		return "line_break"
 	}
 	return "illegal"
+}
+
+// A set of constants for precedence-based expression parsing.
+// Non-operators have lowest precedence.
+const (
+	LowestPrec  = 0 // non-operators
+	HighestPrec = 3
+)
+
+// Precedence returns the operator precedence of the binary
+// operator op. If op is not a binary operator, the result
+// is LowestPrecedence.
+func (op Token) Precedence() int {
+	switch op {
+	case ADD, LARROW, LDBRACE, STRING:
+		return 1
+	}
+	return LowestPrec
 }
