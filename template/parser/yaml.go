@@ -71,18 +71,16 @@ L:
 				continue
 			}
 
-			// no template
 			if s.childTok == token.STRING {
-				lit := s.childLit
 				s.next()
-				if s.childTok == token.EOF {
+				if s.childTok == token.EOF { // no template
 					s.child = nil
 					tokens = append(tokens, tok)
 					s.pos += runesLen(tok.Origin)
 					continue
 				}
-				tok.Value = lit
-				tok.Origin = lit
+				tok.Value = s.preChildLit
+				tok.Origin = s.preChildLit
 				tokens = append(tokens, tok)
 				s.pos += runesLen(tok.Origin)
 			}

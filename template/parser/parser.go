@@ -11,6 +11,7 @@ import (
 // Parser represents a parser.
 type Parser struct {
 	s      *scanner
+	cal    *posCalculator
 	pos    int
 	tok    token.Token
 	lit    string
@@ -19,7 +20,11 @@ type Parser struct {
 
 // NewParser returns a new parser.
 func NewParser(r io.Reader) *Parser {
-	return &Parser{s: newScanner(r)}
+	cal := &posCalculator{}
+	return &Parser{
+		s:   newScanner(io.TeeReader(r, cal)),
+		cal: cal,
+	}
 }
 
 // Parse parses the template string and returns the corresponding ast.Node.
@@ -225,4 +230,9 @@ func (p *Parser) expect(tok token.Token) int {
 	}
 	p.next() // make progress
 	return pos
+}
+
+// Pos returns the Position value for the given offset.
+func (p *Parser) Pos(pos int) *Position {
+	return p.cal.Pos(pos)
 }
