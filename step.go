@@ -1,6 +1,9 @@
 package scenarigo
 
 import (
+	"github.com/lestrrat-go/backoff"
+	"golang.org/x/xerrors"
+
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/plugin"
@@ -40,26 +43,45 @@ func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 		return ctx
 	}
 
-	newCtx, resp, err := s.Request.Invoke(ctx)
-	if err != nil {
-		ctx.Reporter().Fatal(err)
-	}
-	ctx = newCtx
+	return invokeAndAssert(ctx, s)
+}
 
-	assertion, err := s.Expect.Build(ctx)
+func invokeAndAssert(ctx *context.Context, s *schema.Step) *context.Context {
+	policy, err := s.Retry.Build()
 	if err != nil {
-		ctx.Reporter().Fatal(err)
+		ctx.Reporter().Fatal(xerrors.Errorf("invalid retry policy: %w", err))
 	}
-	if err := assertion.Assert(resp); err != nil {
-		if assertErr, ok := err.(*assert.Error); ok {
-			for _, err := range assertErr.Errors {
-				ctx.Reporter().Error(err)
-			}
-			ctx.Reporter().FailNow()
-		} else {
-			ctx.Reporter().Fatal(err)
+
+	b, cancel := policy.Start(ctx.RequestContext())
+	defer cancel()
+
+	var i int
+	for backoff.Continue(b) {
+		ctx.Reporter().Logf("[%d] send request", i)
+		i++
+		newCtx, resp, err := s.Request.Invoke(ctx)
+		if err != nil {
+			ctx.Reporter().Log(err)
+			continue
 		}
+		assertion, err := s.Expect.Build(newCtx)
+		if err != nil {
+			ctx.Reporter().Log(err)
+			continue
+		}
+		if err := assertion.Assert(resp); err != nil {
+			if assertErr, ok := err.(*assert.Error); ok {
+				for _, err := range assertErr.Errors {
+					ctx.Reporter().Log(err)
+				}
+			} else {
+				ctx.Reporter().Log(err)
+			}
+			continue
+		}
+		return newCtx
 	}
 
+	ctx.Reporter().FailNow()
 	return ctx
 }

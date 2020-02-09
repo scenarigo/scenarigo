@@ -24,3 +24,19 @@ steps:
     code: 200
     body:
       message: preout-prein-test-sufin-sufout
+
+---
+title: retry
+steps:
+- title: POST /get
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/count"
+  expect:
+    code: 200
+    body: "2"
+  retry:
+    constant:
+      interval: 1ms
+      maxRetries: 1

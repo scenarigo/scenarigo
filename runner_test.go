@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -351,6 +353,11 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 					}
 					w.Header().Set("Content-Type", "application/json")
 					w.Write(b)
+				})
+				var count int32
+				mux.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
+					i := atomic.AddInt32(&count, 1)
+					w.Write([]byte(strconv.Itoa(int(i))))
 				})
 
 				s := httptest.NewServer(mux)
