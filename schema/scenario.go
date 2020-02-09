@@ -40,6 +40,7 @@ type Step struct {
 	Include     string                 `yaml:"include"`
 	Ref         string                 `yaml:"ref"`
 	Bind        Bind                   `yaml:"bind"`
+	Retry       *RetryPolicy           `yaml:"retry"`
 }
 
 type stepUnmarshaller Step
