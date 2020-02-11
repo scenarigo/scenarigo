@@ -2,25 +2,66 @@ package lsp
 
 import (
 	"context"
+	"sync"
 
 	"github.com/go-language-server/jsonrpc2"
 	"github.com/go-language-server/protocol"
+	"github.com/zoncoen/scenarigo/lsp/source"
+	"go.uber.org/zap"
 )
 
 var _ protocol.ServerInterface = (*Server)(nil)
 
-type Server struct{}
+type serverState int
 
-func (s *Server) Run(ctx context.Context) (err error) {
-	panic("not implemented")
+const (
+	serverCreated serverState = iota
+	serverInitializing
+	serverInitialized
+	serverShutDown
+)
+
+type Server struct {
+	Conn    *jsonrpc2.Conn
+	session source.Session
+
+	stateMu sync.Mutex
+	state   serverState
+
+	pendingFolders []protocol.WorkspaceFolder
+
+	logger *zap.Logger
 }
 
-func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams) (result *protocol.InitializeResult, err error) {
-	return nil, notImplemented("Initialize")
+func NewServer(ctx context.Context, stream jsonrpc2.Stream, opts ...Option) (*Server, error) {
+	srv := &Server{
+		session: source.NewSession(),
+	}
+	srv.Conn, _ = protocol.NewServer(ctx, srv, stream, zap.NewNop())
+	for _, opt := range opts {
+		opt(srv)
+	}
+	return srv, nil
+}
+
+type Option func(*Server)
+
+func WithLogger(logger *zap.Logger) Option {
+	return func(s *Server) {
+		s.logger = logger.Named("server")
+	}
+}
+
+func (s *Server) Run(ctx context.Context) error {
+	return s.Conn.Run(ctx)
+}
+
+func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
+	return s.initialize(ctx, params)
 }
 
 func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) (err error) {
-	return notImplemented("Initialized")
+	return s.initialized(ctx, params)
 }
 
 func (s *Server) Shutdown(ctx context.Context) (err error) {
@@ -47,8 +88,8 @@ func (s *Server) ColorPresentation(ctx context.Context, params *protocol.ColorPr
 	return nil, notImplemented("ColorPresentation")
 }
 
-func (s *Server) Completion(ctx context.Context, params *protocol.CompletionParams) (result *protocol.CompletionList, err error) {
-	return nil, notImplemented("Completion")
+func (s *Server) Completion(ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	return s.completion(ctx, params)
 }
 
 func (s *Server) CompletionResolve(ctx context.Context, params *protocol.CompletionItem) (result *protocol.CompletionItem, err error) {
@@ -64,7 +105,7 @@ func (s *Server) Definition(ctx context.Context, params *protocol.TextDocumentPo
 }
 
 func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDocumentParams) (err error) {
-	return notImplemented("DidChange")
+	return s.didChange(ctx, params)
 }
 
 func (s *Server) DidChangeConfiguration(ctx context.Context, params *protocol.DidChangeConfigurationParams) (err error) {
@@ -84,7 +125,7 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 }
 
 func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) (err error) {
-	return notImplemented("DidOpen")
+	return s.didOpen(ctx, params)
 }
 
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) (err error) {
