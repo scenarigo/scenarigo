@@ -6,13 +6,15 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	yamljson "github.com/kubernetes-sigs/yaml"
 	"github.com/pkg/errors"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/yaml"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	yamljson "sigs.k8s.io/yaml"
+
+	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/internal/reflectutil"
 )
 
 // Request represents a request.

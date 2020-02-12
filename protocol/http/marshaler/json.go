@@ -1,8 +1,9 @@
 package marshaler
 
 import (
-	yamljson "github.com/kubernetes-sigs/yaml"
 	"github.com/zoncoen/yaml"
+
+	yamljson "sigs.k8s.io/yaml"
 )
 
 func init() {

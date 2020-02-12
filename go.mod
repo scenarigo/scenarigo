@@ -14,7 +14,6 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/google/go-cmp v0.3.0
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/kubernetes-sigs/yaml v1.1.0
 	github.com/lestrrat-go/backoff v1.0.0
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/pkg/errors v0.8.1
@@ -29,4 +28,5 @@ require (
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 	google.golang.org/genproto v0.0.0-20191114150713-6bbd007550de
 	google.golang.org/grpc v1.25.1
+	sigs.k8s.io/yaml v1.2.0
 )
