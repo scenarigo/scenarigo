@@ -258,12 +258,9 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 						if err := d.Decode(&body); err != nil {
 							t.Fatalf("failed to decode request body: %s", err)
 						}
-						var msg string
-						if m, ok := body["message"]; ok {
-							msg = m
-						}
 						b, err := json.Marshal(map[string]string{
-							"message": msg,
+							"message": body["message"],
+							"id":      r.URL.Query().Get("id"),
 						})
 						if err != nil {
 							t.Fatalf("failed to marshal: %s", err)

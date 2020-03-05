@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"testing"
 
@@ -52,7 +53,7 @@ func TestRequest_Invoke(t *testing.T) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(fmt.Sprintf(`{"message": "%s"}`, body["message"])))
+			w.Write([]byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id"))))
 		})
 		m.HandleFunc("/echo/gzipped", func(w http.ResponseWriter, req *http.Request) {
 			if req.Method != http.MethodPost {
@@ -75,7 +76,7 @@ func TestRequest_Invoke(t *testing.T) {
 				w.Write([]byte(err.Error()))
 				return
 			}
-			res := []byte(fmt.Sprintf(`{"message": "%s"}`, body["message"]))
+			res := []byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id")))
 			gz := new(bytes.Buffer)
 			ww := gzip.NewWriter(gz)
 			if _, err := ww.Write(res); err != nil {
@@ -113,18 +114,20 @@ func TestRequest_Invoke(t *testing.T) {
 				request: &Request{
 					Method: http.MethodPost,
 					URL:    srv.URL + "/echo",
+					Query:  url.Values{"id": []string{"123"}},
 					Header: map[string][]string{"Authorization": []string{auth}},
 					Body:   map[string]string{"message": "hey"},
 				},
 				result: &result{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey"},
+					body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 			"Post (gzipped)": {
 				request: &Request{
 					Method: http.MethodPost,
 					URL:    srv.URL + "/echo/gzipped",
+					Query:  url.Values{"id": []string{"123"}},
 					Header: map[string][]string{
 						"Authorization":   []string{auth},
 						"Accept-Encoding": []string{"gzip"},
@@ -133,7 +136,7 @@ func TestRequest_Invoke(t *testing.T) {
 				},
 				result: &result{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey"},
+					body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 			"with vars": {
@@ -141,16 +144,18 @@ func TestRequest_Invoke(t *testing.T) {
 					"url":     srv.URL + "/echo",
 					"auth":    auth,
 					"message": "hey",
+					"id":      "123",
 				},
 				request: &Request{
 					Method: http.MethodPost,
 					URL:    "{{vars.url}}",
+					Query:  map[string]string{"id": "{{vars.id}}"},
 					Header: map[string][]string{"Authorization": []string{"{{vars.auth}}"}},
 					Body:   map[string]string{"message": "{{vars.message}}"},
 				},
 				result: &result{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey"},
+					body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 			"custom client": {
@@ -166,11 +171,12 @@ func TestRequest_Invoke(t *testing.T) {
 					Client: "{{vars.client}}",
 					Method: http.MethodPost,
 					URL:    srv.URL + "/echo",
+					Query:  url.Values{"id": []string{"123"}},
 					Body:   map[string]string{"message": "hey"},
 				},
 				result: &result{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey"},
+					body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 		}
@@ -276,6 +282,7 @@ func TestRequest_Invoke_Log(t *testing.T) {
 				req := &Request{
 					Method: http.MethodPost,
 					URL:    srv.URL + "/echo",
+					Query:  url.Values{"query": []string{"hello"}},
 					Body:   map[string]string{"message": "hey"},
 				}
 				if _, _, err := req.Invoke(ctx); err != nil {
@@ -289,7 +296,7 @@ func TestRequest_Invoke_Log(t *testing.T) {
 --- PASS: test.yaml (0.00s)
     request:
         method: POST
-        url: %s/echo
+        url: %s/echo?query=hello
         header:
           User-Agent:
           - %s

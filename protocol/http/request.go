@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -26,6 +27,7 @@ type Request struct {
 	Client string      `yaml:"client,omitempty"`
 	Method string      `yaml:"method"`
 	URL    string      `yaml:"url"`
+	Query  interface{} `yaml:"query,omitempty"`
 	Header interface{} `yaml:"header,omitempty"`
 	Body   interface{} `yaml:"body,omitempty"`
 }
@@ -128,9 +130,35 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	if err != nil {
 		return nil, nil, errors.Errorf("failed to get URL: %s", err)
 	}
-	url, ok := x.(string)
+	urlStr, ok := x.(string)
 	if !ok {
 		return nil, nil, errors.Errorf(`URL must be "string" but got "%T"`, x)
+	}
+
+	if r.Query != nil {
+		u, err := url.Parse(urlStr)
+		if err != nil {
+			return nil, nil, errors.Errorf("invalid url: %s: %s", urlStr, err)
+		}
+		query := u.Query()
+
+		x, err := ctx.ExecuteTemplate(r.Query)
+		if err != nil {
+			return nil, nil, errors.Errorf("failed to set query: %s", err)
+		}
+		q, err := reflectutil.ConvertStringsMap(reflect.ValueOf(x))
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "failed to set query")
+		}
+		for k, vs := range q {
+			vs := vs
+			for _, v := range vs {
+				query.Add(k, v)
+			}
+		}
+
+		u.RawQuery = query.Encode()
+		urlStr = u.String()
 	}
 
 	header := http.Header{}
@@ -171,7 +199,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 		reader = bytes.NewReader(b)
 	}
 
-	req, err := http.NewRequest(method, url, reader)
+	req, err := http.NewRequest(method, urlStr, reader)
 	if err != nil {
 		return nil, nil, errors.Errorf("failed to create request: %s", err)
 	}
