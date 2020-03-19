@@ -2,7 +2,11 @@
 package assert
 
 import (
+	"fmt"
+
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/query/extractor"
+	"github.com/zoncoen/yaml"
 )
 
 // Assertion implements value assertion.
@@ -26,4 +30,47 @@ func assertFunc(q *query.Query, f func(interface{}) error) Assertion {
 		}
 		return f(got)
 	})
+}
+
+// Build is a utility function to create Go value assertion from YAML.
+func Build(expect interface{}) Assertion {
+	var assertions []Assertion
+	if expect != nil {
+		assertions = build(query.New(), expect)
+	}
+	return AssertionFunc(func(v interface{}) error {
+		var assertErr error
+		for _, assertion := range assertions {
+			assertion := assertion
+			if err := assertion.Assert(v); err != nil {
+				assertErr = AppendError(assertErr, err)
+			}
+		}
+		return assertErr
+	})
+}
+
+func build(q *query.Query, expect interface{}) []Assertion {
+	var assertions []Assertion
+	switch v := expect.(type) {
+	case yaml.MapSlice:
+		for _, item := range v {
+			item := item
+			key := fmt.Sprintf("%s", item.Key)
+			assertions = append(assertions, build(q.Append(extractor.Key(key)), item.Value)...)
+		}
+	case []interface{}:
+		for i, elm := range v {
+			elm := elm
+			assertions = append(assertions, build(q.Index(i), elm)...)
+		}
+	default:
+		switch v := expect.(type) {
+		case func(*query.Query) Assertion:
+			assertions = append(assertions, v(q))
+		default:
+			assertions = append(assertions, Equal(q, v))
+		}
+	}
+	return assertions
 }

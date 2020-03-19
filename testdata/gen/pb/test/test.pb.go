@@ -8,6 +8,8 @@ import (
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	math "math"
 )
 
@@ -269,6 +271,14 @@ func (c *testClient) Echo(ctx context.Context, in *EchoRequest, opts ...grpc.Cal
 // TestServer is the server API for Test service.
 type TestServer interface {
 	Echo(context.Context, *EchoRequest) (*EchoResponse, error)
+}
+
+// UnimplementedTestServer can be embedded to have forward compatible implementations.
+type UnimplementedTestServer struct {
+}
+
+func (*UnimplementedTestServer) Echo(ctx context.Context, req *EchoRequest) (*EchoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Echo not implemented")
 }
 
 func RegisterTestServer(s *grpc.Server, srv TestServer) {

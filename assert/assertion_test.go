@@ -1,14 +1,13 @@
-package protocol
+package assert
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/yaml"
 )
 
-func TestCreateAssertion(t *testing.T) {
+func TestBuild(t *testing.T) {
 	var str = `
 deps:
 - name: scenarigo
@@ -31,14 +30,14 @@ deps:
 		".deps[0].tags[0]",
 		".deps[0].tags[1]",
 	}
-	assertion := CreateAssertion(in)
+	assertion := Build(in)
 
 	type info struct {
 		Deps []map[string]interface{} `yaml:"deps"`
 	}
 
 	t.Run("no assertion", func(t *testing.T) {
-		assertion := CreateAssertion(nil)
+		assertion := Build(nil)
 		v := info{}
 		if err := assertion.Assert(v); err != nil {
 			t.Errorf("unexpected error: %s", err)
@@ -80,7 +79,7 @@ deps:
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
-		errs := err.(*assert.Error).Errors
+		errs := err.(*Error).Errors
 		if got, expect := len(errs), len(qs); got != expect {
 			t.Fatalf("expected %d but got %d", expect, got)
 		}
@@ -96,7 +95,7 @@ deps:
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
-		errs := err.(*assert.Error).Errors
+		errs := err.(*Error).Errors
 		if got, expect := len(errs), len(qs); got != expect {
 			t.Fatalf("expected %d but got %d", expect, got)
 		}

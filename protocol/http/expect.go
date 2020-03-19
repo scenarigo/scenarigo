@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/protocol"
 	"github.com/zoncoen/yaml"
 )
 
@@ -22,7 +21,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	if err != nil {
 		return nil, errors.Errorf("invalid expect response: %s", err)
 	}
-	assertion := protocol.CreateAssertion(expectBody)
+	assertion := assert.Build(expectBody)
 
 	return assert.AssertionFunc(func(v interface{}) error {
 		res, ok := v.(*result)

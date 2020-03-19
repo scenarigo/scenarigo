@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/protocol"
 	"github.com/zoncoen/yaml"
 )
 
@@ -36,7 +35,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	if err != nil {
 		return nil, errors.Errorf("invalid expect response: %s", err)
 	}
-	assertion := protocol.CreateAssertion(expectBody)
+	assertion := assert.Build(expectBody)
 
 	return assert.AssertionFunc(func(v interface{}) error {
 		message, stErr, err := extract(v)
@@ -124,7 +123,7 @@ func (e *Expect) assertStatusDetails(sts *status.Status) error {
 			return errors.Errorf(`expected status.details[%d] is "%s" but got detail is "%s": details=[ %s ]`, i, expectName, name, detailsString(sts))
 		}
 
-		if err := protocol.CreateAssertion(expectDetail).Assert(actual); err != nil {
+		if err := assert.Build(expectDetail).Assert(actual); err != nil {
 			return err
 		}
 	}
