@@ -32,7 +32,7 @@ func assertFunc(q *query.Query, f func(interface{}) error) Assertion {
 	})
 }
 
-// Build is a utility function to create Go value assertion from YAML.
+// Build creates an assertion from Go value.
 func Build(expect interface{}) Assertion {
 	var assertions []Assertion
 	if expect != nil {
