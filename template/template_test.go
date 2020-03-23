@@ -85,7 +85,7 @@ func TestTemplate_Execute(t *testing.T) {
 				"f": func(s string) string { return s }},
 			expect: "ok",
 		},
-		"function call with YAML arg": {
+		"left arrow func": {
 			str: strings.Trim(`
 {{echo <-}}:
   message: '{{message}}'
@@ -96,7 +96,7 @@ func TestTemplate_Execute(t *testing.T) {
 			},
 			expect: "hello",
 		},
-		"function call with YAML arg (nest)": {
+		"left arrow func (nest)": {
 			str: strings.Trim(`
 {{echo <-}}:
   message: |
@@ -109,7 +109,20 @@ func TestTemplate_Execute(t *testing.T) {
 			},
 			expect: "hello",
 		},
-		"function call with YAML arg (complex)": {
+		"left arrow func with the arg which contains non-string variable": {
+			str: strings.Trim(`
+{{echo <-}}:
+  message: |
+    {{echo <-}}:
+      message: '{{message}}'
+`, "\n"),
+			data: map[string]interface{}{
+				"echo":    &echoFunc{},
+				"message": 0,
+			},
+			expect: "0",
+		},
+		"left arrow func (complex)": {
 			str: strings.Trim(`
 {{join <-}}:
   prefix: preout-
