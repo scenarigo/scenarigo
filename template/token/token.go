@@ -14,16 +14,16 @@ const (
 	ADD  // +
 	CALL // }}:\n
 
-	LPAREN     // (
-	RPAREN     // )
-	LBRACK     // [
-	RBRACK     // ]
-	LDBRACE    // {{
-	RDBRACE    // }}
-	COMMA      // ,
-	PERIOD     // .
-	LARROW     // <-
-	LINE_BREAK // end of a larrow expression argument
+	LPAREN    // (
+	RPAREN    // )
+	LBRACK    // [
+	RBRACK    // ]
+	LDBRACE   // {{
+	RDBRACE   // }}
+	COMMA     // ,
+	PERIOD    // .
+	LARROW    // <-
+	LINEBREAK // end of a larrow expression argument
 )
 
 // String returns t as string.
@@ -57,8 +57,8 @@ func (t Token) String() string {
 		return "period"
 	case LARROW:
 		return "<-"
-	case LINE_BREAK:
-		return "line_break"
+	case LINEBREAK:
+		return "line break"
 	}
 	return "illegal"
 }
@@ -73,8 +73,8 @@ const (
 // Precedence returns the operator precedence of the binary
 // operator op. If op is not a binary operator, the result
 // is LowestPrecedence.
-func (op Token) Precedence() int {
-	switch op {
+func (t Token) Precedence() int {
+	switch t {
 	case ADD, LARROW, LDBRACE, STRING:
 		return 1
 	}

@@ -162,7 +162,7 @@ func (s *scanner) scan() (int, token.Token, string) {
 		pos, tok, lit := s.yamlScanner.scan()
 		if tok == token.EOF {
 			s.yamlScanner = nil
-			return pos, token.LINE_BREAK, lit
+			return pos, token.LINEBREAK, lit
 		}
 		return pos, tok, lit
 	}

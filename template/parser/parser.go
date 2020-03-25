@@ -53,7 +53,7 @@ func (p *Parser) parseBinaryExpr(prec int) ast.Expr {
 	x := p.parseOperand()
 L:
 	for {
-		if p.tok == token.LINE_BREAK {
+		if p.tok == token.LINEBREAK {
 			return x
 		}
 
@@ -95,7 +95,7 @@ L:
 				Rdbrace: p.expect(token.RDBRACE),
 				Arg:     p.parseExpr(),
 			}
-			if p.tok == token.LINE_BREAK {
+			if p.tok == token.LINEBREAK {
 				if p.lit != "" {
 					p.tok = token.STRING
 					return x

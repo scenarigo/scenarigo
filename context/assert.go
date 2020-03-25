@@ -24,7 +24,7 @@ func (f leftArrowFunc) Exec(arg interface{}) (interface{}, error) {
 	return f(assertion), nil
 }
 
-func (_ leftArrowFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (leftArrowFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
 	var i yaml.KeyOrderPreservedInterface
 	if err := unmarshal(&i); err != nil {
 		return nil, err

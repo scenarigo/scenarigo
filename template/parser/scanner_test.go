@@ -453,7 +453,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 					{
 						pos: 48,
-						tok: token.LINE_BREAK,
+						tok: token.LINEBREAK,
 						lit: "",
 					},
 				},
@@ -524,7 +524,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 					{
 						pos: 53,
-						tok: token.LINE_BREAK,
+						tok: token.LINEBREAK,
 						lit: "\n  ",
 					},
 					{
@@ -534,7 +534,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 					{
 						pos: 60,
-						tok: token.LINE_BREAK,
+						tok: token.LINEBREAK,
 						lit: "",
 					},
 				},

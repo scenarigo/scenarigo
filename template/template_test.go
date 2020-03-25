@@ -180,7 +180,7 @@ type echoArg struct {
 	Message string `yaml:"message"`
 }
 
-func (_ *echoFunc) Exec(in interface{}) (interface{}, error) {
+func (*echoFunc) Exec(in interface{}) (interface{}, error) {
 	arg, ok := in.(echoArg)
 	if !ok {
 		return nil, errors.New("arg must be a echoArg")
@@ -188,7 +188,7 @@ func (_ *echoFunc) Exec(in interface{}) (interface{}, error) {
 	return arg.Message, nil
 }
 
-func (_ *echoFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (*echoFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
 	var arg echoArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ type joinArg struct {
 	Suffix string `yaml:"suffix"`
 }
 
-func (_ *joinFunc) Exec(in interface{}) (interface{}, error) {
+func (*joinFunc) Exec(in interface{}) (interface{}, error) {
 	arg, ok := in.(*joinArg)
 	if !ok {
 		return nil, errors.New("arg must be a joinArg")
@@ -212,7 +212,7 @@ func (_ *joinFunc) Exec(in interface{}) (interface{}, error) {
 	return arg.Prefix + arg.Text + arg.Suffix, nil
 }
 
-func (_ *joinFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (*joinFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
 	var arg joinArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ type callArg struct {
 	Arg string      `yaml:"arg"`
 }
 
-func (_ *callFunc) Exec(in interface{}) (interface{}, error) {
+func (*callFunc) Exec(in interface{}) (interface{}, error) {
 	arg, ok := in.(*callArg)
 	if !ok {
 		return nil, errors.New("arg must be a callArg")
@@ -239,7 +239,7 @@ func (_ *callFunc) Exec(in interface{}) (interface{}, error) {
 	return f(arg.Arg), nil
 }
 
-func (_ *callFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (*callFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
 	var arg callArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
