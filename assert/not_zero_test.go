@@ -38,6 +38,7 @@ func TestNotZero(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
+		test := test
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			assertion := NotZero(query.New())
 			if err := assertion.Assert(test.ok); err != nil {
