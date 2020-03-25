@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
+	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/yaml"
 )
 
@@ -22,15 +23,7 @@ func Execute(i, data interface{}) (interface{}, error) {
 }
 
 func execute(v reflect.Value, data interface{}) (reflect.Value, error) {
-	if v.Kind() == reflect.Interface {
-		v = v.Elem()
-	}
-	if v.Kind() == reflect.Ptr {
-		switch v.Type().Elem().Kind() {
-		case reflect.Map, reflect.Slice, reflect.Struct, reflect.String:
-			v = v.Elem()
-		}
-	}
+	v = reflectutil.Elem(v)
 	switch v.Kind() {
 	case reflect.Map:
 		for _, k := range v.MapKeys() {
@@ -68,10 +61,11 @@ func execute(v reflect.Value, data interface{}) (reflect.Value, error) {
 		default:
 			for i := 0; i < v.NumField(); i++ {
 				field := v.Field(i)
-				_, err := execute(field, data)
+				x, err := execute(field, data)
 				if err != nil {
 					return reflect.Value{}, err
 				}
+				field.Set(x)
 			}
 		}
 	case reflect.String:

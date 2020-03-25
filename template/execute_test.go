@@ -8,6 +8,7 @@ import (
 )
 
 func TestExecute(t *testing.T) {
+	var iface interface{} = `{{"test"}}`
 	tests := map[string]struct {
 		in       interface{}
 		expected interface{}
@@ -111,6 +112,10 @@ func TestExecute(t *testing.T) {
 					Value: nil,
 				},
 			},
+		},
+		"pointer to interface{}": {
+			in:       &iface,
+			expected: "test",
 		},
 	}
 	for name, test := range tests {
