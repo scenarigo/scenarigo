@@ -3,7 +3,6 @@ package template
 import (
 	"reflect"
 
-	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/yaml"
 )
@@ -14,7 +13,7 @@ var yamlMapItemType = reflect.TypeOf(yaml.MapItem{})
 func Execute(i, data interface{}) (interface{}, error) {
 	v, err := execute(reflect.ValueOf(i), data)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to execute template")
+		return nil, err
 	}
 	if v.IsValid() {
 		return v.Interface(), nil

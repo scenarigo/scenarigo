@@ -8,8 +8,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/goccy/go-yaml/lexer"
-
 	"github.com/zoncoen/scenarigo/template/token"
 )
 
@@ -176,10 +174,8 @@ func (s *scanner) scan() (int, token.Token, string) {
 			if err != nil {
 				return s.pos, token.ILLEGAL, err.Error()
 			}
-			s.yamlScanner = &yamlScanner{
-				tokens: lexer.Tokenize(string(b)),
-				pos:    s.pos,
-			}
+
+			s.yamlScanner = newYAMLScanner(string(b), s.pos)
 			return s.scan()
 		}
 

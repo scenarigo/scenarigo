@@ -357,8 +357,7 @@ func TestParser_Parse(t *testing.T) {
 													ValuePos: 103,
 													Kind:     token.STRING,
 													Value: `
-      suffix: -sufin
-  `,
+      suffix: -sufin`,
 												},
 											},
 										},

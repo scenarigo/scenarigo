@@ -300,7 +300,7 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				s := grpc.NewServer()
 				test.RegisterTestServer(s, testServer)
 
-				ln, err := net.Listen("tcp", ":0")
+				ln, err := net.Listen("tcp", "localhost:0")
 				if err != nil {
 					t.Fatalf("unexpected error: %s", err)
 				}

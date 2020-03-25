@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/printer"
 	yamltoken "github.com/goccy/go-yaml/token"
 
@@ -14,6 +15,7 @@ type yamlScanner struct {
 	printer printer.Printer
 	tokens  yamltoken.Tokens
 	pos     int
+	trail   string
 
 	child         *scanner
 	childPos      int
@@ -21,6 +23,27 @@ type yamlScanner struct {
 	childLit      string
 	preChildLit   string
 	afterChildPos int
+}
+
+func newYAMLScanner(s string, pos int) *yamlScanner {
+	// avoid to lost trailling spaces and linebreaks
+	runes := []rune(s)
+	trail := []rune{}
+	for i := len(runes) - 1; i >= 0; i-- {
+		switch ch := runes[i]; ch {
+		case ' ', '\n':
+			trail = append([]rune{ch}, trail...)
+			runes = runes[:i]
+			continue
+		}
+		break
+	}
+
+	return &yamlScanner{
+		tokens: lexer.Tokenize(string(runes)),
+		pos:    pos,
+		trail:  string(trail),
+	}
 }
 
 func (s *yamlScanner) scan() (int, token.Token, string) {
@@ -34,8 +57,7 @@ func (s *yamlScanner) scan() (int, token.Token, string) {
 	}
 
 	if len(s.tokens) == 0 {
-		suf := s.suffix()
-		return s.pos - len(suf), token.EOF, suf
+		return s.pos, token.EOF, s.trail
 	}
 
 	tokens := make([]*yamltoken.Token, 0, len(s.tokens))

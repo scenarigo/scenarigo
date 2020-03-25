@@ -520,13 +520,12 @@ func TestScanner_Scan(t *testing.T) {
 						pos: 42,
 						tok: token.STRING,
 						lit: `
-      c: 3
-  `,
+      c: 3`,
 					},
 					{
-						pos: 56,
+						pos: 53,
 						tok: token.LINE_BREAK,
-						lit: "",
+						lit: "\n  ",
 					},
 					{
 						pos: 56,
