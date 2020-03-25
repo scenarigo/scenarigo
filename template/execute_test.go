@@ -63,10 +63,10 @@ func TestExecute(t *testing.T) {
 		},
 		"map[string][]string": {
 			in: map[string][]string{
-				"env": []string{`{{"test"}}`},
+				"env": {`{{"test"}}`},
 			},
 			expected: map[string][]string{
-				"env": []string{"test"},
+				"env": {"test"},
 			},
 		},
 		"[]string": {

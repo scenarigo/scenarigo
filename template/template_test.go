@@ -73,8 +73,8 @@ func TestTemplate_Execute(t *testing.T) {
 		"query from data": {
 			str: "{{a.b[1]}}",
 			data: map[string]map[string][]string{
-				"a": map[string][]string{
-					"b": []string{"ng", "ok"},
+				"a": {
+					"b": {"ng", "ok"},
 				},
 			},
 			expect: "ok",

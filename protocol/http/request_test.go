@@ -115,7 +115,7 @@ func TestRequest_Invoke(t *testing.T) {
 					Method: http.MethodPost,
 					URL:    srv.URL + "/echo",
 					Query:  url.Values{"id": []string{"123"}},
-					Header: map[string][]string{"Authorization": []string{auth}},
+					Header: map[string][]string{"Authorization": {auth}},
 					Body:   map[string]string{"message": "hey"},
 				},
 				result: &result{
@@ -129,8 +129,8 @@ func TestRequest_Invoke(t *testing.T) {
 					URL:    srv.URL + "/echo/gzipped",
 					Query:  url.Values{"id": []string{"123"}},
 					Header: map[string][]string{
-						"Authorization":   []string{auth},
-						"Accept-Encoding": []string{"gzip"},
+						"Authorization":   {auth},
+						"Accept-Encoding": {"gzip"},
 					},
 					Body: map[string]string{"message": "hey"},
 				},
@@ -150,7 +150,7 @@ func TestRequest_Invoke(t *testing.T) {
 					Method: http.MethodPost,
 					URL:    "{{vars.url}}",
 					Query:  map[string]string{"id": "{{vars.id}}"},
-					Header: map[string][]string{"Authorization": []string{"{{vars.auth}}"}},
+					Header: map[string][]string{"Authorization": {"{{vars.auth}}"}},
 					Body:   map[string]string{"message": "{{vars.message}}"},
 				},
 				result: &result{
