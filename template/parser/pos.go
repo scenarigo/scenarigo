@@ -19,8 +19,7 @@ func (c *posCalculator) Write(p []byte) (n int, err error) {
 	var last int
 	for i, b := range c.buf {
 		if b == '\n' {
-			var line []byte
-			line = c.buf[last : i+1]
+			line := c.buf[last : i+1]
 			c.lines = append(c.lines, len([]rune(string(line))))
 			last = i + 1
 		}

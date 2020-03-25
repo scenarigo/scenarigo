@@ -2,7 +2,6 @@ package schema
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -21,10 +20,10 @@ func TestNeverBackoff(t *testing.T) {
 	done := make(chan error)
 	go func() {
 		if expect, got := true, backoff.Continue(b); got != expect {
-			done <- errors.New(fmt.Sprintf("expect %t but got %t", expect, got))
+			done <- fmt.Errorf("expect %t but got %t", expect, got)
 		}
 		if expect, got := false, backoff.Continue(b); got != expect {
-			done <- errors.New(fmt.Sprintf("expect %t but got %t", expect, got))
+			done <- fmt.Errorf("expect %t but got %t", expect, got)
 		}
 		done <- nil
 	}()

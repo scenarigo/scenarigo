@@ -365,10 +365,7 @@ func TestRequest_buildRequest(t *testing.T) {
 				t.Fatalf("unexpected error: %s", err)
 			}
 			if diff := cmp.Diff(test.expectReq(t), req, cmp.FilterPath(func(path cmp.Path) bool {
-				if path.String() == "ctx" {
-					return true
-				}
-				return false
+				return path.String() == "ctx"
 			}, cmp.Ignore())); diff != "" {
 				t.Errorf("request differs (-want +got):\n%s", diff)
 			}
