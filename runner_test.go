@@ -247,7 +247,7 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 							t.Fatalf("failed to parse form: %s", err)
 						}
 						w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-						w.Write([]byte(strings.Join([]string{
+						_, _ = w.Write([]byte(strings.Join([]string{
 							r.Form.Get("id"),
 							r.Form.Get("message"),
 							r.Form.Get("bool"),
@@ -267,7 +267,7 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 							t.Fatalf("failed to marshal: %s", err)
 						}
 						w.Header().Set("Content-Type", "application/json")
-						w.Write(b)
+						_, _ = w.Write(b)
 					}
 				})
 
@@ -314,7 +314,7 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				}
 
 				go func() {
-					s.Serve(ln)
+					_ = s.Serve(ln)
 				}()
 
 				return func() {
@@ -350,12 +350,12 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 						t.Fatalf("failed to marshal: %s", err)
 					}
 					w.Header().Set("Content-Type", "application/json")
-					w.Write(b)
+					_, _ = w.Write(b)
 				})
 				var count int32
 				mux.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
 					i := atomic.AddInt32(&count, 1)
-					w.Write([]byte(strconv.Itoa(int(i))))
+					_, _ = w.Write([]byte(strconv.Itoa(int(i))))
 				})
 
 				s := httptest.NewServer(mux)
@@ -378,7 +378,7 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 					defer r.Body.Close()
 					w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
-					io.Copy(w, r.Body)
+					_, _ = io.Copy(w, r.Body)
 				})
 
 				s := httptest.NewServer(mux)

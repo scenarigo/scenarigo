@@ -7,7 +7,9 @@ import (
 )
 
 func init() {
-	Register(&jsonMarshaler{})
+	if err := Register(&jsonMarshaler{}); err != nil {
+		panic(err)
+	}
 }
 
 type jsonMarshaler struct{}

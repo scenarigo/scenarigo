@@ -17,7 +17,7 @@ func TestRun(t *testing.T) {
 		}
 		defer r.Body.Close()
 		w.Header().Add("Content-Type", "application/json")
-		w.Write(b)
+		_, _ = w.Write(b)
 	}))
 	defer srv.Close()
 

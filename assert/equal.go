@@ -58,7 +58,7 @@ func convert(v interface{}, t reflect.Type) (result interface{}, resErr error) {
 func isNil(i interface{}) bool {
 	defer func() {
 		// return false if IsNil panics
-		recover()
+		_ = recover()
 	}()
 	if i == nil {
 		return true

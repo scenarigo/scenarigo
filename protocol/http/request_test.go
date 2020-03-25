@@ -49,11 +49,11 @@ func TestRequest_Invoke(t *testing.T) {
 			body := map[string]string{}
 			if err := d.Decode(&body); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id"))))
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id"))))
 		})
 		m.HandleFunc("/echo/gzipped", func(w http.ResponseWriter, req *http.Request) {
 			if req.Method != http.MethodPost {
@@ -73,7 +73,7 @@ func TestRequest_Invoke(t *testing.T) {
 			body := map[string]string{}
 			if err := d.Decode(&body); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
 			res := []byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id")))
@@ -266,11 +266,11 @@ func TestRequest_Invoke_Log(t *testing.T) {
 			body := map[string]string{}
 			if err := d.Decode(&body); err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				_, _ = w.Write([]byte(err.Error()))
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(fmt.Sprintf(`{"message": "%s"}`, body["message"])))
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"message": "%s"}`, body["message"])))
 		})
 		srv := httptest.NewServer(m)
 		defer srv.Close()

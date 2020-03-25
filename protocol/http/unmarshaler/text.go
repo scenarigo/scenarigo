@@ -6,7 +6,9 @@ import (
 )
 
 func init() {
-	Register(&textUnmarshaler{})
+	if err := Register(&textUnmarshaler{}); err != nil {
+		panic(err)
+	}
 }
 
 type textUnmarshaler struct{}

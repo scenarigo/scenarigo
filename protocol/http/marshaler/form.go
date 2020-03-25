@@ -8,7 +8,9 @@ import (
 )
 
 func init() {
-	Register(&formURLEncodedMarshaler{})
+	if err := Register(&formURLEncodedMarshaler{}); err != nil {
+		panic(err)
+	}
 }
 
 type formURLEncodedMarshaler struct{}

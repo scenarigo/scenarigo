@@ -5,7 +5,9 @@ import (
 )
 
 func init() {
-	Register(&jsonUnmarshaler{})
+	if err := Register(&jsonUnmarshaler{}); err != nil {
+		panic(err)
+	}
 }
 
 type jsonUnmarshaler struct{}

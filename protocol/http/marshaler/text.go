@@ -3,7 +3,9 @@ package marshaler
 import "errors"
 
 func init() {
-	Register(&textMarshaler{})
+	if err := Register(&textMarshaler{}); err != nil {
+		panic(err)
+	}
 }
 
 type textMarshaler struct{}
