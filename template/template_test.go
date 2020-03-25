@@ -98,21 +98,27 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"left arrow func (nest)": {
 			str: strings.Trim(`
-{{echo <-}}:
-  message: |
-    {{echo <-}}:
-      message: '{{message}}'
+{{join <-}}:
+  prefix: preout-
+  text: |-
+    {{join <-}}:
+      prefix: prein-
+      text: '{{text}}'
+      suffix: -sufin
+  suffix: -sufout
 `, "\n"),
 			data: map[string]interface{}{
-				"echo":    &echoFunc{},
-				"message": "hello",
+				"join": &joinFunc{},
+				"call": &callFunc{},
+				"f":    func(s string) string { return s },
+				"text": "test",
 			},
-			expect: "hello",
+			expect: "preout-prein-test-sufin-sufout",
 		},
 		"left arrow func with the arg which contains non-string variable": {
 			str: strings.Trim(`
 {{echo <-}}:
-  message: |
+  message: |-
     {{echo <-}}:
       message: '{{message}}'
 `, "\n"),
@@ -125,19 +131,20 @@ func TestTemplate_Execute(t *testing.T) {
 		"left arrow func (complex)": {
 			str: strings.Trim(`
 {{join <-}}:
-  prefix: preout-
+  prefix: pre-
   text: |-
-    {{join <-}}:
-      prefix: prein-
-      text: '{{text}}'
-      suffix: -sufin
-  suffix: -sufout
+    {{call <-}}:
+      f: '{{f}}'
+      arg: '{{text}}'
+  suffix: -suf
 `, "\n"),
 			data: map[string]interface{}{
 				"join": &joinFunc{},
+				"call": &callFunc{},
+				"f":    func(s string) string { return s },
 				"text": "test",
 			},
-			expect: "preout-prein-test-sufin-sufout",
+			expect: "pre-test-suf",
 		},
 		"not found": {
 			str:         "{{a.b[1]}}",
@@ -207,6 +214,33 @@ func (_ *joinFunc) Exec(in interface{}) (interface{}, error) {
 
 func (_ *joinFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
 	var arg joinArg
+	if err := unmarshal(&arg); err != nil {
+		return nil, err
+	}
+	return &arg, nil
+}
+
+type callFunc struct{}
+
+type callArg struct {
+	F   interface{} `yaml:"f"`
+	Arg string      `yaml:"arg"`
+}
+
+func (_ *callFunc) Exec(in interface{}) (interface{}, error) {
+	arg, ok := in.(*callArg)
+	if !ok {
+		return nil, errors.New("arg must be a callArg")
+	}
+	f, ok := arg.F.(func(string) string)
+	if !ok {
+		return nil, errors.New("arg.f must be a func(string) string")
+	}
+	return f(arg.Arg), nil
+}
+
+func (_ *callFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+	var arg callArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
 	}

@@ -186,6 +186,7 @@ func (p *Parser) parseOperand() ast.Expr {
 func (p *Parser) parseParameter() ast.Expr {
 	param := &ast.ParameterExpr{
 		Ldbrace: p.pos,
+		Quoted:  p.s.quoted(),
 	}
 	p.next()
 	param.X = p.parseExpr()

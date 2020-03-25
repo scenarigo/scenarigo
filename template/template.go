@@ -2,6 +2,7 @@
 package template
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zoncoen/yaml"
 
+	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/scenarigo/template/ast"
 	"github.com/zoncoen/scenarigo/template/parser"
 	"github.com/zoncoen/scenarigo/template/token"
@@ -16,9 +18,11 @@ import (
 
 // Template is the representation of a parsed template.
 type Template struct {
+	str  string
 	expr ast.Expr
 
 	executingLeftArrowExprArg bool
+	argFuncs                  map[string]interface{}
 }
 
 // New parses text as a template and returns it.
@@ -33,13 +37,21 @@ func New(str string) (*Template, error) {
 		return nil, errors.Errorf(`unknown node "%T"`, node)
 	}
 	return &Template{
+		str:  str,
 		expr: expr,
 	}, nil
 }
 
 // Execute applies a parsed template to the specified data.
 func (t *Template) Execute(data interface{}) (interface{}, error) {
-	return t.executeExpr(t.expr, data)
+	v, err := t.executeExpr(t.expr, data)
+	if err != nil {
+		if strings.Contains(t.str, "\n") {
+			return nil, errors.Wrapf(err, "failed to execute: \n%s\n", t.str)
+		}
+		return nil, errors.Wrapf(err, "failed to execute: %s", t.str)
+	}
+	return v, nil
 }
 
 func (t *Template) executeExpr(expr ast.Expr, data interface{}) (interface{}, error) {
@@ -84,7 +96,24 @@ func (t *Template) executeParameterExpr(e *ast.ParameterExpr, data interface{}) 
 	if e.X == nil {
 		return "", nil
 	}
-	return t.executeExpr(e.X, data)
+	v, err := t.executeExpr(e.X, data)
+	if err != nil {
+		return nil, err
+	}
+	if t.executingLeftArrowExprArg {
+		// HACK: Left arrow function requires its argument is YAML string to unmarshal into the Go value.
+		// Replace the function into a string temporary.
+		// It will be restored in UnmarshalArg method.
+		if reflectutil.Elem(reflect.ValueOf(v)).Kind() == reflect.Func {
+			p := fmt.Sprintf("func-%p", v)
+			t.argFuncs[p] = v
+			if e.Quoted {
+				return fmt.Sprintf("'{{%s}}'", p), nil
+			}
+			return fmt.Sprintf("{{%s}}", p), nil
+		}
+	}
+	return v, nil
 }
 
 func (t *Template) executeBinaryExpr(e *ast.BinaryExpr, data interface{}) (interface{}, error) {
@@ -175,7 +204,11 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 		return nil, errors.Errorf(`expect string but got %T`, v)
 	}
 	arg, err := f.UnmarshalArg(func(v interface{}) error {
-		return yaml.Unmarshal([]byte(argStr), v)
+		if err := yaml.Unmarshal([]byte(argStr), v); err != nil {
+			return err
+		}
+		_, err = Execute(v, t.argFuncs)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -187,8 +220,11 @@ func (t *Template) executeLeftArrowExprArg(arg ast.Expr, data interface{}) (inte
 	tt := &Template{
 		expr:                      arg,
 		executingLeftArrowExprArg: true,
+		argFuncs:                  map[string]interface{}{},
 	}
-	return tt.Execute(data)
+	v, err := tt.Execute(data)
+	t.argFuncs = tt.argFuncs
+	return v, err
 }
 
 // Func represents a left arrow function.

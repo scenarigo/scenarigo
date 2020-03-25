@@ -80,6 +80,7 @@ L:
 				pos++
 			}
 			s.child = newScanner(strings.NewReader(str))
+			s.child.indicator = tok.Indicator
 			s.child.pos = pos
 
 			s.afterChildPos = s.pos + runesLen(tok.Origin)
@@ -123,21 +124,9 @@ func (s *yamlScanner) next() {
 	s.childPos, s.childTok, s.childLit = s.child.scan()
 }
 
-func (s *yamlScanner) suffix() string {
-	lastLit := []rune(s.preChildLit)
-	l := len(lastLit)
-	var suffix []rune
-L:
-	for i := 1; i <= l; i++ {
-		switch ch := lastLit[l-i]; ch {
-		case ' ':
-			suffix = append([]rune{ch}, suffix...)
-		case '\n':
-			suffix = append([]rune{ch}, suffix...)
-			break L
-		default:
-			break L
-		}
+func (s *yamlScanner) quoted() bool {
+	if s.child != nil {
+		return s.child.quoted()
 	}
-	return string(suffix)
+	return false
 }

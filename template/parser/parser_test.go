@@ -225,6 +225,7 @@ func TestParser_Parse(t *testing.T) {
 									Name:    "message",
 								},
 								Rdbrace: 35,
+								Quoted:  true,
 							},
 						},
 					},
@@ -232,64 +233,6 @@ func TestParser_Parse(t *testing.T) {
 				},
 			},
 			"function call with YAML arg (nest)": {
-				src: strings.Trim(`
-{{echo <-}}:
-  message: |
-    {{echo <-}}:
-      message: '{{message}}'
-`, "\n"),
-				expected: &ast.ParameterExpr{
-					Ldbrace: 1,
-					X: &ast.LeftArrowExpr{
-						Fun: &ast.Ident{
-							NamePos: 3,
-							Name:    "echo",
-						},
-						Larrow:  8,
-						Rdbrace: 10,
-						Arg: &ast.BinaryExpr{
-							X: &ast.BasicLit{
-								ValuePos: 13,
-								Kind:     token.STRING,
-								Value:    "\n  message: |\n    ",
-							},
-							OpPos: 31,
-							Op:    token.ADD,
-							Y: &ast.ParameterExpr{
-								Ldbrace: 31,
-								X: &ast.LeftArrowExpr{
-									Fun: &ast.Ident{
-										NamePos: 33,
-										Name:    "echo",
-									},
-									Larrow:  38,
-									Rdbrace: 40,
-									Arg: &ast.BinaryExpr{
-										X: &ast.BasicLit{
-											ValuePos: 43,
-											Kind:     token.STRING,
-											Value:    "\n      message: ",
-										},
-										OpPos: 60,
-										Op:    token.ADD,
-										Y: &ast.ParameterExpr{
-											Ldbrace: 60,
-											X: &ast.Ident{
-												NamePos: 62,
-												Name:    "message",
-											},
-											Rdbrace: 69,
-										},
-									},
-								},
-								Rdbrace: 40,
-							},
-						},
-					},
-					Rdbrace: 10,
-				},
-			},
-			"function call with YAML arg (complex)": {
 				src: strings.Trim(`
 {{join <-}}:
   prefix: preout-
@@ -349,6 +292,7 @@ func TestParser_Parse(t *testing.T) {
 															Name:    "text",
 														},
 														Rdbrace: 100,
+														Quoted:  true,
 													},
 												},
 												OpPos: 103,

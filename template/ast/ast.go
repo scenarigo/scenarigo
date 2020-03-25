@@ -44,6 +44,7 @@ type (
 		Ldbrace int
 		X       Expr
 		Rdbrace int
+		Quoted  bool
 	}
 
 	// Ident node represents an identifier.

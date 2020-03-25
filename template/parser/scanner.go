@@ -8,6 +8,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	yamltoken "github.com/goccy/go-yaml/token"
+
 	"github.com/zoncoen/scenarigo/template/token"
 )
 
@@ -23,6 +25,7 @@ type scanner struct {
 	// for left arrow expression
 	expectColon bool
 	yamlScanner *yamlScanner
+	indicator   yamltoken.Indicator
 }
 
 func newScanner(r io.Reader) *scanner {
@@ -231,6 +234,13 @@ func (s *scanner) scan() (int, token.Token, string) {
 		}
 	}
 	return s.pos - 1, token.ILLEGAL, string(ch)
+}
+
+func (s *scanner) quoted() bool {
+	if s.yamlScanner != nil {
+		return s.yamlScanner.quoted()
+	}
+	return s.indicator == yamltoken.QuotedScalarIndicator
 }
 
 func isLetter(ch rune) bool {
