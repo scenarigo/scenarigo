@@ -2,6 +2,8 @@
 title: call template func with YAML arg
 plugins:
   complex: complex.so
+vars:
+  text: test
 steps:
 - title: POST /echo
   vars:
@@ -11,7 +13,7 @@ steps:
         text: |-
           {{plugins.complex.Join <-}}:
             prefix: prein-
-            text: test
+            text: '{{vars.text}}'
             suffix: -sufin
         suffix: -sufout
   protocol: http

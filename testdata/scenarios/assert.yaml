@@ -1,0 +1,40 @@
+---
+title: notZero
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    body:
+      message: 'hello'
+  expect:
+    code: 200
+    body:
+      message: '{{assert.notZero}}'
+
+---
+title: contains
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    body:
+      users:
+        - id: 1
+          name: Alice
+          friendIds:
+            - 2
+        - id: 2
+          name: Bob
+          friendIds:
+            - 1
+  expect:
+    code: 200
+    body:
+      users: |-
+        {{assert.contains <-}}:
+          id: 2
+          name: Bob
+          friendIds: |-
+            {{assert.contains <-}}: 1

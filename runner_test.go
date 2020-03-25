@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -355,6 +356,29 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				mux.HandleFunc("/count", func(w http.ResponseWriter, r *http.Request) {
 					i := atomic.AddInt32(&count, 1)
 					w.Write([]byte(strconv.Itoa(int(i))))
+				})
+
+				s := httptest.NewServer(mux)
+				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
+					t.Fatalf("unexpected error: %s", err)
+				}
+
+				return func() {
+					s.Close()
+					os.Unsetenv("TEST_ADDR")
+				}
+			},
+		},
+		"assert": {
+			ok: "testdata/scenarios/assert.yaml",
+			setup: func(t *testing.T) func() {
+				t.Helper()
+
+				mux := http.NewServeMux()
+				mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+					defer r.Body.Close()
+					w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
+					io.Copy(w, r.Body)
 				})
 
 				s := httptest.NewServer(mux)
