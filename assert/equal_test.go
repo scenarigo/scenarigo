@@ -78,7 +78,6 @@ func TestEqual(t *testing.T) {
 }
 
 func TestConvert(t *testing.T) {
-	type myString string
 	tests := []struct {
 		expected interface{}
 		got      interface{}
