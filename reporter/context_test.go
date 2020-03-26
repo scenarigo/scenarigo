@@ -1,3 +1,6 @@
+// NOTE: Fail on only macos-latest of GitHub Actions by duration errors.
+// +build !darwin
+
 package reporter
 
 import (
