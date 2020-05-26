@@ -1,9 +1,9 @@
 package scenarigo
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/context"
@@ -55,28 +55,31 @@ func WithScenarios(paths ...string) func(*Runner) error {
 	}
 }
 
+var (
+	yamlPattern = regexp.MustCompile(`(?i)\.ya?ml$`)
+)
+
+func looksLikeYAML(path string) bool {
+	return yamlPattern.MatchString(path)
+}
+
 func getAllFiles(paths ...string) ([]string, error) {
 	files := []string{}
 	for _, path := range paths {
-		p, err := os.Stat(path)
-		if err != nil {
+		if err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			if looksLikeYAML(path) {
+				files = append(files, path)
+			}
+			return nil
+		}); err != nil {
 			return nil, err
 		}
-		if p.IsDir() {
-			fis, err := ioutil.ReadDir(path)
-			if err != nil {
-				return nil, err
-			}
-			for _, fi := range fis {
-				fs, err := getAllFiles(filepath.Join(path, fi.Name()))
-				if err != nil {
-					return nil, err
-				}
-				files = append(files, fs...)
-			}
-			continue
-		}
-		files = append(files, path)
 	}
 	return files, nil
 }
