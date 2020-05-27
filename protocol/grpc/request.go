@@ -121,7 +121,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 
 	vs := method.Call(in)
 	resp := vs[0].Interface()
-	ctx = ctx.WithResponse(resp)
+	ctx = ctx.WithResponse(resp, header, trailer)
 	if b, err := yaml.Marshal(response{
 		Header:  header,
 		Trailer: trailer,

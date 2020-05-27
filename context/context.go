@@ -10,11 +10,13 @@ import (
 )
 
 type (
-	keyPluginDir struct{}
-	keyPlugins   struct{}
-	keyVars      struct{}
-	keyRequest   struct{}
-	keyResponse  struct{}
+	keyPluginDir       struct{}
+	keyPlugins         struct{}
+	keyVars            struct{}
+	keyRequest         struct{}
+	keyResponse        struct{}
+	keyResponseHeader  struct{}
+	keyResponseTrailer struct{}
 )
 
 // Context represents a scenarigo context.
@@ -153,20 +155,36 @@ func (c *Context) Request() interface{} {
 }
 
 // WithResponse returns a copy of c with response.
-func (c *Context) WithResponse(resp interface{}) *Context {
+// If you want to pass response with http protocol,
+// trailer argument should pass nil because it currently supported gRPC only.
+// ( more detail: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Trailer )
+func (c *Context) WithResponse(resp interface{}, header interface{}, trailer interface{}) *Context {
 	if resp == nil {
 		return c
 	}
-	return newContext(
-		context.WithValue(c.ctx, keyResponse{}, resp),
-		c.reqCtx,
-		c.reporter,
-	)
+	ctx := context.WithValue(c.ctx, keyResponse{}, resp)
+	if header != nil {
+		ctx = context.WithValue(ctx, keyResponseHeader{}, header)
+	}
+	if trailer != nil {
+		ctx = context.WithValue(ctx, keyResponseTrailer{}, trailer)
+	}
+	return newContext(ctx, c.reqCtx, c.reporter)
 }
 
 // Response returns the response.
 func (c *Context) Response() interface{} {
 	return c.ctx.Value(keyResponse{})
+}
+
+// ResponseHeader returns header of response.
+func (c *Context) ResponseHeader() interface{} {
+	return c.ctx.Value(keyResponseHeader{})
+}
+
+// ResponseTrailer returns trailer of response.
+func (c *Context) ResponseTrailer() interface{} {
+	return c.ctx.Value(keyResponseTrailer{})
 }
 
 // Run runs f as a subtest of c called name.

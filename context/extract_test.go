@@ -48,7 +48,7 @@ func TestContext_ExtractKey(t *testing.T) {
 		},
 		"response": {
 			ctx: func(ctx *Context) *Context {
-				return ctx.WithResponse(vars)
+				return ctx.WithResponse(vars, nil, nil)
 			},
 			query:  "response.foo",
 			expect: "bar",
