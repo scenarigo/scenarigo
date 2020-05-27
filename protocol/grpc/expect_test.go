@@ -272,6 +272,28 @@ func TestExpect_Build(t *testing.T) {
 				},
 				expectAssertError: true,
 			},
+			"invalid type of metadata.header": {
+				expect: &Expect{
+					Code: "OK",
+					Metadata: &Metadata{
+						Header: map[string]interface{}{
+							"invalid_key": nil,
+						},
+					},
+				},
+				v: response{
+					Header: metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					},
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
+				},
+				expectAssertError: true,
+			},
 			"wrong metadata.header key": {
 				expect: &Expect{
 					Code: "OK",
