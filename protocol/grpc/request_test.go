@@ -46,8 +46,11 @@ func TestRequest_Invoke(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
-
-			message, serr, err := extract(result)
+			typedResult, ok := result.(response)
+			if !ok {
+				t.Fatalf("failed to type conversion from %s to response", reflect.TypeOf(result))
+			}
+			message, serr, err := extract(typedResult)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -93,8 +96,11 @@ func TestRequest_Invoke(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
-
-			_, serr, err := extract(result)
+			typedResult, ok := result.(response)
+			if !ok {
+				t.Fatalf("failed to type conversion from %s to response", reflect.TypeOf(result))
+			}
+			_, serr, err := extract(typedResult)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

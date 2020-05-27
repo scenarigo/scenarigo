@@ -516,6 +516,17 @@ func TestExpect_Build(t *testing.T) {
 			})
 		}
 	})
+	t.Run("invalid type for assertion.Assert", func(t *testing.T) {
+		ctx := context.FromT(t)
+		assertion, err := (&Expect{}).Build(ctx)
+		if err != nil {
+			t.Fatalf("failed to build assertion: %s", err)
+		}
+		value := "invalid value for assertion"
+		if err := assertion.Assert(value); err == nil {
+			t.Errorf("no assertion error")
+		}
+	})
 }
 
 func mustWithDetails(s *status.Status, details ...proto.Message) *status.Status {

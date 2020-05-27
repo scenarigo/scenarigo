@@ -54,13 +54,13 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	assertion := assert.Build(expectBody)
 
 	return assert.AssertionFunc(func(v interface{}) error {
-		message, stErr, err := extract(v)
-		if err != nil {
-			return err
-		}
 		resp, ok := v.(response)
 		if !ok {
 			return errors.Errorf(`failed to convert to response type. type is %s`, reflect.TypeOf(v))
+		}
+		message, stErr, err := extract(resp)
+		if err != nil {
+			return err
 		}
 		if err := e.assertMetadata(resp.Header, resp.Trailer); err != nil {
 			return err
@@ -234,12 +234,8 @@ func detailsString(sts *status.Status) string {
 	return strings.Join(details, ", ")
 }
 
-func extract(v interface{}) (proto.Message, *status.Status, error) {
-	resp, ok := v.(response)
-	if !ok {
-		return nil, nil, errors.Errorf(`failed to convert to response type. type is %s`, reflect.TypeOf(v))
-	}
-	vs := resp.rvalues
+func extract(v response) (proto.Message, *status.Status, error) {
+	vs := v.rvalues
 	if len(vs) != 2 {
 		return nil, nil, errors.Errorf("expected return value length of method call is 2 but %d", len(vs))
 	}
