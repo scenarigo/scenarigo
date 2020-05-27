@@ -12,6 +12,7 @@ import (
 	"github.com/zoncoen/scenarigo/internal/testutil/gen/pb/test"
 	"github.com/zoncoen/yaml"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -73,6 +74,48 @@ func TestExpect_Build(t *testing.T) {
 							MessageId:   "1",
 							MessageBody: "hello",
 						}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
+				},
+			},
+			"assert metadata.header": {
+				expect: &Expect{
+					Code: "OK",
+					Metadata: &Metadata{
+						Header: map[string]interface{}{
+							"content-type": "application/grpc",
+						},
+					},
+				},
+				v: response{
+					Header: metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					},
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
+				},
+			},
+			"assert metadata.trailer": {
+				expect: &Expect{
+					Code: "OK",
+					Metadata: &Metadata{
+						Trailer: map[string]interface{}{
+							"content-type": "application/grpc",
+						},
+					},
+				},
+				v: response{
+					Trailer: metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					},
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
 						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
 					},
 				},
@@ -226,6 +269,94 @@ func TestExpect_Build(t *testing.T) {
 						MessageBody: "hell",
 					}),
 					reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+				},
+				expectAssertError: true,
+			},
+			"wrong metadata.header key": {
+				expect: &Expect{
+					Code: "OK",
+					Metadata: &Metadata{
+						Header: map[string]interface{}{
+							"invalid_key": "",
+						},
+					},
+				},
+				v: response{
+					Header: metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					},
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
+				},
+				expectAssertError: true,
+			},
+			"wrong metadata.header value": {
+				expect: &Expect{
+					Code: "OK",
+					Metadata: &Metadata{
+						Header: map[string]interface{}{
+							"content-type": "invalid_value",
+						},
+					},
+				},
+				v: response{
+					Header: metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					},
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
+				},
+				expectAssertError: true,
+			},
+			"wrong metadata.trailer key": {
+				expect: &Expect{
+					Code: "OK",
+					Metadata: &Metadata{
+						Trailer: map[string]interface{}{
+							"invalid_key": "",
+						},
+					},
+				},
+				v: response{
+					Trailer: metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					},
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
+				},
+				expectAssertError: true,
+			},
+			"wrong metadata.trailer value": {
+				expect: &Expect{
+					Code: "OK",
+					Metadata: &Metadata{
+						Trailer: map[string]interface{}{
+							"content-type": "invalid_value",
+						},
+					},
+				},
+				v: response{
+					Trailer: metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					},
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
 				},
 				expectAssertError: true,
 			},
