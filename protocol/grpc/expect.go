@@ -38,6 +38,13 @@ type Metadata struct {
 	Trailer map[string]interface{} `yaml:"trailer"`
 }
 
+type metadataType string
+
+const (
+	metadataTypeHeader  metadataType = "header"
+	metadataTypeTrailer metadataType = "trailer"
+)
+
 // Build implements protocol.AssertionBuilder interface.
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	expectBody, err := ctx.ExecuteTemplate(e.Body)
@@ -90,56 +97,44 @@ func (e *Expect) metadataValuesToMap(values []string) map[string]struct{} {
 	return valueMap
 }
 
+func (e *Expect) assertMetadataWithType(typ metadataType, expectedData map[string]interface{}, actualData metadata.MD) error {
+	expectedMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(expectedData))
+	if err != nil {
+		return errors.Errorf(`failed to convert strings map from expected %s of metadata %v`, typ, expectedData)
+	}
+	for expectedKey, expectedValues := range expectedMap {
+		values := actualData.Get(expectedKey)
+		if len(values) == 0 {
+			return errors.Errorf(
+				`expected metadata.%s.%s is not found. actual keys are %v`,
+				typ, expectedKey, e.metadataMapKeys(actualData),
+			)
+		}
+		valueMap := e.metadataValuesToMap(values)
+		for _, expectedValue := range expectedValues {
+			if _, exists := valueMap[expectedValue]; !exists {
+				return errors.Errorf(
+					`expected metadata.%s.%s.%s is not found. actual values are %v`,
+					typ, expectedKey, expectedValue, values,
+				)
+			}
+		}
+	}
+	return nil
+}
+
 func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
 	if e.Metadata == nil {
 		return nil
 	}
 	if len(e.Metadata.Header) > 0 {
-		expectedHeaderMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Metadata.Header))
-		if err != nil {
-			return errors.Errorf(`failed to convert strings map from expected header of metadata %v`, e.Metadata.Header)
-		}
-		for expectedKey, expectedValues := range expectedHeaderMap {
-			values := header.Get(expectedKey)
-			if len(values) == 0 {
-				return errors.Errorf(
-					`expected metadata.header.%s is not found. actual keys are %v`,
-					expectedKey, e.metadataMapKeys(header),
-				)
-			}
-			valueMap := e.metadataValuesToMap(values)
-			for _, expectedValue := range expectedValues {
-				if _, exists := valueMap[expectedValue]; !exists {
-					return errors.Errorf(
-						`expected metadata.header.%s.%s is not found. actual values are %v`,
-						expectedKey, expectedValue, values,
-					)
-				}
-			}
+		if err := e.assertMetadataWithType(metadataTypeHeader, e.Metadata.Header, header); err != nil {
+			return err
 		}
 	}
 	if len(e.Metadata.Trailer) > 0 {
-		expectedTrailerMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Metadata.Trailer))
-		if err != nil {
-			return errors.Errorf(`failed to convert strings map from expected trailer of metadata`)
-		}
-		for expectedKey, expectedValues := range expectedTrailerMap {
-			values := trailer.Get(expectedKey)
-			if len(values) == 0 {
-				return errors.Errorf(
-					`expected metadata.trailer.%s is not found. actual keys are %v`,
-					expectedKey, e.metadataMapKeys(trailer),
-				)
-			}
-			valueMap := e.metadataValuesToMap(values)
-			for _, expectedValue := range expectedValues {
-				if _, exists := valueMap[expectedValue]; !exists {
-					return errors.Errorf(
-						`expected metadata.trailer.%s.%s is not found. actual values are %v`,
-						expectedKey, expectedValue, values,
-					)
-				}
-			}
+		if err := e.assertMetadataWithType(metadataTypeTrailer, e.Metadata.Trailer, trailer); err != nil {
+			return err
 		}
 	}
 	return nil
