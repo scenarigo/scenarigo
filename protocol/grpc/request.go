@@ -26,9 +26,10 @@ type Request struct {
 }
 
 type response struct {
-	Header  interface{} `yaml:"header,omitempty"`
-	Trailer interface{} `yaml:"trailer,omitempty"`
-	Body    interface{} `yaml:"body,omitempty"`
+	Header  metadata.MD     `yaml:"header,omitempty"`
+	Trailer metadata.MD     `yaml:"trailer,omitempty"`
+	Body    interface{}     `yaml:"body,omitempty"`
+	rvalues []reflect.Value `yaml:"-"`
 }
 
 // Invoke implements protocol.Invoker interface.
@@ -119,20 +120,22 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		reflect.ValueOf(grpc.Trailer(&trailer)),
 	)
 
-	vs := method.Call(in)
-	resp := vs[0].Interface()
-	ctx = ctx.WithResponse(resp, header, trailer)
-	if b, err := yaml.Marshal(response{
+	rvalues := method.Call(in)
+	body := rvalues[0].Interface()
+	resp := response{
 		Header:  header,
 		Trailer: trailer,
-		Body:    resp,
-	}); err == nil {
+		Body:    body,
+		rvalues: rvalues,
+	}
+	ctx = ctx.WithResponse(resp)
+	if b, err := yaml.Marshal(resp); err == nil {
 		ctx.Reporter().Logf("response:\n%s", string(b))
 	} else {
 		ctx.Reporter().Logf("failed to dump response:\n%s", err)
 	}
 
-	return ctx, vs, nil
+	return ctx, resp, nil
 }
 
 func validateMethod(method reflect.Value) error {

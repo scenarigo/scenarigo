@@ -91,7 +91,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 			return ctx, nil, errors.Errorf("failed to unmarshal response body as %s: %s: %s", unmarshaler.MediaType(), string(b), err)
 		}
 
-		ctx = ctx.WithResponse(respBody, resp.Header, nil)
+		ctx = ctx.WithResponse(respBody)
 		if b, err := yaml.Marshal(response{
 			Header: resp.Header,
 			Body:   respBody,

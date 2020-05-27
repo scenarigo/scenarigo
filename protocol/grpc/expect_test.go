@@ -20,31 +20,37 @@ func TestExpect_Build(t *testing.T) {
 		tests := map[string]struct {
 			vars   interface{}
 			expect *Expect
-			v      []reflect.Value
+			v      response
 		}{
 			"default": {
 				expect: &Expect{},
-				v: []reflect.Value{
-					reflect.ValueOf(&test.EchoResponse{}),
-					reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+				v: response{
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
 				},
 			},
 			"code": {
 				expect: &Expect{
 					Code: strconv.Itoa(int(codes.InvalidArgument)),
 				},
-				v: []reflect.Value{
-					reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-					reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
+				v: response{
+					rvalues: []reflect.Value{
+						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
+						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
+					},
 				},
 			},
 			"code string": {
 				expect: &Expect{
 					Code: "InvalidArgument",
 				},
-				v: []reflect.Value{
-					reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-					reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
+				v: response{
+					rvalues: []reflect.Value{
+						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
+						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
+					},
 				},
 			},
 			"assert body": {
@@ -61,12 +67,14 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: []reflect.Value{
-					reflect.ValueOf(&test.EchoResponse{
-						MessageId:   "1",
-						MessageBody: "hello",
-					}),
-					reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+				v: response{
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{
+							MessageId:   "1",
+							MessageBody: "hello",
+						}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
 				},
 			},
 			"assert in case of error": {
@@ -94,18 +102,20 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: []reflect.Value{
-					reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-					reflect.ValueOf(mustWithDetails(
-						status.New(codes.InvalidArgument, "invalid argument"),
-						&errdetails.LocalizedMessage{
-							Locale:  "ja-JP",
-							Message: "エラー",
-						},
-						&errdetails.DebugInfo{
-							Detail: "debug",
-						},
-					).Err()),
+				v: response{
+					rvalues: []reflect.Value{
+						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
+						reflect.ValueOf(mustWithDetails(
+							status.New(codes.InvalidArgument, "invalid argument"),
+							&errdetails.LocalizedMessage{
+								Locale:  "ja-JP",
+								Message: "エラー",
+							},
+							&errdetails.DebugInfo{
+								Detail: "debug",
+							},
+						).Err()),
+					},
 				},
 			},
 			"with vars": {
@@ -123,12 +133,14 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: []reflect.Value{
-					reflect.ValueOf(&test.EchoResponse{
-						MessageId:   "1",
-						MessageBody: "hello",
-					}),
-					reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+				v: response{
+					rvalues: []reflect.Value{
+						reflect.ValueOf(&test.EchoResponse{
+							MessageId:   "1",
+							MessageBody: "hello",
+						}),
+						reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()),
+					},
 				},
 			},
 		}

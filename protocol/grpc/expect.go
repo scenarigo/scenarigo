@@ -51,7 +51,11 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if err != nil {
 			return err
 		}
-		if err := e.assertMetadata(ctx.ResponseHeader(), ctx.ResponseTrailer()); err != nil {
+		resp, ok := v.(response)
+		if !ok {
+			return errors.Errorf(`failed to convert to response type. type is %s`, reflect.TypeOf(v))
+		}
+		if err := e.assertMetadata(resp.Header, resp.Trailer); err != nil {
 			return err
 		}
 		if err := e.assertStatusCode(stErr); err != nil {
@@ -86,25 +90,21 @@ func (e *Expect) metadataValuesToMap(values []string) map[string]struct{} {
 	return valueMap
 }
 
-func (e *Expect) assertMetadata(header, trailer interface{}) error {
+func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
 	if e.Metadata == nil {
 		return nil
 	}
 	if len(e.Metadata.Header) > 0 {
-		headerMeta, ok := header.(metadata.MD)
-		if !ok {
-			return errors.Errorf(`failed to get metadata of response header for gRPC`)
-		}
 		expectedHeaderMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Metadata.Header))
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected header of metadata %v`, e.Metadata.Header)
 		}
 		for expectedKey, expectedValues := range expectedHeaderMap {
-			values := headerMeta.Get(expectedKey)
+			values := header.Get(expectedKey)
 			if len(values) == 0 {
 				return errors.Errorf(
 					`expected metadata.header.%s is not found. actual keys are %v`,
-					expectedKey, e.metadataMapKeys(headerMeta),
+					expectedKey, e.metadataMapKeys(header),
 				)
 			}
 			valueMap := e.metadataValuesToMap(values)
@@ -119,20 +119,16 @@ func (e *Expect) assertMetadata(header, trailer interface{}) error {
 		}
 	}
 	if len(e.Metadata.Trailer) > 0 {
-		trailerMeta, ok := trailer.(metadata.MD)
-		if !ok {
-			return errors.Errorf(`failed to get metadata of response trailer for gRPC`)
-		}
 		expectedTrailerMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Metadata.Trailer))
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected trailer of metadata`)
 		}
 		for expectedKey, expectedValues := range expectedTrailerMap {
-			values := trailerMeta.Get(expectedKey)
+			values := trailer.Get(expectedKey)
 			if len(values) == 0 {
 				return errors.Errorf(
 					`expected metadata.trailer.%s is not found. actual keys are %v`,
-					expectedKey, e.metadataMapKeys(trailerMeta),
+					expectedKey, e.metadataMapKeys(trailer),
 				)
 			}
 			valueMap := e.metadataValuesToMap(values)
@@ -244,10 +240,11 @@ func detailsString(sts *status.Status) string {
 }
 
 func extract(v interface{}) (proto.Message, *status.Status, error) {
-	vs, ok := v.([]reflect.Value)
+	resp, ok := v.(response)
 	if !ok {
-		return nil, nil, errors.Errorf("expected []reflect.Value but got %T", v)
+		return nil, nil, errors.Errorf(`failed to convert to response type. type is %s`, reflect.TypeOf(v))
 	}
+	vs := resp.rvalues
 	if len(vs) != 2 {
 		return nil, nil, errors.Errorf("expected return value length of method call is 2 but %d", len(vs))
 	}
