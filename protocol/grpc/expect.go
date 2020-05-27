@@ -19,10 +19,11 @@ import (
 
 // Expect represents expected response values.
 type Expect struct {
-	Code     string                          `yaml:"code"`
-	Body     yaml.KeyOrderPreservedInterface `yaml:"body"`
-	Status   ExpectStatus                    `yaml:"status"`
-	Metadata *Metadata                       `yaml:"metadata"`
+	Code    string                          `yaml:"code"`
+	Body    yaml.KeyOrderPreservedInterface `yaml:"body"`
+	Status  ExpectStatus                    `yaml:"status"`
+	Header  map[string]interface{}          `yaml:"header"`
+	Trailer map[string]interface{}          `yaml:"trailer"`
 }
 
 // ExpectStatus represents expected gRPC status.
@@ -30,12 +31,6 @@ type ExpectStatus struct {
 	Code    string                     `yaml:"code"`
 	Message string                     `yaml:"message"`
 	Details []map[string]yaml.MapSlice `yaml:"details"`
-}
-
-// Metadata represents expected gRPC metadata.
-type Metadata struct {
-	Header  map[string]interface{} `yaml:"header"`
-	Trailer map[string]interface{} `yaml:"trailer"`
 }
 
 type metadataType string
@@ -124,16 +119,13 @@ func (e *Expect) assertMetadataWithType(typ metadataType, expectedData map[strin
 }
 
 func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
-	if e.Metadata == nil {
-		return nil
-	}
-	if len(e.Metadata.Header) > 0 {
-		if err := e.assertMetadataWithType(metadataTypeHeader, e.Metadata.Header, header); err != nil {
+	if len(e.Header) > 0 {
+		if err := e.assertMetadataWithType(metadataTypeHeader, e.Header, header); err != nil {
 			return err
 		}
 	}
-	if len(e.Metadata.Trailer) > 0 {
-		if err := e.assertMetadataWithType(metadataTypeTrailer, e.Metadata.Trailer, trailer); err != nil {
+	if len(e.Trailer) > 0 {
+		if err := e.assertMetadataWithType(metadataTypeTrailer, e.Trailer, trailer); err != nil {
 			return err
 		}
 	}

@@ -22,11 +22,9 @@ steps:
       messageId: "{{request.messageId}}"
       messageBody: "{{request.messageBody}}"
       nullableString: null
-    metadata:
-      header:
-        content-type:
-          - application/grpc
-      trailer:
+    header:
+      content-type:
+        - application/grpc
 
 ---
 title: Unauthenticated
@@ -43,10 +41,9 @@ steps:
       - aaa
   expect:
     code: Unauthenticated
-    metadata:
-      trailer:
-        content-type:
-          - application/grpc
+    trailer:
+      content-type:
+        - application/grpc
 - title: Echo with status
   protocol: grpc
   request:
@@ -56,10 +53,9 @@ steps:
       token:
         - aaa
   expect:
-    metadata:
-      trailer:
-        content-type:
-          - application/grpc
+    trailer:
+      content-type:
+        - application/grpc
     status:
       code: Unauthenticated
       message: invalid token

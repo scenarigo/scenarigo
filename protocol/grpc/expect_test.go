@@ -81,10 +81,8 @@ func TestExpect_Build(t *testing.T) {
 			"assert metadata.header": {
 				expect: &Expect{
 					Code: "OK",
-					Metadata: &Metadata{
-						Header: map[string]interface{}{
-							"content-type": "application/grpc",
-						},
+					Header: map[string]interface{}{
+						"content-type": "application/grpc",
 					},
 				},
 				v: response{
@@ -102,10 +100,8 @@ func TestExpect_Build(t *testing.T) {
 			"assert metadata.trailer": {
 				expect: &Expect{
 					Code: "OK",
-					Metadata: &Metadata{
-						Trailer: map[string]interface{}{
-							"content-type": "application/grpc",
-						},
+					Trailer: map[string]interface{}{
+						"content-type": "application/grpc",
 					},
 				},
 				v: response{
@@ -275,10 +271,8 @@ func TestExpect_Build(t *testing.T) {
 			"invalid type of metadata.header": {
 				expect: &Expect{
 					Code: "OK",
-					Metadata: &Metadata{
-						Header: map[string]interface{}{
-							"invalid_key": nil,
-						},
+					Header: map[string]interface{}{
+						"invalid_key": nil,
 					},
 				},
 				v: response{
@@ -297,10 +291,8 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.header key": {
 				expect: &Expect{
 					Code: "OK",
-					Metadata: &Metadata{
-						Header: map[string]interface{}{
-							"invalid_key": "",
-						},
+					Header: map[string]interface{}{
+						"invalid_key": "",
 					},
 				},
 				v: response{
@@ -319,10 +311,8 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.header value": {
 				expect: &Expect{
 					Code: "OK",
-					Metadata: &Metadata{
-						Header: map[string]interface{}{
-							"content-type": "invalid_value",
-						},
+					Header: map[string]interface{}{
+						"content-type": "invalid_value",
 					},
 				},
 				v: response{
@@ -341,10 +331,8 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.trailer key": {
 				expect: &Expect{
 					Code: "OK",
-					Metadata: &Metadata{
-						Trailer: map[string]interface{}{
-							"invalid_key": "",
-						},
+					Trailer: map[string]interface{}{
+						"invalid_key": "",
 					},
 				},
 				v: response{
@@ -363,10 +351,8 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.trailer value": {
 				expect: &Expect{
 					Code: "OK",
-					Metadata: &Metadata{
-						Trailer: map[string]interface{}{
-							"content-type": "invalid_value",
-						},
+					Trailer: map[string]interface{}{
+						"content-type": "invalid_value",
 					},
 				},
 				v: response{
