@@ -517,14 +517,33 @@ func TestExpect_Build(t *testing.T) {
 		}
 	})
 	t.Run("invalid type for assertion.Assert", func(t *testing.T) {
-		ctx := context.FromT(t)
-		assertion, err := (&Expect{}).Build(ctx)
-		if err != nil {
-			t.Fatalf("failed to build assertion: %s", err)
+		tests := map[string]struct {
+			expect *Expect
+			v      interface{}
+		}{
+			"invalid type for assertion.Assert": {
+				expect: &Expect{},
+				v:      "string is unexpected value",
+			},
+			"invalid type for rvalues of response": {
+				expect: &Expect{},
+				v: response{
+					rvalues: []reflect.Value{},
+				},
+			},
 		}
-		value := "invalid value for assertion"
-		if err := assertion.Assert(value); err == nil {
-			t.Errorf("no assertion error")
+		for name, test := range tests {
+			test := test
+			t.Run(name, func(t *testing.T) {
+				ctx := context.FromT(t)
+				assertion, err := test.expect.Build(ctx)
+				if err != nil {
+					t.Fatalf("failed to build assertion: %s", err)
+				}
+				if err := assertion.Assert(test.v); err == nil {
+					t.Errorf("no assertion error")
+				}
+			})
 		}
 	})
 }
