@@ -6,20 +6,23 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/yaml"
 )
 
 // Expect represents expected response values.
 type Expect struct {
-	Code   string                          `yaml:"code"`
-	Body   yaml.KeyOrderPreservedInterface `yaml:"body"`
-	Status ExpectStatus                    `yaml:"status"`
+	Code     string                          `yaml:"code"`
+	Body     yaml.KeyOrderPreservedInterface `yaml:"body"`
+	Status   ExpectStatus                    `yaml:"status"`
+	Metadata *Metadata                       `yaml:"metadata"`
 }
 
 // ExpectStatus represents expected gRPC status.
@@ -27,6 +30,12 @@ type ExpectStatus struct {
 	Code    string                     `yaml:"code"`
 	Message string                     `yaml:"message"`
 	Details []map[string]yaml.MapSlice `yaml:"details"`
+}
+
+// Metadata represents expected gRPC metadata.
+type Metadata struct {
+	Header  map[string]interface{} `yaml:"header"`
+	Trailer map[string]interface{} `yaml:"trailer"`
 }
 
 // Build implements protocol.AssertionBuilder interface.
@@ -40,6 +49,9 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	return assert.AssertionFunc(func(v interface{}) error {
 		message, stErr, err := extract(v)
 		if err != nil {
+			return err
+		}
+		if err := e.assertMetadata(ctx.ResponseHeader(), ctx.ResponseTrailer()); err != nil {
 			return err
 		}
 		if err := e.assertStatusCode(stErr); err != nil {
@@ -56,6 +68,85 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		}
 		return nil
 	}), nil
+}
+
+func (e *Expect) metadataMapKeys(data metadata.MD) []string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func (e *Expect) metadataValuesToMap(values []string) map[string]struct{} {
+	valueMap := map[string]struct{}{}
+	for _, value := range values {
+		valueMap[value] = struct{}{}
+	}
+	return valueMap
+}
+
+func (e *Expect) assertMetadata(header, trailer interface{}) error {
+	if e.Metadata == nil {
+		return nil
+	}
+	if len(e.Metadata.Header) > 0 {
+		headerMeta, ok := header.(metadata.MD)
+		if !ok {
+			return errors.Errorf(`failed to get metadata of response header for gRPC`)
+		}
+		expectedHeaderMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Metadata.Header))
+		if err != nil {
+			return errors.Errorf(`failed to convert strings map from expected header of metadata %v`, e.Metadata.Header)
+		}
+		for expectedKey, expectedValues := range expectedHeaderMap {
+			values := headerMeta.Get(expectedKey)
+			if len(values) == 0 {
+				return errors.Errorf(
+					`expected metadata.header.%s is not found. actual keys are %v`,
+					expectedKey, e.metadataMapKeys(headerMeta),
+				)
+			}
+			valueMap := e.metadataValuesToMap(values)
+			for _, expectedValue := range expectedValues {
+				if _, exists := valueMap[expectedValue]; !exists {
+					return errors.Errorf(
+						`expected metadata.header.%s.%s is not found. actual values are %v`,
+						expectedKey, expectedValue, values,
+					)
+				}
+			}
+		}
+	}
+	if len(e.Metadata.Trailer) > 0 {
+		trailerMeta, ok := trailer.(metadata.MD)
+		if !ok {
+			return errors.Errorf(`failed to get metadata of response trailer for gRPC`)
+		}
+		expectedTrailerMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Metadata.Trailer))
+		if err != nil {
+			return errors.Errorf(`failed to convert strings map from expected trailer of metadata`)
+		}
+		for expectedKey, expectedValues := range expectedTrailerMap {
+			values := trailerMeta.Get(expectedKey)
+			if len(values) == 0 {
+				return errors.Errorf(
+					`expected metadata.trailer.%s is not found. actual keys are %v`,
+					expectedKey, e.metadataMapKeys(trailerMeta),
+				)
+			}
+			valueMap := e.metadataValuesToMap(values)
+			for _, expectedValue := range expectedValues {
+				if _, exists := valueMap[expectedValue]; !exists {
+					return errors.Errorf(
+						`expected metadata.trailer.%s.%s is not found. actual values are %v`,
+						expectedKey, expectedValue, values,
+					)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (e *Expect) assertStatusCode(sts *status.Status) error {
