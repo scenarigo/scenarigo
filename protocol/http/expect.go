@@ -30,10 +30,10 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if !ok {
 			return errors.Errorf("expected response but got %T", v)
 		}
-		if err := e.assertHeader(res.Header); err != nil {
+		if err := e.assertCode(res.status); err != nil {
 			return err
 		}
-		if err := e.assertCode(res.status); err != nil {
+		if err := e.assertHeader(res.Header); err != nil {
 			return err
 		}
 		if err := assertion.Assert(res.Body); err != nil {
