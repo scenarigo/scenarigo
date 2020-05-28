@@ -127,6 +127,44 @@ func TestExpect_Build(t *testing.T) {
 				},
 				expectAssertError: true,
 			},
+			"wrong header key": {
+				expect: &Expect{
+					Header: yaml.MapSlice{
+						{
+							Key:   "invalid-key",
+							Value: "value",
+						},
+					},
+				},
+				response: response{
+					Header: map[string][]string{
+						"Content-Type": []string{
+							"application/json",
+						},
+					},
+					status: "200 OK",
+				},
+				expectAssertError: true,
+			},
+			"wrong header type": {
+				expect: &Expect{
+					Header: yaml.MapSlice{
+						{
+							Key:   1,
+							Value: nil,
+						},
+					},
+				},
+				response: response{
+					Header: map[string][]string{
+						"Content-Type": []string{
+							"application/json",
+						},
+					},
+					status: "200 OK",
+				},
+				expectAssertError: true,
+			},
 			"failed to execute template": {
 				expect: &Expect{
 					Body: yaml.MapSlice{
