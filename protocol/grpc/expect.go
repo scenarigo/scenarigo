@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/zoncoen/scenarigo/internal/maputil"
 	"github.com/zoncoen/yaml"
 )
 
@@ -22,8 +22,8 @@ type Expect struct {
 	Code    string                          `yaml:"code"`
 	Body    yaml.KeyOrderPreservedInterface `yaml:"body"`
 	Status  ExpectStatus                    `yaml:"status"`
-	Header  map[string]interface{}          `yaml:"header"`
-	Trailer map[string]interface{}          `yaml:"trailer"`
+	Header  yaml.MapSlice                   `yaml:"header"`
+	Trailer yaml.MapSlice                   `yaml:"trailer"`
 }
 
 // ExpectStatus represents expected gRPC status.
@@ -71,7 +71,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 
 func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
 	if len(e.Header) > 0 {
-		headerMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Header))
+		headerMap, err := maputil.ConvertStringsMapSlice(e.Header)
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected header: %v`, e.Header)
 		}
@@ -80,7 +80,7 @@ func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
 		}
 	}
 	if len(e.Trailer) > 0 {
-		trailerMap, err := reflectutil.ConvertStringsMap(reflect.ValueOf(e.Trailer))
+		trailerMap, err := maputil.ConvertStringsMapSlice(e.Trailer)
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected trailer: %v`, e.Trailer)
 		}

@@ -33,9 +33,9 @@ type Request struct {
 }
 
 type response struct {
-	Header interface{} `yaml:"header,omitempty"`
-	Body   interface{} `yaml:"body,omitempty"`
-	status string      `yaml:"-"` // http.Response.Status format e.g. "200 OK"
+	Header map[string][]string `yaml:"header,omitempty"`
+	Body   interface{}         `yaml:"body,omitempty"`
+	status string              `yaml:"-"` // http.Response.Status format e.g. "200 OK"
 }
 
 // Invoke implements protocol.Invoker interface.

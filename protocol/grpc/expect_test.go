@@ -81,8 +81,11 @@ func TestExpect_Build(t *testing.T) {
 			"assert metadata.header": {
 				expect: &Expect{
 					Code: "OK",
-					Header: map[string]interface{}{
-						"content-type": "application/grpc",
+					Header: yaml.MapSlice{
+						{
+							Key:   "content-type",
+							Value: "application/grpc",
+						},
 					},
 				},
 				v: response{
@@ -100,8 +103,11 @@ func TestExpect_Build(t *testing.T) {
 			"assert metadata.trailer": {
 				expect: &Expect{
 					Code: "OK",
-					Trailer: map[string]interface{}{
-						"content-type": "application/grpc",
+					Trailer: yaml.MapSlice{
+						{
+							Key:   "content-type",
+							Value: "application/grpc",
+						},
 					},
 				},
 				v: response{
@@ -281,8 +287,11 @@ func TestExpect_Build(t *testing.T) {
 			"invalid type of metadata.header": {
 				expect: &Expect{
 					Code: "OK",
-					Header: map[string]interface{}{
-						"invalid_key": nil,
+					Header: yaml.MapSlice{
+						{
+							Key:   "invalid_key",
+							Value: nil,
+						},
 					},
 				},
 				v: response{
@@ -301,8 +310,11 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.header key": {
 				expect: &Expect{
 					Code: "OK",
-					Header: map[string]interface{}{
-						"invalid_key": "",
+					Header: yaml.MapSlice{
+						{
+							Key:   "invalid_key",
+							Value: "",
+						},
 					},
 				},
 				v: response{
@@ -321,8 +333,11 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.header value": {
 				expect: &Expect{
 					Code: "OK",
-					Header: map[string]interface{}{
-						"content-type": "invalid_value",
+					Header: yaml.MapSlice{
+						{
+							Key:   "content-type",
+							Value: "invalid_value",
+						},
 					},
 				},
 				v: response{
@@ -341,8 +356,11 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.trailer key": {
 				expect: &Expect{
 					Code: "OK",
-					Trailer: map[string]interface{}{
-						"invalid_key": "",
+					Trailer: yaml.MapSlice{
+						{
+							Key:   "invalid_key",
+							Value: "",
+						},
 					},
 				},
 				v: response{
@@ -361,8 +379,11 @@ func TestExpect_Build(t *testing.T) {
 			"wrong metadata.trailer value": {
 				expect: &Expect{
 					Code: "OK",
-					Trailer: map[string]interface{}{
-						"content-type": "invalid_value",
+					Trailer: yaml.MapSlice{
+						{
+							Key:   "content-type",
+							Value: "invalid_value",
+						},
 					},
 				},
 				v: response{

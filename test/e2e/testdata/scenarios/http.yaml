@@ -17,6 +17,8 @@ steps:
       message: "{{vars.message}}"
   expect:
     code: 200
+    header:
+      Content-Length: 30
     body:
       id: "{{vars.id}}"
       message: "{{request.message}}"
@@ -39,6 +41,8 @@ steps:
   expect:
     code: 200
     body: "123, hello, true"
+    header:
+      Content-Type: 'text/plain; charset=utf-8'
 
 ---
 title: not found
@@ -50,6 +54,9 @@ steps:
     url: "{{env.TEST_ADDR}}/invalid"
   expect:
     code: Not Found
+    header:
+      Content-Length:
+        - 0
 
 ---
 title: forbidden

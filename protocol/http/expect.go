@@ -6,13 +6,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/internal/maputil"
 	"github.com/zoncoen/yaml"
 )
 
 // Expect represents expected response values.
 type Expect struct {
-	Code string                          `yaml:"code"`
-	Body yaml.KeyOrderPreservedInterface `yaml:"body"`
+	Code   string                          `yaml:"code"`
+	Header yaml.MapSlice                   `yaml:"header"`
+	Body   yaml.KeyOrderPreservedInterface `yaml:"body"`
 }
 
 // Build implements protocol.AssertionBuilder interface.
@@ -28,6 +30,9 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if !ok {
 			return errors.Errorf("expected response but got %T", v)
 		}
+		if err := e.assertHeader(res.Header); err != nil {
+			return err
+		}
 		if err := e.assertCode(res.status); err != nil {
 			return err
 		}
@@ -36,6 +41,20 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		}
 		return nil
 	}), nil
+}
+
+func (e *Expect) assertHeader(header map[string][]string) error {
+	if len(e.Header) == 0 {
+		return nil
+	}
+	headerMap, err := maputil.ConvertStringsMapSlice(e.Header)
+	if err != nil {
+		return err
+	}
+	if err := assert.Build(headerMap).Assert(header); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (e *Expect) assertCode(status string) error {
