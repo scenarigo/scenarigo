@@ -96,13 +96,13 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 			return ctx, nil, errors.Errorf("failed to unmarshal response body as %s: %s: %s", unmarshaler.MediaType(), string(b), err)
 		}
 		rvalue.Body = respBody
+		ctx = ctx.WithResponse(respBody)
 		if b, err := yaml.Marshal(rvalue); err == nil {
 			ctx.Reporter().Logf("response:\n%s", string(b))
 		} else {
 			ctx.Reporter().Logf("failed to dump response:\n%s", err)
 		}
 	}
-	ctx = ctx.WithResponse(rvalue)
 	return ctx, rvalue, nil
 }
 

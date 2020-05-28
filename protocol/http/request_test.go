@@ -208,11 +208,7 @@ func TestRequest_Invoke(t *testing.T) {
 				if diff := cmp.Diff(test.request.Body, ctx.Request()); diff != "" {
 					t.Errorf("differs: (-want +got)\n%s", diff)
 				}
-				actualRes, ok = ctx.Response().(response)
-				if !ok {
-					t.Fatalf("failed to convert from %T to response", ctx.Response())
-				}
-				if diff := cmp.Diff(test.response.Body, actualRes.Body); diff != "" {
+				if diff := cmp.Diff(test.response.Body, ctx.Response()); diff != "" {
 					t.Errorf("differs: (-want +got)\n%s", diff)
 				}
 			})
