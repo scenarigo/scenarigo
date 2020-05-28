@@ -35,6 +35,7 @@ type Request struct {
 type response struct {
 	Header interface{} `yaml:"header,omitempty"`
 	Body   interface{} `yaml:"body,omitempty"`
+	status string      `yaml:"-"` // http.Response.Status format e.g. "200 OK"
 }
 
 // Invoke implements protocol.Invoker interface.
@@ -84,25 +85,25 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		return ctx, nil, errors.Errorf("failed to read response body: %s", err)
 	}
 
-	var respBody interface{}
+	rvalue := response{
+		Header: resp.Header,
+		status: resp.Status,
+	}
 	if len(b) > 0 {
 		unmarshaler := unmarshaler.Get(resp.Header.Get("Content-Type"))
+		var respBody interface{}
 		if err := unmarshaler.Unmarshal(b, &respBody); err != nil {
 			return ctx, nil, errors.Errorf("failed to unmarshal response body as %s: %s: %s", unmarshaler.MediaType(), string(b), err)
 		}
-
-		ctx = ctx.WithResponse(respBody)
-		if b, err := yaml.Marshal(response{
-			Header: resp.Header,
-			Body:   respBody,
-		}); err == nil {
+		rvalue.Body = respBody
+		if b, err := yaml.Marshal(rvalue); err == nil {
 			ctx.Reporter().Logf("response:\n%s", string(b))
 		} else {
 			ctx.Reporter().Logf("failed to dump response:\n%s", err)
 		}
 	}
-
-	return ctx, newResult(resp, respBody), nil
+	ctx = ctx.WithResponse(rvalue)
+	return ctx, rvalue, nil
 }
 
 func (r *Request) buildClient(ctx *context.Context) (*http.Client, error) {

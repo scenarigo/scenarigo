@@ -98,15 +98,15 @@ func TestRequest_Invoke(t *testing.T) {
 		defer srv.Close()
 
 		tests := map[string]struct {
-			vars    interface{}
-			request *Request
-			result  *result
+			vars     interface{}
+			request  *Request
+			response response
 		}{
 			"default": {
 				request: &Request{
 					URL: srv.URL,
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
 				},
 			},
@@ -118,9 +118,9 @@ func TestRequest_Invoke(t *testing.T) {
 					Header: map[string][]string{"Authorization": {auth}},
 					Body:   map[string]string{"message": "hey"},
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey", "id": "123"},
+					Body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 			"Post (gzipped)": {
@@ -134,9 +134,9 @@ func TestRequest_Invoke(t *testing.T) {
 					},
 					Body: map[string]string{"message": "hey"},
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey", "id": "123"},
+					Body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 			"with vars": {
@@ -153,9 +153,9 @@ func TestRequest_Invoke(t *testing.T) {
 					Header: map[string][]string{"Authorization": {"{{vars.auth}}"}},
 					Body:   map[string]string{"message": "{{vars.message}}"},
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey", "id": "123"},
+					Body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 			"custom client": {
@@ -174,9 +174,9 @@ func TestRequest_Invoke(t *testing.T) {
 					Query:  url.Values{"id": []string{"123"}},
 					Body:   map[string]string{"message": "hey"},
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
-					body:   map[string]interface{}{"message": "hey", "id": "123"},
+					Body:   map[string]interface{}{"message": "hey", "id": "123"},
 				},
 			},
 		}
@@ -192,9 +192,13 @@ func TestRequest_Invoke(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to invoke: %s", err)
 				}
-				if diff := cmp.Diff(test.result, res,
+				actualRes, ok := res.(response)
+				if !ok {
+					t.Fatalf("failed to convert from %T to response", res)
+				}
+				if diff := cmp.Diff(test.response.Body, actualRes.Body,
 					cmp.AllowUnexported(
-						result{},
+						response{},
 					),
 				); diff != "" {
 					t.Fatalf("differs: (-want +got)\n%s", diff)
@@ -204,7 +208,11 @@ func TestRequest_Invoke(t *testing.T) {
 				if diff := cmp.Diff(test.request.Body, ctx.Request()); diff != "" {
 					t.Errorf("differs: (-want +got)\n%s", diff)
 				}
-				if diff := cmp.Diff(test.result.body, ctx.Response()); diff != "" {
+				actualRes, ok = ctx.Response().(response)
+				if !ok {
+					t.Fatalf("failed to convert from %T to response", ctx.Response())
+				}
+				if diff := cmp.Diff(test.response.Body, actualRes.Body); diff != "" {
 					t.Errorf("differs: (-want +got)\n%s", diff)
 				}
 			})

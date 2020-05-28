@@ -24,14 +24,14 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	assertion := assert.Build(expectBody)
 
 	return assert.AssertionFunc(func(v interface{}) error {
-		res, ok := v.(*result)
+		res, ok := v.(response)
 		if !ok {
-			return errors.Errorf("expected *result but got %T", v)
+			return errors.Errorf("expected response but got %T", v)
 		}
 		if err := e.assertCode(res.status); err != nil {
 			return err
 		}
-		if err := assertion.Assert(res.body); err != nil {
+		if err := assertion.Assert(res.Body); err != nil {
 			return err
 		}
 		return nil

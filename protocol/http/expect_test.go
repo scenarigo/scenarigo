@@ -10,13 +10,13 @@ import (
 func TestExpect_Build(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		tests := map[string]struct {
-			vars   interface{}
-			expect *Expect
-			result *result
+			vars     interface{}
+			expect   *Expect
+			response response
 		}{
 			"default": {
 				expect: &Expect{},
-				result: &result{
+				response: response{
 					status: "200 OK",
 				},
 			},
@@ -24,7 +24,7 @@ func TestExpect_Build(t *testing.T) {
 				expect: &Expect{
 					Code: "404",
 				},
-				result: &result{
+				response: response{
 					status: "404 Not Found",
 				},
 			},
@@ -32,7 +32,7 @@ func TestExpect_Build(t *testing.T) {
 				expect: &Expect{
 					Code: "Not Found",
 				},
-				result: &result{
+				response: response{
 					status: "404 Not Found",
 				},
 			},
@@ -45,9 +45,9 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
-					body:   map[string]string{"foo": "bar"},
+					Body:   map[string]string{"foo": "bar"},
 				},
 			},
 			"with vars": {
@@ -60,9 +60,9 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
-					body:   map[string]string{"foo": "bar"},
+					Body:   map[string]string{"foo": "bar"},
 				},
 			},
 		}
@@ -77,7 +77,7 @@ func TestExpect_Build(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to build assertion: %s", err)
 				}
-				if err := assertion.Assert(test.result); err != nil {
+				if err := assertion.Assert(test.response); err != nil {
 					t.Errorf("got assertion error: %s", err)
 				}
 			})
@@ -86,13 +86,13 @@ func TestExpect_Build(t *testing.T) {
 	t.Run("ng", func(t *testing.T) {
 		tests := map[string]struct {
 			expect            *Expect
-			result            *result
+			response          response
 			expectBuildError  bool
 			expectAssertError bool
 		}{
 			"wrong status code": {
 				expect: &Expect{},
-				result: &result{
+				response: response{
 					status: "404 Not Found",
 				},
 				expectAssertError: true,
@@ -106,7 +106,7 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				result: &result{
+				response: response{
 					status: "200 OK",
 				},
 				expectAssertError: true,
@@ -138,7 +138,7 @@ func TestExpect_Build(t *testing.T) {
 					return
 				}
 
-				err = assertion.Assert(test.result)
+				err = assertion.Assert(test.response)
 				if test.expectAssertError && err == nil {
 					t.Errorf("no assertion error")
 				}
