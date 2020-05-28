@@ -36,6 +36,22 @@ func TestExpect_Build(t *testing.T) {
 					status: "404 Not Found",
 				},
 			},
+			"header": {
+				expect: &Expect{
+					Header: yaml.MapSlice{
+						{
+							Key:   "Content-Type",
+							Value: "application/json",
+						},
+					},
+				},
+				response: response{
+					Header: map[string][]string{
+						"Content-Type": []string{"application/json"},
+					},
+					status: "200 OK",
+				},
+			},
 			"assert body": {
 				expect: &Expect{
 					Body: yaml.MapSlice{
