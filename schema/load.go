@@ -4,8 +4,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
-	"github.com/zoncoen/yaml"
 )
 
 // LoadScenarios loads test scenarios from path.
@@ -17,8 +17,7 @@ func LoadScenarios(path string) ([]*Scenario, error) {
 	defer f.Close()
 
 	var scenarios []*Scenario
-	d := yaml.NewDecoder(f)
-	d.SetStrict(true)
+	d := yaml.NewDecoder(f, yaml.UseOrderedMap(), yaml.Strict())
 	for {
 		var s Scenario
 		if err := d.Decode(&s); err != nil {

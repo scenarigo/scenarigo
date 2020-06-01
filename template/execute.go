@@ -3,8 +3,8 @@ package template
 import (
 	"reflect"
 
+	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
-	"github.com/zoncoen/yaml"
 )
 
 var yamlMapItemType = reflect.TypeOf(yaml.MapItem{})

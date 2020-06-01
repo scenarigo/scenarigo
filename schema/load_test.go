@@ -3,6 +3,7 @@ package schema
 import (
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/zoncoen/scenarigo/protocol"
 )
@@ -54,11 +55,27 @@ func TestLoadScenarios(t *testing.T) {
 						filepath: "testdata/valid.yaml",
 					},
 				},
-				request: map[interface{}]interface{}{
-					"body": map[interface{}]interface{}{"message": "{{vars.message}}"},
+				request: yaml.MapSlice{
+					{
+						Key: "body",
+						Value: yaml.MapSlice{
+							{
+								Key:   "message",
+								Value: "{{vars.message}}",
+							},
+						},
+					},
 				},
-				expect: map[interface{}]interface{}{
-					"body": map[interface{}]interface{}{"message": "{{request.body}}"},
+				expect: yaml.MapSlice{
+					{
+						Key: "body",
+						Value: yaml.MapSlice{
+							{
+								Key:   "message",
+								Value: "{{request.body}}",
+							},
+						},
+					},
 				},
 			},
 			"anchor": {
@@ -80,11 +97,27 @@ func TestLoadScenarios(t *testing.T) {
 						filepath: "testdata/valid-anchor.yaml",
 					},
 				},
-				request: map[interface{}]interface{}{
-					"body": map[interface{}]interface{}{"message": "{{vars.message}}"},
+				request: yaml.MapSlice{
+					{
+						Key: "body",
+						Value: yaml.MapSlice{
+							{
+								Key:   "message",
+								Value: "{{vars.message}}",
+							},
+						},
+					},
 				},
-				expect: map[interface{}]interface{}{
-					"body": map[interface{}]interface{}{"message": "{{request.body}}"},
+				expect: yaml.MapSlice{
+					{
+						Key: "body",
+						Value: yaml.MapSlice{
+							{
+								Key:   "message",
+								Value: "{{request.body}}",
+							},
+						},
+					},
 				},
 			},
 		}

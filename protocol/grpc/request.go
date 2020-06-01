@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"reflect"
 
+	"github.com/goccy/go-yaml"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/zoncoen/yaml"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"

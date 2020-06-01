@@ -9,21 +9,21 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/goccy/go-yaml"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/maputil"
-	"github.com/zoncoen/yaml"
 )
 
 // Expect represents expected response values.
 type Expect struct {
-	Code    string                          `yaml:"code"`
-	Body    yaml.KeyOrderPreservedInterface `yaml:"body"`
-	Status  ExpectStatus                    `yaml:"status"`
-	Header  yaml.MapSlice                   `yaml:"header"`
-	Trailer yaml.MapSlice                   `yaml:"trailer"`
+	Code    string        `yaml:"code"`
+	Body    interface{}   `yaml:"body"`
+	Status  ExpectStatus  `yaml:"status"`
+	Header  yaml.MapSlice `yaml:"header"`
+	Trailer yaml.MapSlice `yaml:"trailer"`
 }
 
 // ExpectStatus represents expected gRPC status.

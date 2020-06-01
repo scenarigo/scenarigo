@@ -1,7 +1,7 @@
 package marshaler
 
 import (
-	"github.com/zoncoen/yaml"
+	"github.com/goccy/go-yaml"
 
 	yamljson "sigs.k8s.io/yaml"
 )

@@ -7,9 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
-	"github.com/zoncoen/yaml"
-
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/scenarigo/template/ast"
 	"github.com/zoncoen/scenarigo/template/parser"
@@ -204,7 +203,7 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 		return nil, errors.Errorf(`expect string but got %T`, v)
 	}
 	arg, err := f.UnmarshalArg(func(v interface{}) error {
-		if err := yaml.Unmarshal([]byte(argStr), v); err != nil {
+		if err := yaml.NewDecoder(strings.NewReader(argStr), yaml.UseOrderedMap()).Decode(v); err != nil {
 			return err
 		}
 		_, err = Execute(v, t.argFuncs)

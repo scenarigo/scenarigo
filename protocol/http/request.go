@@ -12,12 +12,12 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/scenarigo/protocol/http/marshaler"
 	"github.com/zoncoen/scenarigo/protocol/http/unmarshaler"
 	"github.com/zoncoen/scenarigo/version"
-	"github.com/zoncoen/yaml"
 )
 
 var defaultUserAgent = fmt.Sprintf("scenarigo/%s", version.String())

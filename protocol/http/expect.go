@@ -3,18 +3,18 @@ package http
 import (
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/maputil"
-	"github.com/zoncoen/yaml"
 )
 
 // Expect represents expected response values.
 type Expect struct {
-	Code   string                          `yaml:"code"`
-	Header yaml.MapSlice                   `yaml:"header"`
-	Body   yaml.KeyOrderPreservedInterface `yaml:"body"`
+	Code   string        `yaml:"code"`
+	Header yaml.MapSlice `yaml:"header"`
+	Body   interface{}   `yaml:"body"`
 }
 
 // Build implements protocol.AssertionBuilder interface.

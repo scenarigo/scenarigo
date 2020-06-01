@@ -3,8 +3,8 @@ package http
 import (
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/yaml"
 )
 
 func TestExpect_Build(t *testing.T) {

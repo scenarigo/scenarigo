@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/zoncoen/yaml"
+	"github.com/goccy/go-yaml"
 )
 
 func TestConvertStringsMapSlice(t *testing.T) {

@@ -3,9 +3,9 @@ package maputil
 import (
 	"reflect"
 
+	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
-	"github.com/zoncoen/yaml"
 )
 
 // ConvertStringsMapSlice convert yaml.MapSlice( map[string]interface{} ) to yaml.MapSlice( map[string][]string )

@@ -3,8 +3,8 @@ package template
 import (
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
-	"github.com/zoncoen/yaml"
 )
 
 func TestExecute(t *testing.T) {

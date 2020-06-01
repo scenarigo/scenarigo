@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoncoen/yaml"
+	"github.com/goccy/go-yaml"
 )
 
 func TestBuild(t *testing.T) {
@@ -18,8 +18,8 @@ deps:
   tags:
     - go
     - test`
-	var in yaml.MapSlice
-	if err := yaml.Unmarshal([]byte(str), &in); err != nil {
+	var in interface{}
+	if err := yaml.NewDecoder(strings.NewReader(str), yaml.UseOrderedMap()).Decode(&in); err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
 	qs := []string{

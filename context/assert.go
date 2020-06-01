@@ -3,7 +3,6 @@ package context
 import (
 	"github.com/pkg/errors"
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/yaml"
 
 	"github.com/zoncoen/scenarigo/assert"
 )
@@ -25,7 +24,7 @@ func (f leftArrowFunc) Exec(arg interface{}) (interface{}, error) {
 }
 
 func (leftArrowFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
-	var i yaml.KeyOrderPreservedInterface
+	var i interface{}
 	if err := unmarshal(&i); err != nil {
 		return nil, err
 	}

@@ -4,9 +4,9 @@ package assert
 import (
 	"fmt"
 
+	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/query-go"
 	"github.com/zoncoen/scenarigo/query/extractor"
-	"github.com/zoncoen/yaml"
 )
 
 // Assertion implements value assertion.
