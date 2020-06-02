@@ -366,8 +366,27 @@ func TestBuildRequestBody(t *testing.T) {
 }
 
 func TestNormalizeRequestBodyValue(t *testing.T) {
-	invalidRequestBody := func() {}
-	if _, err := normalizeValue(invalidRequestBody); err == nil {
-		t.Fatal("no error")
-	}
+	t.Run("ok", func(t *testing.T) {
+		v, err := normalizeValue(yaml.MapSlice{
+			{Key: "a", Value: "b"},
+			{Key: "c", Value: "d"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %+v", err)
+		}
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			t.Fatalf("failed to convert to map[string]interface{}: %T", v)
+		}
+		if m["a"] != "b" || m["c"] != "d" {
+			t.Fatal("failed to normalize yaml.MapSlice to map[string]interface{} value")
+		}
+	})
+	t.Run("ng", func(t *testing.T) {
+		// func() type cannot encode to []byte as YAML
+		invalidRequestBody := func() {}
+		if _, err := normalizeValue(invalidRequestBody); err == nil {
+			t.Fatal("no error")
+		}
+	})
 }
