@@ -1,7 +1,9 @@
 package marshaler
 
 import (
-	"encoding/json"
+	"bytes"
+
+	"github.com/goccy/go-yaml"
 )
 
 func init() {
@@ -19,9 +21,9 @@ func (m *jsonMarshaler) MediaType() string {
 
 // Marshal implements RequestMarshaler interface.
 func (m *jsonMarshaler) Marshal(v interface{}) ([]byte, error) {
-	bytes, err := json.Marshal(v)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := yaml.NewEncoder(&buf, yaml.JSON()).Encode(v); err != nil {
 		return nil, err
 	}
-	return bytes, nil
+	return buf.Bytes(), nil
 }

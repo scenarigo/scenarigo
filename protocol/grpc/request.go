@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"bytes"
-	"encoding/json"
 	"reflect"
 
 	"github.com/goccy/go-yaml"
@@ -175,36 +174,18 @@ func validateMethod(method reflect.Value) error {
 	return nil
 }
 
-func normalizeValue(x interface{}) (interface{}, error) {
-	// mapping x value to interface{}
-	// because x type may contains yaml.MapSlice or yaml.MapItem
-	b, err := yaml.Marshal(x)
-	if err != nil {
-		return nil, err
-	}
-	var v interface{}
-	if err := yaml.Unmarshal(b, &v); err != nil {
-		return nil, err
-	}
-	return v, nil
-}
-
 func buildRequestBody(ctx *context.Context, req interface{}, src interface{}) error {
 	x, err := ctx.ExecuteTemplate(src)
 	if err != nil {
 		return err
 	}
-	v, err := normalizeValue(x)
-	if err != nil {
-		return err
-	}
-	jb, err := json.Marshal(v)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := yaml.NewEncoder(&buf, yaml.JSON()).Encode(x); err != nil {
 		return err
 	}
 	message, ok := req.(proto.Message)
 	if ok {
-		r := bytes.NewReader(jb)
+		r := bytes.NewReader(buf.Bytes())
 		if err := jsonpb.Unmarshal(r, message); err != nil {
 			return err
 		}
