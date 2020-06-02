@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"bytes"
+	"encoding/json"
 	"reflect"
 
 	"github.com/goccy/go-yaml"
@@ -11,7 +12,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	yamljson "sigs.k8s.io/yaml"
 
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
@@ -175,16 +175,30 @@ func validateMethod(method reflect.Value) error {
 	return nil
 }
 
+func normalizeValue(x interface{}) (interface{}, error) {
+	// mapping x value to interface{}
+	// because x type may contains yaml.MapSlice or yaml.MapItem
+	b, err := yaml.Marshal(x)
+	if err != nil {
+		return nil, err
+	}
+	var v interface{}
+	if err := yaml.Unmarshal(b, &v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
 func buildRequestBody(ctx *context.Context, req interface{}, src interface{}) error {
 	x, err := ctx.ExecuteTemplate(src)
 	if err != nil {
 		return err
 	}
-	b, err := yaml.Marshal(x)
+	v, err := normalizeValue(x)
 	if err != nil {
 		return err
 	}
-	jb, err := yamljson.YAMLToJSON(b)
+	jb, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
