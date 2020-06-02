@@ -73,8 +73,8 @@ github.com/go-playground/locales v0.13.0 h1:HyWk6mgj5qFqCT5fjGBuRArbVDfE4hi8+e8c
 github.com/go-playground/locales v0.13.0/go.mod h1:taPMhCMXrRLJO55olJkUXHZBHCxTMfnGwq/HNwmWNS8=
 github.com/go-playground/universal-translator v0.17.0 h1:icxd5fm+REJzpZx7ZfpaD876Lmtgy7VtROAbHHXk8no=
 github.com/go-playground/universal-translator v0.17.0/go.mod h1:UkSxE5sNxxRwHyU+Scu5vgOQjsIJAF8j9muTVoKLVtA=
-github.com/goccy/go-yaml v1.6.1 h1:+Re3Q6YWhqkJ8vEVWEow53auRp7/if2qrsz8dZh2g70=
-github.com/goccy/go-yaml v1.6.1/go.mod h1:wS4gNoLalDSJxo/SpngzPQ2BN4uuZVLCmbM4S3vd4+Y=
+github.com/goccy/go-yaml v1.6.2 h1:EFTbRx3vFvnE8EA9Yro8/z1qFbBVmjXcWj240HPLWa4=
+github.com/goccy/go-yaml v1.6.2/go.mod h1:wS4gNoLalDSJxo/SpngzPQ2BN4uuZVLCmbM4S3vd4+Y=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b h1:VKtxabqXZkF25pY9ekfRL6a582T4P37/31XEstQ5p58=
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/mock v1.1.1 h1:G5FRp8JnTd7RQH5kemVNlMeyXQAztQ3mOWV95KxsXH8=
@@ -228,8 +228,6 @@ github.com/zoncoen/gotypenames v0.0.0-20181208050024-287fd4bbbaee h1:DaIsog0Tmwt
 github.com/zoncoen/gotypenames v0.0.0-20181208050024-287fd4bbbaee/go.mod h1:6VZIkAlWwqc6WCcXn1MGeWLHJiRJPO6JrXdUmm9C2rk=
 github.com/zoncoen/query-go v1.0.1 h1:Lib5EF/p9LfVZIeZ+M5MWCwdGXeJdg/uojjas8m5Jac=
 github.com/zoncoen/query-go v1.0.1/go.mod h1:hiFwq6NJneLV5KDmlwKvL1hnnnTFlABftCHRyR3fUPQ=
-github.com/zoncoen/yaml v0.0.0-20190621080209-4fe9db62bc7d h1:CGvhu9m9kVaz/++m0Zodbx2X0Whnjg/sRIgK7R9QktU=
-github.com/zoncoen/yaml v0.0.0-20190621080209-4fe9db62bc7d/go.mod h1:wnukNMybQMmIw/SjUh+eeZVEY2COd1yebe3TJieM6Bc=
 golang.org/x/crypto v0.0.0-20181203042331-505ab145d0a9/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/crypto v0.0.0-20190219172222-a4c6cb3142f2/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

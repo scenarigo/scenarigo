@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/template"
-	"github.com/zoncoen/yaml"
 )
 
 func TestLeftArrowFunc(t *testing.T) {
