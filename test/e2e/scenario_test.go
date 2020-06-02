@@ -32,7 +32,6 @@ import (
 
 type testProtocol struct {
 	name               string
-	requstUnmarshaller func(f func(interface{}) error) (protocol.Invoker, error)
 	invoker            invoker
 	expectUnmarshaller func(f func(interface{}) error) (protocol.AssertionBuilder, error)
 	builder            builder
@@ -40,10 +39,7 @@ type testProtocol struct {
 
 func (p *testProtocol) Name() string { return p.name }
 
-func (p *testProtocol) UnmarshalRequest(f func(interface{}) error) (protocol.Invoker, error) {
-	if p.requstUnmarshaller != nil {
-		return p.requstUnmarshaller(f)
-	}
+func (p *testProtocol) UnmarshalRequest(bytes []byte) (protocol.Invoker, error) {
 	return p.invoker, nil
 }
 

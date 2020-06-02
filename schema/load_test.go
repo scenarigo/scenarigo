@@ -15,8 +15,8 @@ type testProtocol struct {
 
 func (p *testProtocol) Name() string { return p.name }
 
-func (p *testProtocol) UnmarshalRequest(f func(interface{}) error) (protocol.Invoker, error) {
-	if err := f(&p.request); err != nil {
+func (p *testProtocol) UnmarshalRequest(bytes []byte) (protocol.Invoker, error) {
+	if err := yaml.Unmarshal(bytes, &p.request); err != nil {
 		return nil, err
 	}
 	return nil, nil
@@ -55,15 +55,9 @@ func TestLoadScenarios(t *testing.T) {
 						filepath: "testdata/valid.yaml",
 					},
 				},
-				request: yaml.MapSlice{
-					{
-						Key: "body",
-						Value: yaml.MapSlice{
-							{
-								Key:   "message",
-								Value: "{{vars.message}}",
-							},
-						},
+				request: map[string]interface{}{
+					"body": map[string]interface{}{
+						"message": "{{vars.message}}",
 					},
 				},
 				expect: yaml.MapSlice{
@@ -97,15 +91,9 @@ func TestLoadScenarios(t *testing.T) {
 						filepath: "testdata/valid-anchor.yaml",
 					},
 				},
-				request: yaml.MapSlice{
-					{
-						Key: "body",
-						Value: yaml.MapSlice{
-							{
-								Key:   "message",
-								Value: "{{vars.message}}",
-							},
-						},
+				request: map[string]interface{}{
+					"body": map[string]interface{}{
+						"message": "{{vars.message}}",
 					},
 				},
 				expect: yaml.MapSlice{

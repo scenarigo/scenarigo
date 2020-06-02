@@ -53,12 +53,12 @@ func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	p := protocol.Get(s.Protocol)
 	if p == nil {
-		if s.Request.unmarshal != nil || s.Expect.unmarshal != nil {
+		if s.Request.bytes != nil || s.Expect.unmarshal != nil {
 			return errors.Errorf("unknown protocol: %s", s.Protocol)
 		}
 	}
-	if s.Request.unmarshal != nil {
-		invoker, err := p.UnmarshalRequest(s.Request.unmarshal)
+	if s.Request.bytes != nil {
+		invoker, err := p.UnmarshalRequest(s.Request.bytes)
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // Request represents a request.
 type Request struct {
 	protocol.Invoker
-	unmarshal func(interface{}) error
+	bytes []byte
 }
 
 // Invoke sends the request.
@@ -90,8 +90,8 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (r *Request) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	r.unmarshal = unmarshal
+func (r *Request) UnmarshalYAML(bytes []byte) error {
+	r.bytes = bytes
 	return nil
 }
 
