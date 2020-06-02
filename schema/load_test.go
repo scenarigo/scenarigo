@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -15,15 +16,15 @@ type testProtocol struct {
 
 func (p *testProtocol) Name() string { return p.name }
 
-func (p *testProtocol) UnmarshalRequest(bytes []byte) (protocol.Invoker, error) {
-	if err := yaml.Unmarshal(bytes, &p.request); err != nil {
+func (p *testProtocol) UnmarshalRequest(b []byte) (protocol.Invoker, error) {
+	if err := yaml.Unmarshal(b, &p.request); err != nil {
 		return nil, err
 	}
 	return nil, nil
 }
 
-func (p *testProtocol) UnmarshalExpect(f func(interface{}) error) (protocol.AssertionBuilder, error) {
-	if err := f(&p.expect); err != nil {
+func (p *testProtocol) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, error) {
+	if err := yaml.NewDecoder(bytes.NewBuffer(b), yaml.UseOrderedMap()).Decode(&p.expect); err != nil {
 		return nil, err
 	}
 	return nil, nil

@@ -53,7 +53,7 @@ func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	p := protocol.Get(s.Protocol)
 	if p == nil {
-		if s.Request.bytes != nil || s.Expect.unmarshal != nil {
+		if s.Request.bytes != nil || s.Expect.bytes != nil {
 			return errors.Errorf("unknown protocol: %s", s.Protocol)
 		}
 	}
@@ -64,8 +64,8 @@ func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		}
 		s.Request.Invoker = invoker
 	}
-	if s.Expect.unmarshal != nil {
-		builder, err := p.UnmarshalExpect(s.Expect.unmarshal)
+	if s.Expect.bytes != nil {
+		builder, err := p.UnmarshalExpect(s.Expect.bytes)
 		if err != nil {
 			return err
 		}
@@ -98,7 +98,7 @@ func (r *Request) UnmarshalYAML(bytes []byte) error {
 // Expect represents a expect response.
 type Expect struct {
 	protocol.AssertionBuilder
-	unmarshal func(interface{}) error
+	bytes []byte
 }
 
 // Build builds the assertion which asserts the response.
@@ -112,8 +112,8 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (e *Expect) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	e.unmarshal = unmarshal
+func (e *Expect) UnmarshalYAML(bytes []byte) error {
+	e.bytes = bytes
 	return nil
 }
 

@@ -39,14 +39,11 @@ type testProtocol struct {
 
 func (p *testProtocol) Name() string { return p.name }
 
-func (p *testProtocol) UnmarshalRequest(bytes []byte) (protocol.Invoker, error) {
+func (p *testProtocol) UnmarshalRequest(_ []byte) (protocol.Invoker, error) {
 	return p.invoker, nil
 }
 
-func (p *testProtocol) UnmarshalExpect(f func(interface{}) error) (protocol.AssertionBuilder, error) {
-	if p.expectUnmarshaller != nil {
-		return p.expectUnmarshaller(f)
-	}
+func (p *testProtocol) UnmarshalExpect(_ []byte) (protocol.AssertionBuilder, error) {
 	return p.builder, nil
 }
 

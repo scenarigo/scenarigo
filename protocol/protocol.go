@@ -43,7 +43,7 @@ func Get(name string) Protocol {
 type Protocol interface {
 	Name() string
 	UnmarshalRequest([]byte) (Invoker, error)
-	UnmarshalExpect(func(interface{}) error) (AssertionBuilder, error)
+	UnmarshalExpect([]byte) (AssertionBuilder, error)
 }
 
 // Invoker is the interface that sends the request and returns response sent from the server.
