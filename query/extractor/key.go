@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/query-go"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 )
@@ -32,16 +31,6 @@ func (e *keyExtractor) Extract(v reflect.Value) (reflect.Value, bool) {
 func (e *keyExtractor) extract(v reflect.Value) (reflect.Value, bool) {
 	v = reflectutil.Elem(v)
 	switch v.Kind() {
-	case reflect.Slice:
-		slice, ok := v.Interface().(yaml.MapSlice)
-		if ok {
-			for _, item := range slice {
-				k := reflectutil.Elem(reflect.ValueOf(item.Key))
-				if k.String() == e.key {
-					return reflect.ValueOf(item.Value), true
-				}
-			}
-		}
 	case reflect.Map:
 		for _, k := range v.MapKeys() {
 			k := reflectutil.Elem(k)
