@@ -85,6 +85,14 @@ func TestTemplate_Execute(t *testing.T) {
 				"f": func(s string) string { return s }},
 			expect: "ok",
 		},
+		"call function that have argument required cast": {
+			str: `{{f(1, 2, 3, 4, 5)}}`,
+			data: map[string]func(int, int8, int16, int32, int64) int{
+				"f": func(a0 int, a1 int8, a2 int16, a3 int32, a4 int64) int {
+					return a0 + int(a1) + int(a2) + int(a3) + int(a4)
+				}},
+			expect: 15,
+		},
 		"left arrow func": {
 			str: strings.Trim(`
 {{echo <-}}:
