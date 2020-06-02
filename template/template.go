@@ -165,6 +165,10 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 		return nil, err
 	}
 	funv := reflect.ValueOf(fun)
+	if funv.Kind() != reflect.Func {
+		return nil, errors.Errorf("not function")
+	}
+
 	args := make([]reflect.Value, len(call.Args))
 	for i, arg := range call.Args {
 		a, err := t.executeExpr(arg, data)
@@ -179,9 +183,6 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 		args[i] = v
 	}
 
-	if funv.Kind() != reflect.Func {
-		return nil, errors.Errorf("not function")
-	}
 	vs := funv.Call(args)
 	if len(vs) != 1 || !vs[0].IsValid() {
 		return nil, errors.Errorf("function should return a value")
