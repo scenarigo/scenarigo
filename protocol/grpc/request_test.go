@@ -364,3 +364,10 @@ func TestBuildRequestBody(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeRequestBodyValue(t *testing.T) {
+	invalidRequestBody := func() {}
+	if _, err := normalizeValue(invalidRequestBody); err == nil {
+		t.Fatal("no error")
+	}
+}
