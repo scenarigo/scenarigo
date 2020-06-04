@@ -20,7 +20,7 @@ func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 	}
 
 	if s.Include != "" {
-		scenarios, err := schema.LoadScenarios(s.Include)
+		scenarios, err := schema.LoadScenarios(ctx, s.Include)
 		if err != nil {
 			ctx.Reporter().Fatalf(`failed to include "%s" as step: %s`, s.Include, err)
 		}

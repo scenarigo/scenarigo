@@ -19,6 +19,7 @@ type Expect struct {
 
 // Build implements protocol.AssertionBuilder interface.
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
+	ctx.AddChildPath("expect").AddChildPath("body")
 	expectBody, err := ctx.ExecuteTemplate(e.Body)
 	if err != nil {
 		return nil, errors.Errorf("invalid expect response: %s", err)

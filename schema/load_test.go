@@ -6,6 +6,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
+	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/protocol"
 )
 
@@ -120,8 +121,8 @@ func TestLoadScenarios(t *testing.T) {
 				}
 				protocol.Register(p)
 				defer protocol.Unregister(p.Name())
-
-				got, err := LoadScenarios(test.path)
+				ctx := context.FromT(t)
+				got, err := LoadScenarios(ctx, test.path)
 				if err != nil {
 					t.Fatalf("unexpected error: %s", err)
 				}
@@ -174,7 +175,8 @@ func TestLoadScenarios(t *testing.T) {
 		for name, test := range tests {
 			test := test
 			t.Run(name, func(t *testing.T) {
-				_, err := LoadScenarios(test.path)
+				ctx := context.FromT(t)
+				_, err := LoadScenarios(ctx, test.path)
 				if err == nil {
 					t.Fatal("expected error but no error")
 				}

@@ -3,9 +3,13 @@ package context
 
 import (
 	"context"
+	"io/ioutil"
 	"path/filepath"
 	"testing"
 
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
@@ -15,6 +19,7 @@ type (
 	keyVars      struct{}
 	keyRequest   struct{}
 	keyResponse  struct{}
+	keyYAML      struct{}
 )
 
 // Context represents a scenarigo context.
@@ -167,6 +172,49 @@ func (c *Context) WithResponse(resp interface{}) *Context {
 // Response returns the response.
 func (c *Context) Response() interface{} {
 	return c.ctx.Value(keyResponse{})
+}
+
+type YAML struct {
+	ScenarioPath string
+	File         *ast.File
+	Builder      *yaml.PathBuilder
+}
+
+func NewYAML(path string) (*YAML, error) {
+	bytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	file, err := parser.ParseBytes(bytes, 0)
+	if err != nil {
+		return nil, err
+	}
+	return &YAML{
+		ScenarioPath: path,
+		File:         file,
+		Builder:      &yaml.PathBuilder{},
+	}, nil
+}
+
+func (c *Context) AddChildPath(selector string) *Context {
+	yml, ok := c.ctx.Value(keyYAML{}).(*YAML)
+	if !ok {
+		return c
+	}
+	b := yml.Builder.Child(selector)
+	yml.Builder = &(*b) // copy PathBuilder
+	return c
+}
+
+func (c *Context) WithYAML(yml *YAML) *Context {
+	if yml == nil {
+		return c
+	}
+	return newContext(
+		context.WithValue(c.ctx, keyYAML{}, yml),
+		c.reqCtx,
+		c.reporter,
+	)
 }
 
 // Run runs f as a subtest of c called name.
