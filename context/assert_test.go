@@ -1,4 +1,4 @@
-package context
+package context_test
 
 import (
 	"strconv"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/assert"
+	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/template"
 )
 
@@ -46,8 +47,8 @@ func TestLeftArrowFunc(t *testing.T) {
 			if err := yaml.Unmarshal([]byte(tc.yaml), &i); err != nil {
 				t.Fatalf("failed to unmarshal: %s", err)
 			}
-			v, err := template.Execute(i, map[string]interface{}{
-				"f": leftArrowFunc(assert.Contains),
+			v, err := template.Execute(context.FromT(t), i, map[string]interface{}{
+				"f": context.ContainsAssertion(),
 			})
 			if err != nil {
 				t.Fatalf("failed to execute: %s", err)

@@ -17,6 +17,7 @@ import (
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/scenarigo/protocol/http/marshaler"
 	"github.com/zoncoen/scenarigo/protocol/http/unmarshaler"
+	"github.com/zoncoen/scenarigo/template"
 	"github.com/zoncoen/scenarigo/version"
 )
 
@@ -109,7 +110,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 func (r *Request) buildClient(ctx *context.Context) (*http.Client, error) {
 	client := &http.Client{}
 	if r.Client != "" {
-		x, err := ctx.ExecuteTemplate(r.Client)
+		x, err := template.Execute(ctx, r.Client, ctx)
 		if err != nil {
 			return nil, errors.Errorf("failed to get client: %s", err)
 		}
@@ -127,7 +128,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 		method = r.Method
 	}
 
-	x, err := ctx.ExecuteTemplate(r.URL)
+	x, err := template.Execute(ctx, r.URL, ctx)
 	if err != nil {
 		return nil, nil, errors.Errorf("failed to get URL: %s", err)
 	}
@@ -143,7 +144,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 		}
 		query := u.Query()
 
-		x, err := ctx.ExecuteTemplate(r.Query)
+		x, err := template.Execute(ctx, r.Query, ctx)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to set query: %s", err)
 		}
@@ -164,7 +165,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 
 	header := http.Header{}
 	if r.Header != nil {
-		x, err := ctx.ExecuteTemplate(r.Header)
+		x, err := template.Execute(ctx, r.Header, ctx)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to set header: %s", err)
 		}
@@ -186,7 +187,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	var reader io.Reader
 	var body interface{}
 	if r.Body != nil {
-		x, err := ctx.ExecuteTemplate(r.Body)
+		x, err := template.Execute(ctx, r.Body, ctx)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to create request: %s", err)
 		}

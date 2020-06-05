@@ -14,6 +14,7 @@ import (
 
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/zoncoen/scenarigo/template"
 )
 
 // Request represents a request.
@@ -37,7 +38,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		return ctx, nil, errors.New("gRPC client must be specified")
 	}
 
-	x, err := ctx.ExecuteTemplate(r.Client)
+	x, err := template.Execute(ctx, r.Client, ctx)
 	if err != nil {
 		return ctx, nil, errors.Errorf("failed to get client: %s", err)
 	}
@@ -67,7 +68,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 
 	reqCtx := ctx.RequestContext()
 	if r.Metadata != nil {
-		x, err := ctx.ExecuteTemplate(r.Metadata)
+		x, err := template.Execute(ctx, r.Metadata, ctx)
 		if err != nil {
 			return ctx, nil, errors.Errorf("failed to set metadata: %s", err)
 		}
@@ -175,7 +176,7 @@ func validateMethod(method reflect.Value) error {
 }
 
 func buildRequestBody(ctx *context.Context, req interface{}, src interface{}) error {
-	x, err := ctx.ExecuteTemplate(src)
+	x, err := template.Execute(ctx, src, ctx)
 	if err != nil {
 		return err
 	}

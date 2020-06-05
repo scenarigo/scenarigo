@@ -7,6 +7,7 @@ import (
 
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/schema"
+	"github.com/zoncoen/scenarigo/template"
 )
 
 func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
@@ -27,7 +28,7 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	}
 
 	if s.Vars != nil {
-		vars, err := ctx.ExecuteTemplate(s.Vars)
+		vars, err := template.Execute(ctx, s.Vars, ctx)
 		if err != nil {
 			ctx.Reporter().Fatalf("invalid vars: %s", err)
 		}
@@ -51,7 +52,7 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 
 			// bind values to the scenario context for enable to access from following steps
 			if step.Bind.Vars != nil {
-				vars, err := ctx.ExecuteTemplate(step.Bind.Vars)
+				vars, err := template.Execute(ctx, step.Bind.Vars, ctx)
 				if err != nil {
 					ctx.Reporter().Fatalf("invalid bind: %s", err)
 				}

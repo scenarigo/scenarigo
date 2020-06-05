@@ -4,13 +4,14 @@ import (
 	"reflect"
 
 	"github.com/goccy/go-yaml"
+	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 )
 
 var yamlMapItemType = reflect.TypeOf(yaml.MapItem{})
 
 // Execute executes templates of i with data.
-func Execute(i, data interface{}) (interface{}, error) {
+func Execute(ctx *context.Context, i, data interface{}) (interface{}, error) {
 	v, err := execute(reflect.ValueOf(i), data)
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
+	"github.com/zoncoen/scenarigo/context"
 )
 
 func TestExecute(t *testing.T) {
@@ -121,7 +122,7 @@ func TestExecute(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			got, err := Execute(test.in, test.vars)
+			got, err := Execute(context.FromT(t), test.in, test.vars)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

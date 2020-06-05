@@ -15,6 +15,7 @@ import (
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/maputil"
+	"github.com/zoncoen/scenarigo/template"
 )
 
 // Expect represents expected response values.
@@ -35,7 +36,7 @@ type ExpectStatus struct {
 
 // Build implements protocol.AssertionBuilder interface.
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
-	expectBody, err := ctx.ExecuteTemplate(e.Body)
+	expectBody, err := template.Execute(ctx, e.Body, ctx)
 	if err != nil {
 		return nil, errors.Errorf("invalid expect response: %s", err)
 	}

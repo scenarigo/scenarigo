@@ -8,11 +8,12 @@ import (
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/plugin"
 	"github.com/zoncoen/scenarigo/schema"
+	"github.com/zoncoen/scenarigo/template"
 )
 
 func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 	if s.Vars != nil {
-		vars, err := ctx.ExecuteTemplate(s.Vars)
+		vars, err := template.Execute(ctx, s.Vars, ctx)
 		if err != nil {
 			ctx.Reporter().Fatalf("invalid vars: %s", err)
 		}
@@ -31,7 +32,7 @@ func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 		return ctx
 	}
 	if s.Ref != "" {
-		x, err := ctx.ExecuteTemplate(s.Ref)
+		x, err := template.Execute(ctx, s.Ref, ctx)
 		if err != nil {
 			ctx.Reporter().Fatalf(`failed to reference "%s" as step: %s`, s.Ref, err)
 		}

@@ -212,7 +212,7 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 		if err := yaml.NewDecoder(strings.NewReader(argStr), yaml.UseOrderedMap()).Decode(v); err != nil {
 			return err
 		}
-		_, err = Execute(v, t.argFuncs)
+		_, err = Execute(nil, v, t.argFuncs)
 		return err
 	})
 	if err != nil {
