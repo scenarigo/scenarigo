@@ -1,7 +1,9 @@
 package template
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/context"
@@ -26,6 +28,20 @@ func ExecuteWithArgs(ctx *context.Context, data, args interface{}) (interface{},
 	return nil, nil
 }
 
+func structFieldName(field reflect.StructField) string {
+	fieldName := field.Name
+	tag := field.Tag.Get("yaml")
+	if tag == "" {
+		return fieldName
+	}
+
+	tagValues := strings.Split(tag, ",")
+	if len(tagValues) > 0 && tagValues[0] != "" {
+		return tagValues[0]
+	}
+	return fieldName
+}
+
 func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflect.Value, error) {
 	v := reflectutil.Elem(data)
 	switch v.Kind() {
@@ -33,7 +49,8 @@ func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflec
 		for _, k := range v.MapKeys() {
 			e := v.MapIndex(k)
 			if !isNil(e) {
-				x, err := execute(ctx, e, args)
+				key := fmt.Sprint(k.Interface())
+				x, err := execute(ctx.AddChildPath(key), e, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
@@ -44,7 +61,7 @@ func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflec
 		for i := 0; i < v.Len(); i++ {
 			e := v.Index(i)
 			if !isNil(e) {
-				x, err := execute(ctx, e, args)
+				x, err := execute(ctx.AddIndexPath(uint(i)), e, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
@@ -56,11 +73,8 @@ func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflec
 		case yamlMapItemType:
 			value := v.FieldByName("Value")
 			if !isNil(value) {
-				key := v.FieldByName("Key").Interface()
-				if keyStr, ok := key.(string); ok {
-					ctx.AddChildPath(keyStr)
-				}
-				x, err := execute(ctx, value, args)
+				key := fmt.Sprint(v.FieldByName("Key").Interface())
+				x, err := execute(ctx.AddChildPath(key), value, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
@@ -69,7 +83,8 @@ func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflec
 		default:
 			for i := 0; i < v.NumField(); i++ {
 				field := v.Field(i)
-				x, err := execute(ctx, field, args)
+				fieldName := structFieldName(v.Type().Field(i))
+				x, err := execute(ctx.AddChildPath(fieldName), field, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}

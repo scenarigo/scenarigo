@@ -180,7 +180,7 @@ func (c *Context) Response() interface{} {
 type YAML struct {
 	ScenarioPath string
 	Node         ast.Node
-	Builder      *yaml.PathBuilder
+	PathString   string
 }
 
 func NewYAML(path string, docIdx int) (*YAML, error) {
@@ -196,7 +196,7 @@ func NewYAML(path string, docIdx int) (*YAML, error) {
 	return &YAML{
 		ScenarioPath: path,
 		Node:         node,
-		Builder:      (&yaml.PathBuilder{}).Root(),
+		PathString:   "$",
 	}, nil
 }
 
@@ -205,9 +205,15 @@ func (c *Context) AddChildPath(selector string) *Context {
 	if !ok {
 		return c
 	}
-	b := yml.Builder.Child(selector)
-	yml.Builder = &(*b) // copy PathBuilder
-	return c
+	return newContext(
+		context.WithValue(c.ctx, keyYAML{}, &YAML{
+			ScenarioPath: yml.ScenarioPath,
+			Node:         yml.Node,
+			PathString:   yml.PathString + fmt.Sprintf(".%s", selector),
+		}),
+		c.reqCtx,
+		c.reporter,
+	)
 }
 
 func (c *Context) AddIndexPath(idx uint) *Context {
@@ -215,9 +221,15 @@ func (c *Context) AddIndexPath(idx uint) *Context {
 	if !ok {
 		return c
 	}
-	b := yml.Builder.Index(idx)
-	yml.Builder = &(*b) // copy PathBuilder
-	return c
+	return newContext(
+		context.WithValue(c.ctx, keyYAML{}, &YAML{
+			ScenarioPath: yml.ScenarioPath,
+			Node:         yml.Node,
+			PathString:   yml.PathString + fmt.Sprintf("[%d]", idx),
+		}),
+		c.reqCtx,
+		c.reporter,
+	)
 }
 
 func (c *Context) currentYAML() string {
@@ -225,8 +237,9 @@ func (c *Context) currentYAML() string {
 	if !ok {
 		return ""
 	}
-	path := yml.Builder.Build()
-	if path == nil {
+	fmt.Println("Path = ", yml.PathString)
+	path, err := yaml.PathString(yml.PathString)
+	if path == nil || err != nil {
 		return ""
 	}
 	node, err := path.FilterNode(yml.Node)

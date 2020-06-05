@@ -45,7 +45,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 	if err != nil {
 		return ctx, nil, err
 	}
-	req, reqBody, err := r.buildRequest(ctx)
+	req, reqBody, err := r.buildRequest(ctx.AddChildPath("request"))
 	if err != nil {
 		return ctx, nil, err
 	}
@@ -128,7 +128,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 		method = r.Method
 	}
 
-	x, err := template.Execute(ctx, r.URL)
+	x, err := template.Execute(ctx.AddChildPath("url"), r.URL)
 	if err != nil {
 		return nil, nil, errors.Errorf("failed to get URL: %s", err)
 	}
@@ -138,6 +138,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	}
 
 	if r.Query != nil {
+		ctx := ctx.AddChildPath("query")
 		u, err := url.Parse(urlStr)
 		if err != nil {
 			return nil, nil, errors.Errorf("invalid url: %s: %s", urlStr, err)
@@ -165,6 +166,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 
 	header := http.Header{}
 	if r.Header != nil {
+		ctx := ctx.AddChildPath("header")
 		x, err := template.Execute(ctx, r.Header)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to set header: %s", err)
@@ -187,6 +189,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	var reader io.Reader
 	var body interface{}
 	if r.Body != nil {
+		ctx := ctx.AddChildPath("body")
 		x, err := template.Execute(ctx, r.Body)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to create request: %s", err)

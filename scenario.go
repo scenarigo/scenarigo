@@ -39,8 +39,9 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	var failed bool
 	for idx, step := range s.Steps {
 		step := step
-		ctx = ctx.AddChildPath("steps").AddIndexPath(uint(idx))
 		ok := scnCtx.Run(step.Title, func(ctx *context.Context) {
+			ctx = ctx.AddChildPath("steps").AddIndexPath(uint(idx))
+
 			// following steps are skipped if the previous step failed
 			if failed {
 				ctx.Reporter().SkipNow()

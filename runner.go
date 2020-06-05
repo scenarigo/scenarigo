@@ -92,7 +92,7 @@ func (r *Runner) Run(ctx *context.Context) {
 	}
 	for _, f := range r.scenarioFiles {
 		ctx.Run(f, func(ctx *context.Context) {
-			scns, err := schema.LoadScenarios(ctx, f)
+			scns, err := schema.LoadScenarios(f)
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}

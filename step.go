@@ -13,7 +13,7 @@ import (
 
 func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 	if s.Vars != nil {
-		vars, err := template.Execute(ctx, s.Vars)
+		vars, err := template.Execute(ctx.AddChildPath("vars"), s.Vars)
 		if err != nil {
 			ctx.Reporter().Fatalf("invalid vars: %s", err)
 		}
@@ -21,7 +21,7 @@ func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 	}
 
 	if s.Include != "" {
-		scenarios, err := schema.LoadScenarios(ctx, s.Include)
+		scenarios, err := schema.LoadScenarios(s.Include)
 		if err != nil {
 			ctx.Reporter().Fatalf(`failed to include "%s" as step: %s`, s.Include, err)
 		}
@@ -32,7 +32,7 @@ func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 		return ctx
 	}
 	if s.Ref != "" {
-		x, err := template.Execute(ctx, s.Ref)
+		x, err := template.Execute(ctx.AddChildPath("ref"), s.Ref)
 		if err != nil {
 			ctx.Reporter().Fatalf(`failed to reference "%s" as step: %s`, s.Ref, err)
 		}
@@ -65,7 +65,7 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step) *context.Context {
 			ctx.Reporter().Log(err)
 			continue
 		}
-		assertion, err := s.Expect.Build(newCtx)
+		assertion, err := s.Expect.Build(newCtx.AddChildPath("expect"))
 		if err != nil {
 			ctx.Reporter().Log(err)
 			continue
