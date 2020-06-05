@@ -17,12 +17,6 @@ func LoadScenarios(ctx *context.Context, path string) ([]*Scenario, error) {
 	}
 	defer f.Close()
 
-	yml, err := context.NewYAML(path)
-	if err != nil {
-		return nil, err
-	}
-	ctx = ctx.WithYAML(yml)
-
 	var scenarios []*Scenario
 	d := yaml.NewDecoder(f, yaml.UseOrderedMap(), yaml.Strict())
 	for {

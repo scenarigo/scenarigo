@@ -10,6 +10,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/goccy/go-yaml/printer"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
@@ -176,11 +177,11 @@ func (c *Context) Response() interface{} {
 
 type YAML struct {
 	ScenarioPath string
-	File         *ast.File
+	Node         ast.Node
 	Builder      *yaml.PathBuilder
 }
 
-func NewYAML(path string) (*YAML, error) {
+func NewYAML(path string, docIdx int) (*YAML, error) {
 	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -189,10 +190,11 @@ func NewYAML(path string) (*YAML, error) {
 	if err != nil {
 		return nil, err
 	}
+	node := file.Docs[docIdx].Body
 	return &YAML{
 		ScenarioPath: path,
-		File:         file,
-		Builder:      &yaml.PathBuilder{},
+		Node:         node,
+		Builder:      (&yaml.PathBuilder{}).Root(),
 	}, nil
 }
 
@@ -204,6 +206,37 @@ func (c *Context) AddChildPath(selector string) *Context {
 	b := yml.Builder.Child(selector)
 	yml.Builder = &(*b) // copy PathBuilder
 	return c
+}
+
+func (c *Context) AddIndexPath(idx uint) *Context {
+	yml, ok := c.ctx.Value(keyYAML{}).(*YAML)
+	if !ok {
+		return c
+	}
+	b := yml.Builder.Index(idx)
+	yml.Builder = &(*b) // copy PathBuilder
+	return c
+}
+
+func (c *Context) CurrentYAML() (string, error) {
+	yml, ok := c.ctx.Value(keyYAML{}).(*YAML)
+	if !ok {
+		return "", nil
+	}
+	path := yml.Builder.Build()
+	if path == nil {
+		return "", nil
+	}
+	node, err := path.FilterNode(yml.Node)
+	if err != nil {
+		return "", err
+	}
+	if node == nil {
+		return "", nil
+	}
+	var p printer.Printer
+	output := p.PrintErrorToken(node.GetToken(), false)
+	return output, nil
 }
 
 func (c *Context) WithYAML(yml *YAML) *Context {

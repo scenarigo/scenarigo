@@ -1,6 +1,7 @@
 package template
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/goccy/go-yaml"
@@ -12,11 +13,7 @@ var yamlMapItemType = reflect.TypeOf(yaml.MapItem{})
 
 // Execute executes templates of i with data.
 func Execute(ctx *context.Context, data interface{}) (interface{}, error) {
-	v, err := ExecuteWithArgs(ctx, data, ctx)
-	if err != nil {
-		return nil, err
-	}
-	return v, nil
+	return ExecuteWithArgs(ctx, data, ctx)
 }
 
 func ExecuteWithArgs(ctx *context.Context, data, args interface{}) (interface{}, error) {
@@ -60,7 +57,12 @@ func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflec
 		case yamlMapItemType:
 			value := v.FieldByName("Value")
 			if !isNil(value) {
+				key := v.FieldByName("Key").Interface()
+				ctx.AddChildPath(key.(string))
 				x, err := execute(ctx, value, args)
+				if yml, err := ctx.CurrentYAML(); err == nil {
+					fmt.Printf("%s\n", yml)
+				}
 				if err != nil {
 					return reflect.Value{}, err
 				}

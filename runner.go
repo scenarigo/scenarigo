@@ -1,6 +1,7 @@
 package scenarigo
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -95,8 +96,13 @@ func (r *Runner) Run(ctx *context.Context) {
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
-			for _, scn := range scns {
+			for idx, scn := range scns {
 				scn := scn
+				yml, err := context.NewYAML(f, idx)
+				if err != nil {
+					log.Fatal(err)
+				}
+				ctx = ctx.WithYAML(yml)
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = runScenario(ctx, scn)
