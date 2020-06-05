@@ -10,7 +10,10 @@ import (
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 )
 
-var yamlMapItemType = reflect.TypeOf(yaml.MapItem{})
+var (
+	yamlMapItemType  = reflect.TypeOf(yaml.MapItem{})
+	yamlMapSliceType = reflect.TypeOf(yaml.MapSlice{})
+)
 
 // Execute executes templates of i with data.
 func Execute(ctx *context.Context, data interface{}) (interface{}, error) {
@@ -61,7 +64,11 @@ func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflec
 		for i := 0; i < v.Len(); i++ {
 			e := v.Index(i)
 			if !isNil(e) {
-				x, err := execute(ctx.AddIndexPath(uint(i)), e, args)
+				ctx := ctx
+				if v.Type() != yamlMapSliceType {
+					ctx = ctx.AddIndexPath(uint(i))
+				}
+				x, err := execute(ctx, e, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
