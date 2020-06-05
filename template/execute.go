@@ -1,7 +1,6 @@
 package template
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/goccy/go-yaml"
@@ -58,11 +57,10 @@ func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflec
 			value := v.FieldByName("Value")
 			if !isNil(value) {
 				key := v.FieldByName("Key").Interface()
-				ctx.AddChildPath(key.(string))
-				x, err := execute(ctx, value, args)
-				if yml, err := ctx.CurrentYAML(); err == nil {
-					fmt.Printf("%s\n", yml)
+				if keyStr, ok := key.(string); ok {
+					ctx.AddChildPath(keyStr)
 				}
+				x, err := execute(ctx, value, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}

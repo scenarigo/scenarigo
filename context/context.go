@@ -11,6 +11,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/printer"
+	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
@@ -218,25 +219,29 @@ func (c *Context) AddIndexPath(idx uint) *Context {
 	return c
 }
 
-func (c *Context) CurrentYAML() (string, error) {
+func (c *Context) currentYAML() string {
 	yml, ok := c.ctx.Value(keyYAML{}).(*YAML)
 	if !ok {
-		return "", nil
+		return ""
 	}
 	path := yml.Builder.Build()
 	if path == nil {
-		return "", nil
+		return ""
 	}
 	node, err := path.FilterNode(yml.Node)
-	if err != nil {
-		return "", err
-	}
-	if node == nil {
-		return "", nil
+	if node == nil || err != nil {
+		return ""
 	}
 	var p printer.Printer
-	output := p.PrintErrorToken(node.GetToken(), false)
-	return output, nil
+	return fmt.Sprintf("\n%s\n", p.PrintErrorToken(node.GetToken(), true))
+}
+
+func (c *Context) AnnotateYAML(target error) error {
+	yml := c.currentYAML()
+	if yml == "" {
+		return target
+	}
+	return errors.Wrapf(target, yml)
 }
 
 func (c *Context) WithYAML(yml *YAML) *Context {

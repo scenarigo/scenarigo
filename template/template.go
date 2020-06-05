@@ -63,9 +63,17 @@ func (t *Template) executeExpr(ctx *context.Context, expr ast.Expr, args interfa
 	case *ast.BinaryExpr:
 		return t.executeBinaryExpr(ctx, e, args)
 	case *ast.Ident:
-		return lookup(e, args)
+		v, err := lookup(e, args)
+		if err != nil {
+			return nil, ctx.AnnotateYAML(err)
+		}
+		return v, nil
 	case *ast.SelectorExpr:
-		return lookup(e, args)
+		v, err := lookup(e, args)
+		if err != nil {
+			return nil, ctx.AnnotateYAML(err)
+		}
+		return v, nil
 	case *ast.IndexExpr:
 		return lookup(e, args)
 	case *ast.CallExpr:
