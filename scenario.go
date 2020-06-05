@@ -28,7 +28,7 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	}
 
 	if s.Vars != nil {
-		vars, err := template.Execute(ctx, s.Vars, ctx)
+		vars, err := template.Execute(ctx, s.Vars)
 		if err != nil {
 			ctx.Reporter().Fatalf("invalid vars: %s", err)
 		}
@@ -52,7 +52,7 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 
 			// bind values to the scenario context for enable to access from following steps
 			if step.Bind.Vars != nil {
-				vars, err := template.Execute(ctx, step.Bind.Vars, ctx)
+				vars, err := template.Execute(ctx, step.Bind.Vars)
 				if err != nil {
 					ctx.Reporter().Fatalf("invalid bind: %s", err)
 				}

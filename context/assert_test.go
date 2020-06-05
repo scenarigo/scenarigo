@@ -47,7 +47,7 @@ func TestLeftArrowFunc(t *testing.T) {
 			if err := yaml.Unmarshal([]byte(tc.yaml), &i); err != nil {
 				t.Fatalf("failed to unmarshal: %s", err)
 			}
-			v, err := template.Execute(context.FromT(t), i, map[string]interface{}{
+			v, err := template.ExecuteWithArgs(context.FromT(t), i, map[string]interface{}{
 				"f": context.ContainsAssertion(),
 			})
 			if err != nil {

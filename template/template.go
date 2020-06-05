@@ -9,6 +9,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
+	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/scenarigo/template/ast"
 	"github.com/zoncoen/scenarigo/template/parser"
@@ -41,9 +42,9 @@ func New(str string) (*Template, error) {
 	}, nil
 }
 
-// Execute applies a parsed template to the specified data.
-func (t *Template) Execute(data interface{}) (interface{}, error) {
-	v, err := t.executeExpr(t.expr, data)
+// Execute applies a parsed template to the specified args.
+func (t *Template) Execute(ctx *context.Context, args interface{}) (interface{}, error) {
+	v, err := t.executeExpr(ctx, t.expr, args)
 	if err != nil {
 		if strings.Contains(t.str, "\n") {
 			return nil, errors.Wrapf(err, "failed to execute: \n%s\n", t.str)
@@ -53,30 +54,30 @@ func (t *Template) Execute(data interface{}) (interface{}, error) {
 	return v, nil
 }
 
-func (t *Template) executeExpr(expr ast.Expr, data interface{}) (interface{}, error) {
+func (t *Template) executeExpr(ctx *context.Context, expr ast.Expr, args interface{}) (interface{}, error) {
 	switch e := expr.(type) {
 	case *ast.BasicLit:
-		return t.executeBasicLit(e)
+		return t.executeBasicLit(ctx, e)
 	case *ast.ParameterExpr:
-		return t.executeParameterExpr(e, data)
+		return t.executeParameterExpr(ctx, e, args)
 	case *ast.BinaryExpr:
-		return t.executeBinaryExpr(e, data)
+		return t.executeBinaryExpr(ctx, e, args)
 	case *ast.Ident:
-		return lookup(e, data)
+		return lookup(e, args)
 	case *ast.SelectorExpr:
-		return lookup(e, data)
+		return lookup(e, args)
 	case *ast.IndexExpr:
-		return lookup(e, data)
+		return lookup(e, args)
 	case *ast.CallExpr:
-		return t.executeFuncCall(e, data)
+		return t.executeFuncCall(ctx, e, args)
 	case *ast.LeftArrowExpr:
-		return t.executeLeftArrowExpr(e, data)
+		return t.executeLeftArrowExpr(ctx, e, args)
 	default:
 		return nil, errors.Errorf(`unknown expression "%T"`, e)
 	}
 }
 
-func (t *Template) executeBasicLit(lit *ast.BasicLit) (interface{}, error) {
+func (t *Template) executeBasicLit(ctx *context.Context, lit *ast.BasicLit) (interface{}, error) {
 	switch lit.Kind {
 	case token.STRING:
 		return lit.Value, nil
@@ -91,11 +92,11 @@ func (t *Template) executeBasicLit(lit *ast.BasicLit) (interface{}, error) {
 	}
 }
 
-func (t *Template) executeParameterExpr(e *ast.ParameterExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeParameterExpr(ctx *context.Context, e *ast.ParameterExpr, args interface{}) (interface{}, error) {
 	if e.X == nil {
 		return "", nil
 	}
-	v, err := t.executeExpr(e.X, data)
+	v, err := t.executeExpr(ctx, e.X, args)
 	if err != nil {
 		return nil, err
 	}
@@ -115,12 +116,12 @@ func (t *Template) executeParameterExpr(e *ast.ParameterExpr, data interface{}) 
 	return v, nil
 }
 
-func (t *Template) executeBinaryExpr(e *ast.BinaryExpr, data interface{}) (interface{}, error) {
-	x, err := t.executeExpr(e.X, data)
+func (t *Template) executeBinaryExpr(ctx *context.Context, e *ast.BinaryExpr, args interface{}) (interface{}, error) {
+	x, err := t.executeExpr(ctx, e.X, args)
 	if err != nil {
 		return nil, err
 	}
-	y, err := t.executeExpr(e.Y, data)
+	y, err := t.executeExpr(ctx, e.Y, args)
 	if err != nil {
 		return nil, err
 	}
@@ -159,8 +160,8 @@ func (t *Template) stringize(v interface{}) (string, error) {
 	return "", errors.Errorf("expect string but got %T", v)
 }
 
-func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interface{}, error) {
-	fun, err := t.executeExpr(call.Fun, data)
+func (t *Template) executeFuncCall(ctx *context.Context, call *ast.CallExpr, data interface{}) (interface{}, error) {
+	fun, err := t.executeExpr(ctx, call.Fun, data)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +172,7 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 
 	args := make([]reflect.Value, len(call.Args))
 	for i, arg := range call.Args {
-		a, err := t.executeExpr(arg, data)
+		a, err := t.executeExpr(ctx, arg, data)
 		if err != nil {
 			return nil, err
 		}
@@ -190,8 +191,8 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 	return vs[0].Interface(), nil
 }
 
-func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) (interface{}, error) {
-	v, err := t.executeExpr(e.Fun, data)
+func (t *Template) executeLeftArrowExpr(ctx *context.Context, e *ast.LeftArrowExpr, data interface{}) (interface{}, error) {
+	v, err := t.executeExpr(ctx, e.Fun, data)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +201,7 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 		return nil, errors.Errorf(`expect template function but got %T`, e)
 	}
 
-	v, err = t.executeLeftArrowExprArg(e.Arg, data)
+	v, err = t.executeLeftArrowExprArg(ctx, e.Arg, data)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +213,7 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 		if err := yaml.NewDecoder(strings.NewReader(argStr), yaml.UseOrderedMap()).Decode(v); err != nil {
 			return err
 		}
-		_, err = Execute(nil, v, t.argFuncs)
+		_, err = ExecuteWithArgs(ctx, v, t.argFuncs)
 		return err
 	})
 	if err != nil {
@@ -221,13 +222,13 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 	return f.Exec(arg)
 }
 
-func (t *Template) executeLeftArrowExprArg(arg ast.Expr, data interface{}) (interface{}, error) {
+func (t *Template) executeLeftArrowExprArg(ctx *context.Context, arg ast.Expr, data interface{}) (interface{}, error) {
 	tt := &Template{
 		expr:                      arg,
 		executingLeftArrowExprArg: true,
 		argFuncs:                  map[string]interface{}{},
 	}
-	v, err := tt.Execute(data)
+	v, err := tt.Execute(ctx, data)
 	t.argFuncs = tt.argFuncs
 	return v, err
 }

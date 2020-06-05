@@ -11,8 +11,16 @@ import (
 var yamlMapItemType = reflect.TypeOf(yaml.MapItem{})
 
 // Execute executes templates of i with data.
-func Execute(ctx *context.Context, i, data interface{}) (interface{}, error) {
-	v, err := execute(reflect.ValueOf(i), data)
+func Execute(ctx *context.Context, data interface{}) (interface{}, error) {
+	v, err := ExecuteWithArgs(ctx, data, ctx)
+	if err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func ExecuteWithArgs(ctx *context.Context, data, args interface{}) (interface{}, error) {
+	v, err := execute(ctx, reflect.ValueOf(data), args)
 	if err != nil {
 		return nil, err
 	}
@@ -22,14 +30,14 @@ func Execute(ctx *context.Context, i, data interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func execute(v reflect.Value, data interface{}) (reflect.Value, error) {
-	v = reflectutil.Elem(v)
+func execute(ctx *context.Context, data reflect.Value, args interface{}) (reflect.Value, error) {
+	v := reflectutil.Elem(data)
 	switch v.Kind() {
 	case reflect.Map:
 		for _, k := range v.MapKeys() {
 			e := v.MapIndex(k)
 			if !isNil(e) {
-				x, err := execute(e, data)
+				x, err := execute(ctx, e, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
@@ -40,7 +48,7 @@ func execute(v reflect.Value, data interface{}) (reflect.Value, error) {
 		for i := 0; i < v.Len(); i++ {
 			e := v.Index(i)
 			if !isNil(e) {
-				x, err := execute(e, data)
+				x, err := execute(ctx, e, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
@@ -52,7 +60,7 @@ func execute(v reflect.Value, data interface{}) (reflect.Value, error) {
 		case yamlMapItemType:
 			value := v.FieldByName("Value")
 			if !isNil(value) {
-				x, err := execute(value, data)
+				x, err := execute(ctx, value, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
@@ -61,7 +69,7 @@ func execute(v reflect.Value, data interface{}) (reflect.Value, error) {
 		default:
 			for i := 0; i < v.NumField(); i++ {
 				field := v.Field(i)
-				x, err := execute(field, data)
+				x, err := execute(ctx, field, args)
 				if err != nil {
 					return reflect.Value{}, err
 				}
@@ -73,7 +81,7 @@ func execute(v reflect.Value, data interface{}) (reflect.Value, error) {
 		if err != nil {
 			return reflect.Value{}, err
 		}
-		x, err := tmpl.Execute(data)
+		x, err := tmpl.Execute(ctx, args)
 		if err != nil {
 			return reflect.Value{}, err
 		}

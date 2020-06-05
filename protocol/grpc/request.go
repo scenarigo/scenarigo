@@ -38,7 +38,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		return ctx, nil, errors.New("gRPC client must be specified")
 	}
 
-	x, err := template.Execute(ctx, r.Client, ctx)
+	x, err := template.Execute(ctx, r.Client)
 	if err != nil {
 		return ctx, nil, errors.Errorf("failed to get client: %s", err)
 	}
@@ -68,7 +68,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 
 	reqCtx := ctx.RequestContext()
 	if r.Metadata != nil {
-		x, err := template.Execute(ctx, r.Metadata, ctx)
+		x, err := template.Execute(ctx, r.Metadata)
 		if err != nil {
 			return ctx, nil, errors.Errorf("failed to set metadata: %s", err)
 		}
@@ -176,7 +176,7 @@ func validateMethod(method reflect.Value) error {
 }
 
 func buildRequestBody(ctx *context.Context, req interface{}, src interface{}) error {
-	x, err := template.Execute(ctx, src, ctx)
+	x, err := template.Execute(ctx, src)
 	if err != nil {
 		return err
 	}

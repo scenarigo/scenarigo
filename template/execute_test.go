@@ -122,7 +122,7 @@ func TestExecute(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			got, err := Execute(context.FromT(t), test.in, test.vars)
+			got, err := ExecuteWithArgs(context.FromT(t), test.in, test.vars)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

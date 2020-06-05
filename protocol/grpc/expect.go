@@ -36,7 +36,7 @@ type ExpectStatus struct {
 
 // Build implements protocol.AssertionBuilder interface.
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
-	expectBody, err := template.Execute(ctx, e.Body, ctx)
+	expectBody, err := template.Execute(ctx, e.Body)
 	if err != nil {
 		return nil, errors.Errorf("invalid expect response: %s", err)
 	}

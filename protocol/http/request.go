@@ -110,7 +110,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 func (r *Request) buildClient(ctx *context.Context) (*http.Client, error) {
 	client := &http.Client{}
 	if r.Client != "" {
-		x, err := template.Execute(ctx, r.Client, ctx)
+		x, err := template.Execute(ctx, r.Client)
 		if err != nil {
 			return nil, errors.Errorf("failed to get client: %s", err)
 		}
@@ -128,7 +128,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 		method = r.Method
 	}
 
-	x, err := template.Execute(ctx, r.URL, ctx)
+	x, err := template.Execute(ctx, r.URL)
 	if err != nil {
 		return nil, nil, errors.Errorf("failed to get URL: %s", err)
 	}
@@ -144,7 +144,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 		}
 		query := u.Query()
 
-		x, err := template.Execute(ctx, r.Query, ctx)
+		x, err := template.Execute(ctx, r.Query)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to set query: %s", err)
 		}
@@ -165,7 +165,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 
 	header := http.Header{}
 	if r.Header != nil {
-		x, err := template.Execute(ctx, r.Header, ctx)
+		x, err := template.Execute(ctx, r.Header)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to set header: %s", err)
 		}
@@ -187,7 +187,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	var reader io.Reader
 	var body interface{}
 	if r.Body != nil {
-		x, err := template.Execute(ctx, r.Body, ctx)
+		x, err := template.Execute(ctx, r.Body)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to create request: %s", err)
 		}

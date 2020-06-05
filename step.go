@@ -13,7 +13,7 @@ import (
 
 func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 	if s.Vars != nil {
-		vars, err := template.Execute(ctx, s.Vars, ctx)
+		vars, err := template.Execute(ctx, s.Vars)
 		if err != nil {
 			ctx.Reporter().Fatalf("invalid vars: %s", err)
 		}
@@ -32,7 +32,7 @@ func runStep(ctx *context.Context, s *schema.Step) *context.Context {
 		return ctx
 	}
 	if s.Ref != "" {
-		x, err := template.Execute(ctx, s.Ref, ctx)
+		x, err := template.Execute(ctx, s.Ref)
 		if err != nil {
 			ctx.Reporter().Fatalf(`failed to reference "%s" as step: %s`, s.Ref, err)
 		}

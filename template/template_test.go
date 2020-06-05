@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/zoncoen/scenarigo/context"
 )
 
 func TestNew(t *testing.T) {
@@ -166,7 +167,7 @@ func TestTemplate_Execute(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
-			i, err := tmpl.Execute(test.data)
+			i, err := tmpl.Execute(context.FromT(t), test.data)
 			if !test.expectError && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
