@@ -32,6 +32,7 @@ require (
 	github.com/zoncoen/goprotoyamltag v0.0.0-20190614090358-19b914992920
 	github.com/zoncoen/gotypenames v0.0.0-20181208050024-287fd4bbbaee
 	github.com/zoncoen/query-go v1.0.1
+	golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 	golang.org/x/tools v0.0.0-20200502202811-ed308ab3e770 // indirect

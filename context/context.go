@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/printer"
 	"github.com/zoncoen/scenarigo/reporter"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 type (
@@ -245,8 +247,9 @@ func (c *Context) currentYAML() string {
 	if node == nil || err != nil {
 		return ""
 	}
+	isColored := terminal.IsTerminal(int(os.Stdout.Fd()))
 	var p printer.Printer
-	return p.PrintErrorToken(node.GetToken(), true)
+	return p.PrintErrorToken(node.GetToken(), isColored)
 }
 
 func (c *Context) ReportYAML() {
