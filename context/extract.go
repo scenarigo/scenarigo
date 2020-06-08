@@ -10,6 +10,12 @@ const (
 	nameAssert   = "assert"
 )
 
+var assertions map[string]interface{}
+
+func RegisterAssertions(asserts map[string]interface{}) {
+	assertions = asserts
+}
+
 // ExtractByKey implements query.KeyExtractor interface.
 func (c *Context) ExtractByKey(key string) (interface{}, bool) {
 	switch key {

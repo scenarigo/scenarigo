@@ -2,10 +2,12 @@
 package assert
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/query/extractor"
 )
 
@@ -30,6 +32,34 @@ func assertFunc(q *query.Query, f func(interface{}) error) Assertion {
 		}
 		return f(got)
 	})
+}
+
+var assertions = map[string]interface{}{
+	"notZero":     NotZero,
+	"contains":    leftArrowFunc(Contains),
+	"notContains": leftArrowFunc(NotContains),
+}
+
+func init() {
+	context.RegisterAssertions(assertions)
+}
+
+type leftArrowFunc func(assertion Assertion) func(*query.Query) Assertion
+
+func (f leftArrowFunc) Exec(arg interface{}) (interface{}, error) {
+	assertion, ok := arg.(Assertion)
+	if !ok {
+		return nil, errors.New("argument must be a assert.Assertion")
+	}
+	return f(assertion), nil
+}
+
+func (leftArrowFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+	var i interface{}
+	if err := unmarshal(&i); err != nil {
+		return nil, err
+	}
+	return Build(i), nil
 }
 
 // Build creates an assertion from Go value.
