@@ -8,6 +8,7 @@ import (
 	"github.com/zoncoen/query-go"
 
 	"github.com/zoncoen/scenarigo/assert"
+	"github.com/zoncoen/scenarigo/context"
 )
 
 func TestJSON_Unmarshal_BigInt(t *testing.T) {
@@ -28,7 +29,9 @@ func TestJSON_Unmarshal_BigInt(t *testing.T) {
 		t.Fatal("id not found")
 	}
 
-	if err := assert.Equal(query.New(), in).Assert(out); err != nil {
+	ctx := context.FromT(t)
+
+	if err := assert.Equal(query.New(), in).Assert(ctx, out); err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
 

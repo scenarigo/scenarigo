@@ -7,11 +7,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/context"
 )
 
 // Equal returns an assertion to ensure a value equals the expected value.
 func Equal(q *query.Query, expected interface{}) Assertion {
-	return assertFunc(q, func(v interface{}) error {
+	return assertFunc(q, func(ctx *context.Context, v interface{}) error {
 		if n, ok := v.(json.Number); ok {
 			switch expected.(type) {
 			case int, int8, int16, int32, int64,

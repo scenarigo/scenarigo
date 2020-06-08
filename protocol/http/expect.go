@@ -26,25 +26,25 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	}
 	assertion := assert.Build(expectBody)
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	return assert.AssertionFunc(func(ctx *context.Context, v interface{}) error {
 		res, ok := v.(response)
 		if !ok {
 			return errors.Errorf("expected response but got %T", v)
 		}
-		if err := e.assertCode(res.status); err != nil {
+		if err := e.assertCode(ctx, res.status); err != nil {
 			return err
 		}
-		if err := e.assertHeader(res.Header); err != nil {
+		if err := e.assertHeader(ctx, res.Header); err != nil {
 			return err
 		}
-		if err := assertion.Assert(res.Body); err != nil {
+		if err := assertion.Assert(ctx, res.Body); err != nil {
 			return err
 		}
 		return nil
 	}), nil
 }
 
-func (e *Expect) assertHeader(header map[string][]string) error {
+func (e *Expect) assertHeader(ctx *context.Context, header map[string][]string) error {
 	if len(e.Header) == 0 {
 		return nil
 	}
@@ -52,13 +52,13 @@ func (e *Expect) assertHeader(header map[string][]string) error {
 	if err != nil {
 		return err
 	}
-	if err := assert.Build(headerMap).Assert(header); err != nil {
+	if err := assert.Build(headerMap).Assert(ctx, header); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (e *Expect) assertCode(status string) error {
+func (e *Expect) assertCode(ctx *context.Context, status string) error {
 	expectedCode := "200"
 	if e.Code != "" {
 		expectedCode = e.Code

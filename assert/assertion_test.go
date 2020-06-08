@@ -40,13 +40,15 @@ deps:
 	}
 
 	t.Run("no assertion", func(t *testing.T) {
+		ctx := context.FromT(t)
 		assertion := Build(nil)
 		v := info{}
-		if err := assertion.Assert(v); err != nil {
+		if err := assertion.Assert(ctx, v); err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
 	})
 	t.Run("ok", func(t *testing.T) {
+		ctx := context.FromT(t)
 		v := info{
 			Deps: []map[string]interface{}{
 				{
@@ -60,11 +62,12 @@ deps:
 				},
 			},
 		}
-		if err := assertion.Assert(v); err != nil {
+		if err := assertion.Assert(ctx, v); err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
 	})
 	t.Run("ng", func(t *testing.T) {
+		ctx := context.FromT(t)
 		v := info{
 			Deps: []map[string]interface{}{
 				{
@@ -78,7 +81,7 @@ deps:
 				},
 			},
 		}
-		err := assertion.Assert(v)
+		err := assertion.Assert(ctx, v)
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
@@ -94,7 +97,8 @@ deps:
 		}
 	})
 	t.Run("assert nil", func(t *testing.T) {
-		err := assertion.Assert(nil)
+		ctx := context.FromT(t)
+		err := assertion.Assert(ctx, nil)
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
@@ -143,21 +147,22 @@ func TestLeftArrowFunc(t *testing.T) {
 	for name, tc := range tests {
 		tc := tc
 		t.Run(name, func(t *testing.T) {
+			ctx := context.FromT(t)
 			var i interface{}
 			if err := yaml.Unmarshal([]byte(tc.yaml), &i); err != nil {
 				t.Fatalf("failed to unmarshal: %s", err)
 			}
-			v, err := template.ExecuteWithArgs(context.FromT(t), i, map[string]interface{}{
+			v, err := template.ExecuteWithArgs(ctx, i, map[string]interface{}{
 				"f": assertions["contains"],
 			})
 			if err != nil {
 				t.Fatalf("failed to execute: %s", err)
 			}
 			assertion := Build(v)
-			if err := assertion.Assert(tc.ok); err != nil {
+			if err := assertion.Assert(ctx, tc.ok); err != nil {
 				t.Errorf("unexpected error: %s", err)
 			}
-			if err := assertion.Assert(tc.ng); err == nil {
+			if err := assertion.Assert(ctx, tc.ng); err == nil {
 				t.Errorf("expected error but no error")
 			}
 		})

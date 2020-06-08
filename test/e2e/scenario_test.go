@@ -105,7 +105,7 @@ func TestRunner_Run(t *testing.T) {
 				scenario: "testdata/scenarios/simple.yaml",
 				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
 				builder: func(ctx *context.Context) (assert.Assertion, error) {
-					return assert.AssertionFunc(func(_ interface{}) error { return nil }), nil
+					return assert.AssertionFunc(func(*context.Context, interface{}) error { return nil }), nil
 				},
 			},
 		}
@@ -169,7 +169,7 @@ func TestRunner_Run(t *testing.T) {
 				scenario: "testdata/scenarios/simple.yaml",
 				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
 				builder: func(ctx *context.Context) (assert.Assertion, error) {
-					return assert.AssertionFunc(func(_ interface{}) error { return errors.New("some error occurred") }), nil
+					return assert.AssertionFunc(func(*context.Context, interface{}) error { return errors.New("some error occurred") }), nil
 				},
 			},
 		}

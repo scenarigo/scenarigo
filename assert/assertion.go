@@ -13,24 +13,24 @@ import (
 
 // Assertion implements value assertion.
 type Assertion interface {
-	Assert(v interface{}) error
+	Assert(ctx *context.Context, v interface{}) error
 }
 
 // AssertionFunc is an adaptor to allow the use of ordinary functions as assertions.
-type AssertionFunc func(v interface{}) error
+type AssertionFunc func(ctx *context.Context, v interface{}) error
 
 // Assert asserts the v.
-func (f AssertionFunc) Assert(v interface{}) error {
-	return f(v)
+func (f AssertionFunc) Assert(ctx *context.Context, v interface{}) error {
+	return f(ctx, v)
 }
 
-func assertFunc(q *query.Query, f func(interface{}) error) Assertion {
-	return AssertionFunc(func(v interface{}) error {
+func assertFunc(q *query.Query, f func(*context.Context, interface{}) error) Assertion {
+	return AssertionFunc(func(ctx *context.Context, v interface{}) error {
 		got, err := q.Extract(v)
 		if err != nil {
-			return err
+			return ctx.AnnotateYAML(err)
 		}
-		return f(got)
+		return f(ctx, got)
 	})
 }
 
@@ -68,11 +68,11 @@ func Build(expect interface{}) Assertion {
 	if expect != nil {
 		assertions = build(query.New(), expect)
 	}
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(ctx *context.Context, v interface{}) error {
 		var assertErr error
 		for _, assertion := range assertions {
 			assertion := assertion
-			if err := assertion.Assert(v); err != nil {
+			if err := assertion.Assert(ctx, v); err != nil {
 				assertErr = AppendError(assertErr, err)
 			}
 		}

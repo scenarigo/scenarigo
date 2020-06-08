@@ -6,11 +6,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/context"
 )
 
 // NotZero returns an assertion to ensure a value is not zero value.
 func NotZero(q *query.Query) Assertion {
-	return assertFunc(q, func(v interface{}) error {
+	return assertFunc(q, func(ctx *context.Context, v interface{}) error {
 		if n, ok := v.(json.Number); ok {
 			if i, err := n.Int64(); err == nil {
 				if i == 0 {

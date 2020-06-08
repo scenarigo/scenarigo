@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/context"
 )
 
 func TestContains(t *testing.T) {
@@ -36,8 +37,9 @@ func TestContains(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
+			ctx := context.FromT(t)
 			assertion := Contains(Equal(q, test.contains))(q)
-			err := assertion.Assert(test.in)
+			err := assertion.Assert(ctx, test.in)
 			if !test.expectError && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -77,8 +79,9 @@ func TestNotContains(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
+			ctx := context.FromT(t)
 			assertion := NotContains(Equal(q, test.notContains))(q)
-			err := assertion.Assert(test.in)
+			err := assertion.Assert(ctx, test.in)
 			if !test.expectError && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

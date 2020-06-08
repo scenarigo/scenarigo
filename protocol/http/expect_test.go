@@ -93,7 +93,7 @@ func TestExpect_Build(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to build assertion: %s", err)
 				}
-				if err := assertion.Assert(test.response); err != nil {
+				if err := assertion.Assert(ctx, test.response); err != nil {
 					t.Errorf("got assertion error: %s", err)
 				}
 			})
@@ -192,7 +192,7 @@ func TestExpect_Build(t *testing.T) {
 					return
 				}
 
-				err = assertion.Assert(test.response)
+				err = assertion.Assert(ctx, test.response)
 				if test.expectAssertError && err == nil {
 					t.Errorf("no assertion error")
 				}

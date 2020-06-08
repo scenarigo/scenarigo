@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/internal/testutil/gen/pb/test"
 )
 
@@ -82,11 +83,12 @@ func TestEqual(t *testing.T) {
 	for name, tc := range tests {
 		tc := tc
 		t.Run(name, func(t *testing.T) {
+			ctx := context.FromT(t)
 			assertion := Equal(query.New(), tc.expected)
-			if err := assertion.Assert(tc.ok); err != nil {
+			if err := assertion.Assert(ctx, tc.ok); err != nil {
 				t.Errorf("unexpected error: %s", err)
 			}
-			if err := assertion.Assert(tc.ng); err == nil {
+			if err := assertion.Assert(ctx, tc.ng); err == nil {
 				t.Errorf("expected error but no error")
 			}
 		})

@@ -42,7 +42,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	}
 	assertion := assert.Build(expectBody)
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	return assert.AssertionFunc(func(ctx *context.Context, v interface{}) error {
 		resp, ok := v.(response)
 		if !ok {
 			return errors.Errorf(`failed to convert to response type. type is %s`, reflect.TypeOf(v))
@@ -51,32 +51,32 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if err != nil {
 			return err
 		}
-		if err := e.assertMetadata(resp.Header, resp.Trailer); err != nil {
+		if err := e.assertMetadata(ctx, resp.Header, resp.Trailer); err != nil {
 			return err
 		}
-		if err := e.assertStatusCode(stErr); err != nil {
+		if err := e.assertStatusCode(ctx, stErr); err != nil {
 			return err
 		}
-		if err := e.assertStatusMessage(stErr); err != nil {
+		if err := e.assertStatusMessage(ctx, stErr); err != nil {
 			return err
 		}
-		if err := e.assertStatusDetails(stErr); err != nil {
+		if err := e.assertStatusDetails(ctx, stErr); err != nil {
 			return err
 		}
-		if err := assertion.Assert(message); err != nil {
+		if err := assertion.Assert(ctx, message); err != nil {
 			return err
 		}
 		return nil
 	}), nil
 }
 
-func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
+func (e *Expect) assertMetadata(ctx *context.Context, header, trailer metadata.MD) error {
 	if len(e.Header) > 0 {
 		headerMap, err := maputil.ConvertStringsMapSlice(e.Header)
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected header: %v`, e.Header)
 		}
-		if err := assert.Build(headerMap).Assert(header); err != nil {
+		if err := assert.Build(headerMap).Assert(ctx, header); err != nil {
 			return err
 		}
 	}
@@ -85,14 +85,14 @@ func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected trailer: %v`, e.Trailer)
 		}
-		if err := assert.Build(trailerMap).Assert(trailer); err != nil {
+		if err := assert.Build(trailerMap).Assert(ctx, trailer); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e *Expect) assertStatusCode(sts *status.Status) error {
+func (e *Expect) assertStatusCode(ctx *context.Context, sts *status.Status) error {
 	expectedCode := "OK"
 	if e.Code != "" {
 		expectedCode = e.Code
@@ -111,7 +111,7 @@ func (e *Expect) assertStatusCode(sts *status.Status) error {
 	return errors.Errorf(`expected code is "%s" but got "%s": message="%s": details=[ %s ]`, expectedCode, sts.Code().String(), sts.Message(), detailsString(sts))
 }
 
-func (e *Expect) assertStatusMessage(sts *status.Status) error {
+func (e *Expect) assertStatusMessage(ctx *context.Context, sts *status.Status) error {
 	if e.Status.Message == "" {
 		return nil
 	}
@@ -123,7 +123,7 @@ func (e *Expect) assertStatusMessage(sts *status.Status) error {
 	return errors.Errorf(`expected status.message is "%s" but got "%s": code="%s": details=[ %s ]`, e.Status.Message, sts.Message(), sts.Code().String(), detailsString(sts))
 }
 
-func (e *Expect) assertStatusDetails(sts *status.Status) error {
+func (e *Expect) assertStatusDetails(ctx *context.Context, sts *status.Status) error {
 	if len(e.Status.Details) == 0 {
 		return nil
 	}
@@ -157,7 +157,7 @@ func (e *Expect) assertStatusDetails(sts *status.Status) error {
 			return errors.Errorf(`expected status.details[%d] is "%s" but got detail is "%s": details=[ %s ]`, i, expectName, name, detailsString(sts))
 		}
 
-		if err := assert.Build(expectDetail).Assert(actual); err != nil {
+		if err := assert.Build(expectDetail).Assert(ctx, actual); err != nil {
 			return err
 		}
 	}

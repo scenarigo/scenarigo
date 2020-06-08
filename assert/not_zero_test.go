@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/context"
 )
 
 func TestNotZero(t *testing.T) {
@@ -49,11 +50,12 @@ func TestNotZero(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			ctx := context.FromT(t)
 			assertion := NotZero(query.New())
-			if err := assertion.Assert(test.ok); err != nil {
+			if err := assertion.Assert(ctx, test.ok); err != nil {
 				t.Errorf("unexpected error: %s", err)
 			}
-			if err := assertion.Assert(test.ng); err == nil {
+			if err := assertion.Assert(ctx, test.ng); err == nil {
 				t.Errorf("expected error but no error")
 			}
 		})

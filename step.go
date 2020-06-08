@@ -70,7 +70,7 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step) *context.Context {
 			ctx.Reporter().Log(err)
 			continue
 		}
-		if err := assertion.Assert(resp); err != nil {
+		if err := assertion.Assert(ctx, resp); err != nil {
 			if assertErr, ok := err.(*assert.Error); ok {
 				for _, err := range assertErr.Errors {
 					ctx.Reporter().Log(err)

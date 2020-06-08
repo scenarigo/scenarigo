@@ -104,7 +104,7 @@ type Expect struct {
 // Build builds the assertion which asserts the response.
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	if e.AssertionBuilder == nil {
-		return assert.AssertionFunc(func(v interface{}) error {
+		return assert.AssertionFunc(func(*context.Context, interface{}) error {
 			return nil
 		}), nil
 	}
