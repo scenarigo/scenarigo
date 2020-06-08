@@ -17,8 +17,9 @@ import (
 
 // Runner represents a test runner.
 type Runner struct {
-	pluginDir     *string
-	scenarioFiles []string
+	pluginDir               *string
+	scenarioFiles           []string
+	isEnabledOptionsFromEnv bool
 }
 
 // WithPluginDir returns a option which sets plugin root directory.
@@ -56,6 +57,16 @@ func WithScenarios(paths ...string) func(*Runner) error {
 	}
 }
 
+// WithOptionsFromEnv returns a option which sets flag whether accepts configuration from ENV.
+// Currently Available ENV variables are the following.
+// - SCENARIGO_COLOR=(1|true|TRUE)
+func WithOptionsFromEnv(isEnv bool) func(*Runner) error {
+	return func(r *Runner) error {
+		r.isEnabledOptionsFromEnv = isEnv
+		return nil
+	}
+}
+
 var (
 	yamlPattern = regexp.MustCompile(`(?i)\.ya?ml$`)
 )
@@ -89,6 +100,9 @@ func getAllFiles(paths ...string) ([]string, error) {
 func (r *Runner) Run(ctx *context.Context) {
 	if r.pluginDir != nil {
 		ctx = ctx.WithPluginDir(*r.pluginDir)
+	}
+	if r.isEnabledOptionsFromEnv {
+		ctx = ctx.WithEnabledOptionsFromEnv()
 	}
 	for _, f := range r.scenarioFiles {
 		ctx.Run(f, func(ctx *context.Context) {

@@ -7,23 +7,29 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/printer"
+	"github.com/mattn/go-isatty"
 	"github.com/zoncoen/scenarigo/reporter"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 type (
-	keyPluginDir struct{}
-	keyPlugins   struct{}
-	keyVars      struct{}
-	keyRequest   struct{}
-	keyResponse  struct{}
-	keyYAML      struct{}
+	keyPluginDir             struct{}
+	keyPlugins               struct{}
+	keyVars                  struct{}
+	keyRequest               struct{}
+	keyResponse              struct{}
+	keyYAML                  struct{}
+	keyEnabledOptionsFromEnv struct{}
+)
+
+const (
+	envScenarigoColor = "SCENARIGO_COLOR"
 )
 
 // Context represents a scenarigo context.
@@ -233,6 +239,14 @@ func (c *Context) AddIndexPath(idx uint) *Context {
 	)
 }
 
+func (c *Context) isEnabledColor() bool {
+	if isEnabled, exists := c.ctx.Value(keyEnabledOptionsFromEnv{}).(bool); isEnabled && exists {
+		result, _ := strconv.ParseBool(os.Getenv(envScenarigoColor))
+		return result
+	}
+	return isatty.IsTerminal(os.Stdout.Fd())
+}
+
 func (c *Context) currentYAML() string {
 	yml, ok := c.ctx.Value(keyYAML{}).(*YAML)
 	if !ok {
@@ -246,9 +260,8 @@ func (c *Context) currentYAML() string {
 	if node == nil || err != nil {
 		return ""
 	}
-	isColored := terminal.IsTerminal(int(os.Stdout.Fd()))
 	var p printer.Printer
-	return p.PrintErrorToken(node.GetToken(), isColored)
+	return p.PrintErrorToken(node.GetToken(), c.isEnabledColor())
 }
 
 func (c *Context) ReportYAML() {
@@ -269,6 +282,14 @@ func (c *Context) WithYAML(yml *YAML) *Context {
 	}
 	return newContext(
 		context.WithValue(c.ctx, keyYAML{}, yml),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+func (c *Context) WithEnabledOptionsFromEnv() *Context {
+	return newContext(
+		context.WithValue(c.ctx, keyEnabledOptionsFromEnv{}, true),
 		c.reqCtx,
 		c.reporter,
 	)
