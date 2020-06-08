@@ -41,7 +41,7 @@ type response struct {
 
 // Invoke implements protocol.Invoker interface.
 func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
-	client, err := r.buildClient(ctx)
+	client, err := r.buildClient(ctx.AddChildPath("client"))
 	if err != nil {
 		return ctx, nil, err
 	}

@@ -36,7 +36,7 @@ type ExpectStatus struct {
 
 // Build implements protocol.AssertionBuilder interface.
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
-	expectBody, err := template.Execute(ctx, e.Body)
+	expectBody, err := template.Execute(ctx.AddChildPath("body"), e.Body)
 	if err != nil {
 		return nil, errors.Errorf("invalid expect response: %s", err)
 	}
@@ -54,16 +54,16 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if err := e.assertMetadata(ctx, resp.Header, resp.Trailer); err != nil {
 			return err
 		}
-		if err := e.assertStatusCode(ctx, stErr); err != nil {
+		if err := e.assertStatusCode(ctx.AddChildPath("code"), stErr); err != nil {
 			return err
 		}
-		if err := e.assertStatusMessage(ctx, stErr); err != nil {
+		if err := e.assertStatusMessage(ctx.AddChildPath("message"), stErr); err != nil {
 			return err
 		}
-		if err := e.assertStatusDetails(ctx, stErr); err != nil {
+		if err := e.assertStatusDetails(ctx.AddChildPath("details"), stErr); err != nil {
 			return err
 		}
-		if err := assertion.Assert(ctx, message); err != nil {
+		if err := assertion.Assert(ctx.AddChildPath("body"), message); err != nil {
 			return err
 		}
 		return nil
@@ -76,7 +76,7 @@ func (e *Expect) assertMetadata(ctx *context.Context, header, trailer metadata.M
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected header: %v`, e.Header)
 		}
-		if err := assert.Build(headerMap).Assert(ctx, header); err != nil {
+		if err := assert.Build(headerMap).Assert(ctx.AddChildPath("header"), header); err != nil {
 			return err
 		}
 	}
@@ -85,7 +85,7 @@ func (e *Expect) assertMetadata(ctx *context.Context, header, trailer metadata.M
 		if err != nil {
 			return errors.Errorf(`failed to convert strings map from expected trailer: %v`, e.Trailer)
 		}
-		if err := assert.Build(trailerMap).Assert(ctx, trailer); err != nil {
+		if err := assert.Build(trailerMap).Assert(ctx.AddChildPath("trailer"), trailer); err != nil {
 			return err
 		}
 	}
@@ -107,7 +107,7 @@ func (e *Expect) assertStatusCode(ctx *context.Context, sts *status.Status) erro
 	if got, expected := strconv.Itoa(int(int32(sts.Code()))), expectedCode; got == expected {
 		return nil
 	}
-
+	ctx.ReportYAML()
 	return errors.Errorf(`expected code is "%s" but got "%s": message="%s": details=[ %s ]`, expectedCode, sts.Code().String(), sts.Message(), detailsString(sts))
 }
 
@@ -120,6 +120,7 @@ func (e *Expect) assertStatusMessage(ctx *context.Context, sts *status.Status) e
 		return nil
 	}
 
+	ctx.ReportYAML()
 	return errors.Errorf(`expected status.message is "%s" but got "%s": code="%s": details=[ %s ]`, e.Status.Message, sts.Message(), sts.Code().String(), detailsString(sts))
 }
 

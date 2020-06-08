@@ -38,7 +38,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		return ctx, nil, errors.New("gRPC client must be specified")
 	}
 
-	x, err := template.Execute(ctx, r.Client)
+	x, err := template.Execute(ctx.AddChildPath("request").AddChildPath("client"), r.Client)
 	if err != nil {
 		return ctx, nil, errors.Errorf("failed to get client: %s", err)
 	}
@@ -47,6 +47,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 	var method reflect.Value
 	for {
 		if !client.IsValid() {
+			ctx.AddChildPath("request").AddChildPath("client").ReportYAML()
 			return nil, nil, errors.Errorf("client %s is invalid", r.Client)
 		}
 		method = client.MethodByName(r.Method)
@@ -58,6 +59,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		case reflect.Interface, reflect.Ptr:
 			client = client.Elem()
 		default:
+			ctx.AddChildPath("request").AddChildPath("method").ReportYAML()
 			return nil, nil, errors.Errorf("method %s.%s not found", r.Client, r.Method)
 		}
 	}
@@ -68,7 +70,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 
 	reqCtx := ctx.RequestContext()
 	if r.Metadata != nil {
-		x, err := template.Execute(ctx, r.Metadata)
+		x, err := template.Execute(ctx.AddChildPath("request").AddChildPath("metadata"), r.Metadata)
 		if err != nil {
 			return ctx, nil, errors.Errorf("failed to set metadata: %s", err)
 		}
@@ -94,7 +96,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 			in = append(in, reflect.ValueOf(reqCtx))
 		case 1:
 			req := reflect.New(method.Type().In(i).Elem()).Interface()
-			if err := buildRequestBody(ctx, req, r.Body); err != nil {
+			if err := buildRequestBody(ctx.AddChildPath("request").AddChildPath("body"), req, r.Body); err != nil {
 				return ctx, nil, errors.Errorf("failed to build request body: %s", err)
 			}
 
