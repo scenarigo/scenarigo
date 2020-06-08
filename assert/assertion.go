@@ -32,7 +32,8 @@ func assertFunc(q *query.Query, f func(*context.Context, interface{}) error) Ass
 			if len(query) > 1 {
 				ctx = ctx.AddChildPath(query[1:])
 			}
-			return ctx.AnnotateYAML(err)
+			ctx.ReportYAML()
+			return err
 		}
 		return f(ctx, got)
 	})

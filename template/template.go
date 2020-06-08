@@ -65,19 +65,22 @@ func (t *Template) executeExpr(ctx *context.Context, expr ast.Expr, args interfa
 	case *ast.Ident:
 		v, err := lookup(e, args)
 		if err != nil {
-			return nil, ctx.AnnotateYAML(err)
+			ctx.ReportYAML()
+			return nil, err
 		}
 		return v, nil
 	case *ast.SelectorExpr:
 		v, err := lookup(e, args)
 		if err != nil {
-			return nil, ctx.AnnotateYAML(err)
+			ctx.ReportYAML()
+			return nil, err
 		}
 		return v, nil
 	case *ast.IndexExpr:
 		v, err := lookup(e, args)
 		if err != nil {
-			return nil, ctx.AnnotateYAML(err)
+			ctx.ReportYAML()
+			return nil, err
 		}
 		return v, nil
 	case *ast.CallExpr:

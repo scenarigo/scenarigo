@@ -12,7 +12,6 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/printer"
-	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
@@ -247,15 +246,15 @@ func (c *Context) currentYAML() string {
 		return ""
 	}
 	var p printer.Printer
-	return fmt.Sprintf("\n%s\n", p.PrintErrorToken(node.GetToken(), true))
+	return p.PrintErrorToken(node.GetToken(), true)
 }
 
-func (c *Context) AnnotateYAML(target error) error {
+func (c *Context) ReportYAML() {
 	yml := c.currentYAML()
 	if yml == "" {
-		return target
+		return
 	}
-	return errors.Wrapf(target, yml)
+	c.Reporter().Logf("\n\t%s\n", yml)
 }
 
 func (c *Context) WithYAML(yml *YAML) *Context {

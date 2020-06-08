@@ -31,13 +31,13 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if !ok {
 			return errors.Errorf("expected response but got %T", v)
 		}
-		if err := e.assertCode(ctx, res.status); err != nil {
+		if err := e.assertCode(ctx.AddChildPath("code"), res.status); err != nil {
 			return err
 		}
 		if err := e.assertHeader(ctx.AddChildPath("header"), res.Header); err != nil {
 			return err
 		}
-		if err := assertion.Assert(ctx, res.Body); err != nil {
+		if err := assertion.Assert(ctx.AddChildPath("body"), res.Body); err != nil {
 			return err
 		}
 		return nil
@@ -73,5 +73,6 @@ func (e *Expect) assertCode(ctx *context.Context, status string) error {
 	if got, expected := strs[1], expectedCode; got == expected {
 		return nil
 	}
+	ctx.ReportYAML()
 	return errors.Errorf(`expected code is "%s" but got "%s"`, expectedCode, status)
 }

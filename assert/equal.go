@@ -56,9 +56,19 @@ func Equal(q *query.Query, expected interface{}) Assertion {
 					return nil
 				}
 			}
+			query := q.String()
+			if len(query) > 1 {
+				ctx = ctx.AddChildPath(query[1:])
+			}
+			ctx.ReportYAML()
 			return errors.Errorf(fmt.Sprintf("%s: expected %T (%+v) but got %T (%+v)", q.String(), expected, expected, v, v))
 		}
 
+		query := q.String()
+		if len(query) > 1 {
+			ctx = ctx.AddChildPath(query[1:])
+		}
+		ctx.ReportYAML()
 		return errors.Errorf(fmt.Sprintf("%s: expected %+v but got %+v", q.String(), expected, v))
 	})
 }
