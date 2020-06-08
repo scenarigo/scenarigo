@@ -238,7 +238,6 @@ func (c *Context) currentYAML() string {
 	if !ok {
 		return ""
 	}
-	fmt.Println("Path = ", yml.PathString)
 	path, err := yaml.PathString(yml.PathString)
 	if path == nil || err != nil {
 		return ""
