@@ -1,6 +1,8 @@
 package reporter
 
-import "testing"
+import (
+	"testing"
+)
 
 // FromT creates Reporter from t.
 func FromT(t *testing.T) Reporter {
@@ -18,3 +20,6 @@ func (r *testReporter) Run(name string, f func(t Reporter)) bool {
 		f(FromT(t))
 	})
 }
+
+// IsTesting flag whether instance of testing.T
+func (r *testReporter) IsTesting() bool { return true }

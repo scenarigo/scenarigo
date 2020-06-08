@@ -33,6 +33,7 @@ type Reporter interface {
 	Skipped() bool
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
+	IsTesting() bool
 }
 
 // Run runs f with new Reporter which applied opts.
@@ -223,6 +224,9 @@ func rewrite(s string) string {
 func (r *reporter) isRoot() bool {
 	return r.depth == 0
 }
+
+// IsTesting flag whether instance of testing.T
+func (r *reporter) IsTesting() bool { return false }
 
 // Run runs f as a subtest of r called name.
 // It runs f in a separate goroutine and blocks until f returns or calls r.Parallel to become a parallel test.

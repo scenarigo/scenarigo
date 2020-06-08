@@ -256,7 +256,11 @@ func (c *Context) ReportYAML() {
 	if yml == "" {
 		return
 	}
-	c.Reporter().Logf("\n\t%s\n", yml)
+	if c.Reporter().IsTesting() {
+		c.Reporter().Logf("\n%s", yml)
+	} else {
+		c.Reporter().Logf("\n\t%s", yml)
+	}
 }
 
 func (c *Context) WithYAML(yml *YAML) *Context {
