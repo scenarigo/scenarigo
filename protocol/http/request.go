@@ -138,14 +138,13 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	}
 
 	if r.Query != nil {
-		ctx := ctx.AddChildPath("query")
 		u, err := url.Parse(urlStr)
 		if err != nil {
 			return nil, nil, errors.Errorf("invalid url: %s: %s", urlStr, err)
 		}
 		query := u.Query()
 
-		x, err := template.Execute(ctx, r.Query)
+		x, err := template.Execute(ctx.AddChildPath("query"), r.Query)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to set query: %s", err)
 		}
@@ -166,8 +165,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 
 	header := http.Header{}
 	if r.Header != nil {
-		ctx := ctx.AddChildPath("header")
-		x, err := template.Execute(ctx, r.Header)
+		x, err := template.Execute(ctx.AddChildPath("header"), r.Header)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to set header: %s", err)
 		}
@@ -189,8 +187,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	var reader io.Reader
 	var body interface{}
 	if r.Body != nil {
-		ctx := ctx.AddChildPath("body")
-		x, err := template.Execute(ctx, r.Body)
+		x, err := template.Execute(ctx.AddChildPath("body"), r.Body)
 		if err != nil {
 			return nil, nil, errors.Errorf("failed to create request: %s", err)
 		}
