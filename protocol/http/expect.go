@@ -34,7 +34,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if err := e.assertCode(ctx, res.status); err != nil {
 			return err
 		}
-		if err := e.assertHeader(ctx, res.Header); err != nil {
+		if err := e.assertHeader(ctx.AddChildPath("header"), res.Header); err != nil {
 			return err
 		}
 		if err := assertion.Assert(ctx, res.Body); err != nil {

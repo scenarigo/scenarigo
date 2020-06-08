@@ -28,6 +28,10 @@ func assertFunc(q *query.Query, f func(*context.Context, interface{}) error) Ass
 	return AssertionFunc(func(ctx *context.Context, v interface{}) error {
 		got, err := q.Extract(v)
 		if err != nil {
+			query := q.String()
+			if len(query) > 1 {
+				ctx = ctx.AddChildPath(query[1:])
+			}
 			return ctx.AnnotateYAML(err)
 		}
 		return f(ctx, got)
