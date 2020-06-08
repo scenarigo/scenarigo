@@ -24,14 +24,20 @@ func (f AssertionFunc) Assert(ctx *context.Context, v interface{}) error {
 	return f(ctx, v)
 }
 
+func addChildPathFromQuery(ctx *context.Context, q *query.Query) *context.Context {
+	query := q.String()
+	if len(query) > 1 {
+		// query[0] is '.' character
+		return ctx.AddChildPath(query[1:])
+	}
+	return ctx
+}
+
 func assertFunc(q *query.Query, f func(*context.Context, interface{}) error) Assertion {
 	return AssertionFunc(func(ctx *context.Context, v interface{}) error {
 		got, err := q.Extract(v)
 		if err != nil {
-			query := q.String()
-			if len(query) > 1 {
-				ctx = ctx.AddChildPath(query[1:])
-			}
+			addChildPathFromQuery(ctx, q)
 			ctx.ReportYAML()
 			return err
 		}
