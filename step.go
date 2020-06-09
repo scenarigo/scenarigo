@@ -18,13 +18,14 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 		vars, err := ctx.ExecuteTemplate(s.Vars)
 		if err != nil {
 			ctx.Reporter().Fatal(
-				errors.WithNode(
+				errors.WithNodeAndColored(
 					errors.WrapPath(
 						err,
 						fmt.Sprintf("steps[%d].vars", stepIdx),
 						"invalid vars",
 					),
 					ctx.Node(),
+					ctx.EnabledColor(),
 				),
 			)
 		}
@@ -46,25 +47,27 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 		x, err := ctx.ExecuteTemplate(s.Ref)
 		if err != nil {
 			ctx.Reporter().Fatal(
-				errors.WithNode(
+				errors.WithNodeAndColored(
 					errors.WrapPathf(
 						err,
 						fmt.Sprintf("steps[%d].ref", stepIdx),
 						`failed to reference "%s" as step`, s.Ref,
 					),
 					ctx.Node(),
+					ctx.EnabledColor(),
 				),
 			)
 		}
 		stp, ok := x.(plugin.Step)
 		if !ok {
 			ctx.Reporter().Fatal(
-				errors.WithNode(
+				errors.WithNodeAndColored(
 					errors.ErrorPathf(
 						fmt.Sprintf("steps[%d].ref", stepIdx),
 						`failed to reference "%s" as step: not implement plugin.Step interface`, s.Ref,
 					),
 					ctx.Node(),
+					ctx.EnabledColor(),
 				),
 			)
 		}
@@ -91,9 +94,10 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 		newCtx, resp, err := s.Request.Invoke(ctx)
 		if err != nil {
 			ctx.Reporter().Log(
-				errors.WithNode(
+				errors.WithNodeAndColored(
 					errors.WithPath(err, fmt.Sprintf("steps[%d].request", stepIdx)),
 					ctx.Node(),
+					ctx.EnabledColor(),
 				),
 			)
 			continue
@@ -101,17 +105,19 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 		assertion, err := s.Expect.Build(newCtx)
 		if err != nil {
 			ctx.Reporter().Log(
-				errors.WithNode(
+				errors.WithNodeAndColored(
 					errors.WithPath(err, fmt.Sprintf("steps[%d].expect", stepIdx)),
 					ctx.Node(),
+					ctx.EnabledColor(),
 				),
 			)
 			continue
 		}
 		if err := assertion.Assert(resp); err != nil {
-			err = errors.WithNode(
+			err = errors.WithNodeAndColored(
 				errors.WithPath(err, fmt.Sprintf("steps[%d].expect", stepIdx)),
 				ctx.Node(),
+				ctx.EnabledColor(),
 			)
 			if assertErr, ok := err.(*assert.Error); ok {
 				for _, err := range assertErr.Errors {

@@ -1,6 +1,7 @@
 package scenarigo
 
 import (
+	"fmt"
 	"path/filepath"
 	"plugin"
 	"reflect"
@@ -55,9 +56,14 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 				vars, err := ctx.ExecuteTemplate(step.Bind.Vars)
 				if err != nil {
 					ctx.Reporter().Fatal(
-						errors.WithNode(
-							errors.WrapPath(err, "bind.vars", "invalid bind"),
+						errors.WithNodeAndColored(
+							errors.WrapPath(
+								err,
+								fmt.Sprintf("steps[%d].bind.vars", idx),
+								"invalid bind",
+							),
 							ctx.Node(),
+							ctx.EnabledColor(),
 						),
 					)
 				}

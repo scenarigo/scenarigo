@@ -118,10 +118,10 @@ func WithQuery(err error, q *query.Query) error {
 	}
 }
 
-func WithNode(err error, node ast.Node) error {
+func WithNodeAndColored(err error, node ast.Node, colored bool) error {
 	e, ok := err.(Error)
 	if ok {
-		e.SetNode(node)
+		e.SetNodeAndColored(node, colored)
 		return e
 	}
 	return err
@@ -130,14 +130,15 @@ func WithNode(err error, node ast.Node) error {
 type Error interface {
 	AppendPath(string)
 	Wrapf(string, ...interface{})
-	SetNode(ast.Node)
+	SetNodeAndColored(ast.Node, bool)
 	Error() string
 }
 
 type PathError struct {
-	Path string
-	Node ast.Node
-	Err  error
+	Path         string
+	Node         ast.Node
+	EnabledColor bool
+	Err          error
 }
 
 func (e *PathError) AppendPath(path string) {
@@ -148,8 +149,9 @@ func (e *PathError) Wrapf(message string, args ...interface{}) {
 	e.Err = errors.Wrapf(e.Err, message, args...)
 }
 
-func (e *PathError) SetNode(node ast.Node) {
+func (e *PathError) SetNodeAndColored(node ast.Node, colored bool) {
 	e.Node = node
+	e.EnabledColor = colored
 }
 
 func (e *PathError) yml() string {
@@ -166,11 +168,11 @@ func (e *PathError) yml() string {
 		return ""
 	}
 	var p printer.Printer
-	return p.PrintErrorToken(node.GetToken(), true)
+	return p.PrintErrorToken(node.GetToken(), e.EnabledColor)
 }
 
 func (e *PathError) Error() string {
-	return fmt.Sprintf("\t%s\n%s", e.yml(), e.Err.Error())
+	return fmt.Sprintf("\n%s\n%s", e.yml(), e.Err.Error())
 }
 
 type MultiPathError struct {
@@ -188,7 +190,7 @@ func (e *MultiPathError) Error() string {
 	mulerr = &multierror.Error{
 		ErrorFormat: func(es []error) string {
 			if len(es) == 1 {
-				return fmt.Sprintf("1 error occurred:\n%s\n\n", strings.TrimLeft(es[0].Error(), "\t"))
+				return fmt.Sprintf("1 error occurred:%s\n\n", strings.TrimLeft(es[0].Error(), "\t"))
 			}
 
 			points := make([]string, len(es))
@@ -197,7 +199,7 @@ func (e *MultiPathError) Error() string {
 			}
 
 			return fmt.Sprintf(
-				"%d errors occurred:\n%s\n\n",
+				"%d errors occurred:%s\n\n",
 				len(es), strings.Join(points, "\n"))
 		},
 	}
@@ -224,12 +226,12 @@ func (e *MultiPathError) Wrapf(message string, args ...interface{}) {
 	e.err = errors.Wrapf(e.err, message, args...)
 }
 
-func (e *MultiPathError) SetNode(node ast.Node) {
+func (e *MultiPathError) SetNodeAndColored(node ast.Node, colored bool) {
 	for _, err := range e.Errs {
 		e, ok := err.(Error)
 		if !ok {
 			continue
 		}
-		e.SetNode(node)
+		e.SetNodeAndColored(node, colored)
 	}
 }

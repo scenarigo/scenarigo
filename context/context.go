@@ -3,20 +3,28 @@ package context
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/goccy/go-yaml/ast"
+	"github.com/mattn/go-isatty"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
 type (
-	keyPluginDir struct{}
-	keyPlugins   struct{}
-	keyVars      struct{}
-	keyRequest   struct{}
-	keyResponse  struct{}
-	keyYAMLNode  struct{}
+	keyPluginDir             struct{}
+	keyPlugins               struct{}
+	keyVars                  struct{}
+	keyRequest               struct{}
+	keyResponse              struct{}
+	keyYAMLNode              struct{}
+	keyEnabledOptionsFromEnv struct{}
+)
+
+const (
+	envScenarigoColor = "SCENARIGO_COLOR"
 )
 
 // Context represents a scenarigo context.
@@ -190,6 +198,24 @@ func (c *Context) Node() ast.Node {
 		return nil
 	}
 	return node
+}
+
+// WithEnabledOptionsFromEnv returns a copy of c with enabledOptionsFromEnv flag
+func (c *Context) WithEnabledOptionsFromEnv() *Context {
+	return newContext(
+		context.WithValue(c.ctx, keyEnabledOptionsFromEnv{}, true),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+// EnabledColor returns whether color output is enabled
+func (c *Context) EnabledColor() bool {
+	if isEnabled, exists := c.ctx.Value(keyEnabledOptionsFromEnv{}).(bool); isEnabled && exists {
+		result, _ := strconv.ParseBool(os.Getenv(envScenarigoColor))
+		return result
+	}
+	return isatty.IsTerminal(os.Stdout.Fd())
 }
 
 // Run runs f as a subtest of c called name.
