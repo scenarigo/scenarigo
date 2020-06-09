@@ -10,10 +10,9 @@ import (
 	"net/url"
 	"reflect"
 
-	"github.com/pkg/errors"
-
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 	"github.com/zoncoen/scenarigo/protocol/http/marshaler"
 	"github.com/zoncoen/scenarigo/protocol/http/unmarshaler"
@@ -42,7 +41,7 @@ type response struct {
 func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
 	client, err := r.buildClient(ctx)
 	if err != nil {
-		return ctx, nil, err
+		return ctx, nil, errors.WithPath(err, "client")
 	}
 	req, reqBody, err := r.buildRequest(ctx)
 	if err != nil {
@@ -111,7 +110,7 @@ func (r *Request) buildClient(ctx *context.Context) (*http.Client, error) {
 	if r.Client != "" {
 		x, err := ctx.ExecuteTemplate(r.Client)
 		if err != nil {
-			return nil, errors.Errorf("failed to get client: %s", err)
+			return nil, errors.Wrapf(err, "failed to get client")
 		}
 		var ok bool
 		if client, ok = x.(*http.Client); !ok {
@@ -129,27 +128,27 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 
 	x, err := ctx.ExecuteTemplate(r.URL)
 	if err != nil {
-		return nil, nil, errors.Errorf("failed to get URL: %s", err)
+		return nil, nil, errors.WrapPathf(err, "url", "failed to get URL")
 	}
 	urlStr, ok := x.(string)
 	if !ok {
-		return nil, nil, errors.Errorf(`URL must be "string" but got "%T"`, x)
+		return nil, nil, errors.ErrorPathf("url", `URL must be "string" but got "%T"`, x)
 	}
 
 	if r.Query != nil {
 		u, err := url.Parse(urlStr)
 		if err != nil {
-			return nil, nil, errors.Errorf("invalid url: %s: %s", urlStr, err)
+			return nil, nil, errors.WrapPathf(err, "url", "invalid url: %s", urlStr)
 		}
 		query := u.Query()
 
 		x, err := ctx.ExecuteTemplate(r.Query)
 		if err != nil {
-			return nil, nil, errors.Errorf("failed to set query: %s", err)
+			return nil, nil, errors.WrapPathf(err, "query", "failed to set query")
 		}
 		q, err := reflectutil.ConvertStringsMap(reflect.ValueOf(x))
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to set query")
+			return nil, nil, errors.WrapPathf(err, "query", "failed to set query")
 		}
 		for k, vs := range q {
 			vs := vs
@@ -166,11 +165,11 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	if r.Header != nil {
 		x, err := ctx.ExecuteTemplate(r.Header)
 		if err != nil {
-			return nil, nil, errors.Errorf("failed to set header: %s", err)
+			return nil, nil, errors.WrapPathf(err, "header", "failed to set header")
 		}
 		hdr, err := reflectutil.ConvertStringsMap(reflect.ValueOf(x))
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to set header")
+			return nil, nil, errors.WrapPathf(err, "header", "failed to set header")
 		}
 		for k, vs := range hdr {
 			vs := vs
@@ -188,14 +187,14 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	if r.Body != nil {
 		x, err := ctx.ExecuteTemplate(r.Body)
 		if err != nil {
-			return nil, nil, errors.Errorf("failed to create request: %s", err)
+			return nil, nil, errors.WrapPathf(err, "body", "failed to create request")
 		}
 		body = x
 
 		marshaler := marshaler.Get(header.Get("Content-Type"))
 		b, err := marshaler.Marshal(body)
 		if err != nil {
-			return nil, nil, errors.Errorf("failed to marshal request body as %s: %#v: %s", marshaler.MediaType(), body, err)
+			return nil, nil, errors.ErrorPathf("body", "failed to marshal request body as %s: %#v: %s", marshaler.MediaType(), body, err)
 		}
 		reader = bytes.NewReader(b)
 	}

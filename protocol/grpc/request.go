@@ -7,12 +7,12 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 )
 
@@ -39,14 +39,14 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 
 	x, err := ctx.ExecuteTemplate(r.Client)
 	if err != nil {
-		return ctx, nil, errors.Errorf("failed to get client: %s", err)
+		return ctx, nil, errors.WrapPath(err, "client", "failed to get client")
 	}
 
 	client := reflect.ValueOf(x)
 	var method reflect.Value
 	for {
 		if !client.IsValid() {
-			return nil, nil, errors.Errorf("client %s is invalid", r.Client)
+			return nil, nil, errors.ErrorPathf("client", "client %s is invalid", r.Client)
 		}
 		method = client.MethodByName(r.Method)
 		if method.IsValid() {
@@ -57,23 +57,23 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		case reflect.Interface, reflect.Ptr:
 			client = client.Elem()
 		default:
-			return nil, nil, errors.Errorf("method %s.%s not found", r.Client, r.Method)
+			return nil, nil, errors.ErrorPathf("method", "method %s.%s not found", r.Client, r.Method)
 		}
 	}
 
 	if err := validateMethod(method); err != nil {
-		return ctx, nil, errors.Errorf(`"%s.%s" must be "func(context.Context, proto.Message, ...grpc.CallOption) (proto.Message, error): %s"`, r.Client, r.Method, err)
+		return ctx, nil, errors.ErrorPathf("method", `"%s.%s" must be "func(context.Context, proto.Message, ...grpc.CallOption) (proto.Message, error): %s"`, r.Client, r.Method, err)
 	}
 
 	reqCtx := ctx.RequestContext()
 	if r.Metadata != nil {
 		x, err := ctx.ExecuteTemplate(r.Metadata)
 		if err != nil {
-			return ctx, nil, errors.Errorf("failed to set metadata: %s", err)
+			return ctx, nil, errors.WrapPathf(err, "metadata", "failed to set metadata")
 		}
 		md, err := reflectutil.ConvertStringsMap(reflect.ValueOf(x))
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to set metadata")
+			return nil, nil, errors.WrapPathf(err, "metadata", "failed to set metadata")
 		}
 
 		pairs := []string{}
@@ -94,7 +94,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		case 1:
 			req := reflect.New(method.Type().In(i).Elem()).Interface()
 			if err := buildRequestBody(ctx, req, r.Body); err != nil {
-				return ctx, nil, errors.Errorf("failed to build request body: %s", err)
+				return ctx, nil, errors.WrapPathf(err, "body", "failed to build request body")
 			}
 
 			ctx = ctx.WithRequest(req)

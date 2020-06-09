@@ -11,9 +11,9 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/internal/maputil"
 )
 
@@ -37,7 +37,7 @@ type ExpectStatus struct {
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	expectBody, err := ctx.ExecuteTemplate(e.Body)
 	if err != nil {
-		return nil, errors.Errorf("invalid expect response: %s", err)
+		return nil, errors.WrapPathf(err, "body", "invalid expect response: %s", err)
 	}
 	assertion := assert.Build(expectBody)
 
@@ -54,16 +54,16 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 			return err
 		}
 		if err := e.assertStatusCode(stErr); err != nil {
-			return err
+			return errors.WithPath(err, "code")
 		}
 		if err := e.assertStatusMessage(stErr); err != nil {
-			return err
+			return errors.WithPath(err, "message")
 		}
 		if err := e.assertStatusDetails(stErr); err != nil {
-			return err
+			return errors.WithPath(err, "details")
 		}
 		if err := assertion.Assert(message); err != nil {
-			return err
+			return errors.WithPath(err, "body")
 		}
 		return nil
 	}), nil
@@ -76,7 +76,7 @@ func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
 			return errors.Errorf(`failed to convert strings map from expected header: %v`, e.Header)
 		}
 		if err := assert.Build(headerMap).Assert(header); err != nil {
-			return err
+			return errors.WithPath(err, "header")
 		}
 	}
 	if len(e.Trailer) > 0 {
@@ -85,7 +85,7 @@ func (e *Expect) assertMetadata(header, trailer metadata.MD) error {
 			return errors.Errorf(`failed to convert strings map from expected trailer: %v`, e.Trailer)
 		}
 		if err := assert.Build(trailerMap).Assert(trailer); err != nil {
-			return err
+			return errors.WithPath(err, "trailer")
 		}
 	}
 	return nil

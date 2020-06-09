@@ -1,10 +1,13 @@
 package scenarigo
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/schema"
@@ -84,6 +87,18 @@ func getAllFiles(paths ...string) ([]string, error) {
 	return files, nil
 }
 
+func newYAMLNode(path string, docIdx int) (ast.Node, error) {
+	bytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	file, err := parser.ParseBytes(bytes, 0)
+	if err != nil {
+		return nil, err
+	}
+	return file.Docs[docIdx].Body, nil
+}
+
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
 	if r.pluginDir != nil {
@@ -95,8 +110,13 @@ func (r *Runner) Run(ctx *context.Context) {
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
-			for _, scn := range scns {
+			for idx, scn := range scns {
 				scn := scn
+				node, err := newYAMLNode(f, idx)
+				if err != nil {
+					ctx.Reporter().Fatalf("failed to create ast: %s", err)
+				}
+				ctx = ctx.WithNode(node)
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = runScenario(ctx, scn)

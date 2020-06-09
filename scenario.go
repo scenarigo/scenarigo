@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/schema"
 )
 
@@ -36,7 +37,7 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 
 	scnCtx := ctx
 	var failed bool
-	for _, step := range s.Steps {
+	for idx, step := range s.Steps {
 		step := step
 		ok := scnCtx.Run(step.Title, func(ctx *context.Context) {
 			// following steps are skipped if the previous step failed
@@ -47,13 +48,18 @@ func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 			if step.Include != "" {
 				step.Include = filepath.Join(filepath.Dir(s.Filepath()), step.Include)
 			}
-			ctx = runStep(ctx, step)
+			ctx = runStep(ctx, step, idx)
 
 			// bind values to the scenario context for enable to access from following steps
 			if step.Bind.Vars != nil {
 				vars, err := ctx.ExecuteTemplate(step.Bind.Vars)
 				if err != nil {
-					ctx.Reporter().Fatalf("invalid bind: %s", err)
+					ctx.Reporter().Fatal(
+						errors.WithNode(
+							errors.WrapPath(err, "bind.vars", "invalid bind"),
+							ctx.Node(),
+						),
+					)
 				}
 				scnCtx = scnCtx.WithVars(vars)
 			}

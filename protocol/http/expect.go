@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/internal/maputil"
 )
 
@@ -21,7 +21,7 @@ type Expect struct {
 func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	expectBody, err := ctx.ExecuteTemplate(e.Body)
 	if err != nil {
-		return nil, errors.Errorf("invalid expect response: %s", err)
+		return nil, errors.WrapPathf(err, "body", "invalid expect response")
 	}
 	assertion := assert.Build(expectBody)
 
@@ -31,13 +31,13 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 			return errors.Errorf("expected response but got %T", v)
 		}
 		if err := e.assertCode(res.status); err != nil {
-			return err
+			return errors.WithPath(err, "code")
 		}
 		if err := e.assertHeader(res.Header); err != nil {
-			return err
+			return errors.WithPath(err, "header")
 		}
 		if err := assertion.Assert(res.Body); err != nil {
-			return err
+			return errors.WithPath(err, "body")
 		}
 		return nil
 	}), nil

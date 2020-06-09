@@ -6,6 +6,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/query/extractor"
 )
 
@@ -26,7 +27,7 @@ func assertFunc(q *query.Query, f func(interface{}) error) Assertion {
 	return AssertionFunc(func(v interface{}) error {
 		got, err := q.Extract(v)
 		if err != nil {
-			return err
+			return errors.WithQuery(err, q)
 		}
 		return f(got)
 	})
@@ -39,14 +40,17 @@ func Build(expect interface{}) Assertion {
 		assertions = build(query.New(), expect)
 	}
 	return AssertionFunc(func(v interface{}) error {
-		var assertErr error
+		errs := []error{}
 		for _, assertion := range assertions {
 			assertion := assertion
 			if err := assertion.Assert(v); err != nil {
-				assertErr = AppendError(assertErr, err)
+				errs = append(errs, err)
 			}
 		}
-		return assertErr
+		if len(errs) > 0 {
+			return errors.Errors(errs...)
+		}
+		return nil
 	})
 }
 

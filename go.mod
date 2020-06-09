@@ -12,7 +12,7 @@ require (
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/fatih/structtag v1.0.0 // indirect
 	github.com/git-chglog/git-chglog v0.0.0-20200414013904-db796966b373
-	github.com/goccy/go-yaml v1.6.5
+	github.com/goccy/go-yaml v1.7.5
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.3.5
 	github.com/google/go-cmp v0.4.0

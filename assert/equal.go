@@ -2,11 +2,10 @@ package assert
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 
-	"github.com/pkg/errors"
 	"github.com/zoncoen/query-go"
+	"github.com/zoncoen/scenarigo/errors"
 )
 
 // Equal returns an assertion to ensure a value equals the expected value.
@@ -55,10 +54,9 @@ func Equal(q *query.Query, expected interface{}) Assertion {
 					return nil
 				}
 			}
-			return errors.Errorf(fmt.Sprintf("%s: expected %T (%+v) but got %T (%+v)", q.String(), expected, expected, v, v))
+			return errors.ErrorQueryf(q, "%s: expected %T (%+v) but got %T (%+v)", q.String(), expected, expected, v, v)
 		}
-
-		return errors.Errorf(fmt.Sprintf("%s: expected %+v but got %+v", q.String(), expected, v))
+		return errors.ErrorQueryf(q, "%s: expected %+v but got %+v", q.String(), expected, v)
 	})
 }
 

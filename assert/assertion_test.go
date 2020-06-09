@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
+	"github.com/zoncoen/scenarigo/errors"
 )
 
 func TestBuild(t *testing.T) {
@@ -79,7 +80,7 @@ deps:
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
-		errs := err.(*Error).Errors
+		errs := err.(*errors.MultiPathError).Errs
 		if got, expect := len(errs), len(qs); got != expect {
 			t.Fatalf("expected %d but got %d", expect, got)
 		}
@@ -95,7 +96,7 @@ deps:
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
-		errs := err.(*Error).Errors
+		errs := err.(*errors.MultiPathError).Errs
 		if got, expect := len(errs), len(qs); got != expect {
 			t.Fatalf("expected %d but got %d", expect, got)
 		}

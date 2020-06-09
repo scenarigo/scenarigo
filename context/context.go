@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
@@ -15,6 +16,7 @@ type (
 	keyVars      struct{}
 	keyRequest   struct{}
 	keyResponse  struct{}
+	keyYAMLNode  struct{}
 )
 
 // Context represents a scenarigo context.
@@ -167,6 +169,27 @@ func (c *Context) WithResponse(resp interface{}) *Context {
 // Response returns the response.
 func (c *Context) Response() interface{} {
 	return c.ctx.Value(keyResponse{})
+}
+
+// WithNode returns a copy of c with ast.Node
+func (c *Context) WithNode(node ast.Node) *Context {
+	if node == nil {
+		return c
+	}
+	return newContext(
+		context.WithValue(c.ctx, keyYAMLNode{}, node),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+// Node returns the ast.Node.
+func (c *Context) Node() ast.Node {
+	node, ok := c.ctx.Value(keyYAMLNode{}).(ast.Node)
+	if !ok {
+		return nil
+	}
+	return node
 }
 
 // Run runs f as a subtest of c called name.
