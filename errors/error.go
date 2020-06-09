@@ -159,7 +159,6 @@ func (e *PathError) yml() string {
 		return ""
 	}
 	path, err := yaml.PathString(fmt.Sprintf("$%s", e.Path))
-	fmt.Println("path = ", path)
 	if path == nil || err != nil {
 		return ""
 	}
