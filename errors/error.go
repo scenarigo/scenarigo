@@ -13,10 +13,12 @@ import (
 	"github.com/zoncoen/query-go"
 )
 
+// Errorf call github.com/pkg/errors.Errorf
 func Errorf(format string, args ...interface{}) error {
 	return errors.Errorf(format, args...)
 }
 
+// ErrorPathf create PathError instance with path and error message
 func ErrorPathf(path, msg string, args ...interface{}) error {
 	return &PathError{
 		Path: fmt.Sprintf(".%s", path),
@@ -24,6 +26,7 @@ func ErrorPathf(path, msg string, args ...interface{}) error {
 	}
 }
 
+// ErrorQueryf create PathError instance by query.Query
 func ErrorQueryf(q *query.Query, format string, args ...interface{}) error {
 	return &PathError{
 		Path: q.String(),
@@ -31,10 +34,12 @@ func ErrorQueryf(q *query.Query, format string, args ...interface{}) error {
 	}
 }
 
+// New call github.com/pkg/errors.New
 func New(message string) error {
 	return errors.New(message)
 }
 
+// ErrorPath create PathError instance with path and error message
 func ErrorPath(path, message string) error {
 	return &PathError{
 		Path: fmt.Sprintf(".%s", path),
@@ -42,14 +47,16 @@ func ErrorPath(path, message string) error {
 	}
 }
 
+// Errors create MultiPathError by error instances
 func Errors(errs ...error) error {
 	return &MultiPathError{Errs: errs}
 }
 
+// Wrap wrap error while paying attention to PathError and MultiPathError
 func Wrap(err error, message string) error {
 	e, ok := err.(Error)
 	if ok {
-		e.Wrapf(message)
+		e.wrapf(message)
 		return e
 	}
 	return &PathError{
@@ -57,11 +64,12 @@ func Wrap(err error, message string) error {
 	}
 }
 
+// WrapPath wrap error with path while paying attention to PathError and MultiPathError
 func WrapPath(err error, path, message string) error {
 	e, ok := err.(Error)
 	if ok {
-		e.Wrapf(message)
-		e.AppendPath(fmt.Sprintf(".%s", path))
+		e.wrapf(message)
+		e.appendPath(fmt.Sprintf(".%s", path))
 		return e
 	}
 	return &PathError{
@@ -70,10 +78,11 @@ func WrapPath(err error, path, message string) error {
 	}
 }
 
+// Wrapf wrap error while paying attention to PathError and MultiPathError
 func Wrapf(err error, format string, args ...interface{}) error {
 	e, ok := err.(Error)
 	if ok {
-		e.Wrapf(format, args...)
+		e.wrapf(format, args...)
 		return e
 	}
 	return &PathError{
@@ -81,11 +90,12 @@ func Wrapf(err error, format string, args ...interface{}) error {
 	}
 }
 
+// WrapPathf wrap error with path while paying attention to PathError and MultiPathError
 func WrapPathf(err error, path, message string, args ...interface{}) error {
 	e, ok := err.(Error)
 	if ok {
-		e.Wrapf(message, args...)
-		e.AppendPath(fmt.Sprintf(".%s", path))
+		e.wrapf(message, args...)
+		e.appendPath(fmt.Sprintf(".%s", path))
 		return e
 	}
 	return &PathError{
@@ -94,11 +104,11 @@ func WrapPathf(err error, path, message string, args ...interface{}) error {
 	}
 }
 
-// WithPath add path to error
+// WithPath add path to error if errors instance is PathError or MultiPathError
 func WithPath(err error, path string) error {
 	e, ok := err.(Error)
 	if ok {
-		e.AppendPath(fmt.Sprintf(".%s", path))
+		e.appendPath(fmt.Sprintf(".%s", path))
 		return e
 	}
 	return &PathError{
@@ -107,10 +117,12 @@ func WithPath(err error, path string) error {
 	}
 }
 
+// WithQuery add path by query.Query to error
+// if errors instance is PathError or MultiPathError
 func WithQuery(err error, q *query.Query) error {
 	e, ok := err.(Error)
 	if ok {
-		e.AppendPath(q.String())
+		e.appendPath(q.String())
 		return e
 	}
 	return &PathError{
@@ -119,22 +131,26 @@ func WithQuery(err error, q *query.Query) error {
 	}
 }
 
+// WithNodeAndColored set ast.Node and colored to error
+// if errors instance is PathError or MultiPathError
 func WithNodeAndColored(err error, node ast.Node, colored bool) error {
 	e, ok := err.(Error)
 	if ok {
-		e.SetNodeAndColored(node, colored)
+		e.setNodeAndColored(node, colored)
 		return e
 	}
 	return err
 }
 
+// Error represents interface for PathError and MultiPathError
 type Error interface {
-	AppendPath(string)
-	Wrapf(string, ...interface{})
-	SetNodeAndColored(ast.Node, bool)
+	appendPath(string)
+	wrapf(string, ...interface{})
+	setNodeAndColored(ast.Node, bool)
 	Error() string
 }
 
+// PathError represents error with path
 type PathError struct {
 	Path         string
 	Node         ast.Node
@@ -142,15 +158,15 @@ type PathError struct {
 	Err          error
 }
 
-func (e *PathError) AppendPath(path string) {
+func (e *PathError) appendPath(path string) {
 	e.Path = path + e.Path
 }
 
-func (e *PathError) Wrapf(message string, args ...interface{}) {
+func (e *PathError) wrapf(message string, args ...interface{}) {
 	e.Err = errors.Wrapf(e.Err, message, args...)
 }
 
-func (e *PathError) SetNodeAndColored(node ast.Node, colored bool) {
+func (e *PathError) setNodeAndColored(node ast.Node, colored bool) {
 	e.Node = node
 	e.EnabledColor = colored
 }
@@ -192,6 +208,7 @@ func (e *PathError) Error() string {
 	return fmt.Sprintf("\n%s\n%s", e.yml(), e.Err.Error())
 }
 
+// MultiPathError represents multiple error with path
 type MultiPathError struct {
 	Node ast.Node
 	Errs []error
@@ -219,33 +236,33 @@ func (e *MultiPathError) Error() string {
 	return mulerr.Error()
 }
 
-func (e *MultiPathError) AppendPath(path string) {
+func (e *MultiPathError) appendPath(path string) {
 	for _, err := range e.Errs {
 		e, ok := err.(Error)
 		if !ok {
 			continue
 		}
-		e.AppendPath(path)
+		e.appendPath(path)
 	}
 }
 
-func (e *MultiPathError) Wrapf(message string, args ...interface{}) {
+func (e *MultiPathError) wrapf(message string, args ...interface{}) {
 	for idx, err := range e.Errs {
 		pathErr, ok := err.(Error)
 		if ok {
-			pathErr.Wrapf(message, args...)
+			pathErr.wrapf(message, args...)
 		} else {
 			e.Errs[idx] = errors.Wrapf(err, message, args...)
 		}
 	}
 }
 
-func (e *MultiPathError) SetNodeAndColored(node ast.Node, colored bool) {
+func (e *MultiPathError) setNodeAndColored(node ast.Node, colored bool) {
 	for _, err := range e.Errs {
 		e, ok := err.(Error)
 		if !ok {
 			continue
 		}
-		e.SetNodeAndColored(node, colored)
+		e.setNodeAndColored(node, colored)
 	}
 }
