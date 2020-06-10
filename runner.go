@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/mattn/go-isatty"
 	"github.com/pkg/errors"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/schema"
@@ -19,9 +21,9 @@ import (
 
 // Runner represents a test runner.
 type Runner struct {
-	pluginDir               *string
-	scenarioFiles           []string
-	isEnabledOptionsFromEnv bool
+	pluginDir     *string
+	scenarioFiles []string
+	enabledColor  bool
 }
 
 // WithPluginDir returns a option which sets plugin root directory.
@@ -39,6 +41,7 @@ func WithPluginDir(path string) func(*Runner) error {
 // NewRunner returns a new test runner.
 func NewRunner(opts ...func(*Runner) error) (*Runner, error) {
 	r := &Runner{}
+	r.enabledColor = isatty.IsTerminal(os.Stdout.Fd())
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
 			return nil, err
@@ -64,7 +67,9 @@ func WithScenarios(paths ...string) func(*Runner) error {
 // - SCENARIGO_COLOR=(1|true|TRUE)
 func WithOptionsFromEnv(isEnv bool) func(*Runner) error {
 	return func(r *Runner) error {
-		r.isEnabledOptionsFromEnv = isEnv
+		if isEnv {
+			r.setOptionsFromEnv()
+		}
 		return nil
 	}
 }
@@ -98,6 +103,22 @@ func getAllFiles(paths ...string) ([]string, error) {
 	return files, nil
 }
 
+const (
+	envScenarigoColor = "SCENARIGO_COLOR"
+)
+
+func (r *Runner) setOptionsFromEnv() {
+	r.setEnabledColor(os.Getenv(envScenarigoColor))
+}
+
+func (r *Runner) setEnabledColor(envColor string) {
+	if envColor == "" {
+		return
+	}
+	result, _ := strconv.ParseBool(envColor)
+	r.enabledColor = result
+}
+
 func newYAMLNode(path string, docIdx int) (ast.Node, error) {
 	bytes, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -115,9 +136,7 @@ func (r *Runner) Run(ctx *context.Context) {
 	if r.pluginDir != nil {
 		ctx = ctx.WithPluginDir(*r.pluginDir)
 	}
-	if r.isEnabledOptionsFromEnv {
-		ctx = ctx.WithEnabledOptionsFromEnv()
-	}
+	ctx = ctx.WithEnabledColor(r.enabledColor)
 	for _, f := range r.scenarioFiles {
 		ctx.Run(f, func(ctx *context.Context) {
 			scns, err := schema.LoadScenarios(f)
