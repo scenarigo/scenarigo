@@ -120,6 +120,7 @@ func TestRequest_Invoke(t *testing.T) {
 			vars        map[string]interface{}
 			client      string
 			method      string
+			metadata    map[string]interface{}
 			expectError string
 		}{
 			"no client": {
@@ -145,6 +146,14 @@ func TestRequest_Invoke(t *testing.T) {
 				method:      "NotFound",
 				expectError: "method {{vars.client}}.NotFound not found",
 			},
+			"invalid metadata": {
+				vars: map[string]interface{}{
+					"client": test.NewTestClient(nil),
+				},
+				method:   "Echo",
+				client:   "{{vars.client}}",
+				metadata: map[string]interface{}{"a": "{{b}}"},
+			},
 		}
 		for name, tc := range tests {
 			tc := tc
@@ -156,6 +165,9 @@ func TestRequest_Invoke(t *testing.T) {
 				req := &Request{
 					Client: tc.client,
 					Method: tc.method,
+				}
+				if tc.metadata != nil {
+					req.Metadata = tc.metadata
 				}
 				_, _, err := req.Invoke(ctx)
 				if err == nil {

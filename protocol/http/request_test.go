@@ -240,6 +240,12 @@ func TestRequest_Invoke(t *testing.T) {
 					URL: "{{vars.url}}",
 				},
 			},
+			"failed to buildClient": {
+				request: &Request{Client: "{{}}"},
+			},
+			"failed to buildClient ( invalid template )": {
+				request: &Request{Client: "{{invalid}}"},
+			},
 		}
 		for name, test := range tests {
 			test := test
