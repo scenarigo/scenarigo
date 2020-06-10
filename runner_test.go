@@ -1,6 +1,7 @@
 package scenarigo
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -18,5 +19,21 @@ func TestRunnerWithScenarios(t *testing.T) {
 		if !yamlPattern.MatchString(file) {
 			t.Fatalf("invalid scenario file: %s", file)
 		}
+	}
+}
+
+func TestRunnerWithOptionsFromEnv(t *testing.T) {
+	if err := os.Setenv(envScenarigoColor, "true"); err != nil {
+		t.Fatalf("%+v", err)
+	}
+	defer os.Unsetenv(envScenarigoColor)
+	runner, err := NewRunner(
+		WithOptionsFromEnv(true),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !runner.enabledColor {
+		t.Fatalf("failed to set enabledColor from env")
 	}
 }
