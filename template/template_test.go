@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -167,6 +168,62 @@ func TestTemplate_Execute(t *testing.T) {
 				t.Fatalf("unexpected error: %s", err)
 			}
 			i, err := tmpl.Execute(test.data)
+			if !test.expectError && err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			if test.expectError && err == nil {
+				t.Fatal("expected error but got no error")
+			}
+			if diff := cmp.Diff(test.expect, i); diff != "" {
+				t.Errorf("diff: (-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestTemplate_ExecuteDirect(t *testing.T) {
+	tests := map[string]struct {
+		i           interface{}
+		data        interface{}
+		expect      interface{}
+		expectError bool
+	}{
+		"not found by MapItem": {
+			i: yaml.MapSlice{
+				{
+					Key:   "a",
+					Value: "{{b}}",
+				},
+			},
+			expectError: true,
+		},
+		"not found by struct": {
+			i: struct {
+				A string
+			}{
+				A: "{{b}}",
+			},
+			expectError: true,
+		},
+		"not found by struct with tag": {
+			i: struct {
+				A string `yaml:"a"`
+			}{
+				A: "{{b}}",
+			},
+			expectError: true,
+		},
+		"not found by map": {
+			i: map[string]string{
+				"a": "{{b}}",
+			},
+			expectError: true,
+		},
+	}
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			i, err := Execute(test.i, test.data)
 			if !test.expectError && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
