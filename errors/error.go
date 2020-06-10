@@ -6,6 +6,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/printer"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
@@ -36,7 +37,7 @@ func New(message string) error {
 
 func ErrorPath(path, message string) error {
 	return &PathError{
-		Path: path,
+		Path: fmt.Sprintf(".%s", path),
 		Err:  errors.New(message),
 	}
 }
@@ -154,20 +155,37 @@ func (e *PathError) SetNodeAndColored(node ast.Node, colored bool) {
 	e.EnabledColor = colored
 }
 
-func (e *PathError) yml() string {
+func (e *PathError) cloneCurrentNode() ast.Node {
 	if e.Node == nil {
+		return nil
+	}
+	file, err := parser.ParseBytes([]byte(e.Node.String()), 0)
+	if err != nil {
+		return nil
+	}
+	if len(file.Docs) == 0 {
+		return nil
+	}
+	return file.Docs[0].Body
+}
+
+func (e *PathError) yml() string {
+	// clone current node
+	// because PrintErrorToken make disruptive changes token.Token
+	node := e.cloneCurrentNode()
+	if node == nil {
 		return ""
 	}
 	path, err := yaml.PathString(fmt.Sprintf("$%s", e.Path))
 	if path == nil || err != nil {
 		return ""
 	}
-	node, err := path.FilterNode(e.Node)
-	if node == nil || err != nil {
+	filteredNode, err := path.FilterNode(node)
+	if filteredNode == nil || err != nil {
 		return ""
 	}
 	var p printer.Printer
-	return p.PrintErrorToken(node.GetToken(), e.EnabledColor)
+	return p.PrintErrorToken(filteredNode.GetToken(), e.EnabledColor)
 }
 
 func (e *PathError) Error() string {
@@ -177,14 +195,9 @@ func (e *PathError) Error() string {
 type MultiPathError struct {
 	Node ast.Node
 	Errs []error
-	err  error
 }
 
 func (e *MultiPathError) Error() string {
-	prefix := ""
-	if e.err != nil {
-		prefix = e.err.Error()
-	}
 	var mulerr error
 	mulerr = &multierror.Error{
 		ErrorFormat: func(es []error) string {
@@ -202,9 +215,7 @@ func (e *MultiPathError) Error() string {
 				len(es), strings.Join(points, "\n"))
 		},
 	}
-	for _, err := range e.Errs {
-		mulerr = multierror.Append(mulerr, errors.Errorf("%s%s", prefix, err.Error()))
-	}
+	mulerr = multierror.Append(mulerr, e.Errs...)
 	return mulerr.Error()
 }
 
@@ -219,10 +230,14 @@ func (e *MultiPathError) AppendPath(path string) {
 }
 
 func (e *MultiPathError) Wrapf(message string, args ...interface{}) {
-	if e.err == nil {
-		e.err = errors.New("")
+	for idx, err := range e.Errs {
+		pathErr, ok := err.(Error)
+		if ok {
+			pathErr.Wrapf(message, args...)
+		} else {
+			e.Errs[idx] = errors.Wrapf(err, message, args...)
+		}
 	}
-	e.err = errors.Wrapf(e.err, message, args...)
 }
 
 func (e *MultiPathError) SetNodeAndColored(node ast.Node, colored bool) {
