@@ -4,6 +4,9 @@ plugins:
   grpc: "grpc.so"
 steps:
 - title: Echo
+  bind:
+    vars:
+      mid: '{{response.messageId}}'
   vars:
     id: xxx
     message: hello

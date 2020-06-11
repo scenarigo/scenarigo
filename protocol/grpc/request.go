@@ -127,7 +127,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		Body:    body,
 		rvalues: rvalues,
 	}
-	ctx = ctx.WithResponse(resp)
+	ctx = ctx.WithResponse(body)
 	if b, err := yaml.Marshal(resp); err == nil {
 		ctx.Reporter().Logf("response:\n%s", string(b))
 	} else {

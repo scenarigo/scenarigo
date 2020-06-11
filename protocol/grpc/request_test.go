@@ -65,11 +65,7 @@ func TestRequest_Invoke(t *testing.T) {
 			if diff := cmp.Diff(req, ctx.Request()); diff != "" {
 				t.Errorf("differs: (-want +got)\n%s", diff)
 			}
-			respValue, ok := ctx.Response().(response)
-			if !ok {
-				t.Fatal("failed to get response type from ctx.Response()")
-			}
-			if diff := cmp.Diff(resp, respValue.Body); diff != "" {
+			if diff := cmp.Diff(resp, ctx.Response()); diff != "" {
 				t.Errorf("differs: (-want +got)\n%s", diff)
 			}
 		})
