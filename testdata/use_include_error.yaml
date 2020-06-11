@@ -1,0 +1,16 @@
+---
+title: /echo
+steps:
+- title: POST /echo by include
+  include: base_error.yaml
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/echo"
+    body:
+      message: "{{vars.message}}"
+  expect:
+    code: 200
+    body:
+      message: "{{request.message}}"
+
