@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -73,6 +74,16 @@ func TestKey_Extract(t *testing.T) {
 			"key extractor": {
 				key:    "key",
 				v:      &testKeyExtractor{v: "value"},
+				expect: "value",
+			},
+			"ordered map": {
+				key: "paramA",
+				v: yaml.MapSlice{
+					{
+						Key:   "paramA",
+						Value: "value",
+					},
+				},
 				expect: "value",
 			},
 		}
