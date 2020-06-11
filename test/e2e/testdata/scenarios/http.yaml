@@ -4,6 +4,9 @@ anchors:
   header: &header
     Accept-Encoding: gzip
     Accept: application/json
+vars:
+  param:
+    paramA: world
 steps:
 - title: POST /echo
   vars:
@@ -18,11 +21,11 @@ steps:
     header:
       Authorization: "Bearer {{env.TEST_TOKEN}}"
     body:
-      message: "{{vars.message}}"
+      message: "{{vars.message}} {{vars.param.paramA}}"
   expect:
     code: 200
     header:
-      Content-Length: 30
+      Content-Length: 36
     body:
       id: "{{vars.id}}"
       message: "{{request.message}}"

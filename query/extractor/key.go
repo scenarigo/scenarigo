@@ -1,11 +1,18 @@
 package extractor
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/query-go"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
+)
+
+var (
+	yamlMapItemType  = reflect.TypeOf(yaml.MapItem{})
+	yamlMapSliceType = reflect.TypeOf(yaml.MapSlice{})
 )
 
 // Key returns a new key extractor.
@@ -39,26 +46,45 @@ func (e *keyExtractor) extract(v reflect.Value) (reflect.Value, bool) {
 			}
 		}
 	case reflect.Struct:
-		inlines := []int{}
-		for i := 0; i < v.Type().NumField(); i++ {
-			field := v.Type().FieldByIndex([]int{i})
-			name := strings.ToLower(field.Name)
-			if tag, ok := field.Tag.Lookup("yaml"); ok {
-				strs := strings.Split(tag, ",")
-				for _, opt := range strs[1:] {
-					if opt == "inline" {
-						inlines = append(inlines, i)
-					}
-				}
-				name = strs[0]
+		switch v.Type() {
+		case yamlMapItemType:
+			if fmt.Sprint(v.FieldByName("Key").Interface()) == e.key {
+				return v.FieldByName("Value"), true
 			}
-			if name == e.key {
-				return v.FieldByIndex([]int{i}), true
+		default:
+			inlines := []int{}
+			for i := 0; i < v.Type().NumField(); i++ {
+				field := v.Type().FieldByIndex([]int{i})
+				name := strings.ToLower(field.Name)
+				if tag, ok := field.Tag.Lookup("yaml"); ok {
+					strs := strings.Split(tag, ",")
+					for _, opt := range strs[1:] {
+						if opt == "inline" {
+							inlines = append(inlines, i)
+						}
+					}
+					name = strs[0]
+				}
+				if name == e.key {
+					return v.FieldByIndex([]int{i}), true
+				}
+			}
+			for _, i := range inlines {
+				if val, ok := e.Extract(v.Field(i)); ok {
+					return val, true
+				}
 			}
 		}
-		for _, i := range inlines {
-			if val, ok := e.Extract(v.Field(i)); ok {
-				return val, true
+	case reflect.Slice:
+		if v.Type() == yamlMapSliceType {
+			for i := 0; i < v.Len(); i++ {
+				elem := v.Index(i)
+				if !elem.IsValid() {
+					continue
+				}
+				if val, ok := e.Extract(elem); ok {
+					return val, true
+				}
 			}
 		}
 	}
