@@ -1,5 +1,9 @@
 ---
 title: /echo
+anchors:
+  header: &header
+    Accept-Encoding: gzip
+    Accept: application/json
 steps:
 - title: POST /echo
   vars:
@@ -32,6 +36,7 @@ steps:
     method: POST
     url: "{{env.TEST_ADDR}}/echo"
     header:
+      <<: *header
       Authorization: "Bearer {{env.TEST_TOKEN}}"
       Content-Type: application/x-www-form-urlencoded
     body:
