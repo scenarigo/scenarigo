@@ -29,7 +29,10 @@ func assertFunc(q *query.Query, f func(interface{}) error) Assertion {
 		if err != nil {
 			return errors.WithQuery(err, q)
 		}
-		return f(got)
+		if err := f(got); err != nil {
+			return errors.WithQuery(err, q)
+		}
+		return nil
 	})
 }
 
