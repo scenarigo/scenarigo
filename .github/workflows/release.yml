@@ -13,8 +13,10 @@ jobs:
         go-version: 1.14
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
     - name: Generate CHANGELOG
-      run: echo "::set-env name=CHANGELOG::$(make changelog/ci)"
+      run: make changelog/ci && cat .CHANGELOG.md
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v2
       with:
