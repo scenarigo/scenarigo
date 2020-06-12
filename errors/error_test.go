@@ -221,7 +221,7 @@ func TestWithNodeAndColored(t *testing.T) {
 }
 
 func TestMultiPathError(t *testing.T) {
-	yml := `
+	yml := `---
 path:
   a: 1
   b: 2
@@ -238,11 +238,12 @@ path:
 	t.Run("one error", func(t *testing.T) {
 		expected := `
 1 error occurred:
-   1 | path:
->  2 |   a: 1
+   1 | ---
+   2 | path:
+>  3 |   a: 1
             ^
-   3 |   b: 2
-   4 |   c: 3
+   4 |   b: 2
+   5 |   c: 3
 invalid a
 
 `
@@ -261,18 +262,20 @@ invalid a
 	t.Run("with path", func(t *testing.T) {
 		expected := `
 3 errors occurred:
-   1 | path:
->  2 |   a: 1
+   1 | ---
+   2 | path:
+>  3 |   a: 1
             ^
-   3 |   b: 2
-   4 |   c: 3
+   4 |   b: 2
+   5 |   c: 3
 invalid a
 
-   1 | path:
-   2 |   a: 1
->  3 |   b: 2
+   1 | ---
+   2 | path:
+   3 |   a: 1
+>  4 |   b: 2
             ^
-   4 |   c: 3
+   5 |   c: 3
 invalid b
 invalid c
 
@@ -296,18 +299,20 @@ invalid c
 	t.Run("wrap path", func(t *testing.T) {
 		expected := `
 3 errors occurred:
-   1 | path:
->  2 |   a: 1
+   1 | ---
+   2 | path:
+>  3 |   a: 1
             ^
-   3 |   b: 2
-   4 |   c: 3
+   4 |   b: 2
+   5 |   c: 3
 unexpected error: invalid a
 
-   1 | path:
-   2 |   a: 1
->  3 |   b: 2
+   1 | ---
+   2 | path:
+   3 |   a: 1
+>  4 |   b: 2
             ^
-   4 |   c: 3
+   5 |   c: 3
 unexpected error: invalid b
 unexpected error: invalid c
 

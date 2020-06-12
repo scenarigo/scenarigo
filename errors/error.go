@@ -6,7 +6,6 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
-	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/printer"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
@@ -171,37 +170,20 @@ func (e *PathError) setNodeAndColored(node ast.Node, colored bool) {
 	e.EnabledColor = colored
 }
 
-func (e *PathError) cloneCurrentNode() ast.Node {
-	if e.Node == nil {
-		return nil
-	}
-	file, err := parser.ParseBytes([]byte(e.Node.String()), 0)
-	if err != nil {
-		return nil
-	}
-	if len(file.Docs) == 0 {
-		return nil
-	}
-	return file.Docs[0].Body
-}
-
 func (e *PathError) yml() string {
-	// clone current node
-	// because PrintErrorToken make disruptive changes token.Token
-	node := e.cloneCurrentNode()
-	if node == nil {
+	if e.Node == nil {
 		return ""
 	}
 	path, err := yaml.PathString(fmt.Sprintf("$%s", e.Path))
 	if path == nil || err != nil {
 		return ""
 	}
-	filteredNode, err := path.FilterNode(node)
-	if filteredNode == nil || err != nil {
+	node, err := path.FilterNode(e.Node)
+	if node == nil || err != nil {
 		return ""
 	}
 	var p printer.Printer
-	return p.PrintErrorToken(filteredNode.GetToken(), e.EnabledColor)
+	return p.PrintErrorToken(node.GetToken(), e.EnabledColor)
 }
 
 func (e *PathError) Error() string {
