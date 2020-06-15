@@ -1,12 +1,14 @@
 ---
 title: /echo
-anchors:
-  header: &header
-    Accept-Encoding: gzip
-    Accept: application/json
 vars:
   param:
     paramA: world
+  accept: &accept application/json
+anchors:
+  encoding: &encoding gzip
+  header: &header
+    Accept-Encoding: *encoding
+    Accept: *accept
 steps:
 - title: POST /echo
   vars:
