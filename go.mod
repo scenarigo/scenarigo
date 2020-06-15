@@ -5,7 +5,7 @@ go 1.14
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/fatih/color v1.9.0 // indirect
-	github.com/goccy/go-yaml v1.7.11
+	github.com/goccy/go-yaml v1.7.12
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.3.5
 	github.com/google/go-cmp v0.4.0

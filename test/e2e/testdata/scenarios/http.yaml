@@ -83,3 +83,35 @@ steps:
       - "Bearer aaa"
   expect:
     code: Forbidden
+    
+---
+title: /echo
+vars:
+  id: 123
+  msg: |-
+    line1
+     line2
+steps:
+  - title: POST /echo
+    vars:
+      id: "123"
+      message: hello
+    protocol: http
+    request:
+      method: POST
+      url: "{{env.TEST_ADDR}}/echo"
+      query:
+        id: "{{vars.id}}"
+      header:
+        Authorization: "Bearer {{env.TEST_TOKEN}}"
+      body:
+        message: "{{vars.msg}}"
+    expect:
+      code: 200
+      header:
+        Content-Length: 38
+      body:
+        message: |-
+          line1
+           line2
+        id: "{{vars.id}}"
