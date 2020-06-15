@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/internal/testutil/gen/pb/test"
+	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
 )
 
 func TestEqual(t *testing.T) {

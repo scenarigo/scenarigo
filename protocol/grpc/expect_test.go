@@ -10,7 +10,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/testutil/gen/pb/test"
+	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"

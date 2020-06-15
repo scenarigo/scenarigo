@@ -12,6 +12,8 @@ linters:
     - unparam
     - interfacer
     - prealloc
+  skip-dirs:
+    - gen
 
 issues:
   exclude-rules:

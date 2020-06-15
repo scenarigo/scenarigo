@@ -7,8 +7,8 @@ PATH := $(abspath $(BIN_DIR)):$(PATH)
 UNAME_OS := $(shell uname -s)
 UNAME_ARCH := $(shell uname -m)
 
-PROTO_DIR := $(CURDIR)/internal/testutil/testdata/proto
-GEN_PB_DIR := $(CURDIR)/internal/testutil/gen/pb
+PROTO_DIR := $(CURDIR)/testdata/proto
+GEN_PB_DIR := $(CURDIR)/testdata/gen/pb
 PLUGINS_DIR := $(CURDIR)/test/e2e/testdata/plugins
 GEN_PLUGINS_DIR := $(CURDIR)/test/e2e/testdata/gen/plugins
 
@@ -81,7 +81,7 @@ coverage: ## measure test coverage
 	@go test -race $(TEST_TARGETS) -coverprofile=coverage.out -covermode=atomic
 
 .PHONY: lint/ci
-lint/ci: $(GOLANGCI_LINT)
+lint/ci:
 	@make credits
 	@git add --all
 	@git diff --cached --quiet || (echo '"make credits" required'; exit 1)

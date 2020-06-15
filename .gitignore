@@ -1,6 +1,6 @@
 vendor
 .envrc
 .bin
-gen
+/test/e2e/testdata/gen
 coverage.out
 .CHANGELOG.md
