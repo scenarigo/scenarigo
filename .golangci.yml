@@ -12,6 +12,7 @@ linters:
     - unparam
     - interfacer
     - prealloc
+    - dupl
   skip-dirs:
     - gen
 
