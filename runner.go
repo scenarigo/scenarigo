@@ -65,6 +65,7 @@ func WithScenarios(paths ...string) func(*Runner) error {
 // WithOptionsFromEnv returns a option which sets flag whether accepts configuration from ENV.
 // Currently Available ENV variables are the following.
 // - SCENARIGO_COLOR=(1|true|TRUE)
+// nolint:stylecheck
 func WithOptionsFromEnv(isEnv bool) func(*Runner) error {
 	return func(r *Runner) error {
 		if isEnv {

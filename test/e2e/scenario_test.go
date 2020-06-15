@@ -31,10 +31,9 @@ import (
 )
 
 type testProtocol struct {
-	name               string
-	invoker            invoker
-	expectUnmarshaller func(f func(interface{}) error) (protocol.AssertionBuilder, error)
-	builder            builder
+	name    string
+	invoker invoker
+	builder builder
 }
 
 func (p *testProtocol) Name() string { return p.name }

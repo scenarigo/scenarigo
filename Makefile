@@ -3,6 +3,7 @@ SHELL := /bin/bash
 
 BIN_DIR := $(CURDIR)/.bin
 PATH := $(abspath $(BIN_DIR)):$(PATH)
+TOOLS_DIR := $(CURDIR)/tools
 
 UNAME_OS := $(shell uname -s)
 UNAME_ARCH := $(shell uname -m)
@@ -30,35 +31,48 @@ $(PROTOC): | $(BIN_DIR)
 
 PROTOC_GEN_GO := $(BIN_DIR)/protoc-gen-go
 $(PROTOC_GEN_GO): | $(BIN_DIR)
-	@go build -o $(PROTOC_GEN_GO) github.com/golang/protobuf/protoc-gen-go
+	@cd $(TOOLS_DIR) && \
+		go build -o $(PROTOC_GEN_GO) github.com/golang/protobuf/protoc-gen-go
 
 GOPROTOYAMLTAG := $(BIN_DIR)/goprotoyamltag
 $(GOPROTOYAMLTAG): | $(BIN_DIR)
-	@go build -o $(GOPROTOYAMLTAG) github.com/zoncoen/goprotoyamltag
+	@cd $(TOOLS_DIR) && \
+		go build -o $(GOPROTOYAMLTAG) github.com/zoncoen/goprotoyamltag
 
 GOTYPENAMES := $(BIN_DIR)/gotypenames
 $(GOTYPENAMES): | $(BIN_DIR)
-	@go build -o $(GOTYPENAMES) github.com/zoncoen/gotypenames
+	@cd $(TOOLS_DIR) && \
+		go build -o $(GOTYPENAMES) github.com/zoncoen/gotypenames
 
 MOCKGEN := $(BIN_DIR)/mockgen
 $(MOCKGEN): | $(BIN_DIR)
-	@go build -o $(MOCKGEN) github.com/golang/mock/mockgen
+	@cd $(TOOLS_DIR) && \
+		go build -o $(MOCKGEN) github.com/golang/mock/mockgen
 
 GOBUMP := $(BIN_DIR)/gobump
 $(GOBUMP): | $(BIN_DIR)
-	@go build -o $(GOBUMP) github.com/x-motemen/gobump/cmd/gobump
+	@cd $(TOOLS_DIR) && \
+		go build -o $(GOBUMP) github.com/x-motemen/gobump/cmd/gobump
 
 GIT_CHGLOG := $(BIN_DIR)/git-chglog
 $(GIT_CHGLOG): | $(BIN_DIR)
-	@go build -o $(GIT_CHGLOG) github.com/git-chglog/git-chglog/cmd/git-chglog
+	@cd $(TOOLS_DIR) && \
+		go build -o $(GIT_CHGLOG) github.com/git-chglog/git-chglog/cmd/git-chglog
 
 GO_LICENSES := $(BIN_DIR)/go-licenses
 $(GO_LICENSES): | $(BIN_DIR)
-	@go build -o $(GO_LICENSES) github.com/google/go-licenses
+	@cd $(TOOLS_DIR) && \
+		go build -o $(GO_LICENSES) github.com/google/go-licenses
 
 GOCREDITS := $(BIN_DIR)/gocredits
 $(GOCREDITS): | $(BIN_DIR)
-	@go build -o $(GOCREDITS) github.com/Songmu/gocredits/cmd/gocredits
+	@cd $(TOOLS_DIR) && \
+		go build -o $(GOCREDITS) github.com/Songmu/gocredits/cmd/gocredits
+
+GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
+$(GOLANGCI_LINT): | $(BIN_DIR)
+	@cd $(TOOLS_DIR) && \
+		go build -o $(GOLANGCI_LINT) github.com/golangci/golangci-lint/cmd/golangci-lint
 
 .PHONY: test
 E2E_TEST_TARGETS := test/e2e
@@ -79,6 +93,10 @@ test/ci: coverage test/e2e
 .PHONY: coverage
 coverage: ## measure test coverage
 	@go test -race $(TEST_TARGETS) -coverprofile=coverage.out -covermode=atomic
+
+.PHONY: lint
+lint: $(GOLANGCI_LINT) ## run lint
+	@golangci-lint run
 
 .PHONY: lint/ci
 lint/ci:

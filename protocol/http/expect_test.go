@@ -47,7 +47,7 @@ func TestExpect_Build(t *testing.T) {
 				},
 				response: response{
 					Header: map[string][]string{
-						"Content-Type": []string{"application/json"},
+						"Content-Type": {"application/json"},
 					},
 					status: "200 OK",
 				},
@@ -138,7 +138,7 @@ func TestExpect_Build(t *testing.T) {
 				},
 				response: response{
 					Header: map[string][]string{
-						"Content-Type": []string{
+						"Content-Type": {
 							"application/json",
 						},
 					},
@@ -157,7 +157,7 @@ func TestExpect_Build(t *testing.T) {
 				},
 				response: response{
 					Header: map[string][]string{
-						"Content-Type": []string{
+						"Content-Type": {
 							"application/json",
 						},
 					},

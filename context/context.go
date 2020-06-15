@@ -172,7 +172,7 @@ func (c *Context) Response() interface{} {
 	return c.ctx.Value(keyResponse{})
 }
 
-// WithNode returns a copy of c with ast.Node
+// WithNode returns a copy of c with ast.Node.
 func (c *Context) WithNode(node ast.Node) *Context {
 	if node == nil {
 		return c
@@ -193,7 +193,7 @@ func (c *Context) Node() ast.Node {
 	return node
 }
 
-// WithEnabledColor returns a copy of c with enabledColor flag
+// WithEnabledColor returns a copy of c with enabledColor flag.
 func (c *Context) WithEnabledColor(enabledColor bool) *Context {
 	return newContext(
 		context.WithValue(c.ctx, keyEnabledColor{}, enabledColor),
@@ -202,7 +202,7 @@ func (c *Context) WithEnabledColor(enabledColor bool) *Context {
 	)
 }
 
-// EnabledColor returns whether color output is enabled
+// EnabledColor returns whether color output is enabled.
 func (c *Context) EnabledColor() bool {
 	enabledColor, ok := c.ctx.Value(keyEnabledColor{}).(bool)
 	if ok {

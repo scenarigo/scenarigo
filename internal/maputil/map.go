@@ -8,7 +8,7 @@ import (
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
 )
 
-// ConvertStringsMapSlice convert yaml.MapSlice( map[string]interface{} ) to yaml.MapSlice( map[string][]string )
+// ConvertStringsMapSlice convert yaml.MapSlice( map[string]interface{} ) to yaml.MapSlice( map[string][]string ).
 func ConvertStringsMapSlice(in yaml.MapSlice) (yaml.MapSlice, error) {
 	m := map[string]interface{}{}
 	for _, v := range in {

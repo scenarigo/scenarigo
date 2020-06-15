@@ -204,7 +204,7 @@ func (e *MultiPathError) Error() string {
 
 			points := make([]string, len(es))
 			for i, err := range es {
-				points[i] = fmt.Sprintf("%s", strings.TrimLeft(err.Error(), "\t"))
+				points[i] = strings.TrimLeft(err.Error(), "\t")
 			}
 
 			return fmt.Sprintf(

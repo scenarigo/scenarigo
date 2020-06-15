@@ -105,6 +105,7 @@ This project uses the Makefile as a task runner.
 ```
 test                           run tests
 coverage                       measure test coverage
+lint                           run lint
 gen                            generate necessary files for testing
 release                        release new version
 changelog                      generate CHANGELOG.md

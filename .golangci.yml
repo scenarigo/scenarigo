@@ -13,6 +13,10 @@ linters:
     - interfacer
     - prealloc
     - dupl
+    - testpackage
+    - goerr113
+    - maligned
+    - nestif
   skip-dirs:
     - gen
 
@@ -21,3 +25,6 @@ issues:
     - path: _test.go
       linters:
         - goconst
+    - linters:
+        - stylecheck
+      text: "ST1016:"
