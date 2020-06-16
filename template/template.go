@@ -168,6 +168,12 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 	if funv.Kind() != reflect.Func {
 		return nil, errors.Errorf("not function")
 	}
+	if funv.Type().NumIn() != len(call.Args) {
+		return nil, errors.Errorf(
+			"expected function argument number is %d. but specified %d arguments",
+			funv.Type().NumIn(), len(call.Args),
+		)
+	}
 
 	args := make([]reflect.Value, len(call.Args))
 	for i, arg := range call.Args {

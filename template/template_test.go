@@ -94,6 +94,15 @@ func TestTemplate_Execute(t *testing.T) {
 				}},
 			expect: 15,
 		},
+		"invalid function argument": {
+			str: `{{f(1, 2, 3)}}`,
+			data: map[string]func(int, int) int{
+				"f": func(a0, a1 int) int {
+					return a0 + a1
+				},
+			},
+			expectError: true,
+		},
 		"left arrow func": {
 			str: strings.Trim(`
 {{echo <-}}:
