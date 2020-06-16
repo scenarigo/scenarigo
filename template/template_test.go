@@ -94,6 +94,19 @@ func TestTemplate_Execute(t *testing.T) {
 				}},
 			expect: 15,
 		},
+		"call function that have variadic arguments": {
+			str: `{{f(1, 2, 3, 4, 5)}}`,
+			data: map[string]func(int, ...float32) int{
+				"f": func(a0 int, args ...float32) int {
+					sum := a0
+					for _, a := range args {
+						sum += int(a)
+					}
+					return sum
+				}},
+			expect: 15,
+		},
+
 		"invalid function argument": {
 			str: `{{f(1, 2, 3)}}`,
 			data: map[string]func(int, int) int{
@@ -101,6 +114,18 @@ func TestTemplate_Execute(t *testing.T) {
 					return a0 + a1
 				},
 			},
+			expectError: true,
+		},
+		"invalid function argument ( variadic arguments )": {
+			str: `{{f()}}`,
+			data: map[string]func(int, ...float32) int{
+				"f": func(a0 int, args ...float32) int {
+					sum := a0
+					for _, a := range args {
+						sum += int(a)
+					}
+					return sum
+				}},
 			expectError: true,
 		},
 		"left arrow func": {

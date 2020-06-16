@@ -159,6 +159,20 @@ func (t *Template) stringize(v interface{}) (string, error) {
 	return "", errors.Errorf("expect string but got %T", v)
 }
 
+func (t *Template) requiredFuncArgType(funcType reflect.Type, argIdx int) reflect.Type {
+	if !funcType.IsVariadic() {
+		return funcType.In(argIdx)
+	}
+
+	argNum := funcType.NumIn()
+	lastArgIdx := argNum - 1
+	if argIdx < lastArgIdx {
+		return funcType.In(argIdx)
+	}
+
+	return funcType.In(lastArgIdx).Elem()
+}
+
 func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interface{}, error) {
 	fun, err := t.executeExpr(call.Fun, data)
 	if err != nil {
@@ -168,7 +182,16 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 	if funv.Kind() != reflect.Func {
 		return nil, errors.Errorf("not function")
 	}
-	if funv.Type().NumIn() != len(call.Args) {
+	funcType := funv.Type()
+	if funcType.IsVariadic() {
+		minArgNum := funcType.NumIn() - 1
+		if len(call.Args) < minArgNum {
+			return nil, errors.Errorf(
+				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
+				minArgNum, len(call.Args),
+			)
+		}
+	} else if funcType.NumIn() != len(call.Args) {
 		return nil, errors.Errorf(
 			"expected function argument number is %d. but specified %d arguments",
 			funv.Type().NumIn(), len(call.Args),
@@ -181,7 +204,7 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 		if err != nil {
 			return nil, err
 		}
-		requiredType := funv.Type().In(i)
+		requiredType := t.requiredFuncArgType(funcType, i)
 		v := reflect.ValueOf(a)
 		if v.IsValid() && v.Type().ConvertibleTo(requiredType) {
 			v = v.Convert(requiredType)
