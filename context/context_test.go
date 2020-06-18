@@ -30,5 +30,4 @@ func TestContext(t *testing.T) {
 			t.Fatal("failed to get dryRun")
 		}
 	})
-
 }
