@@ -30,4 +30,17 @@ func TestContext(t *testing.T) {
 			t.Fatal("failed to get dryRun")
 		}
 	})
+	t.Run("run", func(t *testing.T) {
+		ctx := FromT(t)
+		ok := ctx.Run("child", func(ctx *Context) {
+			ctx.Run("grandchild", func(ctx *Context) {})
+		})
+		if !ok {
+			t.Fatal("failed to run")
+		}
+		subtests := ctx.SubTests()
+		if len(subtests) != 2 {
+			t.Fatal("failed to get subtests")
+		}
+	})
 }
