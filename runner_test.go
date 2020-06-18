@@ -9,9 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/protocol"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
@@ -31,53 +29,9 @@ func TestRunnerWithScenarios(t *testing.T) {
 	}
 }
 
-type testProtocol struct {
-	name    string
-	invoker invoker
-	builder builder
-}
-
-func (p *testProtocol) Name() string { return p.name }
-
-func (p *testProtocol) UnmarshalRequest(_ []byte) (protocol.Invoker, error) {
-	return p.invoker, nil
-}
-
-func (p *testProtocol) UnmarshalExpect(_ []byte) (protocol.AssertionBuilder, error) {
-	return p.builder, nil
-}
-
-type invoker func(*context.Context) (*context.Context, interface{}, error)
-
-func (f invoker) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
-	return f(ctx)
-}
-
-type builder func(*context.Context) (assert.Assertion, error)
-
-func (f builder) Build(ctx *context.Context) (assert.Assertion, error) {
-	return f(ctx)
-}
-
 func TestRunnerWithDryRun(t *testing.T) {
-	scenariosPath := filepath.Join("test", "e2e", "testdata", "scenarios")
-	pluginPath := filepath.Join("test", "e2e", "testdata", "gen", "plugins")
-
-	p := &testProtocol{
-		name: "test",
-		invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
-			return ctx, nil, nil
-		}),
-		builder: builder(func(ctx *context.Context) (assert.Assertion, error) {
-			return assert.AssertionFunc(func(_ interface{}) error { return nil }), nil
-		}),
-	}
-	protocol.Register(p)
-	defer protocol.Unregister(p.Name())
-
 	runner, err := NewRunner(
-		WithScenarios(scenariosPath),
-		WithPluginDir(pluginPath),
+		WithScenarios("testdata"),
 		WithDryRun(true),
 	)
 	if err != nil {
