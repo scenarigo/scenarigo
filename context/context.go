@@ -3,6 +3,7 @@ package context
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -18,31 +19,46 @@ type (
 	keyResponse     struct{}
 	keyYAMLNode     struct{}
 	keyEnabledColor struct{}
+	keyDryRun       struct{}
 )
 
 // Context represents a scenarigo context.
 type Context struct {
-	ctx      context.Context
-	reqCtx   context.Context
-	reporter reporter.Reporter
+	ctx        context.Context
+	reqCtx     context.Context
+	reporter   reporter.Reporter
+	captureCtx *captureContext
+}
+
+type captureContext struct {
+	subtests []string
+}
+
+func (c *captureContext) addSubTest(name string) {
+	c.subtests = append(c.subtests, name)
+}
+
+func newCaptureContext() *captureContext {
+	return &captureContext{subtests: []string{}}
 }
 
 // New returns a new scenarigo context.
 func New(r reporter.Reporter) *Context {
-	return newContext(context.Background(), context.Background(), r)
+	return newContext(context.Background(), context.Background(), r, newCaptureContext())
 }
 
 // FromT creates a new context from t.
 func FromT(t *testing.T) *Context {
-	return newContext(context.Background(), context.Background(), reporter.FromT(t))
+	return newContext(context.Background(), context.Background(), reporter.FromT(t), newCaptureContext())
 }
 
 // nolint:golint
-func newContext(ctx context.Context, reqCtx context.Context, r reporter.Reporter) *Context {
+func newContext(ctx context.Context, reqCtx context.Context, r reporter.Reporter, captureCtx *captureContext) *Context {
 	return &Context{
-		ctx:      ctx,
-		reqCtx:   reqCtx,
-		reporter: r,
+		ctx:        ctx,
+		reqCtx:     reqCtx,
+		reporter:   r,
+		captureCtx: captureCtx,
 	}
 }
 
@@ -52,6 +68,7 @@ func (c *Context) WithRequestContext(reqCtx context.Context) *Context {
 		c.ctx,
 		reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -62,7 +79,7 @@ func (c *Context) RequestContext() context.Context {
 
 // WithReporter returns a copy of c with new test reporter.
 func (c *Context) WithReporter(r reporter.Reporter) *Context {
-	return newContext(c.ctx, c.reqCtx, r)
+	return newContext(c.ctx, c.reqCtx, r, c.captureCtx)
 }
 
 // Reporter returns the reporter of context.
@@ -80,6 +97,7 @@ func (c *Context) WithPluginDir(path string) *Context {
 		context.WithValue(c.ctx, keyPluginDir{}, abs),
 		c.reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -103,6 +121,7 @@ func (c *Context) WithPlugins(ps map[string]interface{}) *Context {
 		context.WithValue(c.ctx, keyPlugins{}, plugins),
 		c.reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -126,6 +145,7 @@ func (c *Context) WithVars(v interface{}) *Context {
 		context.WithValue(c.ctx, keyVars{}, vars),
 		c.reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -147,6 +167,7 @@ func (c *Context) WithRequest(req interface{}) *Context {
 		context.WithValue(c.ctx, keyRequest{}, req),
 		c.reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -164,6 +185,7 @@ func (c *Context) WithResponse(resp interface{}) *Context {
 		context.WithValue(c.ctx, keyResponse{}, resp),
 		c.reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -181,6 +203,7 @@ func (c *Context) WithNode(node ast.Node) *Context {
 		context.WithValue(c.ctx, keyYAMLNode{}, node),
 		c.reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -199,6 +222,7 @@ func (c *Context) WithEnabledColor(enabledColor bool) *Context {
 		context.WithValue(c.ctx, keyEnabledColor{}, enabledColor),
 		c.reqCtx,
 		c.reporter,
+		c.captureCtx,
 	)
 }
 
@@ -211,7 +235,36 @@ func (c *Context) EnabledColor() bool {
 	return false
 }
 
+// WithDryRun returns a copy of c with dryRun flag.
+func (c *Context) WithDryRun(isDryRun bool) *Context {
+	return newContext(
+		context.WithValue(c.ctx, keyDryRun{}, isDryRun),
+		c.reqCtx,
+		c.reporter,
+		c.captureCtx,
+	)
+}
+
+// DryRun returns whether dryRun flag is enabled.
+func (c *Context) DryRun() bool {
+	dryRun, ok := c.ctx.Value(keyDryRun{}).(bool)
+	if ok {
+		return dryRun
+	}
+	return false
+}
+
+func (c *Context) SubTests() []string {
+	return c.captureCtx.subtests
+}
+
 // Run runs f as a subtest of c called name.
 func (c *Context) Run(name string, f func(*Context)) bool {
+	curname := c.Reporter().Name()
+	if curname != "" {
+		c.captureCtx.addSubTest(fmt.Sprintf("%s/%s", curname, reporter.RewriteName(name)))
+	} else {
+		c.captureCtx.addSubTest(reporter.RewriteName(name))
+	}
 	return c.Reporter().Run(name, func(r reporter.Reporter) { f(c.WithReporter(r)) })
 }

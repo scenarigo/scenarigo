@@ -87,6 +87,10 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 }
 
 func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context {
+	if ctx.DryRun() {
+		return ctx
+	}
+
 	policy, err := s.Retry.Build()
 	if err != nil {
 		ctx.Reporter().Fatal(xerrors.Errorf("invalid retry policy: %w", err))

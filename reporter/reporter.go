@@ -203,8 +203,8 @@ func (r *reporter) appendChild(child *reporter) {
 	r.m.Unlock()
 }
 
-// rewrite rewrites a subname to having only printable characters and no white space.
-func rewrite(s string) string {
+// RewriteName rewrites a subname to having only printable characters and no white space.
+func RewriteName(s string) string {
 	b := make([]byte, 0, len(s))
 	for _, r := range s {
 		switch {
@@ -231,7 +231,7 @@ func (r *reporter) isRoot() bool {
 // Run may be called simultaneously from multiple goroutines,
 // but all such calls must return before the outer test function for r returns.
 func (r *reporter) Run(name string, f func(t Reporter)) bool {
-	name = rewrite(name)
+	name = RewriteName(name)
 	if r.name != "" {
 		name = fmt.Sprintf("%s/%s", r.name, name)
 	}

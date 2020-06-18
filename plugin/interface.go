@@ -22,5 +22,8 @@ type StepFunc func(ctx *context.Context, step *schema.Step) *context.Context
 
 // Run implements Step interface.
 func (f StepFunc) Run(ctx *context.Context, step *schema.Step) *context.Context {
+	if ctx.DryRun() {
+		return ctx
+	}
 	return f(ctx, step)
 }

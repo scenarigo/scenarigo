@@ -24,6 +24,7 @@ type Runner struct {
 	pluginDir     *string
 	scenarioFiles []string
 	enabledColor  bool
+	isDryRun      bool
 }
 
 // WithPluginDir returns a option which sets plugin root directory.
@@ -58,6 +59,16 @@ func WithScenarios(paths ...string) func(*Runner) error {
 			return err
 		}
 		r.scenarioFiles = files
+		return nil
+	}
+}
+
+// WithDryRun returns a option which sets flag for dry running.
+func WithDryRun(isDryRun bool) func(*Runner) error {
+	return func(r *Runner) error {
+		if isDryRun {
+			r.isDryRun = isDryRun
+		}
 		return nil
 	}
 }
@@ -137,7 +148,8 @@ func (r *Runner) Run(ctx *context.Context) {
 	if r.pluginDir != nil {
 		ctx = ctx.WithPluginDir(*r.pluginDir)
 	}
-	ctx = ctx.WithEnabledColor(r.enabledColor)
+	ctx = ctx.WithEnabledColor(r.enabledColor).WithDryRun(r.isDryRun)
+
 	for _, f := range r.scenarioFiles {
 		ctx.Run(f, func(ctx *context.Context) {
 			scns, err := schema.LoadScenarios(f)
