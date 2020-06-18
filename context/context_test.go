@@ -23,4 +23,12 @@ func TestContext(t *testing.T) {
 			t.Fatal("failed to get enabledColor")
 		}
 	})
+	t.Run("dryRun", func(t *testing.T) {
+		ctx := FromT(t)
+		ctx = ctx.WithDryRun(true)
+		if !ctx.DryRun() {
+			t.Fatal("failed to get dryRun")
+		}
+	})
+
 }
