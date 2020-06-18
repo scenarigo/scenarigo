@@ -129,7 +129,9 @@ gen/mock: $(GOTYPENAMES) $(MOCKGEN)
 	@for file in $$(find $(GEN_PB_DIR) -name '*.pb.go'); do \
 		package=$$(basename $$(dirname $$file)); \
 		echo "generate mock for $$file"; \
-		gotypenames --filename $$file --only-exported --types interface | xargs -ISTRUCT -L1 -P8 mockgen -source $$file -package $$package -self_package $(GEN_PB_DIR)/$$package -destination $$(dirname $$file)/$$(basename $${file%.pb.go})_mock.go; \
+		dstfile=$$(dirname $$file)/$$(basename $${file%.pb.go})_mock.go; \
+		gotypenames --filename $$file --only-exported --types interface | xargs -ISTRUCT -L1 -P8 mockgen -source $$file -package $$package -self_package $(GEN_PB_DIR)/$$package -destination $$dstfile; \
+		sed -i '' -e '/\/\/ Source: /d' $$dstfile || (echo "failed to delete generated marker about source path ( Source: /path/to/name.pb.go )"); \
 	done
 
 .PHONY: gen/plugins
