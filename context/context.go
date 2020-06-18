@@ -254,6 +254,7 @@ func (c *Context) DryRun() bool {
 	return false
 }
 
+// SubTests returns all subtest names.
 func (c *Context) SubTests() []string {
 	return c.captureCtx.subtests
 }
