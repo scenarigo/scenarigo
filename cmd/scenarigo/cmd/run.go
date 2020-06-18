@@ -17,10 +17,12 @@ var (
 
 var (
 	verbose bool
+	dryRun  bool
 )
 
 func init() {
 	runCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
+	runCmd.Flags().BoolVarP(&dryRun, "dry-run", "", false, "running without request invoking and assertion")
 	rootCmd.AddCommand(runCmd)
 }
 
@@ -38,6 +40,7 @@ func run(cmd *cobra.Command, args []string) error {
 	for _, arg := range args {
 		opts = append(opts, scenarigo.WithScenarios(arg))
 	}
+	opts = append(opts, scenarigo.WithDryRun(dryRun))
 	r, err := scenarigo.NewRunner(opts...)
 	if err != nil {
 		return err
