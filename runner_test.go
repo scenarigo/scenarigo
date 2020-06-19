@@ -136,3 +136,35 @@ func TestRunnerFail(t *testing.T) {
 		}
 	}
 }
+
+func TestRunner_ScenarioFiles(t *testing.T) {
+	scenariosPath := filepath.Join("test", "e2e", "testdata", "scenarios")
+	runner, err := NewRunner(WithScenarios(scenariosPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.ScenarioFiles()) == 0 {
+		t.Fatal("failed to get scenario files")
+	}
+}
+
+func TestRunner_ScenarioMap(t *testing.T) {
+	runner, err := NewRunner(WithScenarios("testdata"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range runner.ScenarioFiles() {
+		m, err := runner.ScenarioMap(context.FromT(t), file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(m) == 0 {
+			t.Fatal("failed to get scenarios")
+		}
+		for _, steps := range m {
+			if len(steps) == 0 {
+				t.Fatal("failed to get steps from scenario map")
+			}
+		}
+	}
+}
