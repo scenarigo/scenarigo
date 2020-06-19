@@ -132,6 +132,36 @@ func newYAMLNode(path string, docIdx int) (ast.Node, error) {
 	return file.Docs[docIdx].Body, nil
 }
 
+// ScenariosFiles returns all scenario file paths.
+func (r *Runner) ScenarioFiles() []string {
+	return r.scenarioFiles
+}
+
+// Scenarios returns map for all scenarios ( key is scenario name and value is steps of scenario ).
+func (r *Runner) ScenarioMap(ctx *context.Context, path string) (map[string][]string, error) {
+	scns, err := schema.LoadScenarios(path)
+	if err != nil {
+		return nil, err
+	}
+
+	scenarioMap := map[string][]string{}
+	ctx.Run(path, func(ctx *context.Context) {
+		for _, scn := range scns {
+			ctx.Run(scn.Title, func(ctx *context.Context) {
+				scenarioName := ctx.Reporter().Name()
+				scenarioMap[scenarioName] = []string{}
+				for _, step := range scn.Steps {
+					ctx.Run(step.Title, func(ctx *context.Context) {
+						stepName := ctx.Reporter().Name()
+						scenarioMap[scenarioName] = append(scenarioMap[scenarioName], stepName)
+					})
+				}
+			})
+		}
+	})
+	return scenarioMap, nil
+}
+
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
 	if r.pluginDir != nil {
