@@ -82,7 +82,7 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 		}
 		startTime := time.Now()
 		ctx = stp.Run(ctx, s)
-		ctx.Reporter().Logf("Run %s: elapsed time %f sec", s.Ref, time.Now().Sub(startTime).Seconds())
+		ctx.Reporter().Logf("Run %s: elapsed time %f sec", s.Ref, time.Since(startTime).Seconds())
 		return ctx
 	}
 
@@ -105,7 +105,7 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 
 		reqTime := time.Now()
 		newCtx, resp, err := s.Request.Invoke(ctx)
-		ctx.Reporter().Logf("elapsed time: %f sec", time.Now().Sub(reqTime).Seconds())
+		ctx.Reporter().Logf("elapsed time: %f sec", time.Since(reqTime).Seconds())
 
 		if err != nil {
 			ctx.Reporter().Log(
