@@ -2,6 +2,7 @@ package scenarigo
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/lestrrat-go/backoff"
 	"golang.org/x/xerrors"
@@ -79,7 +80,9 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 				),
 			)
 		}
+		startTime := time.Now()
 		ctx = stp.Run(ctx, s)
+		ctx.Reporter().Logf("Run %s: elapsed time %f sec", s.Ref, time.Now().Sub(startTime).Seconds())
 		return ctx
 	}
 
@@ -99,7 +102,11 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 	for backoff.Continue(b) {
 		ctx.Reporter().Logf("[%d] send request", i)
 		i++
+
+		reqTime := time.Now()
 		newCtx, resp, err := s.Request.Invoke(ctx)
+		ctx.Reporter().Logf("elapsed time: %f sec", time.Now().Sub(reqTime).Seconds())
+
 		if err != nil {
 			ctx.Reporter().Log(
 				errors.WithNodeAndColored(
