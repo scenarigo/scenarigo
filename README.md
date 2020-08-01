@@ -1,4 +1,4 @@
-# scenarigo
+# Scenarigo
 
 [![godoc](https://godoc.org/github.com/zoncoen/scenarigo?status.svg)](https://pkg.go.dev/github.com/zoncoen/scenarigo)
 ![test](https://github.com/zoncoen/scenarigo/workflows/test/badge.svg?branch=master)
@@ -11,7 +11,7 @@ A scenario-based API testing tool for HTTP/gRPC server.
 
 ## Overview
 
-scenarigo is a scenario-based API testing tool for HTTP/gRPC server.
+Scenarigo is a scenario-based API testing tool for HTTP/gRPC server.
 It is written in Go, enable to customize by [the plugin package of Go](https://golang.org/pkg/plugin/).
 You can write test scenarios as YAML files and executes them.
 
@@ -32,71 +32,176 @@ steps:
       name: "{{vars.repo}}"
 ```
 
-#### Use as CLI tool
-
-```shell
-$ scenarigo run github.yaml
-```
-
-#### Use as Go package
-
-This package requires Go 1.16 or later.
-
-```go main_test.go
-package main
-
-import (
-	"testing"
-
-	"github.com/zoncoen/scenarigo"
-	"github.com/zoncoen/scenarigo/context"
-)
-
-func TestGitHub(t *testing.T) {
-	r, err := scenarigo.NewRunner(
-		scenarigo.WithScenarios(
-			"testdata/github.yaml",
-		),
-	)
-	if err != nil {
-		t.Fatalf("failed to create a test runner: %s", err)
-	}
-	r.Run(context.FromT(t))
-}
-```
-
-```shell
-$ go test . -run "TestGitHub"
-```
-
-## Features
-
-* provides the command-line tool and the Go package for testing
-* supports HTTP and gRPC
-* customization by writing Go code
-
 ## Installation
 
 Go to the [releases page](https://github.com/zoncoen/scenarigo/releases) and download the zip file. Unpack the zip file, and put the binary to a directory in your `$PATH`.
 
+### Setup
+
+You can create a configuration file `.scenarigo.yaml` via the following command.
+
+```shell
+$ scenarigo config init
+```
+
+```yaml .scenarigo.yaml
+$ scenarigo config init
+```
+
 ## Usage
 
 ```
-scenarigo is a scenario testing tool for APIs.
+scenarigo is a scenario-based API testing tool.
 
 Usage:
   scenarigo [command]
 
 Available Commands:
+  config      manage the scenarigo configuration file
   help        Help about any command
+  list        list the test scenarios
   run         run test scenarios
   version     print scenarigo version
 
 Flags:
-  -h, --help   help for scenarigo
+  -c, --config string   specify configuration file path
+  -h, --help            help for scenarigo
 
 Use "scenarigo [command] --help" for more information about a command.
 ```
+
+## How to write test scenarios
+
+You can write test scenarios easily in YAML.
+
+### Send HTTP requests
+
+A test scenario consists of some steps. A step represents an API request. The scenario steps will be run from top to bottom sequentially.
+This simple example has a step that sends a `GET` request to `http://example.com/message`.
+
+```yaml
+title: check /message
+steps:
+- title: GET /message
+  protocol: http
+  request:
+    method: GET
+    url: http://example.com/message
+```
+
+To send a query parameter, add it directly to the URL or use the `query` field.
+
+```yaml
+title: check /message
+steps:
+- title: GET /message
+  protocol: http
+  request:
+    method: GET
+    url: http://example.com/message
+    query:
+      id: 1
+```
+
+You can use other methods to send data to your APIs.
+
+```yaml
+title: check /message
+steps:
+- title: POST /message
+  protocol: http
+  request:
+    method: POST
+    url: http://example.com/message
+    body:
+      message: hello
+```
+
+By default, Scenarigo will send body data as JSON. If you want to use other formats, set the `Content-Type` header.
+
+```yaml
+title: check /message
+steps:
+- title: POST /message
+  protocol: http
+  request:
+    method: POST
+    url: http://example.com/message
+    header:
+      Content-Type: application/x-www-form-urlencoded
+    body:
+      message: hello
+```
+
+Available `Content-Type` header to encode request body is the following.
+
+- `application/json` (default)
+- `text/plain`
+- `application/x-www-form-urlencoded`
+
+### Check HTTP responses
+
+You can test your APIs by checking responses. If the result differs expected values, Scenarigo aborts the execution of the test scenario and notify the error.
+
+```yaml
+title: check /message
+steps:
+- title: GET /message
+  protocol: http
+  request:
+    method: GET
+    url: http://example.com/message
+    query:
+      id: 1
+  expect:
+    code: OK
+    header:
+      Content-Type: application/json; charset=utf-8
+    body:
+      id: 1
+      message: hello
+```
+
+### Template string
+
+Scenarigo provides the original template string feature. It enables to store and reuse values in test scenarios.
+The `vars` field defines variables that can be referred by template string like `'{{vars.id}}'`.
+
+```yaml
+title: check /message
+vars:
+  id: 1
+steps:
+- title: GET /message
+  protocol: http
+  request:
+    method: GET
+    url: http://example.com/message
+    query:
+      id: '{{vars.id}}'
+```
+
+You can define "step" scope variables that can't be accessed from other steps.
+
+```yaml
+title: check /message
+steps:
+- title: GET /message
+  vars:
+  - 1
+  protocol: http
+  request:
+    method: GET
+    url: http://example.com/message
+    query:
+      id: '{{vars[0]}}'
+```
+
+The template
+
+### Reuse response values
+
+### Retry requests
 
 ## Development
 
