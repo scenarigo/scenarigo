@@ -193,6 +193,13 @@ func TestTemplate_Execute(t *testing.T) {
 			str:         "{{a.b[1]}}",
 			expectError: true,
 		},
+		"panic": {
+			str: "{{panic()}}",
+			data: map[string]interface{}{
+				"panic": func() { panic("omg") },
+			},
+			expectError: true,
+		},
 	}
 	for name, test := range tests {
 		test := test

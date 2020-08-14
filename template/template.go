@@ -42,7 +42,12 @@ func New(str string) (*Template, error) {
 }
 
 // Execute applies a parsed template to the specified data.
-func (t *Template) Execute(data interface{}) (interface{}, error) {
+func (t *Template) Execute(data interface{}) (ret interface{}, retErr error) {
+	defer func() {
+		if err := recover(); err != nil {
+			retErr = fmt.Errorf("failed to execute: panic: %s", err)
+		}
+	}()
 	v, err := t.executeExpr(t.expr, data)
 	if err != nil {
 		if strings.Contains(t.str, "\n") {
