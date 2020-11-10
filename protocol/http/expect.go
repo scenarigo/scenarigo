@@ -7,7 +7,6 @@ import (
 	"github.com/zoncoen/scenarigo/assert"
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/maputil"
 )
 
 // Expect represents expected response values.
@@ -29,6 +28,12 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	}
 	codeAssertion := assert.Build(executedCode)
 
+	expectHeader, err := ctx.ExecuteTemplate(e.Header)
+	if err != nil {
+		return nil, errors.WrapPathf(err, "header", "invalid expect header response")
+	}
+	headerAssertion := assert.Build(expectHeader)
+
 	expectBody, err := ctx.ExecuteTemplate(e.Body)
 	if err != nil {
 		return nil, errors.WrapPathf(err, "body", "invalid expect response")
@@ -43,7 +48,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		if err := assertCode(codeAssertion, res.status); err != nil {
 			return errors.WithPath(err, "code")
 		}
-		if err := e.assertHeader(res.Header); err != nil {
+		if err := headerAssertion.Assert(res.Header); err != nil {
 			return errors.WithPath(err, "header")
 		}
 		if err := assertion.Assert(res.Body); err != nil {
@@ -51,20 +56,6 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		}
 		return nil
 	}), nil
-}
-
-func (e *Expect) assertHeader(header map[string][]string) error {
-	if len(e.Header) == 0 {
-		return nil
-	}
-	headerMap, err := maputil.ConvertStringsMapSlice(e.Header)
-	if err != nil {
-		return err
-	}
-	if err := assert.Build(headerMap).Assert(header); err != nil {
-		return err
-	}
-	return nil
 }
 
 func assertCode(assertion assert.Assertion, status string) error {

@@ -27,7 +27,8 @@ steps:
   expect:
     code: 200
     header:
-      Content-Length: 36
+      Content-Length:
+      - "36"
     body:
       id: "{{vars.id}}"
       message: "{{request.message}}"
@@ -52,7 +53,8 @@ steps:
     code: 200
     body: "123, hello, true"
     header:
-      Content-Type: 'text/plain; charset=utf-8'
+      Content-Type:
+      - "text/plain; charset=utf-8"
 
 ---
 title: not found
@@ -66,7 +68,7 @@ steps:
     code: Not Found
     header:
       Content-Length:
-        - 0
+      - "0"
 
 ---
 title: forbidden
@@ -109,7 +111,8 @@ steps:
     expect:
       code: 200
       header:
-        Content-Length: 38
+        Content-Length:
+        - "38"
       body:
         message: |-
           line1

@@ -48,8 +48,10 @@ func TestExpect_Build(t *testing.T) {
 				expect: &Expect{
 					Header: yaml.MapSlice{
 						{
-							Key:   "Content-Type",
-							Value: "application/json",
+							Key: "Content-Type",
+							Value: []string{
+								"application/json",
+							},
 						},
 					},
 				},
