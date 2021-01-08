@@ -11,7 +11,9 @@ import (
 	"testing"
 
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/plugin"
 	"github.com/zoncoen/scenarigo/reporter"
+	"github.com/zoncoen/scenarigo/schema"
 )
 
 func TestRunnerWithScenarios(t *testing.T) {
@@ -46,11 +48,30 @@ func TestRunnerWithOptionsFromEnv(t *testing.T) {
 	}
 }
 
+type structFoo struct{}
+
+func (*structFoo) Run(ctx *context.Context, step *schema.Step) *context.Context {
+	vars, err := ctx.ExecuteTemplate(map[string]interface{}{
+		"foo": "bar",
+	})
+	if err != nil {
+		ctx.Reporter().Fatalf("invalid vars: %s", err)
+	}
+	return ctx.WithVars(vars)
+}
+
+type structPrint struct{}
+
+func (*structPrint) Run(ctx *context.Context, step *schema.Step) *context.Context {
+	return ctx
+}
+
 func TestRunner(t *testing.T) {
 	tests := map[string]struct {
-		path  string
-		yaml  string
-		setup func(*testing.T) func()
+		path        string
+		yaml        string
+		setup       func(*testing.T) func()
+		defaultVars map[string]interface{}
 	}{
 		"run step with include": {
 			path: filepath.Join("testdata", "use_include.yaml"),
@@ -113,6 +134,39 @@ steps:
 				}
 			},
 		},
+		"run with yaml ( default vars )": {
+			yaml: `
+---
+title: default vars
+steps:
+- title: call foo
+  ref: '{{ vars.Foo(ctx) }}'
+  bind:
+    vars:
+      foo: '{{ vars.foo }}'
+- title: print
+  ref: '{{ vars.Print(vars.foo) }}'
+`,
+			setup: func(t *testing.T) func() {
+				return func() {}
+			},
+			defaultVars: map[string]interface{}{
+				"Foo": func(ctx *context.Context) plugin.Step {
+					return new(structFoo)
+				},
+				"Print": func(args ...interface{}) plugin.Step {
+					if len(args) != 1 {
+						t.Fatalf("invalid argument number for print: %d", len(args))
+					}
+					arg, ok := args[0].(string)
+					if !ok {
+						t.Fatalf("invalid argument type. expected string type but got %T", args[0])
+					}
+					t.Log(arg)
+					return new(structPrint)
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		teardown := test.setup(t)
@@ -124,6 +178,9 @@ steps:
 		}
 		if test.yaml != "" {
 			opts = append(opts, WithScenariosFromReader(strings.NewReader(test.yaml)))
+		}
+		if test.defaultVars != nil {
+			opts = append(opts, WithDefaultVars(test.defaultVars))
 		}
 		runner, err := NewRunner(opts...)
 		if err != nil {

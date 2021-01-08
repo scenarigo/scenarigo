@@ -27,6 +27,7 @@ type Runner struct {
 	pluginDir       *string
 	scenarioFiles   []string
 	scenarioReaders []io.Reader
+	defaultVars     map[string]interface{}
 	enabledColor    bool
 }
 
@@ -70,6 +71,14 @@ func WithScenarios(paths ...string) func(*Runner) error {
 func WithScenariosFromReader(readers ...io.Reader) func(*Runner) error {
 	return func(r *Runner) error {
 		r.scenarioReaders = readers
+		return nil
+	}
+}
+
+// WithDefaultVars returns a option which sets default vars.
+func WithDefaultVars(vars map[string]interface{}) func(*Runner) error {
+	return func(r *Runner) error {
+		r.defaultVars = vars
 		return nil
 	}
 }
@@ -184,6 +193,17 @@ func (r *Runner) ScenarioMap(ctx *context.Context, path string) (map[string][]st
 	return scenarioMap, nil
 }
 
+func (r *Runner) evalDefaultVarsIfExists(ctx *context.Context) *context.Context {
+	if r.defaultVars == nil {
+		return ctx
+	}
+	vars, err := ctx.ExecuteTemplate(r.defaultVars)
+	if err != nil {
+		ctx.Reporter().Fatalf("invalid vars: %s", err)
+	}
+	return ctx.WithVars(vars)
+}
+
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
 	if r.pluginDir != nil {
@@ -205,6 +225,7 @@ func (r *Runner) Run(ctx *context.Context) {
 				ctx = ctx.WithNode(node)
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
+					ctx = r.evalDefaultVarsIfExists(ctx)
 					_ = runScenario(ctx, scn)
 				})
 			}
@@ -228,6 +249,7 @@ func (r *Runner) Run(ctx *context.Context) {
 			ctx = ctx.WithNode(node)
 			ctx.Run(scn.Title, func(ctx *context.Context) {
 				ctx.Reporter().Parallel()
+				ctx = r.evalDefaultVarsIfExists(ctx)
 				_ = runScenario(ctx, scn)
 			})
 		}
