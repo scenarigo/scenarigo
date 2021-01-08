@@ -140,7 +140,7 @@ steps:
 title: default vars
 steps:
 - title: call foo
-  ref: '{{ vars.Foo(ctx) }}'
+  ref: '{{ vars.Foo() }}'
   bind:
     vars:
       foo: '{{ vars.foo }}'
@@ -151,7 +151,7 @@ steps:
 				return func() {}
 			},
 			defaultVars: map[string]interface{}{
-				"Foo": func(ctx *context.Context) plugin.Step {
+				"Foo": func() plugin.Step {
 					return new(structFoo)
 				},
 				"Print": func(args ...interface{}) plugin.Step {
