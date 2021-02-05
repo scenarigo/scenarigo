@@ -70,11 +70,12 @@ func TestGreater(t *testing.T) {
 				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
 				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)), nil,
+				json.Number("bad"),
 			} {
 				for _, expected := range []interface{}{
 					exp, int8(exp), int16(exp), int32(exp), int64(exp),
 					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
-					uintptr(exp), float32(exp), float64(exp),
+					uintptr(exp), float32(exp), float64(exp), "bad",
 				} {
 					name := fmt.Sprintf("%T and %T", actual, expected)
 					t.Run(name, func(t *testing.T) {
@@ -183,11 +184,12 @@ func TestGreaterOrEqual(t *testing.T) {
 				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
 				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)), nil,
+				json.Number("bad"),
 			} {
 				for _, expected := range []interface{}{
 					exp, int8(exp), int16(exp), int32(exp), int64(exp),
 					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
-					uintptr(exp), float32(exp), float64(exp),
+					uintptr(exp), float32(exp), float64(exp), "bad",
 				} {
 					name := fmt.Sprintf("%T and %T", actual, expected)
 					t.Run(name, func(t *testing.T) {
