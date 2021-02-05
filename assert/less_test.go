@@ -22,7 +22,7 @@ func TestLess(t *testing.T) {
 				for _, ok := range []interface{}{
 					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
 					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2),
+					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
 				} {
 					name := fmt.Sprintf("%T and %T", expected, ok)
 					t.Run(name, func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestLess(t *testing.T) {
 				for _, ng := range []interface{}{
 					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
 					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2),
+					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
 				} {
 					name := fmt.Sprintf("%T and %T", expected, ng)
 					t.Run(name, func(t *testing.T) {
@@ -143,7 +143,7 @@ func TestLessOrEqual(t *testing.T) {
 				for _, ok := range []interface{}{
 					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
 					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2),
+					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
 				} {
 					name := fmt.Sprintf("%T and %T", expected, ok)
 					t.Run(name, func(t *testing.T) {
@@ -204,7 +204,7 @@ func TestLessOrEqual(t *testing.T) {
 				for _, ng := range []interface{}{
 					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
 					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2),
+					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
 				} {
 					name := fmt.Sprintf("%T and %T", expected, ng)
 					t.Run(name, func(t *testing.T) {
