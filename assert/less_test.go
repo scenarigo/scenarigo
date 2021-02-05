@@ -69,7 +69,7 @@ func TestLess(t *testing.T) {
 			for _, actual := range []interface{}{
 				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
-				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)),
+				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)), nil,
 			} {
 				for _, expected := range []interface{}{
 					exp, int8(exp), int16(exp), int32(exp), int64(exp),
@@ -182,7 +182,7 @@ func TestLessOrEqual(t *testing.T) {
 			for _, actual := range []interface{}{
 				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
-				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)),
+				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)), nil,
 			} {
 				for _, expected := range []interface{}{
 					exp, int8(exp), int16(exp), int32(exp), int64(exp),

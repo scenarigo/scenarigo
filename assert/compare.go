@@ -10,7 +10,7 @@ import (
 func convertComparableValue(v interface{}, t reflect.Type) (interface{}, error) {
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
-		return nil, errors.Errorf("v is invalid value")
+		return nil, errors.Errorf("value is invalid")
 	}
 	if t == nil {
 		return nil, errors.Errorf("expected type is nil")
