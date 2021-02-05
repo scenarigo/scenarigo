@@ -44,6 +44,20 @@ deps:
 			t.Errorf("unexpected error: %s", err)
 		}
 	})
+	t.Run("compare", func(t *testing.T) {
+		if err := Build(Greater(1)).Assert(2); err != nil {
+			t.Fatal(err)
+		}
+		if err := Build(GreaterOrEqual(1)).Assert(1); err != nil {
+			t.Fatal(err)
+		}
+		if err := Build(Less(2)).Assert(1); err != nil {
+			t.Fatal(err)
+		}
+		if err := Build(LessOrEqual(1)).Assert(1); err != nil {
+			t.Fatal(err)
+		}
+	})
 	t.Run("ok", func(t *testing.T) {
 		v := info{
 			Deps: []map[string]interface{}{
