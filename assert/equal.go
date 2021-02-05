@@ -48,7 +48,7 @@ func Equal(q *query.Query, expected interface{}) Assertion {
 				}
 			}
 			// try type conversion
-			converted, err := convert(expected, t)
+			converted, err := convertComparableValue(expected, t)
 			if err == nil {
 				if reflect.DeepEqual(v, converted) {
 					return nil
@@ -64,16 +64,6 @@ func Equal(q *query.Query, expected interface{}) Assertion {
 		}
 		return errors.Errorf("%s: expected %+v but got %+v", q.String(), expected, v)
 	})
-}
-
-func convert(v interface{}, t reflect.Type) (result interface{}, resErr error) {
-	defer func() {
-		if err := recover(); err != nil {
-			resErr = errors.Errorf("failed to convert: %s", err)
-		}
-	}()
-	result = reflect.ValueOf(v).Convert(t).Interface()
-	return
 }
 
 func isNil(i interface{}) bool {
