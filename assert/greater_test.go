@@ -14,12 +14,12 @@ func TestGreater(t *testing.T) {
 			act := 3
 			exp := 2
 			for _, actual := range []interface{}{
-				int(act), int8(act), int16(act), int32(act), int64(act),
+				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
 				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
 				for _, expected := range []interface{}{
-					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					exp, int8(exp), int16(exp), int32(exp), int64(exp),
 					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
 					uintptr(exp), float32(exp), float64(exp),
 				} {
@@ -67,12 +67,12 @@ func TestGreater(t *testing.T) {
 			act := 2
 			exp := 3
 			for _, actual := range []interface{}{
-				int(act), int8(act), int16(act), int32(act), int64(act),
+				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
 				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
 				for _, expected := range []interface{}{
-					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					exp, int8(exp), int16(exp), int32(exp), int64(exp),
 					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
 					uintptr(exp), float32(exp), float64(exp),
 				} {
@@ -127,12 +127,12 @@ func TestGreaterOrEqual(t *testing.T) {
 			act := 3
 			exp := 2
 			for _, actual := range []interface{}{
-				int(act), int8(act), int16(act), int32(act), int64(act),
+				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
 				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
 				for _, expected := range []interface{}{
-					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					exp, int8(exp), int16(exp), int32(exp), int64(exp),
 					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
 					uintptr(exp), float32(exp), float64(exp),
 				} {
@@ -180,12 +180,12 @@ func TestGreaterOrEqual(t *testing.T) {
 			act := 2
 			exp := 3
 			for _, actual := range []interface{}{
-				int(act), int8(act), int16(act), int32(act), int64(act),
+				act, int8(act), int16(act), int32(act), int64(act),
 				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
 				uintptr(act), float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
 				for _, expected := range []interface{}{
-					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					exp, int8(exp), int16(exp), int32(exp), int64(exp),
 					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
 					uintptr(exp), float32(exp), float64(exp),
 				} {

@@ -133,8 +133,9 @@ func convertJSONNumber(v json.Number, t reflect.Type) (interface{}, error) {
 		return f, nil
 	case reflect.String:
 		return v.String(), nil
+	default:
+		return nil, errors.Errorf("failed to convert %T to %s", v, t)
 	}
-	return nil, errors.Errorf("failed to convert %T to %s", v, t)
 }
 
 type compareType int
@@ -206,7 +207,7 @@ func compare(v, v2 interface{}, typ compareType) (bool, error) {
 		return compareFloat(float64(vv), float64(vv2), typ)
 	case float64:
 		vv2 := v2.(float64)
-		return compareFloat(float64(vv), float64(vv2), typ)
+		return compareFloat(vv, vv2, typ)
 	case string:
 		vv2 := v2.(string)
 		return compareString(vv, vv2, typ)
