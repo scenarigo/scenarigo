@@ -315,25 +315,13 @@ func compareString(v, v2 string, typ compareType) (bool, error) {
 		}
 		return false, errors.Errorf("%v is not equal %v", v, v2)
 	case compareGreater:
-		if v > v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not greater than %v", v, v2)
+		return false, errors.Errorf("expected type is string but it doesn't compare by greater than")
 	case compareGreaterOrEqual:
-		if v >= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal or greater than %v", v, v2)
+		return false, errors.Errorf("expected type is string but it doesn't compare by greater than or equal")
 	case compareLess:
-		if v < v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not less than %v", v, v2)
+		return false, errors.Errorf("expected type is string but it doesn't compare by less than")
 	case compareLessOrEqual:
-		if v <= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal of less than %v", v, v2)
+		return false, errors.Errorf("expected type is string but it doesn't compare by less than or equal")
 	}
 	return false, errors.Errorf("unknown compare type %s", typ)
 }

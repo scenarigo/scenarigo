@@ -91,6 +91,10 @@ func TestLess(t *testing.T) {
 				actual   interface{}
 				expected interface{}
 			}{
+				"string": {
+					actual:   "a",
+					expected: "b",
+				},
 				"enum integer": {
 					actual:   test.UserType_STAFF,
 					expected: int(test.UserType_CUSTOMER),
@@ -200,6 +204,10 @@ func TestLessOrEqual(t *testing.T) {
 				actual   interface{}
 				expected interface{}
 			}{
+				"string": {
+					actual:   "a",
+					expected: "b",
+				},
 				"enum integer": {
 					actual:   test.UserType_STAFF,
 					expected: int(test.UserType_CUSTOMER),

@@ -91,6 +91,10 @@ func TestGreater(t *testing.T) {
 				actual   interface{}
 				expected interface{}
 			}{
+				"string": {
+					actual:   "a",
+					expected: "b",
+				},
 				"enum integer": {
 					actual:   test.UserType_CUSTOMER,
 					expected: int(test.UserType_STAFF),
@@ -200,6 +204,10 @@ func TestGreaterOrEqual(t *testing.T) {
 				actual   interface{}
 				expected interface{}
 			}{
+				"string": {
+					actual:   "a",
+					expected: "b",
+				},
 				"enum integer": {
 					actual:   test.UserType_CUSTOMER,
 					expected: int(test.UserType_STAFF),
