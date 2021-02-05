@@ -5,29 +5,28 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zoncoen/query-go"
 	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
 )
 
 func TestLess(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		t.Run("builtin number", func(t *testing.T) {
-			v := 2
-			v2 := 3
-			for _, expected := range []interface{}{
-				int(v), int8(v), int16(v), int32(v), int64(v),
-				uint(v), uint8(v), uint16(v), uint32(v), uint64(v),
-				float32(v), float64(v),
+		t.Run("number", func(t *testing.T) {
+			act := 2
+			exp := 3
+			for _, actual := range []interface{}{
+				int(act), int8(act), int16(act), int32(act), int64(act),
+				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
+				float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
-				for _, ok := range []interface{}{
-					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
-					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
+				for _, expected := range []interface{}{
+					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
+					float32(exp), float64(exp),
 				} {
-					name := fmt.Sprintf("%T and %T", expected, ok)
+					name := fmt.Sprintf("%T and %T", actual, expected)
 					t.Run(name, func(t *testing.T) {
-						assertion := Less(query.New(), expected)
-						if err := assertion.Assert(ok); err != nil {
+						assertion := Less(expected)
+						if err := assertion.Assert(actual); err != nil {
 							t.Errorf("%s: unexpected error: %s", name, err)
 						}
 					})
@@ -36,31 +35,27 @@ func TestLess(t *testing.T) {
 		})
 		t.Run("other types", func(t *testing.T) {
 			tests := map[string]struct {
+				actual   interface{}
 				expected interface{}
-				ok       interface{}
 			}{
-				"string": {
-					expected: "b",
-					ok:       "c",
-				},
 				"enum integer": {
-					expected: int(test.UserType_CUSTOMER),
-					ok:       test.UserType_STAFF,
+					actual:   test.UserType_CUSTOMER,
+					expected: int(test.UserType_STAFF),
 				},
 				"json.Number (int)": {
-					expected: 1,
-					ok:       json.Number("2"),
+					actual:   json.Number("1"),
+					expected: 2,
 				},
 				"json.Number (float)": {
-					expected: 1,
-					ok:       json.Number("3.14"),
+					actual:   json.Number("2.1"),
+					expected: 3,
 				},
 			}
 			for name, tc := range tests {
 				tc := tc
 				t.Run(name, func(t *testing.T) {
-					assertion := Less(query.New(), tc.expected)
-					if err := assertion.Assert(tc.ok); err != nil {
+					assertion := Less(tc.expected)
+					if err := assertion.Assert(tc.actual); err != nil {
 						t.Errorf("%s: unexpected error: %s", name, err)
 					}
 				})
@@ -68,23 +63,23 @@ func TestLess(t *testing.T) {
 		})
 	})
 	t.Run("failure", func(t *testing.T) {
-		t.Run("builtin number", func(t *testing.T) {
-			v := 2
-			v2 := 1
-			for _, expected := range []interface{}{
-				int(v), int8(v), int16(v), int32(v), int64(v),
-				uint(v), uint8(v), uint16(v), uint32(v), uint64(v),
-				float32(v), float64(v),
+		t.Run("number", func(t *testing.T) {
+			act := 3
+			exp := 2
+			for _, actual := range []interface{}{
+				int(act), int8(act), int16(act), int32(act), int64(act),
+				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
+				float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
-				for _, ng := range []interface{}{
-					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
-					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
+				for _, expected := range []interface{}{
+					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
+					float32(exp), float64(exp),
 				} {
-					name := fmt.Sprintf("%T and %T", expected, ng)
+					name := fmt.Sprintf("%T and %T", actual, expected)
 					t.Run(name, func(t *testing.T) {
-						assertion := Less(query.New(), expected)
-						if err := assertion.Assert(ng); err == nil {
+						assertion := Less(expected)
+						if err := assertion.Assert(actual); err == nil {
 							t.Errorf("%s: expected error but no error", name)
 						}
 					})
@@ -93,35 +88,27 @@ func TestLess(t *testing.T) {
 		})
 		t.Run("other types", func(t *testing.T) {
 			tests := map[string]struct {
+				actual   interface{}
 				expected interface{}
-				ng       interface{}
 			}{
-				"string (equal)": {
-					expected: "a",
-					ng:       "a",
-				},
-				"string": {
-					expected: "b",
-					ng:       "a",
-				},
 				"enum integer": {
-					expected: int(test.UserType_STAFF),
-					ng:       test.UserType_CUSTOMER,
+					actual:   test.UserType_STAFF,
+					expected: int(test.UserType_CUSTOMER),
 				},
 				"json.Number (int)": {
-					expected: json.Number("2"),
-					ng:       1,
+					actual:   2,
+					expected: json.Number("1"),
 				},
 				"json.Number (float)": {
-					expected: json.Number("3.14"),
-					ng:       2,
+					actual:   3,
+					expected: json.Number("2.1"),
 				},
 			}
 			for name, tc := range tests {
 				tc := tc
 				t.Run(name, func(t *testing.T) {
-					assertion := Less(query.New(), tc.expected)
-					if err := assertion.Assert(tc.ng); err == nil {
+					assertion := Less(tc.expected)
+					if err := assertion.Assert(tc.actual); err == nil {
 						t.Errorf("%s: expected error but no error", name)
 					}
 				})
@@ -132,23 +119,23 @@ func TestLess(t *testing.T) {
 
 func TestLessOrEqual(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		t.Run("builtin number", func(t *testing.T) {
-			v := 2
-			v2 := 3
-			for _, expected := range []interface{}{
-				int(v), int8(v), int16(v), int32(v), int64(v),
-				uint(v), uint8(v), uint16(v), uint32(v), uint64(v),
-				float32(v), float64(v),
+		t.Run("number", func(t *testing.T) {
+			act := 2
+			exp := 3
+			for _, actual := range []interface{}{
+				int(act), int8(act), int16(act), int32(act), int64(act),
+				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
+				float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
-				for _, ok := range []interface{}{
-					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
-					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
+				for _, expected := range []interface{}{
+					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
+					float32(exp), float64(exp),
 				} {
-					name := fmt.Sprintf("%T and %T", expected, ok)
+					name := fmt.Sprintf("%T and %T", actual, expected)
 					t.Run(name, func(t *testing.T) {
-						assertion := LessOrEqual(query.New(), expected)
-						if err := assertion.Assert(ok); err != nil {
+						assertion := LessOrEqual(expected)
+						if err := assertion.Assert(actual); err != nil {
 							t.Errorf("%s: unexpected error: %s", name, err)
 						}
 					})
@@ -157,35 +144,27 @@ func TestLessOrEqual(t *testing.T) {
 		})
 		t.Run("other types", func(t *testing.T) {
 			tests := map[string]struct {
+				actual   interface{}
 				expected interface{}
-				ok       interface{}
 			}{
-				"string (equal)": {
-					expected: "a",
-					ok:       "a",
-				},
-				"string": {
-					expected: "a",
-					ok:       "b",
-				},
 				"enum integer": {
-					expected: int(test.UserType_CUSTOMER),
-					ok:       test.UserType_STAFF,
+					actual:   test.UserType_CUSTOMER,
+					expected: int(test.UserType_STAFF),
 				},
 				"json.Number (int)": {
-					expected: 1,
-					ok:       json.Number("2"),
+					actual:   json.Number("1"),
+					expected: 2,
 				},
 				"json.Number (float)": {
-					expected: 2,
-					ok:       json.Number("3.14"),
+					actual:   json.Number("2.1"),
+					expected: 3,
 				},
 			}
 			for name, tc := range tests {
 				tc := tc
 				t.Run(name, func(t *testing.T) {
-					assertion := LessOrEqual(query.New(), tc.expected)
-					if err := assertion.Assert(tc.ok); err != nil {
+					assertion := LessOrEqual(tc.expected)
+					if err := assertion.Assert(tc.actual); err != nil {
 						t.Errorf("%s: unexpected error: %s", name, err)
 					}
 				})
@@ -193,23 +172,23 @@ func TestLessOrEqual(t *testing.T) {
 		})
 	})
 	t.Run("failure", func(t *testing.T) {
-		t.Run("builtin number", func(t *testing.T) {
-			v := 3
-			v2 := 2
-			for _, expected := range []interface{}{
-				int(v), int8(v), int16(v), int32(v), int64(v),
-				uint(v), uint8(v), uint16(v), uint32(v), uint64(v),
-				float32(v), float64(v),
+		t.Run("number", func(t *testing.T) {
+			act := 3
+			exp := 2
+			for _, actual := range []interface{}{
+				int(act), int8(act), int16(act), int32(act), int64(act),
+				uint(act), uint8(act), uint16(act), uint32(act), uint64(act),
+				float32(act), float64(act), json.Number(fmt.Sprint(act)),
 			} {
-				for _, ng := range []interface{}{
-					int(v2), int8(v2), int16(v2), int32(v2), int64(v2),
-					uint(v2), uint8(v2), uint16(v2), uint32(v2), uint64(v2),
-					float32(v2), float64(v2), json.Number(fmt.Sprint(v2)),
+				for _, expected := range []interface{}{
+					int(exp), int8(exp), int16(exp), int32(exp), int64(exp),
+					uint(exp), uint8(exp), uint16(exp), uint32(exp), uint64(exp),
+					float32(exp), float64(exp),
 				} {
-					name := fmt.Sprintf("%T and %T", expected, ng)
+					name := fmt.Sprintf("%T and %T", actual, expected)
 					t.Run(name, func(t *testing.T) {
-						assertion := LessOrEqual(query.New(), expected)
-						if err := assertion.Assert(ng); err == nil {
+						assertion := LessOrEqual(expected)
+						if err := assertion.Assert(actual); err == nil {
 							t.Errorf("%s: expected error but no error", name)
 						}
 					})
@@ -218,31 +197,27 @@ func TestLessOrEqual(t *testing.T) {
 		})
 		t.Run("other types", func(t *testing.T) {
 			tests := map[string]struct {
+				actual   interface{}
 				expected interface{}
-				ng       interface{}
 			}{
-				"string": {
-					expected: "b",
-					ng:       "a",
-				},
 				"enum integer": {
-					expected: int(test.UserType_STAFF),
-					ng:       test.UserType_CUSTOMER,
+					actual:   test.UserType_STAFF,
+					expected: int(test.UserType_CUSTOMER),
 				},
 				"json.Number (int)": {
-					expected: json.Number("2"),
-					ng:       1,
+					actual:   2,
+					expected: json.Number("1"),
 				},
 				"json.Number (float)": {
-					expected: json.Number("3.14"),
-					ng:       2,
+					actual:   3,
+					expected: json.Number("2.1"),
 				},
 			}
 			for name, tc := range tests {
 				tc := tc
 				t.Run(name, func(t *testing.T) {
-					assertion := LessOrEqual(query.New(), tc.expected)
-					if err := assertion.Assert(tc.ng); err == nil {
+					assertion := LessOrEqual(tc.expected)
+					if err := assertion.Assert(tc.actual); err == nil {
 						t.Errorf("%s: expected error but no error", name)
 					}
 				})

@@ -8,12 +8,16 @@ import (
 )
 
 var assertions = map[string]interface{}{
-	"and":         listArgsLeftArrowFunc(listArgsAssertion(assert.And)),
-	"or":          listArgsLeftArrowFunc(listArgsAssertion(assert.Or)),
-	"notZero":     assert.NotZero,
-	"contains":    leftArrowFunc(assert.Contains),
-	"notContains": leftArrowFunc(assert.NotContains),
-	"regexp":      assert.Regexp,
+	"and":                listArgsLeftArrowFunc(listArgsAssertion(assert.And)),
+	"or":                 listArgsLeftArrowFunc(listArgsAssertion(assert.Or)),
+	"notZero":            assert.NotZero,
+	"contains":           leftArrowFunc(assert.Contains),
+	"notContains":        leftArrowFunc(assert.NotContains),
+	"regexp":             assert.Regexp,
+	"greaterThan":        assert.Greater,
+	"greaterThanOrEqual": assert.GreaterOrEqual,
+	"lessThan":           assert.Less,
+	"lessThanOrEqual":    assert.LessOrEqual,
 }
 
 type leftArrowFunc func(assertion assert.Assertion) func(*query.Query) assert.Assertion

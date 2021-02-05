@@ -2,51 +2,34 @@ package assert
 
 import (
 	"reflect"
-
-	"github.com/pkg/errors"
-	"github.com/zoncoen/query-go"
 )
 
 // Less returns an assertion to ensure a value less than the expected value.
-func Less(q *query.Query, expected interface{}) Assertion {
-	return assertFunc(q, func(v interface{}) error {
-		expectedType := reflect.TypeOf(expected)
-		comparableV, err := convertComparableValue(v, expectedType)
+func Less(expected interface{}) Assertion {
+	return AssertionFunc(func(v interface{}) error {
+		actual, err := convertComparableValue(v, reflect.TypeOf(expected))
 		if err != nil {
-			if q.String() == "" {
-				return err
-			}
-			return errors.Errorf("%s: %s", q.String(), err)
+			return err
 		}
-		ok, err := compare(expected, comparableV, compareLess)
+		ok, err := compare(actual, expected, compareLess)
 		if ok {
 			return nil
 		}
-		if q.String() == "" {
-			return err
-		}
-		return errors.Errorf("%s: %s", q.String(), err)
+		return err
 	})
 }
 
 // LessOrEqual returns an assertion to ensure a value equal or less than the expected value.
-func LessOrEqual(q *query.Query, expected interface{}) Assertion {
-	return assertFunc(q, func(v interface{}) error {
-		expectedType := reflect.TypeOf(expected)
-		comparableV, err := convertComparableValue(v, expectedType)
+func LessOrEqual(expected interface{}) Assertion {
+	return AssertionFunc(func(v interface{}) error {
+		actual, err := convertComparableValue(v, reflect.TypeOf(expected))
 		if err != nil {
-			if q.String() == "" {
-				return err
-			}
-			return errors.Errorf("%s: %s", q.String(), err)
+			return err
 		}
-		ok, err := compare(expected, comparableV, compareLessOrEqual)
+		ok, err := compare(actual, expected, compareLessOrEqual)
 		if ok {
 			return nil
 		}
-		if q.String() == "" {
-			return err
-		}
-		return errors.Errorf("%s: %s", q.String(), err)
+		return err
 	})
 }

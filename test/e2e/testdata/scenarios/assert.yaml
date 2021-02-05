@@ -131,3 +131,93 @@ steps:
   expect:
     body:
       message: '{{assert.regexp("(?i)hello")}}'
+
+---
+title: greater
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      message: 4
+  expect:
+    body:
+      message: '{{assert.greaterThan(2)}}'
+
+---
+title: greater or equal ( greater )
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      message: 4
+  expect:
+    body:
+      message: '{{assert.greaterThanOrEqual(2)}}'
+
+---
+title: greater or equal ( equal )
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      message: 2
+  expect:
+    body:
+      message: '{{assert.greaterThanOrEqual(2)}}'
+
+---
+title: less
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      message: 2
+  expect:
+    body:
+      message: '{{assert.lessThan(4)}}'
+
+---
+title: less or equal ( less )
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      message: 2
+  expect:
+    body:
+      message: '{{assert.lessThanOrEqual(4)}}'
+
+---
+title: less or equal ( equal )
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      message: 2
+  expect:
+    body:
+      message: '{{assert.lessThanOrEqual(2)}}'

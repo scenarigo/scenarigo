@@ -76,6 +76,17 @@ func build(q *query.Query, expect interface{}) []Assertion {
 		}
 	default:
 		switch v := expect.(type) {
+		case Assertion:
+			assertions = append(assertions, AssertionFunc(func(val interface{}) error {
+				got, err := q.Extract(val)
+				if err != nil {
+					return err
+				}
+				if err := v.Assert(got); err != nil {
+					return errors.WithQuery(err, q)
+				}
+				return nil
+			}))
 		case func(*query.Query) Assertion:
 			assertions = append(assertions, v(q))
 		default:
