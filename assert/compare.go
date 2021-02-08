@@ -10,20 +10,6 @@ import (
 
 type compareType int
 
-func (t compareType) String() string {
-	switch t {
-	case compareGreater:
-		return "greater"
-	case compareGreaterOrEqual:
-		return "greater or equal"
-	case compareLess:
-		return "less"
-	case compareLessOrEqual:
-		return "less or equal"
-	}
-	return ""
-}
-
 const (
 	compareGreater compareType = iota
 	compareGreaterOrEqual
