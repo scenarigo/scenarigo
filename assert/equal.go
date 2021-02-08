@@ -48,7 +48,7 @@ func Equal(q *query.Query, expected interface{}) Assertion {
 				}
 			}
 			// try type conversion
-			converted, err := convertComparableValue(expected, t)
+			converted, err := convert(expected, t)
 			if err == nil {
 				if reflect.DeepEqual(v, converted) {
 					return nil

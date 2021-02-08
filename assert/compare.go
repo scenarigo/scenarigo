@@ -2,148 +2,16 @@ package assert
 
 import (
 	"encoding/json"
+	"math/big"
 	"reflect"
 
 	"github.com/zoncoen/scenarigo/errors"
 )
 
-func convertComparableValue(v interface{}, t reflect.Type) (interface{}, error) {
-	rv := reflect.ValueOf(v)
-	if !rv.IsValid() {
-		return nil, errors.Errorf("value is invalid")
-	}
-	if t == nil {
-		return nil, errors.Errorf("expected type is nil")
-	}
-
-	// if v is json.Number, we try to convert expected type.
-	if n, ok := v.(json.Number); ok {
-		return convertJSONNumber(n, t)
-	}
-
-	if t.Kind() == reflect.String {
-		enum, ok := v.(interface {
-			String() string
-			EnumDescriptor() ([]byte, []int)
-		})
-		if ok {
-			return enum.String(), nil
-		}
-	}
-
-	if rv.Type().ConvertibleTo(t) {
-		return rv.Convert(t).Interface(), nil
-	}
-
-	return nil, errors.Errorf("failed to convert %T to %s", v, t)
-}
-
-func convertJSONNumberToInt(v json.Number) (int64, error) {
-	i, err := v.Int64()
-	if err == nil {
-		return i, nil
-	}
-	// if json.Number is float, Int64 will return an error because it uses strconv.ParseInt internally.
-	f, err := v.Float64()
-	if err == nil {
-		return int64(f), nil
-	}
-	return 0, errors.Errorf("cannot convert json.Number to integer type")
-}
-
-func convertJSONNumber(v json.Number, t reflect.Type) (interface{}, error) {
-	switch t.Kind() {
-	case reflect.Int:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return int(i), nil
-	case reflect.Int8:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return int8(i), nil
-	case reflect.Int16:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return int16(i), nil
-	case reflect.Int32:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return int32(i), nil
-	case reflect.Int64:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return i, nil
-	case reflect.Uint:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return uint(i), nil
-	case reflect.Uint8:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return uint8(i), nil
-	case reflect.Uint16:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return uint16(i), nil
-	case reflect.Uint32:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return uint32(i), nil
-	case reflect.Uint64:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return uint64(i), nil
-	case reflect.Uintptr:
-		i, err := convertJSONNumberToInt(v)
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return uintptr(i), nil
-	case reflect.Float32:
-		f, err := v.Float64()
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return float32(f), nil
-	case reflect.Float64:
-		f, err := v.Float64()
-		if err != nil {
-			return nil, errors.Errorf("expected %s type. but %v couldn't convert it: %s", t, v, err)
-		}
-		return f, nil
-	case reflect.String:
-		return v.String(), nil
-	default:
-		return nil, errors.Errorf("failed to convert %T to %s", v, t)
-	}
-}
-
 type compareType int
 
 func (t compareType) String() string {
 	switch t {
-	case compareEqual:
-		return "equal"
 	case compareGreater:
 		return "greater"
 	case compareGreaterOrEqual:
@@ -157,172 +25,192 @@ func (t compareType) String() string {
 }
 
 const (
-	compareEqual compareType = iota
-	compareGreater
+	compareGreater compareType = iota
 	compareGreaterOrEqual
 	compareLess
 	compareLessOrEqual
 )
 
-func compare(v, v2 interface{}, typ compareType) (bool, error) {
-	if reflect.TypeOf(v) != reflect.TypeOf(v2) {
-		return false, errors.Errorf("expected type is %T but got type is %T", v, v2)
+func compareNumber(expected, actual interface{}, typ compareType) (bool, error) {
+	if !reflect.ValueOf(expected).IsValid() {
+		return false, errors.Errorf("expected value %v is invalid", expected)
 	}
-	switch vv := v.(type) {
-	case int:
-		vv2 := v2.(int)
-		return compareInt(int64(vv), int64(vv2), typ)
-	case int8:
-		vv2 := v2.(int8)
-		return compareInt(int64(vv), int64(vv2), typ)
-	case int16:
-		vv2 := v2.(int16)
-		return compareInt(int64(vv), int64(vv2), typ)
-	case int32:
-		vv2 := v2.(int32)
-		return compareInt(int64(vv), int64(vv2), typ)
-	case int64:
-		vv2 := v2.(int64)
-		return compareInt(vv, vv2, typ)
-	case uint:
-		vv2 := v2.(uint)
-		return compareUint(uint64(vv), uint64(vv2), typ)
-	case uint8:
-		vv2 := v2.(uint8)
-		return compareUint(uint64(vv), uint64(vv2), typ)
-	case uint16:
-		vv2 := v2.(uint16)
-		return compareUint(uint64(vv), uint64(vv2), typ)
-	case uint32:
-		vv2 := v2.(uint32)
-		return compareUint(uint64(vv), uint64(vv2), typ)
-	case uint64:
-		vv2 := v2.(uint64)
-		return compareUint(vv, vv2, typ)
-	case uintptr:
-		vv2 := v2.(uintptr)
-		return compareUint(uint64(vv), uint64(vv2), typ)
-	case float32:
-		vv2 := v2.(float32)
-		return compareFloat(float64(vv), float64(vv2), typ)
-	case float64:
-		vv2 := v2.(float64)
-		return compareFloat(vv, vv2, typ)
-	case string:
-		vv2 := v2.(string)
-		return compareString(vv, vv2, typ)
+	if !reflect.ValueOf(actual).IsValid() {
+		return false, errors.Errorf("actual value %v is invalid", actual)
 	}
-	return false, errors.Errorf("expected type is %T but it doesn't compare by %s", v, typ)
+
+	n1, err := toNumber(expected)
+	if err != nil {
+		return false, err
+	}
+	n2, err := toNumber(actual)
+	if err != nil {
+		return false, err
+	}
+	if isKindOfInt(n1) && isKindOfInt(n2) {
+		i1, err := convertToBigInt(n1)
+		if err != nil {
+			return false, err
+		}
+		i2, err := convertToBigInt(n2)
+		if err != nil {
+			return false, err
+		}
+		return compareByType(i1.Cmp(i2), i2.String(), typ)
+	}
+	f1, err := convertToBigFloat(n1)
+	if err != nil {
+		return false, err
+	}
+	f2, err := convertToBigFloat(n2)
+	if err != nil {
+		return false, err
+	}
+	return compareByType(f1.Cmp(f2), f2.String(), typ)
 }
 
-func compareInt(v, v2 int64, typ compareType) (bool, error) {
-	switch typ {
-	case compareEqual:
-		if v == v2 {
-			return true, nil
+func toNumber(v interface{}) (interface{}, error) {
+	if n, ok := v.(json.Number); ok {
+		if i, err := n.Int64(); err == nil {
+			return i, nil
 		}
-		return false, errors.Errorf("%v is not equal %v", v, v2)
-	case compareGreater:
-		if v > v2 {
-			return true, nil
+		if f, err := n.Float64(); err == nil {
+			return f, nil
 		}
-		return false, errors.Errorf("%v is not greater than %v", v, v2)
-	case compareGreaterOrEqual:
-		if v >= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal or greater than %v", v, v2)
-	case compareLess:
-		if v < v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not less than %v", v, v2)
-	case compareLessOrEqual:
-		if v <= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal of less than %v", v, v2)
+		return nil, errors.Errorf("failed to convert %v to number", n)
 	}
-	return false, errors.Errorf("unknown compare type %s", typ)
+	if !isKindOfNumber(v) {
+		return nil, errors.Errorf("failed to convert %T to number", v)
+	}
+	return v, nil
 }
 
-func compareUint(v, v2 uint64, typ compareType) (bool, error) {
-	switch typ {
-	case compareEqual:
-		if v == v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal %v", v, v2)
-	case compareGreater:
-		if v > v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not greater than %v", v, v2)
-	case compareGreaterOrEqual:
-		if v >= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal or greater than %v", v, v2)
-	case compareLess:
-		if v < v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not less than %v", v, v2)
-	case compareLessOrEqual:
-		if v <= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal of less than %v", v, v2)
+func isKindOfInt(v interface{}) bool {
+	switch reflect.TypeOf(v).Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Uintptr:
+		return true
+	default:
+		return false
 	}
-	return false, errors.Errorf("unknown compare type %s", typ)
 }
 
-func compareFloat(v, v2 float64, typ compareType) (bool, error) {
-	switch typ {
-	case compareEqual:
-		if v == v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal %v", v, v2)
-	case compareGreater:
-		if v > v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not greater than %v", v, v2)
-	case compareGreaterOrEqual:
-		if v >= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal or greater than %v", v, v2)
-	case compareLess:
-		if v < v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not less than %v", v, v2)
-	case compareLessOrEqual:
-		if v <= v2 {
-			return true, nil
-		}
-		return false, errors.Errorf("%v is not equal of less than %v", v, v2)
+func isKindOfFloat(v interface{}) bool {
+	switch reflect.TypeOf(v).Kind() {
+	case reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
 	}
-	return false, errors.Errorf("unknown compare type %s", typ)
 }
 
-func compareString(v, v2 string, typ compareType) (bool, error) {
+func isKindOfNumber(v interface{}) bool {
+	return isKindOfInt(v) || isKindOfFloat(v)
+}
+
+func compareByType(result int, expValue string, typ compareType) (bool, error) {
 	switch typ {
-	case compareEqual:
-		if v == v2 {
+	case compareGreater:
+		if result > 0 {
 			return true, nil
 		}
-		return false, errors.Errorf("%v is not equal %v", v, v2)
-	case compareGreater:
-		return false, errors.Errorf("expected type is string but it doesn't compare by greater than")
+		return false, errors.Errorf("must be greater than %s", expValue)
 	case compareGreaterOrEqual:
-		return false, errors.Errorf("expected type is string but it doesn't compare by greater than or equal")
+		if result >= 0 {
+			return true, nil
+		}
+		return false, errors.Errorf("must be equal or greater than %s", expValue)
 	case compareLess:
-		return false, errors.Errorf("expected type is string but it doesn't compare by less than")
+		if result < 0 {
+			return true, nil
+		}
+		return false, errors.Errorf("must be less than %s", expValue)
 	case compareLessOrEqual:
-		return false, errors.Errorf("expected type is string but it doesn't compare by less than or equal")
+		if result <= 0 {
+			return true, nil
+		}
+		return false, errors.Errorf("must be equal or less than %s", expValue)
+	default:
+		return false, errors.Errorf("unknown compare type %s", typ)
 	}
-	return false, errors.Errorf("unknown compare type %s", typ)
+}
+
+func convert(v interface{}, t reflect.Type) (interface{}, error) {
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() {
+		return nil, errors.Errorf("value is invalid")
+	}
+	if rv.Type().ConvertibleTo(t) {
+		return rv.Convert(t).Interface(), nil
+	}
+	return nil, errors.Errorf("%T is not convertible to %s", v, t)
+}
+
+func convertToInt64(v interface{}) (int64, error) {
+	vv, err := convert(v, reflect.TypeOf(int64(0)))
+	if err != nil {
+		return 0, err
+	}
+	return vv.(int64), nil
+}
+
+func convertToUint64(v interface{}) (uint64, error) {
+	vv, err := convert(v, reflect.TypeOf(uint64(0)))
+	if err != nil {
+		return 0, err
+	}
+	return vv.(uint64), nil
+}
+
+func convertToFloat64(v interface{}) (float64, error) {
+	vv, err := convert(v, reflect.TypeOf(float64(0)))
+	if err != nil {
+		return 0, err
+	}
+	return vv.(float64), nil
+}
+
+func convertToBigInt(v interface{}) (*big.Int, error) {
+	switch reflect.TypeOf(v).Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		i64, err := convertToInt64(v)
+		if err != nil {
+			return nil, err
+		}
+		return big.NewInt(i64), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		u64, err := convertToUint64(v)
+		if err != nil {
+			return nil, err
+		}
+		return big.NewInt(0).SetUint64(u64), nil
+	default:
+		return nil, errors.Errorf("%T is not convertible to *big.Int", v)
+	}
+}
+
+func convertToBigFloat(v interface{}) (*big.Float, error) {
+	switch reflect.TypeOf(v).Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		i64, err := convertToInt64(v)
+		if err != nil {
+			return nil, err
+		}
+		return big.NewFloat(0).SetInt64(i64), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		u64, err := convertToUint64(v)
+		if err != nil {
+			return nil, err
+		}
+		return big.NewFloat(0).SetUint64(u64), nil
+	case reflect.Float32, reflect.Float64:
+		f64, err := convertToFloat64(v)
+		if err != nil {
+			return nil, err
+		}
+		return big.NewFloat(f64), nil
+	default:
+		return nil, errors.Errorf("%T is not convertible to *big.Float", v)
+	}
 }

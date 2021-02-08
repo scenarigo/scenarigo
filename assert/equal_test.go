@@ -113,7 +113,7 @@ func TestConvert(t *testing.T) {
 	for i, test := range tests {
 		test := test
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			_, err := convertComparableValue(test.expected, reflect.TypeOf(test.got))
+			_, err := convert(test.expected, reflect.TypeOf(test.got))
 			if test.ok && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

@@ -30,7 +30,7 @@ func Regexp(expr string) func(*query.Query) Assertion {
 				return fmt.Errorf(`does not match the pattern "%s"`, expr)
 			}
 
-			converted, err := convertComparableValue(v, typeString)
+			converted, err := convert(v, typeString)
 			if err == nil {
 				if s, ok := converted.(string); ok {
 					if pattern.MatchString(s) {
