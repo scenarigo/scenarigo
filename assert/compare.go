@@ -118,7 +118,7 @@ func compareByType(result int, expValue string, typ compareType) (bool, error) {
 		}
 		return false, errors.Errorf("must be equal or less than %s", expValue)
 	default:
-		return false, errors.Errorf("unknown compare type %s", typ)
+		return false, errors.Errorf("unknown compare type %v", typ)
 	}
 }
 
