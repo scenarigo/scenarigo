@@ -122,6 +122,32 @@ func TestConvert(t *testing.T) {
 			}
 		})
 	}
+	t.Run("convertToBigInt", func(t *testing.T) {
+		if _, err := convertToBigInt("bad value"); err == nil {
+			t.Fatal("expected error but not eror")
+		}
+	})
+	t.Run("convertToBigFloat", func(t *testing.T) {
+		if _, err := convertToBigFloat("bad value"); err == nil {
+			t.Fatal("expected error but not eror")
+		}
+	})
+	t.Run("convertToInt64", func(t *testing.T) {
+		if _, err := convertToInt64("bad value"); err == nil {
+			t.Fatal("expected error but not eror")
+		}
+	})
+	t.Run("convertToUint64", func(t *testing.T) {
+		if _, err := convertToUint64("bad value"); err == nil {
+			t.Fatal("expected error but not eror")
+		}
+	})
+	t.Run("convertToFloat64", func(t *testing.T) {
+		if _, err := convertToFloat64("bad value"); err == nil {
+			t.Fatal("expected error but not eror")
+		}
+	})
+
 }
 
 func TestIsNil(t *testing.T) {
