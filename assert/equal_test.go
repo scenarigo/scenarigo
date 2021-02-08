@@ -147,7 +147,6 @@ func TestConvert(t *testing.T) {
 			t.Fatal("expected error but not eror")
 		}
 	})
-
 }
 
 func TestIsNil(t *testing.T) {
