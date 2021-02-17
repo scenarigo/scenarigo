@@ -52,17 +52,16 @@ func TestRunScenario_LoadPlugin(t *testing.T) {
 plugins:
   simple: simple.so
   `
-		sceanrios, err := schema.LoadScenariosFromReader(strings.NewReader(scenarioYAML))
+		runner, err := NewRunner(
+			WithScenariosFromReader(strings.NewReader(scenarioYAML)),
+			WithPluginDir("test/e2e/testdata/gen/plugins"),
+		)
 		if err != nil {
-			t.Fatalf("failed to load scenario: %s", err)
+			t.Fatalf("failed to create runner: %s", err)
 		}
-		if len(sceanrios) != 1 {
-			t.Fatalf("unexpected scenario length: %d", len(sceanrios))
-		}
-
 		var log bytes.Buffer
 		ok := reporter.Run(func(rptr reporter.Reporter) {
-			RunScenario(context.New(rptr).WithPluginDir("test/e2e/testdata/gen/plugins"), sceanrios[0])
+			runner.Run(context.New(rptr))
 		}, reporter.WithWriter(&log))
 		if !ok {
 			t.Fatalf("scenario failed:\n%s", log.String())
@@ -73,17 +72,16 @@ plugins:
 plugins:
   simple: invalid.so
   `
-		sceanrios, err := schema.LoadScenariosFromReader(strings.NewReader(scenarioYAML))
+		runner, err := NewRunner(
+			WithScenariosFromReader(strings.NewReader(scenarioYAML)),
+			WithPluginDir("test/e2e/testdata/gen/plugins"),
+		)
 		if err != nil {
-			t.Fatalf("failed to load scenario: %s", err)
+			t.Fatalf("failed to create runner: %s", err)
 		}
-		if len(sceanrios) != 1 {
-			t.Fatalf("unexpected scenario length: %d", len(sceanrios))
-		}
-
 		var log bytes.Buffer
 		ok := reporter.Run(func(rptr reporter.Reporter) {
-			RunScenario(context.New(rptr).WithPluginDir("test/e2e/testdata/gen/plugins"), sceanrios[0])
+			runner.Run(context.New(rptr))
 		}, reporter.WithWriter(&log))
 		if ok {
 			t.Fatal("expected error")
