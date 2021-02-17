@@ -85,14 +85,14 @@ test/unit:
 
 .PHONY: test/e2e
 test/e2e:
-	@go test ./$(E2E_TEST_TARGETS)/... # can't use -race flug with plugin.Plugin
+	@go test ./$(E2E_TEST_TARGETS)/... # can't use -race flag with plugin.Plugin
 
 .PHONY: test/ci
 test/ci: coverage test/e2e
 
 .PHONY: coverage
 coverage: ## measure test coverage
-	@go test -race $(TEST_TARGETS) -coverprofile=coverage.out -covermode=atomic
+	@go test $(TEST_TARGETS) -coverprofile=coverage.out -covermode=atomic # can't use -race flag with plugin.Plugin
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## run lint
