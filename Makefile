@@ -92,7 +92,8 @@ test/ci: coverage test/e2e
 
 .PHONY: coverage
 coverage: ## measure test coverage
-	@go test $(TEST_TARGETS) -coverprofile=coverage.out -covermode=atomic # can't use -race flag with plugin.Plugin
+	@go test -race $(TEST_TARGETS) -coverprofile=coverage.out -covermode=atomic
+	@go test $(TEST_TARGETS) -coverprofile=coverage_norace.out -covermode=atomic # for plugin
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## run lint
