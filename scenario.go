@@ -5,11 +5,27 @@ import (
 	"path/filepath"
 	"plugin"
 	"reflect"
+	"sync"
 
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/schema"
 )
+
+var plgMu sync.Mutex
+
+// loadPlugin loads the plugin safely.
+// plugin.Open's documentation says 'this is safe for concurrent use by multiple goroutines' ( https://golang.org/pkg/plugin/#Open )
+// BUT we encountered `recursive call during initialization - linker skew` error when loading multiple plugins concurrently.
+func loadPlugin(ctx *context.Context, path string) *plugin.Plugin {
+	plgMu.Lock()
+	defer plgMu.Unlock()
+	p, err := plugin.Open(path)
+	if err != nil {
+		ctx.Reporter().Fatalf("failed to open plugin: %s", err)
+	}
+	return p
+}
 
 // RunScenario runs a test scenario s.
 func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
@@ -21,10 +37,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 			if root := ctx.PluginDir(); root != "" {
 				path = filepath.Join(root, path)
 			}
-			p, err := plugin.Open(path)
-			if err != nil {
-				ctx.Reporter().Fatalf("failed to open plugin: %s", err)
-			}
+			p := loadPlugin(ctx, path)
 			plugs[name] = &plug{p}
 		}
 		ctx = ctx.WithPlugins(plugs)
