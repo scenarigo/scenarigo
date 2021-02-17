@@ -18,6 +18,8 @@ var plgMu sync.Mutex
 // plugin.Open's documentation says 'this is safe for concurrent use by multiple goroutines' ( https://golang.org/pkg/plugin/#Open )
 // BUT we encountered `recursive call during initialization - linker skew` error when loading multiple plugins concurrently.
 func loadPlugin(ctx *context.Context, path string) *plugin.Plugin {
+	// TODO: It is not yet known if this process is accurate. If you find a better way, you need to fix this process.
+	// see related PR: https://github.com/zoncoen/scenarigo/pull/78
 	plgMu.Lock()
 	defer plgMu.Unlock()
 	p, err := plugin.Open(path)
