@@ -77,26 +77,22 @@ $(GOLANGCI_LINT): | $(BIN_DIR)
 .PHONY: test
 E2E_TEST_TARGETS := test/e2e
 TEST_TARGETS := $(shell go list ./... | grep -v $(E2E_TEST_TARGETS))
-test: test/unit test/e2e ## run tests
-
-.PHONY: test/unit
-test/unit:
-	@go test -race $(TEST_TARGETS)
-
-.PHONY: test/e2e
-test/e2e:
-	@go test ./$(E2E_TEST_TARGETS)/... # can't use -race flag with plugin.Plugin
+test: test/race test/norace
 
 .PHONY: test/ci
-test/ci: coverage test/e2e test/race
+test/ci: coverage test/race
 
 .PHONY: coverage
 coverage: ## measure test coverage
-	@go test $(TEST_TARGETS) -coverprofile=coverage.out -covermode=atomic
+	@go test $(TEST_TARGETS) ./$(E2E_TEST_TARGETS)/... -coverprofile=coverage.out -covermode=atomic
+
+.PHONY: test/norace
+test/norace:
+	@go test $(TEST_TARGETS) ./$(E2E_TEST_TARGETS)/...
 
 .PHONY: test/race
 test/race:
-	@go test -race $(TEST_TARGETS)
+	@go test -race $(TEST_TARGETS) ./$(E2E_TEST_TARGETS)/...
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## run lint
