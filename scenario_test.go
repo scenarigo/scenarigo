@@ -60,9 +60,7 @@ plugins:
 			t.Fatalf("unexpected scenario length: %d", len(sceanrios))
 		}
 
-		var (
-			log bytes.Buffer
-		)
+		var log bytes.Buffer
 		ok := reporter.Run(func(rptr reporter.Reporter) {
 			RunScenario(context.New(rptr).WithPluginDir("test/e2e/testdata/gen/plugins"), sceanrios[0])
 		}, reporter.WithWriter(&log))
@@ -83,9 +81,7 @@ plugins:
 			t.Fatalf("unexpected scenario length: %d", len(sceanrios))
 		}
 
-		var (
-			log bytes.Buffer
-		)
+		var log bytes.Buffer
 		ok := reporter.Run(func(rptr reporter.Reporter) {
 			RunScenario(context.New(rptr).WithPluginDir("test/e2e/testdata/gen/plugins"), sceanrios[0])
 		}, reporter.WithWriter(&log))
