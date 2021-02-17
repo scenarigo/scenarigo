@@ -3,6 +3,7 @@ package scenarigo
 import (
 	"bytes"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/zoncoen/scenarigo/context"
@@ -43,6 +44,55 @@ steps:
 	if got != path {
 		t.Errorf("invalid filepath: %q", got)
 	}
+}
+
+func TestRunScenario_LoadPlugin(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		scenarioYAML := `
+plugins:
+  simple: simple.so
+  `
+		sceanrios, err := schema.LoadScenariosFromReader(strings.NewReader(scenarioYAML))
+		if err != nil {
+			t.Fatalf("failed to load scenario: %s", err)
+		}
+		if len(sceanrios) != 1 {
+			t.Fatalf("unexpected scenario length: %d", len(sceanrios))
+		}
+
+		var (
+			log bytes.Buffer
+		)
+		ok := reporter.Run(func(rptr reporter.Reporter) {
+			RunScenario(context.New(rptr).WithPluginDir("test/e2e/testdata/gen/plugins"), sceanrios[0])
+		}, reporter.WithWriter(&log))
+		if !ok {
+			t.Fatalf("scenario failed:\n%s", log.String())
+		}
+	})
+	t.Run("failure", func(t *testing.T) {
+		scenarioYAML := `
+plugins:
+  simple: invalid.so
+  `
+		sceanrios, err := schema.LoadScenariosFromReader(strings.NewReader(scenarioYAML))
+		if err != nil {
+			t.Fatalf("failed to load scenario: %s", err)
+		}
+		if len(sceanrios) != 1 {
+			t.Fatalf("unexpected scenario length: %d", len(sceanrios))
+		}
+
+		var (
+			log bytes.Buffer
+		)
+		ok := reporter.Run(func(rptr reporter.Reporter) {
+			RunScenario(context.New(rptr).WithPluginDir("test/e2e/testdata/gen/plugins"), sceanrios[0])
+		}, reporter.WithWriter(&log))
+		if ok {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 func createTempScenario(t *testing.T, scenario string) string {
