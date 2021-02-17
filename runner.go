@@ -211,25 +211,27 @@ func (r *Runner) Run(ctx *context.Context) {
 		})
 	}
 	for _, reader := range r.scenarioReaders {
-		buf := new(bytes.Buffer)
-		if _, err := buf.ReadFrom(reader); err != nil {
-			ctx.Reporter().Fatalf("failed to read from io.Reader: %s", err)
-		}
-		scns, err := schema.LoadScenariosFromReader(bytes.NewBuffer(buf.Bytes()))
-		if err != nil {
-			ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
-		}
-		for idx, scn := range scns {
-			scn := scn
-			node, err := newYAMLNodeFromReader(bytes.NewBuffer(buf.Bytes()), idx)
-			if err != nil {
-				ctx.Reporter().Fatalf("failed to create ast: %s", err)
+		ctx.Run("", func(ctx *context.Context) {
+			buf := new(bytes.Buffer)
+			if _, err := buf.ReadFrom(reader); err != nil {
+				ctx.Reporter().Fatalf("failed to read from io.Reader: %s", err)
 			}
-			ctx = ctx.WithNode(node)
-			ctx.Run(scn.Title, func(ctx *context.Context) {
-				ctx.Reporter().Parallel()
-				_ = RunScenario(ctx, scn)
-			})
-		}
+			scns, err := schema.LoadScenariosFromReader(bytes.NewBuffer(buf.Bytes()))
+			if err != nil {
+				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
+			}
+			for idx, scn := range scns {
+				scn := scn
+				node, err := newYAMLNodeFromReader(bytes.NewBuffer(buf.Bytes()), idx)
+				if err != nil {
+					ctx.Reporter().Fatalf("failed to create ast: %s", err)
+				}
+				ctx = ctx.WithNode(node)
+				ctx.Run(scn.Title, func(ctx *context.Context) {
+					ctx.Reporter().Parallel()
+					_ = RunScenario(ctx, scn)
+				})
+			}
+		})
 	}
 }
