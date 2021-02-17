@@ -3,4 +3,5 @@ vendor
 .bin
 /test/e2e/testdata/gen
 coverage.out
+coverage_norace.out
 .CHANGELOG.md
