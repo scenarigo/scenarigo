@@ -3,7 +3,6 @@ package reporter
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -264,34 +263,6 @@ type result struct {
 	Skipped  bool
 	Logs     []string
 	Children []result
-}
-
-func collectResult(r *reporter) result {
-	res := result{
-		Failed:  r.Failed(),
-		Skipped: r.Skipped(),
-		Logs:    r.logs,
-	}
-	for _, child := range r.children {
-		res.Children = append(res.Children, collectResult(child))
-	}
-	return res
-}
-
-func ignoreStackTrace(in result) result {
-	out := result{
-		Failed:  in.Failed,
-		Skipped: in.Skipped,
-	}
-	for _, l := range in.Logs {
-		if !strings.HasPrefix(l, "goroutine ") {
-			out.Logs = append(out.Logs, l)
-		}
-	}
-	for _, child := range in.Children {
-		out.Children = append(out.Children, ignoreStackTrace(child))
-	}
-	return out
 }
 
 func TestPrint(t *testing.T) {
