@@ -433,7 +433,7 @@ FAIL
 }
 
 func TestLogRecorder(t *testing.T) {
-	var r logRecorder
+	r := &logRecorder{}
 	r.log("info")
 	r.error("error")
 	r.skip("skip")
@@ -441,14 +441,11 @@ func TestLogRecorder(t *testing.T) {
 	opts := []cmp.Option{
 		cmp.AllowUnexported(logRecorder{}),
 		cmp.FilterPath(func(p cmp.Path) bool {
-			if p.Last().String() == ".m" {
-				return true
-			}
-			return false
+			return p.Last().String() == ".m"
 		}, cmp.Ignore()),
 	}
 	skipIdx := 2
-	if diff := cmp.Diff(logRecorder{
+	if diff := cmp.Diff(&logRecorder{
 		strs:      []string{"info", "error", "skip"},
 		infoIdxs:  []int{0},
 		errorIdxs: []int{1},
@@ -536,23 +533,20 @@ func TestReporter_PrivateMethods(t *testing.T) {
 					opts := []cmp.Option{
 						cmp.AllowUnexported(logRecorder{}),
 						cmp.FilterPath(func(p cmp.Path) bool {
-							if p.Last().String() == ".m" {
-								return true
-							}
-							return false
+							return p.Last().String() == ".m"
 						}, cmp.Ignore()),
 					}
-					if diff := cmp.Diff(logRecorder{}, r.getLogs(), opts...); diff != "" {
+					if diff := cmp.Diff(&logRecorder{}, r.getLogs(), opts...); diff != "" {
 						t.Errorf("result mismatch (-want +got):\n%s", diff)
 					}
-					if diff := cmp.Diff(logRecorder{
+					if diff := cmp.Diff(&logRecorder{
 						strs:     []string{"child log"},
 						infoIdxs: []int{0},
 					}, children[0].getLogs(), opts...); diff != "" {
 						t.Errorf("result mismatch (-want +got):\n%s", diff)
 					}
 					zero := 0
-					if diff := cmp.Diff(logRecorder{
+					if diff := cmp.Diff(&logRecorder{
 						strs:    []string{"skip log"},
 						skipIdx: &zero,
 					}, children[1].getLogs(), opts...); diff != "" {

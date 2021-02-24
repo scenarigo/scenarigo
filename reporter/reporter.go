@@ -37,7 +37,7 @@ type Reporter interface {
 	// for test reports
 	getName() string
 	getDuration() TestDuration
-	getLogs() logRecorder
+	getLogs() *logRecorder
 	getChildren() []Reporter
 	isRoot() bool
 }
@@ -69,7 +69,7 @@ type reporter struct {
 	failed     int32
 	skipped    int32
 	isParallel bool
-	logs       logRecorder
+	logs       *logRecorder
 	children   []*reporter
 	start      time.Time
 	duration   time.Duration
@@ -167,6 +167,7 @@ func (r *logRecorder) skipLog() *string {
 
 func new() *reporter {
 	return &reporter{
+		logs:    &logRecorder{},
 		barrier: make(chan bool),
 		done:    make(chan bool),
 	}
@@ -467,7 +468,7 @@ func (r *reporter) getDuration() TestDuration {
 	return TestDuration(r.duration)
 }
 
-func (r *reporter) getLogs() logRecorder {
+func (r *reporter) getLogs() *logRecorder {
 	return r.logs
 }
 

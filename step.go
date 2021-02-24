@@ -47,7 +47,7 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 		}
 		currentNode := ctx.Node()
 		ctx.Run(scenarios[0].Filepath(), func(ctx *context.Context) {
-			ctx = RunScenario(ctx.WithNode(includeNode), scenarios[0])
+			RunScenario(ctx.WithNode(includeNode), scenarios[0])
 		})
 
 		// back node to current node

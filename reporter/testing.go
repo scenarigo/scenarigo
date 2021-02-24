@@ -20,6 +20,7 @@ func fromT(t *testing.T, name string) *testReporter {
 	return &testReporter{
 		T:    t,
 		name: name,
+		logs: &logRecorder{},
 	}
 }
 
@@ -29,7 +30,7 @@ type testReporter struct {
 	name     string
 	start    time.Time
 	duration time.Duration
-	logs     logRecorder
+	logs     *logRecorder
 	root     bool
 	children []Reporter
 	mu       sync.Mutex
@@ -181,7 +182,7 @@ func (r *testReporter) getDuration() TestDuration {
 	return TestDuration(r.duration)
 }
 
-func (r *testReporter) getLogs() logRecorder {
+func (r *testReporter) getLogs() *logRecorder {
 	return r.logs
 }
 

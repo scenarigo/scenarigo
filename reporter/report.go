@@ -151,7 +151,7 @@ func (r ScenarioFileReport) MarshalXML(e *xml.Encoder, start xml.StartElement) e
 
 // ScenarioReport represents a result report of a test scenario.
 type ScenarioReport struct {
-	Name     string       `json:"name""`
+	Name     string       `json:"name"`
 	File     string       `json:"-"`
 	Result   TestResult   `json:"result"`
 	Duration TestDuration `json:"duration"`
@@ -211,6 +211,7 @@ func (r ScenarioReport) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 				break
 			}
 		}
+	default:
 	}
 	return e.EncodeElement(xr, start)
 }
@@ -247,19 +248,24 @@ const (
 	TestResultPassed
 	TestResultFailed
 	TestResultSkipped
+
+	testResultUndefinedString = "undefined"
+	testResultPassedString    = "passed"
+	testResultFailedString    = "failed"
+	testResultSkippedString   = "skipped"
 )
 
 // String returns r as a string.
 func (r TestResult) String() string {
 	switch r {
 	case TestResultPassed:
-		return "passed"
+		return testResultPassedString
 	case TestResultFailed:
-		return "failed"
+		return testResultFailedString
 	case TestResultSkipped:
-		return "skipped"
+		return testResultSkippedString
 	default:
-		return "undefined"
+		return testResultUndefinedString
 	}
 }
 
@@ -274,20 +280,19 @@ func (r *TestResult) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
-	if s == "passed" {
+	switch s {
+	case testResultPassedString:
 		*r = TestResultPassed
-		return nil
-	} else if s == "failed" {
+	case testResultFailedString:
 		*r = TestResultFailed
-		return nil
-	} else if s == "skipped" {
+	case testResultSkippedString:
 		*r = TestResultSkipped
-		return nil
-	} else if s == "undefined" {
+	case testResultUndefinedString:
 		*r = TestResultUndefined
-		return nil
+	default:
+		return fmt.Errorf("invalid test result %s", s)
 	}
-	return fmt.Errorf("invalid test result %s", s)
+	return nil
 }
 
 // MarshalYAML implements yaml.Marshaler interface.
@@ -301,20 +306,19 @@ func (r *TestResult) UnmarshalYAML(b []byte) error {
 	if err := yaml.Unmarshal(b, &s); err != nil {
 		return err
 	}
-	if s == "passed" {
+	switch s {
+	case testResultPassedString:
 		*r = TestResultPassed
-		return nil
-	} else if s == "failed" {
+	case testResultFailedString:
 		*r = TestResultFailed
-		return nil
-	} else if s == "skipped" {
+	case testResultSkippedString:
 		*r = TestResultSkipped
-		return nil
-	} else if s == "undefined" {
+	case testResultUndefinedString:
 		*r = TestResultUndefined
-		return nil
+	default:
+		return fmt.Errorf("invalid test result %s", s)
 	}
-	return fmt.Errorf("invalid test result %s", s)
+	return nil
 }
 
 // TestDuration represents an elapsed time of a test.
@@ -341,7 +345,7 @@ func (d *TestDuration) UnmarshalJSON(b []byte) error {
 
 // MarshalYAML implements yaml.Marshaler interface.
 func (d TestDuration) MarshalYAML() ([]byte, error) {
-	return []byte(fmt.Sprintf("%s", time.Duration(d).String())), nil
+	return []byte(time.Duration(d).String()), nil
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
