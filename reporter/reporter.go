@@ -33,6 +33,13 @@ type Reporter interface {
 	Skipped() bool
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
+
+	// for test reports
+	getName() string
+	getDuration() TestDuration
+	getLogs() logRecorder
+	getChildren() []Reporter
+	isRoot() bool
 }
 
 // Run runs f with new Reporter which applied opts.
@@ -57,11 +64,12 @@ type reporter struct {
 	context    *testContext
 	parent     *reporter
 	name       string
+	goTestName string
 	depth      int // Nesting depth of test.
 	failed     int32
 	skipped    int32
 	isParallel bool
-	logs       []string
+	logs       logRecorder
 	children   []*reporter
 	start      time.Time
 	duration   time.Duration
@@ -70,6 +78,91 @@ type reporter struct {
 	done    chan bool // To signal a test is done.
 
 	disableAddDuration bool // for testing
+}
+
+type logRecorder struct {
+	m         sync.Mutex
+	strs      []string
+	infoIdxs  []int
+	errorIdxs []int
+	skipIdx   *int
+}
+
+func (r *logRecorder) log(s string) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.strs = append(r.strs, s)
+	r.infoIdxs = append(r.infoIdxs, len(r.strs)-1)
+}
+
+func (r *logRecorder) error(s string) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.strs = append(r.strs, s)
+	r.errorIdxs = append(r.errorIdxs, len(r.strs)-1)
+}
+
+func (r *logRecorder) skip(s string) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.strs = append(r.strs, s)
+	i := len(r.strs) - 1
+	r.skipIdx = &i
+}
+
+func (r *logRecorder) all() []string {
+	r.m.Lock()
+	defer r.m.Unlock()
+	strs := make([]string, len(r.strs))
+	for i, str := range r.strs {
+		strs[i] = str
+	}
+	return strs
+}
+
+func (r *logRecorder) infoLogs() []string {
+	r.m.Lock()
+	defer r.m.Unlock()
+	ignore := map[int]struct{}{}
+	for _, i := range r.errorIdxs {
+		ignore[i] = struct{}{}
+	}
+	if r.skipIdx != nil {
+		ignore[*r.skipIdx] = struct{}{}
+	}
+	strs := make([]string, 0, len(r.strs)-len(ignore))
+	for i, str := range r.strs {
+		if _, ok := ignore[i]; ok {
+			continue
+		}
+		strs = append(strs, str)
+	}
+	if len(strs) == 0 {
+		return nil
+	}
+	return strs
+}
+
+func (r *logRecorder) errorLogs() []string {
+	r.m.Lock()
+	defer r.m.Unlock()
+	strs := make([]string, len(r.errorIdxs))
+	for i, j := range r.errorIdxs {
+		strs[i] = r.strs[j]
+	}
+	if len(strs) == 0 {
+		return nil
+	}
+	return strs
+}
+
+func (r *logRecorder) skipLog() *string {
+	r.m.Lock()
+	defer r.m.Unlock()
+	if r.skipIdx == nil {
+		return nil
+	}
+	return &r.strs[*r.skipIdx]
 }
 
 func new() *reporter {
@@ -81,7 +174,7 @@ func new() *reporter {
 
 // Name returns the name of the running test.
 func (r *reporter) Name() string {
-	return r.name
+	return r.goTestName
 }
 
 // Fail marks the function as having failed but continues execution.
@@ -105,36 +198,30 @@ func (r *reporter) FailNow() {
 	runtime.Goexit()
 }
 
-func (r *reporter) log(s string) {
-	r.m.Lock()
-	r.logs = append(r.logs, s)
-	r.m.Unlock()
-}
-
 // Log formats its arguments using default formatting, analogous to fmt.Print,
 // and records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
 func (r *reporter) Log(args ...interface{}) {
-	r.log(fmt.Sprint(args...))
+	r.logs.log(fmt.Sprint(args...))
 }
 
 // Logf formats its arguments according to the format, analogous to fmt.Printf, and
 // records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
 func (r *reporter) Logf(format string, args ...interface{}) {
-	r.log(fmt.Sprintf(format, args...))
+	r.logs.log(fmt.Sprintf(format, args...))
 }
 
 // Error is equivalent to Log followed by Fail.
 func (r *reporter) Error(args ...interface{}) {
 	r.Fail()
-	r.Log(args...)
+	r.logs.error(fmt.Sprint(args...))
 }
 
 // Errorf is equivalent to Logf followed by Fail.
 func (r *reporter) Errorf(format string, args ...interface{}) {
 	r.Fail()
-	r.Logf(format, args...)
+	r.logs.error(fmt.Sprintf(format, args...))
 }
 
 // Fatal is equivalent to Log followed by FailNow.
@@ -151,13 +238,13 @@ func (r *reporter) Fatalf(format string, args ...interface{}) {
 
 // Skip is equivalent to Log followed by SkipNow.
 func (r *reporter) Skip(args ...interface{}) {
-	r.Log(args...)
+	r.logs.skip(fmt.Sprint(args...))
 	r.SkipNow()
 }
 
 // Skipf is equivalent to Logf followed by SkipNow.
 func (r *reporter) Skipf(format string, args ...interface{}) {
-	r.Logf(format, args...)
+	r.logs.skip(fmt.Sprintf(format, args...))
 	r.SkipNow()
 }
 
@@ -185,14 +272,14 @@ func (r *reporter) Parallel() {
 	r.m.Unlock()
 
 	if r.context.verbose {
-		r.context.printf("=== PAUSE %s\n", r.name)
+		r.context.printf("=== PAUSE %s\n", r.goTestName)
 	}
 	r.done <- true     // Release calling test.
 	<-r.parent.barrier // Wait for the parent test to complete.
 	r.context.waitParallel()
 
 	if r.context.verbose {
-		r.context.printf("=== CONT  %s\n", r.name)
+		r.context.printf("=== CONT  %s\n", r.goTestName)
 	}
 	r.start = time.Now()
 }
@@ -231,18 +318,19 @@ func (r *reporter) isRoot() bool {
 // Run may be called simultaneously from multiple goroutines,
 // but all such calls must return before the outer test function for r returns.
 func (r *reporter) Run(name string, f func(t Reporter)) bool {
-	name = rewrite(name)
-	if r.name != "" {
-		name = fmt.Sprintf("%s/%s", r.name, name)
+	goTestName := rewrite(name)
+	if r.goTestName != "" {
+		goTestName = fmt.Sprintf("%s/%s", r.goTestName, goTestName)
 	}
 	child := new()
 	child.context = r.context
 	child.parent = r
 	child.name = name
+	child.goTestName = goTestName
 	child.depth = r.depth + 1
 	child.disableAddDuration = r.disableAddDuration
 	if r.context.verbose {
-		r.context.printf("=== RUN   %s\n", child.name)
+		r.context.printf("=== RUN   %s\n", child.goTestName)
 	}
 	go child.run(f)
 	<-child.done
@@ -328,9 +416,9 @@ func collectOutput(r *reporter) []string {
 			status = "SKIP"
 		}
 		results = []string{
-			fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.name, r.duration.Seconds()),
+			fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.goTestName, r.duration.Seconds()),
 		}
-		for _, l := range r.logs {
+		for _, l := range r.logs.all() {
 			padding := fmt.Sprintf("%s    ", prefix)
 			results = append(results, pad(l, padding))
 		}
@@ -341,14 +429,14 @@ func collectOutput(r *reporter) []string {
 	if r.depth == 1 {
 		if r.Failed() {
 			results = append(results,
-				fmt.Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.name, r.duration.Seconds()),
+				fmt.Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.goTestName, r.duration.Seconds()),
 			)
 		} else {
 			if r.context.verbose {
 				results = append(results, "PASS")
 			}
 			results = append(results,
-				fmt.Sprintf("ok  \t%s\t%.3fs", r.name, r.duration.Seconds()),
+				fmt.Sprintf("ok  \t%s\t%.3fs", r.goTestName, r.duration.Seconds()),
 			)
 		}
 	}
@@ -369,4 +457,24 @@ func pad(s string, padding string) string {
 		b.WriteString(l)
 	}
 	return b.String()
+}
+
+func (r *reporter) getName() string {
+	return r.name
+}
+
+func (r *reporter) getDuration() TestDuration {
+	return TestDuration(r.duration)
+}
+
+func (r *reporter) getLogs() logRecorder {
+	return r.logs
+}
+
+func (r *reporter) getChildren() []Reporter {
+	children := make([]Reporter, len(r.children))
+	for i, child := range r.children {
+		children[i] = child
+	}
+	return children
 }
