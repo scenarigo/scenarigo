@@ -250,6 +250,9 @@ func TestRun(t *testing.T) {
 				if expect, got := test.expectSerialDuration, duration.Truncate(50*time.Millisecond); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
+				if expect, got := test.expectSerialDuration, time.Duration(r.getDuration()).Truncate(50*time.Millisecond); got != expect {
+					t.Errorf("expected %s but got %s", expect, got)
+				}
 			})
 			t.Run("parallel", func(t *testing.T) {
 				start := time.Now()
@@ -267,6 +270,9 @@ func TestRun(t *testing.T) {
 					t.Errorf("result mismatch (-want +got):\n%s", diff)
 				}
 				if expect, got := test.expectParallelDuration, duration.Truncate(50*time.Millisecond); got != expect {
+					t.Errorf("expected %s but got %s", expect, got)
+				}
+				if expect, got := test.expectParallelDuration, time.Duration(r.getDuration()).Truncate(50*time.Millisecond); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
 			})

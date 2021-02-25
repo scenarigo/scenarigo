@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"sync"
 	"testing"
-	"time"
 	"unsafe"
 )
 
@@ -18,24 +17,24 @@ func FromT(t *testing.T) Reporter {
 
 func fromT(t *testing.T, name string) *testReporter {
 	return &testReporter{
-		T:    t,
-		name: name,
-		logs: &logRecorder{},
+		T:                t,
+		name:             name,
+		logs:             &logRecorder{},
+		durationMeasurer: &durationMeasurer{},
 	}
 }
 
 // testReporter is a wrapper to provide Reporter interface for *testing.T.
 type testReporter struct {
 	*testing.T
-	name     string
-	start    time.Time
-	duration time.Duration
-	logs     *logRecorder
-	root     bool
-	children []Reporter
-	mu       sync.Mutex
+	name             string
+	logs             *logRecorder
+	durationMeasurer *durationMeasurer
+	root             bool
+	children         []Reporter
+	mu               sync.Mutex
 
-	disableAddDuration bool // for testing
+	zeroDuration bool // for testing
 }
 
 func (r *testReporter) addBufferDirectly(b []byte) bool {
@@ -147,22 +146,24 @@ func (r *testReporter) Skipf(format string, args ...interface{}) {
 // Parallel signals that this test is to be run in parallel with (and only with)
 // other parallel tests.
 func (r *testReporter) Parallel() {
+	r.durationMeasurer.stop()
 	r.T.Parallel()
-	r.start = time.Now()
+	r.durationMeasurer.start()
 }
 
 // Run runs f as a subtest of r called name.
 func (r *testReporter) Run(name string, f func(t Reporter)) bool {
 	return r.T.Run(name, func(t *testing.T) {
 		child := fromT(t, name)
-		child.disableAddDuration = r.disableAddDuration
+		child.durationMeasurer = r.durationMeasurer.spawn()
+		child.zeroDuration = r.zeroDuration
 		r.mu.Lock()
 		r.children = append(r.children, child)
 		r.mu.Unlock()
-		child.start = time.Now()
+		child.durationMeasurer.start()
 		defer func() {
 			err := recover()
-			child.duration = time.Since(child.start)
+			child.durationMeasurer.stop()
 			if err != nil {
 				panic(err)
 			}
@@ -176,10 +177,10 @@ func (r *testReporter) getName() string {
 }
 
 func (r *testReporter) getDuration() TestDuration {
-	if r.disableAddDuration {
+	if r.zeroDuration {
 		return 0
 	}
-	return TestDuration(r.duration)
+	return TestDuration(r.durationMeasurer.getDuration())
 }
 
 func (r *testReporter) getLogs() *logRecorder {

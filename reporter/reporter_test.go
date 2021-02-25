@@ -283,7 +283,9 @@ func TestPrint(t *testing.T) {
 			f: func(t *testing.T, r *reporter) {
 				r.Run("a", func(r Reporter) {
 					rptr := pr(t, r)
-					rptr.duration = 1234 * time.Millisecond
+					rptr.durationMeasurer = &durationMeasurer{
+						duration: 1234 * time.Millisecond,
+					}
 				})
 			},
 			expect: `
@@ -295,7 +297,9 @@ ok  	a	1.234s
 				r.Run("a", func(r Reporter) {
 					rptr := pr(t, r)
 					rptr.Error("error!")
-					rptr.duration = 1234 * time.Millisecond
+					rptr.durationMeasurer = &durationMeasurer{
+						duration: 1234 * time.Millisecond,
+					}
 				})
 			},
 			expect: `
@@ -327,7 +331,9 @@ ok  	a	0.000s
 						r.Run("c", func(r Reporter) {
 							rptr := pr(t, r)
 							rptr.Error("error!")
-							rptr.duration = 1230 * time.Millisecond
+							rptr.durationMeasurer = &durationMeasurer{
+								duration: 1230 * time.Millisecond,
+							}
 						})
 					})
 				})
@@ -373,7 +379,9 @@ ok  	a	0.000s
 						r.Run("c", func(r Reporter) {
 							rptr := pr(t, r)
 							rptr.Error("error!")
-							rptr.duration = 1230 * time.Millisecond
+							rptr.durationMeasurer = &durationMeasurer{
+								duration: 1230 * time.Millisecond,
+							}
 						})
 					})
 				})
@@ -422,7 +430,7 @@ FAIL
 			var b bytes.Buffer
 			Run(func(r Reporter) {
 				rptr := pr(t, r)
-				rptr.disableAddDuration = true
+				rptr.zeroDuration = true
 				test.f(t, rptr)
 			}, WithWriter(&b))
 			if diff := cmp.Diff(test.expect, "\n"+b.String()); diff != "" {
@@ -489,7 +497,9 @@ func TestReporter_PrivateMethods(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			test.run(t, func(r Reporter) {
+			var r Reporter
+			test.run(t, func(rptr Reporter) {
+				r = rptr
 				if ok := r.Run("child", func(r Reporter) {
 					time.Sleep(10 * time.Millisecond)
 					r.Log("child log")
@@ -502,68 +512,68 @@ func TestReporter_PrivateMethods(t *testing.T) {
 				}); !ok {
 					t.Fatal("test failed")
 				}
+			})
 
-				children := r.getChildren()
-				if got := len(children); got != 2 {
-					t.Fatalf("expected length is 2 but %d", got)
+			children := r.getChildren()
+			if got := len(children); got != 2 {
+				t.Fatalf("expected length is 2 but %d", got)
+			}
+			t.Run("getName", func(t *testing.T) {
+				if got, expected := r.getName(), test.rootName; got != expected {
+					t.Errorf("expect %q but got %q", expected, got)
 				}
-				t.Run("getName", func(t *testing.T) {
-					if got, expected := r.getName(), test.rootName; got != expected {
-						t.Errorf("expect %q but got %q", expected, got)
-					}
-					if got, expected := children[0].getName(), "child"; got != expected {
-						t.Errorf("expect %q but got %q", expected, got)
-					}
-					if got, expected := children[1].getName(), "skip"; got != expected {
-						t.Errorf("expect %q but got %q", expected, got)
-					}
-				})
-				t.Run("getDuration", func(t *testing.T) {
-					if got := r.getDuration(); got != 0 {
-						t.Errorf("duration must be 0 but %d", got)
-					}
-					if got := children[0].getDuration(); got == 0 {
-						t.Error("duration must be greater than 0")
-					}
-					if got := children[1].getDuration(); got == 0 {
-						t.Error("duration must be greater than 0")
-					}
-				})
-				t.Run("getLogs", func(t *testing.T) {
-					opts := []cmp.Option{
-						cmp.AllowUnexported(logRecorder{}),
-						cmp.FilterPath(func(p cmp.Path) bool {
-							return p.Last().String() == ".m"
-						}, cmp.Ignore()),
-					}
-					if diff := cmp.Diff(&logRecorder{}, r.getLogs(), opts...); diff != "" {
-						t.Errorf("result mismatch (-want +got):\n%s", diff)
-					}
-					if diff := cmp.Diff(&logRecorder{
-						strs:     []string{"child log"},
-						infoIdxs: []int{0},
-					}, children[0].getLogs(), opts...); diff != "" {
-						t.Errorf("result mismatch (-want +got):\n%s", diff)
-					}
-					zero := 0
-					if diff := cmp.Diff(&logRecorder{
-						strs:    []string{"skip log"},
-						skipIdx: &zero,
-					}, children[1].getLogs(), opts...); diff != "" {
-						t.Errorf("result mismatch (-want +got):\n%s", diff)
-					}
-				})
-				t.Run("isRoot", func(t *testing.T) {
-					if got, expected := r.isRoot(), true; got != expected {
-						t.Errorf("expect %t but got %t", expected, got)
-					}
-					if got, expected := children[0].isRoot(), false; got != expected {
-						t.Errorf("expect %t but got %t", expected, got)
-					}
-					if got, expected := children[1].isRoot(), false; got != expected {
-						t.Errorf("expect %t but got %t", expected, got)
-					}
-				})
+				if got, expected := children[0].getName(), "child"; got != expected {
+					t.Errorf("expect %q but got %q", expected, got)
+				}
+				if got, expected := children[1].getName(), "skip"; got != expected {
+					t.Errorf("expect %q but got %q", expected, got)
+				}
+			})
+			t.Run("getDuration", func(t *testing.T) {
+				if got := r.getDuration(); got == 0 {
+					t.Error("duration must be greater than 0")
+				}
+				if got := children[0].getDuration(); got == 0 {
+					t.Error("duration must be greater than 0")
+				}
+				if got := children[1].getDuration(); got == 0 {
+					t.Error("duration must be greater than 0")
+				}
+			})
+			t.Run("getLogs", func(t *testing.T) {
+				opts := []cmp.Option{
+					cmp.AllowUnexported(logRecorder{}),
+					cmp.FilterPath(func(p cmp.Path) bool {
+						return p.Last().String() == ".m"
+					}, cmp.Ignore()),
+				}
+				if diff := cmp.Diff(&logRecorder{}, r.getLogs(), opts...); diff != "" {
+					t.Errorf("result mismatch (-want +got):\n%s", diff)
+				}
+				if diff := cmp.Diff(&logRecorder{
+					strs:     []string{"child log"},
+					infoIdxs: []int{0},
+				}, children[0].getLogs(), opts...); diff != "" {
+					t.Errorf("result mismatch (-want +got):\n%s", diff)
+				}
+				zero := 0
+				if diff := cmp.Diff(&logRecorder{
+					strs:    []string{"skip log"},
+					skipIdx: &zero,
+				}, children[1].getLogs(), opts...); diff != "" {
+					t.Errorf("result mismatch (-want +got):\n%s", diff)
+				}
+			})
+			t.Run("isRoot", func(t *testing.T) {
+				if got, expected := r.isRoot(), true; got != expected {
+					t.Errorf("expect %t but got %t", expected, got)
+				}
+				if got, expected := children[0].isRoot(), false; got != expected {
+					t.Errorf("expect %t but got %t", expected, got)
+				}
+				if got, expected := children[1].isRoot(), false; got != expected {
+					t.Errorf("expect %t but got %t", expected, got)
+				}
 			})
 		})
 	}

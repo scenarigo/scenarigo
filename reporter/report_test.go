@@ -120,14 +120,14 @@ func TestGenerateTestReport(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				t.Run("reporter", func(t *testing.T) {
 					r := run(func(r Reporter) {
-						r.(*reporter).disableAddDuration = true
+						r.(*reporter).zeroDuration = true
 						test.f(r)
 					}, WithWriter(&nopWriter{}))
 					checkReport(t, r, test.expect)
 				})
 				t.Run("testReporter", func(t *testing.T) {
 					r := FromT(t)
-					r.(*testReporter).disableAddDuration = true
+					r.(*testReporter).zeroDuration = true
 					test.f(r)
 					test.expect.Name = t.Name()
 					checkReport(t, r, test.expect)
@@ -207,7 +207,7 @@ func TestGenerateTestReport(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				t.Run("reporter", func(t *testing.T) {
 					r := run(func(r Reporter) {
-						r.(*reporter).disableAddDuration = true
+						r.(*reporter).zeroDuration = true
 						test.f(r)
 					}, WithWriter(&nopWriter{}))
 					checkReport(t, r, test.expect)
