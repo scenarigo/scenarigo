@@ -3,6 +3,7 @@ package reporter
 import (
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -251,6 +252,9 @@ func TestRun(t *testing.T) {
 				if expect, got := test.expectSerialDuration, duration.Truncate(5*durationTestUnit); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
+				if expect, got := test.expectSerialDuration, r.getDuration().Truncate(5*durationTestUnit); got != expect {
+					t.Errorf("expected %s but got %s", expect, got)
+				}
 			})
 			t.Run("parallel", func(t *testing.T) {
 				t.Parallel()
@@ -271,7 +275,38 @@ func TestRun(t *testing.T) {
 				if expect, got := test.expectParallelDuration, duration.Truncate(5*durationTestUnit); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
+				if expect, got := test.expectParallelDuration, r.getDuration().Truncate(5*durationTestUnit); got != expect {
+					t.Errorf("expected %s but got %s", expect, got)
+				}
 			})
 		})
 	}
+}
+
+func collectResult(r *reporter) result {
+	res := result{
+		Failed:  r.Failed(),
+		Skipped: r.Skipped(),
+		Logs:    r.logs,
+	}
+	for _, child := range r.children {
+		res.Children = append(res.Children, collectResult(child))
+	}
+	return res
+}
+
+func ignoreStackTrace(in result) result {
+	out := result{
+		Failed:  in.Failed,
+		Skipped: in.Skipped,
+	}
+	for _, l := range in.Logs {
+		if !strings.HasPrefix(l, "goroutine ") {
+			out.Logs = append(out.Logs, l)
+		}
+	}
+	for _, child := range in.Children {
+		out.Children = append(out.Children, ignoreStackTrace(child))
+	}
+	return out
 }

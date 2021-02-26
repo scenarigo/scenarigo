@@ -5,18 +5,27 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 	"unsafe"
 )
 
 // FromT creates Reporter from t.
 func FromT(t *testing.T) Reporter {
-	return &testReporter{T: t}
+	return fromT(t)
+}
+
+func fromT(t *testing.T) *testReporter {
+	return &testReporter{
+		T:                t,
+		durationMeasurer: &durationMeasurer{},
+	}
 }
 
 // testReporter is a wrapper to provide Reporter interface for *testing.T.
 type testReporter struct {
 	*testing.T
-	mu sync.Mutex
+	durationMeasurer testDurationMeasurer
+	mu               sync.Mutex
 }
 
 func (r *testReporter) addBufferDirectly(b []byte) bool {
@@ -109,9 +118,31 @@ func (r *testReporter) Skipf(format string, args ...interface{}) {
 	r.SkipNow()
 }
 
+// Parallel signals that this test is to be run in parallel with (and only with)
+// other parallel tests.
+func (r *testReporter) Parallel() {
+	r.durationMeasurer.stop()
+	r.T.Parallel()
+	r.durationMeasurer.start()
+}
+
 // Run runs f as a subtest of r called name.
 func (r *testReporter) Run(name string, f func(t Reporter)) bool {
 	return r.T.Run(name, func(t *testing.T) {
-		f(FromT(t))
+		child := fromT(t)
+		child.durationMeasurer = r.durationMeasurer.spawn()
+		defer func() {
+			err := recover()
+			child.durationMeasurer.stop()
+			if err != nil {
+				panic(err)
+			}
+		}()
+		child.durationMeasurer.start()
+		f(child)
 	})
+}
+
+func (r *testReporter) getDuration() time.Duration {
+	return r.durationMeasurer.getDuration()
 }

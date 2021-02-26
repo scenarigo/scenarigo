@@ -33,6 +33,8 @@ type Reporter interface {
 	Skipped() bool
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
+
+	getDuration() time.Duration
 }
 
 // Run runs f with new Reporter which applied opts.
@@ -53,29 +55,27 @@ func run(f func(r Reporter), opts ...Option) *reporter {
 // reporter is an implementation of Reporter that
 // records its mutations for later inspection in tests.
 type reporter struct {
-	m          sync.Mutex
-	context    *testContext
-	parent     *reporter
-	name       string
-	depth      int // Nesting depth of test.
-	failed     int32
-	skipped    int32
-	isParallel bool
-	logs       []string
-	children   []*reporter
-	start      time.Time
-	duration   time.Duration
+	m                sync.Mutex
+	context          *testContext
+	parent           *reporter
+	name             string
+	depth            int // Nesting depth of test.
+	failed           int32
+	skipped          int32
+	isParallel       bool
+	logs             []string
+	durationMeasurer testDurationMeasurer
+	children         []*reporter
 
 	barrier chan bool // To signal parallel subtests they may start.
 	done    chan bool // To signal a test is done.
-
-	disableAddDuration bool // for testing
 }
 
 func new() *reporter {
 	return &reporter{
-		barrier: make(chan bool),
-		done:    make(chan bool),
+		durationMeasurer: &durationMeasurer{},
+		barrier:          make(chan bool),
+		done:             make(chan bool),
 	}
 }
 
@@ -181,7 +181,7 @@ func (r *reporter) Parallel() {
 		panic("reporter: Reporter.Parallel called multiple times")
 	}
 	r.isParallel = true
-	r.addDuration(time.Since(r.start))
+	r.durationMeasurer.stop()
 	r.m.Unlock()
 
 	if r.context.verbose {
@@ -194,7 +194,7 @@ func (r *reporter) Parallel() {
 	if r.context.verbose {
 		r.context.printf("=== CONT  %s\n", r.name)
 	}
-	r.start = time.Now()
+	r.durationMeasurer.start()
 }
 
 func (r *reporter) appendChild(child *reporter) {
@@ -240,7 +240,7 @@ func (r *reporter) Run(name string, f func(t Reporter)) bool {
 	child.parent = r
 	child.name = name
 	child.depth = r.depth + 1
-	child.disableAddDuration = r.disableAddDuration
+	child.durationMeasurer = r.durationMeasurer.spawn()
 	if r.context.verbose {
 		r.context.printf("=== RUN   %s\n", child.name)
 	}
@@ -256,7 +256,7 @@ func (r *reporter) Run(name string, f func(t Reporter)) bool {
 func (r *reporter) run(f func(r Reporter)) {
 	var finished bool
 	defer func() {
-		r.addDuration(time.Since(r.start))
+		r.durationMeasurer.stop()
 		err := recover()
 		if !finished && err == nil {
 			err = errors.New("test executed panic(nil) or runtime.Goexit")
@@ -298,15 +298,9 @@ func (r *reporter) run(f func(r Reporter)) {
 		r.done <- true
 	}()
 
-	r.start = time.Now()
+	r.durationMeasurer.start()
 	f(r)
 	finished = true
-}
-
-func (r *reporter) addDuration(delta time.Duration) {
-	if !r.disableAddDuration {
-		r.duration += delta
-	}
 }
 
 func print(r *reporter) {
@@ -328,7 +322,7 @@ func collectOutput(r *reporter) []string {
 			status = "SKIP"
 		}
 		results = []string{
-			fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.name, r.duration.Seconds()),
+			fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.name, r.durationMeasurer.getDuration().Seconds()),
 		}
 		for _, l := range r.logs {
 			padding := fmt.Sprintf("%s    ", prefix)
@@ -341,14 +335,14 @@ func collectOutput(r *reporter) []string {
 	if r.depth == 1 {
 		if r.Failed() {
 			results = append(results,
-				fmt.Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.name, r.duration.Seconds()),
+				fmt.Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.name, r.durationMeasurer.getDuration().Seconds()),
 			)
 		} else {
 			if r.context.verbose {
 				results = append(results, "PASS")
 			}
 			results = append(results,
-				fmt.Sprintf("ok  \t%s\t%.3fs", r.name, r.duration.Seconds()),
+				fmt.Sprintf("ok  \t%s\t%.3fs", r.name, r.durationMeasurer.getDuration().Seconds()),
 			)
 		}
 	}
@@ -369,4 +363,8 @@ func pad(s string, padding string) string {
 		b.WriteString(l)
 	}
 	return b.String()
+}
+
+func (r *reporter) getDuration() time.Duration {
+	return r.durationMeasurer.getDuration()
 }

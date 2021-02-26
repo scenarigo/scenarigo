@@ -3,7 +3,6 @@ package reporter
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -266,34 +265,6 @@ type result struct {
 	Children []result
 }
 
-func collectResult(r *reporter) result {
-	res := result{
-		Failed:  r.Failed(),
-		Skipped: r.Skipped(),
-		Logs:    r.logs,
-	}
-	for _, child := range r.children {
-		res.Children = append(res.Children, collectResult(child))
-	}
-	return res
-}
-
-func ignoreStackTrace(in result) result {
-	out := result{
-		Failed:  in.Failed,
-		Skipped: in.Skipped,
-	}
-	for _, l := range in.Logs {
-		if !strings.HasPrefix(l, "goroutine ") {
-			out.Logs = append(out.Logs, l)
-		}
-	}
-	for _, child := range in.Children {
-		out.Children = append(out.Children, ignoreStackTrace(child))
-	}
-	return out
-}
-
 func TestPrint(t *testing.T) {
 	pr := func(t *testing.T, r Reporter) *reporter {
 		t.Helper()
@@ -312,7 +283,9 @@ func TestPrint(t *testing.T) {
 			f: func(t *testing.T, r *reporter) {
 				r.Run("a", func(r Reporter) {
 					rptr := pr(t, r)
-					rptr.duration = 1234 * time.Millisecond
+					rptr.durationMeasurer = &fixedDurationMeasurer{
+						duration: 1234 * time.Millisecond,
+					}
 				})
 			},
 			expect: `
@@ -324,7 +297,9 @@ ok  	a	1.234s
 				r.Run("a", func(r Reporter) {
 					rptr := pr(t, r)
 					rptr.Error("error!")
-					rptr.duration = 1234 * time.Millisecond
+					rptr.durationMeasurer = &fixedDurationMeasurer{
+						duration: 1234 * time.Millisecond,
+					}
 				})
 			},
 			expect: `
@@ -356,7 +331,9 @@ ok  	a	0.000s
 						r.Run("c", func(r Reporter) {
 							rptr := pr(t, r)
 							rptr.Error("error!")
-							rptr.duration = 1230 * time.Millisecond
+							rptr.durationMeasurer = &fixedDurationMeasurer{
+								duration: 1230 * time.Millisecond,
+							}
 						})
 					})
 				})
@@ -402,7 +379,9 @@ ok  	a	0.000s
 						r.Run("c", func(r Reporter) {
 							rptr := pr(t, r)
 							rptr.Error("error!")
-							rptr.duration = 1230 * time.Millisecond
+							rptr.durationMeasurer = &fixedDurationMeasurer{
+								duration: 1230 * time.Millisecond,
+							}
 						})
 					})
 				})
@@ -451,7 +430,7 @@ FAIL
 			var b bytes.Buffer
 			Run(func(r Reporter) {
 				rptr := pr(t, r)
-				rptr.disableAddDuration = true
+				rptr.durationMeasurer = &fixedDurationMeasurer{}
 				test.f(t, rptr)
 			}, WithWriter(&b))
 			if diff := cmp.Diff(test.expect, "\n"+b.String()); diff != "" {
