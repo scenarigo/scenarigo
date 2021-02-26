@@ -1,6 +1,3 @@
-// NOTE: Fail on only macos-latest of GitHub Actions by duration errors.
-// +build !darwin
-
 package reporter
 
 import (
@@ -14,14 +11,16 @@ import (
 )
 
 func TestTestContext(t *testing.T) {
+	t.Parallel()
 	t.Run("serial", func(t *testing.T) {
+		t.Parallel()
 		ctx := newTestContext(WithMaxParallel(1))
 		if expect, got := 1, ctx.running; got != expect {
 			t.Errorf("expected %d but got %d", expect, got)
 		}
 
 		now := time.Now()
-		duration := 100 * time.Millisecond
+		duration := 10 * durationTestUnit
 		done := make(chan struct{})
 		go func() {
 			time.Sleep(duration)
@@ -33,7 +32,7 @@ func TestTestContext(t *testing.T) {
 		}()
 
 		ctx.waitParallel() // wait goroutine function
-		if expect, got := duration, time.Since(now).Truncate(10*time.Millisecond); got != expect {
+		if expect, got := duration, time.Since(now).Truncate(durationTestUnit); got != expect {
 			t.Errorf("expected %s but got %s", expect, got)
 		}
 		if expect, got := int64(0), ctx.waitings(); got != expect {
@@ -43,13 +42,14 @@ func TestTestContext(t *testing.T) {
 		<-done
 	})
 	t.Run("parallel", func(t *testing.T) {
+		t.Parallel()
 		ctx := newTestContext(WithMaxParallel(2))
 		if expect, got := 1, ctx.running; got != expect {
 			t.Errorf("expected %d but got %d", expect, got)
 		}
 
 		now := time.Now()
-		duration := 100 * time.Millisecond
+		duration := 10 * durationTestUnit
 		done := make(chan struct{})
 		go func() {
 			time.Sleep(duration)
@@ -61,7 +61,7 @@ func TestTestContext(t *testing.T) {
 		}()
 
 		ctx.waitParallel() // not wait goroutine function (run in parallel)
-		if expect, got := time.Duration(0), time.Since(now).Truncate(10*time.Millisecond); got != expect {
+		if expect, got := time.Duration(0), time.Since(now).Truncate(durationTestUnit); got != expect {
 			t.Errorf("expected %s but got %s", expect, got)
 		}
 		if expect, got := int64(0), ctx.waitings(); got != expect {
@@ -183,13 +183,13 @@ func TestRun(t *testing.T) {
 			maxParallel: 3,
 			fs: []func(r Reporter){
 				func(r Reporter) {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * durationTestUnit)
 				},
 				func(r Reporter) {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * durationTestUnit)
 				},
 				func(r Reporter) {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * durationTestUnit)
 				},
 			},
 			expect: result{
@@ -199,20 +199,20 @@ func TestRun(t *testing.T) {
 					{},
 				},
 			},
-			expectSerialDuration:   300 * time.Millisecond,
-			expectParallelDuration: 100 * time.Millisecond,
+			expectSerialDuration:   30 * durationTestUnit,
+			expectParallelDuration: 10 * durationTestUnit,
 		},
 		"run tests in parallel (max number of concurrent executions is 2)": {
 			maxParallel: 2,
 			fs: []func(r Reporter){
 				func(r Reporter) {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * durationTestUnit)
 				},
 				func(r Reporter) {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * durationTestUnit)
 				},
 				func(r Reporter) {
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * durationTestUnit)
 				},
 			},
 			expect: result{
@@ -222,8 +222,8 @@ func TestRun(t *testing.T) {
 					{},
 				},
 			},
-			expectSerialDuration:   300 * time.Millisecond,
-			expectParallelDuration: 200 * time.Millisecond,
+			expectSerialDuration:   30 * durationTestUnit,
+			expectParallelDuration: 20 * durationTestUnit,
 		},
 	}
 	for name, test := range tests {
@@ -233,7 +233,9 @@ func TestRun(t *testing.T) {
 			opts = append(opts, WithMaxParallel(test.maxParallel))
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			t.Run("serial", func(t *testing.T) {
+				t.Parallel()
 				start := time.Now()
 				r := run(func(r Reporter) {
 					for i, f := range test.fs {
@@ -247,14 +249,15 @@ func TestRun(t *testing.T) {
 				if diff := cmp.Diff(test.expect, ignoreStackTrace(collectResult(r))); diff != "" {
 					t.Errorf("result mismatch (-want +got):\n%s", diff)
 				}
-				if expect, got := test.expectSerialDuration, duration.Truncate(50*time.Millisecond); got != expect {
+				if expect, got := test.expectSerialDuration, duration.Truncate(5*durationTestUnit); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
-				if expect, got := test.expectSerialDuration, time.Duration(r.getDuration()).Truncate(50*time.Millisecond); got != expect {
+				if expect, got := test.expectSerialDuration, time.Duration(r.getDuration()).Truncate(5*durationTestUnit); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
 			})
 			t.Run("parallel", func(t *testing.T) {
+				t.Parallel()
 				start := time.Now()
 				r := run(func(r Reporter) {
 					for i, f := range test.fs {
@@ -269,10 +272,10 @@ func TestRun(t *testing.T) {
 				if diff := cmp.Diff(test.expect, ignoreStackTrace(collectResult(r))); diff != "" {
 					t.Errorf("result mismatch (-want +got):\n%s", diff)
 				}
-				if expect, got := test.expectParallelDuration, duration.Truncate(50*time.Millisecond); got != expect {
+				if expect, got := test.expectParallelDuration, duration.Truncate(5*durationTestUnit); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
-				if expect, got := test.expectParallelDuration, time.Duration(r.getDuration()).Truncate(50*time.Millisecond); got != expect {
+				if expect, got := test.expectParallelDuration, time.Duration(r.getDuration()).Truncate(5*durationTestUnit); got != expect {
 					t.Errorf("expected %s but got %s", expect, got)
 				}
 			})

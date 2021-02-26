@@ -18,6 +18,8 @@ import (
                    0  1  2  3  4  5 (100ms)
 */
 func TestDurationMeasurer(t *testing.T) {
+	t.Parallel()
+
 	var wg sync.WaitGroup
 	ch := make(chan struct{})
 
@@ -30,7 +32,7 @@ func TestDurationMeasurer(t *testing.T) {
 	go func() {
 		<-ch
 		child1.start()
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(20 * durationTestUnit)
 		child1.stop()
 		wg.Done()
 	}()
@@ -39,9 +41,9 @@ func TestDurationMeasurer(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		<-ch
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * durationTestUnit)
 		child1.start()
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(20 * durationTestUnit)
 		child1.stop()
 		wg.Done()
 	}()
@@ -50,9 +52,9 @@ func TestDurationMeasurer(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		<-ch
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * durationTestUnit)
 		child2.start()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * durationTestUnit)
 		child2.stop()
 		wg.Done()
 	}()
@@ -61,9 +63,9 @@ func TestDurationMeasurer(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		<-ch
-		time.Sleep(400 * time.Millisecond)
+		time.Sleep(40 * durationTestUnit)
 		child2.start()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * durationTestUnit)
 		child2.stop()
 		wg.Done()
 	}()
@@ -71,13 +73,13 @@ func TestDurationMeasurer(t *testing.T) {
 	close(ch)
 	wg.Wait()
 
-	if expect, got := 400*time.Millisecond, parent.duration.Truncate(10*time.Millisecond); got != expect {
+	if expect, got := 40*durationTestUnit, parent.duration.Truncate(durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
-	if expect, got := 300*time.Millisecond, child1.duration.Truncate(10*time.Millisecond); got != expect {
+	if expect, got := 30*durationTestUnit, child1.duration.Truncate(durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
-	if expect, got := 200*time.Millisecond, child2.duration.Truncate(10*time.Millisecond); got != expect {
+	if expect, got := 20*durationTestUnit, child2.duration.Truncate(durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
 }
