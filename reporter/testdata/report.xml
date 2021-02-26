@@ -1,0 +1,12 @@
+<testsuites>
+  <testsuite tests="3" failures="1" name="file1.yaml" time="0.123000">
+    <testcase name="passed scenario" file="file1.yaml" time="0.100000"></testcase>
+    <testcase name="failed scenario" file="file1.yaml" time="0.023000">
+      <failure message="failed step">error</failure>
+      <system-out><![CDATA[info]]></system-out>
+    </testcase>
+    <testcase name="skipped scenario" file="file1.yaml" time="0.000000">
+      <skipped message="skipped step">skip</skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

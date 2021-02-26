@@ -11,12 +11,16 @@ import (
 
 // FromT creates Reporter from t.
 func FromT(t *testing.T) Reporter {
-	return fromT(t)
+	r := fromT(t, t.Name())
+	r.root = true
+	return r
 }
 
-func fromT(t *testing.T) *testReporter {
+func fromT(t *testing.T, name string) *testReporter {
 	return &testReporter{
 		T:                t,
+		name:             name,
+		logs:             &logRecorder{},
 		durationMeasurer: &durationMeasurer{},
 	}
 }
@@ -24,7 +28,11 @@ func fromT(t *testing.T) *testReporter {
 // testReporter is a wrapper to provide Reporter interface for *testing.T.
 type testReporter struct {
 	*testing.T
+	name             string
+	logs             *logRecorder
 	durationMeasurer testDurationMeasurer
+	root             bool
+	children         []Reporter
 	mu               sync.Mutex
 }
 
@@ -74,47 +82,63 @@ func (r *testReporter) fatal(log string) {
 // and records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
 func (r *testReporter) Log(args ...interface{}) {
-	r.log(fmt.Sprint(args...))
+	s := fmt.Sprint(args...)
+	r.logs.log(s)
+	r.log(s)
 }
 
 // Logf formats its arguments according to the format, analogous to fmt.Printf, and
 // records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
 func (r *testReporter) Logf(format string, args ...interface{}) {
-	r.log(fmt.Sprintf(format, args...))
+	s := fmt.Sprintf(format, args...)
+	r.logs.log(s)
+	r.log(s)
 }
 
 // Error is equivalent to Log followed by Fail.
 func (r *testReporter) Error(args ...interface{}) {
 	r.Fail()
-	r.Log(args...)
+	s := fmt.Sprint(args...)
+	r.logs.error(s)
+	r.log(s)
 }
 
 // Errorf is equivalent to Logf followed by Fail.
 func (r *testReporter) Errorf(format string, args ...interface{}) {
 	r.Fail()
-	r.Logf(format, args...)
+	s := fmt.Sprintf(format, args...)
+	r.logs.error(s)
+	r.log(s)
 }
 
 // Fatal is equivalent to Log followed by FailNow.
 func (r *testReporter) Fatal(args ...interface{}) {
-	r.fatal(fmt.Sprint(args...))
+	s := fmt.Sprint(args...)
+	r.logs.error(s)
+	r.fatal(s)
 }
 
 // Fatalf is equivalent to Logf followed by FailNow.
 func (r *testReporter) Fatalf(format string, args ...interface{}) {
-	r.fatal(fmt.Sprintf(format, args...))
+	s := fmt.Sprintf(format, args...)
+	r.logs.error(s)
+	r.fatal(s)
 }
 
 // Skip is equivalent to Log followed by SkipNow.
 func (r *testReporter) Skip(args ...interface{}) {
-	r.Log(args...)
+	s := fmt.Sprint(args...)
+	r.logs.skip(s)
+	r.log(s)
 	r.SkipNow()
 }
 
 // Skipf is equivalent to Logf followed by SkipNow.
 func (r *testReporter) Skipf(format string, args ...interface{}) {
-	r.Logf(format, args...)
+	s := fmt.Sprintf(format, args...)
+	r.logs.skip(s)
+	r.log(s)
 	r.SkipNow()
 }
 
@@ -129,8 +153,11 @@ func (r *testReporter) Parallel() {
 // Run runs f as a subtest of r called name.
 func (r *testReporter) Run(name string, f func(t Reporter)) bool {
 	return r.T.Run(name, func(t *testing.T) {
-		child := fromT(t)
+		child := fromT(t, name)
 		child.durationMeasurer = r.durationMeasurer.spawn()
+		r.mu.Lock()
+		r.children = append(r.children, child)
+		r.mu.Unlock()
 		defer func() {
 			err := recover()
 			child.durationMeasurer.stop()
@@ -143,6 +170,22 @@ func (r *testReporter) Run(name string, f func(t Reporter)) bool {
 	})
 }
 
+func (r *testReporter) getName() string {
+	return r.name
+}
+
 func (r *testReporter) getDuration() time.Duration {
 	return r.durationMeasurer.getDuration()
+}
+
+func (r *testReporter) getLogs() *logRecorder {
+	return r.logs
+}
+
+func (r *testReporter) getChildren() []Reporter {
+	return r.children
+}
+
+func (r *testReporter) isRoot() bool {
+	return r.root
 }

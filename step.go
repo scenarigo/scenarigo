@@ -46,7 +46,9 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 			ctx.Reporter().Fatalf(`failed to create ast: %s`, err)
 		}
 		currentNode := ctx.Node()
-		ctx = RunScenario(ctx.WithNode(includeNode), scenarios[0])
+		ctx.Run(scenarios[0].Filepath(), func(ctx *context.Context) {
+			RunScenario(ctx.WithNode(includeNode), scenarios[0])
+		})
 
 		// back node to current node
 		ctx = ctx.WithNode(currentNode)

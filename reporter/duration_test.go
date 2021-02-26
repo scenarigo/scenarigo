@@ -287,7 +287,7 @@ func collectResult(r *reporter) result {
 	res := result{
 		Failed:  r.Failed(),
 		Skipped: r.Skipped(),
-		Logs:    r.logs,
+		Logs:    r.logs.all(),
 	}
 	for _, child := range r.children {
 		res.Children = append(res.Children, collectResult(child))

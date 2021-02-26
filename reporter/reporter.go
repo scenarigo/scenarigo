@@ -34,7 +34,12 @@ type Reporter interface {
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
 
+	// for test reports
+	getName() string
 	getDuration() time.Duration
+	getLogs() *logRecorder
+	getChildren() []Reporter
+	isRoot() bool
 }
 
 // Run runs f with new Reporter which applied opts.
@@ -59,11 +64,12 @@ type reporter struct {
 	context          *testContext
 	parent           *reporter
 	name             string
+	goTestName       string
 	depth            int // Nesting depth of test.
 	failed           int32
 	skipped          int32
 	isParallel       bool
-	logs             []string
+	logs             *logRecorder
 	durationMeasurer testDurationMeasurer
 	children         []*reporter
 
@@ -73,6 +79,7 @@ type reporter struct {
 
 func new() *reporter {
 	return &reporter{
+		logs:             &logRecorder{},
 		durationMeasurer: &durationMeasurer{},
 		barrier:          make(chan bool),
 		done:             make(chan bool),
@@ -81,7 +88,7 @@ func new() *reporter {
 
 // Name returns the name of the running test.
 func (r *reporter) Name() string {
-	return r.name
+	return r.goTestName
 }
 
 // Fail marks the function as having failed but continues execution.
@@ -105,36 +112,30 @@ func (r *reporter) FailNow() {
 	runtime.Goexit()
 }
 
-func (r *reporter) log(s string) {
-	r.m.Lock()
-	r.logs = append(r.logs, s)
-	r.m.Unlock()
-}
-
 // Log formats its arguments using default formatting, analogous to fmt.Print,
 // and records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
 func (r *reporter) Log(args ...interface{}) {
-	r.log(fmt.Sprint(args...))
+	r.logs.log(fmt.Sprint(args...))
 }
 
 // Logf formats its arguments according to the format, analogous to fmt.Printf, and
 // records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
 func (r *reporter) Logf(format string, args ...interface{}) {
-	r.log(fmt.Sprintf(format, args...))
+	r.logs.log(fmt.Sprintf(format, args...))
 }
 
 // Error is equivalent to Log followed by Fail.
 func (r *reporter) Error(args ...interface{}) {
 	r.Fail()
-	r.Log(args...)
+	r.logs.error(fmt.Sprint(args...))
 }
 
 // Errorf is equivalent to Logf followed by Fail.
 func (r *reporter) Errorf(format string, args ...interface{}) {
 	r.Fail()
-	r.Logf(format, args...)
+	r.logs.error(fmt.Sprintf(format, args...))
 }
 
 // Fatal is equivalent to Log followed by FailNow.
@@ -151,13 +152,13 @@ func (r *reporter) Fatalf(format string, args ...interface{}) {
 
 // Skip is equivalent to Log followed by SkipNow.
 func (r *reporter) Skip(args ...interface{}) {
-	r.Log(args...)
+	r.logs.skip(fmt.Sprint(args...))
 	r.SkipNow()
 }
 
 // Skipf is equivalent to Logf followed by SkipNow.
 func (r *reporter) Skipf(format string, args ...interface{}) {
-	r.Logf(format, args...)
+	r.logs.skip(fmt.Sprintf(format, args...))
 	r.SkipNow()
 }
 
@@ -185,14 +186,14 @@ func (r *reporter) Parallel() {
 	r.m.Unlock()
 
 	if r.context.verbose {
-		r.context.printf("=== PAUSE %s\n", r.name)
+		r.context.printf("=== PAUSE %s\n", r.goTestName)
 	}
 	r.done <- true     // Release calling test.
 	<-r.parent.barrier // Wait for the parent test to complete.
 	r.context.waitParallel()
 
 	if r.context.verbose {
-		r.context.printf("=== CONT  %s\n", r.name)
+		r.context.printf("=== CONT  %s\n", r.goTestName)
 	}
 	r.durationMeasurer.start()
 }
@@ -231,18 +232,19 @@ func (r *reporter) isRoot() bool {
 // Run may be called simultaneously from multiple goroutines,
 // but all such calls must return before the outer test function for r returns.
 func (r *reporter) Run(name string, f func(t Reporter)) bool {
-	name = rewrite(name)
-	if r.name != "" {
-		name = fmt.Sprintf("%s/%s", r.name, name)
+	goTestName := rewrite(name)
+	if r.goTestName != "" {
+		goTestName = fmt.Sprintf("%s/%s", r.goTestName, goTestName)
 	}
 	child := new()
 	child.context = r.context
 	child.parent = r
 	child.name = name
+	child.goTestName = goTestName
 	child.depth = r.depth + 1
 	child.durationMeasurer = r.durationMeasurer.spawn()
 	if r.context.verbose {
-		r.context.printf("=== RUN   %s\n", child.name)
+		r.context.printf("=== RUN   %s\n", child.goTestName)
 	}
 	go child.run(f)
 	<-child.done
@@ -322,9 +324,9 @@ func collectOutput(r *reporter) []string {
 			status = "SKIP"
 		}
 		results = []string{
-			fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.name, r.durationMeasurer.getDuration().Seconds()),
+			fmt.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.goTestName, r.durationMeasurer.getDuration().Seconds()),
 		}
-		for _, l := range r.logs {
+		for _, l := range r.logs.all() {
 			padding := fmt.Sprintf("%s    ", prefix)
 			results = append(results, pad(l, padding))
 		}
@@ -335,14 +337,14 @@ func collectOutput(r *reporter) []string {
 	if r.depth == 1 {
 		if r.Failed() {
 			results = append(results,
-				fmt.Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.name, r.durationMeasurer.getDuration().Seconds()),
+				fmt.Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.goTestName, r.durationMeasurer.getDuration().Seconds()),
 			)
 		} else {
 			if r.context.verbose {
 				results = append(results, "PASS")
 			}
 			results = append(results,
-				fmt.Sprintf("ok  \t%s\t%.3fs", r.name, r.durationMeasurer.getDuration().Seconds()),
+				fmt.Sprintf("ok  \t%s\t%.3fs", r.goTestName, r.durationMeasurer.getDuration().Seconds()),
 			)
 		}
 	}
@@ -365,6 +367,22 @@ func pad(s string, padding string) string {
 	return b.String()
 }
 
+func (r *reporter) getName() string {
+	return r.name
+}
+
 func (r *reporter) getDuration() time.Duration {
 	return r.durationMeasurer.getDuration()
+}
+
+func (r *reporter) getLogs() *logRecorder {
+	return r.logs
+}
+
+func (r *reporter) getChildren() []Reporter {
+	children := make([]Reporter, len(r.children))
+	for i, child := range r.children {
+		children[i] = child
+	}
+	return children
 }

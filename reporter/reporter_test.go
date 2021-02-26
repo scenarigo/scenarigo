@@ -16,7 +16,7 @@ func TestReporter(t *testing.T) {
 func TestReporter_Name(t *testing.T) {
 	name := "testname"
 	r := new()
-	r.name = name
+	r.goTestName = name
 	if expect, got := name, r.Name(); got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
@@ -65,10 +65,10 @@ func TestReporter_Log(t *testing.T) {
 	str := "log"
 	r := new()
 	r.Log(str)
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := str, r.logs[0]; got != expect {
+	if expect, got := str, r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 }
@@ -78,10 +78,10 @@ func TestReporter_Logf(t *testing.T) {
 	name := "testname"
 	r := new()
 	r.Errorf(format, name)
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := fmt.Sprintf(format, name), r.logs[0]; got != expect {
+	if expect, got := fmt.Sprintf(format, name), r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 }
@@ -93,10 +93,10 @@ func TestReporter_Error(t *testing.T) {
 	if expect, got := true, r.Failed(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := name, r.logs[0]; got != expect {
+	if expect, got := name, r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 }
@@ -109,10 +109,10 @@ func TestReporter_Errorf(t *testing.T) {
 	if expect, got := true, r.Failed(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := fmt.Sprintf(format, name), r.logs[0]; got != expect {
+	if expect, got := fmt.Sprintf(format, name), r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 }
@@ -133,10 +133,10 @@ func TestReporter_Fatal(t *testing.T) {
 	if expect, got := true, r.Failed(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := name, r.logs[0]; got != expect {
+	if expect, got := name, r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 	if expect, got := false, reached; got != expect {
@@ -161,10 +161,10 @@ func TestReporter_Fatalf(t *testing.T) {
 	if expect, got := true, r.Failed(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := fmt.Sprintf(format, name), r.logs[0]; got != expect {
+	if expect, got := fmt.Sprintf(format, name), r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 	if expect, got := false, reached; got != expect {
@@ -188,10 +188,10 @@ func TestReporter_Skip(t *testing.T) {
 	if expect, got := true, r.Skipped(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := name, r.logs[0]; got != expect {
+	if expect, got := name, r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 	if expect, got := false, reached; got != expect {
@@ -216,10 +216,10 @@ func TestReporter_Skipf(t *testing.T) {
 	if expect, got := true, r.Skipped(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
-	if expect, got := 1, len(r.logs); got != expect {
+	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
 	}
-	if expect, got := fmt.Sprintf(format, name), r.logs[0]; got != expect {
+	if expect, got := fmt.Sprintf(format, name), r.logs.all()[0]; got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
 	}
 	if expect, got := false, reached; got != expect {
@@ -436,6 +436,108 @@ FAIL
 			if diff := cmp.Diff(test.expect, "\n"+b.String()); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestReporter_PrivateMethods(t *testing.T) {
+	tests := map[string]struct {
+		run      func(t *testing.T, f func(Reporter))
+		rootName string
+	}{
+		"reporter": {
+			run: func(t *testing.T, f func(Reporter)) {
+				Run(f)
+			},
+		},
+		"testReporter": {
+			run: func(t *testing.T, f func(Reporter)) {
+				f(FromT(t))
+			},
+			rootName: "TestReporter_PrivateMethods/testReporter",
+		},
+	}
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			var r Reporter
+			test.run(t, func(rptr Reporter) {
+				r = rptr
+				if ok := r.Run("child", func(r Reporter) {
+					time.Sleep(10 * time.Millisecond)
+					r.Log("child log")
+				}); !ok {
+					t.Fatal("test failed")
+				}
+				if ok := r.Run("skip", func(r Reporter) {
+					time.Sleep(10 * time.Millisecond)
+					r.Skip("skip log")
+				}); !ok {
+					t.Fatal("test failed")
+				}
+			})
+
+			children := r.getChildren()
+			if got := len(children); got != 2 {
+				t.Fatalf("expected length is 2 but %d", got)
+			}
+			t.Run("getName", func(t *testing.T) {
+				if got, expected := r.getName(), test.rootName; got != expected {
+					t.Errorf("expect %q but got %q", expected, got)
+				}
+				if got, expected := children[0].getName(), "child"; got != expected {
+					t.Errorf("expect %q but got %q", expected, got)
+				}
+				if got, expected := children[1].getName(), "skip"; got != expected {
+					t.Errorf("expect %q but got %q", expected, got)
+				}
+			})
+			t.Run("getDuration", func(t *testing.T) {
+				if got := r.getDuration(); got == 0 {
+					t.Error("duration must be greater than 0")
+				}
+				if got := children[0].getDuration(); got == 0 {
+					t.Error("duration must be greater than 0")
+				}
+				if got := children[1].getDuration(); got == 0 {
+					t.Error("duration must be greater than 0")
+				}
+			})
+			t.Run("getLogs", func(t *testing.T) {
+				opts := []cmp.Option{
+					cmp.AllowUnexported(logRecorder{}),
+					cmp.FilterPath(func(p cmp.Path) bool {
+						return p.Last().String() == ".m"
+					}, cmp.Ignore()),
+				}
+				if diff := cmp.Diff(&logRecorder{}, r.getLogs(), opts...); diff != "" {
+					t.Errorf("result mismatch (-want +got):\n%s", diff)
+				}
+				if diff := cmp.Diff(&logRecorder{
+					strs:     []string{"child log"},
+					infoIdxs: []int{0},
+				}, children[0].getLogs(), opts...); diff != "" {
+					t.Errorf("result mismatch (-want +got):\n%s", diff)
+				}
+				zero := 0
+				if diff := cmp.Diff(&logRecorder{
+					strs:    []string{"skip log"},
+					skipIdx: &zero,
+				}, children[1].getLogs(), opts...); diff != "" {
+					t.Errorf("result mismatch (-want +got):\n%s", diff)
+				}
+			})
+			t.Run("isRoot", func(t *testing.T) {
+				if got, expected := r.isRoot(), true; got != expected {
+					t.Errorf("expect %t but got %t", expected, got)
+				}
+				if got, expected := children[0].isRoot(), false; got != expected {
+					t.Errorf("expect %t but got %t", expected, got)
+				}
+				if got, expected := children[1].isRoot(), false; got != expected {
+					t.Errorf("expect %t but got %t", expected, got)
+				}
+			})
 		})
 	}
 }
