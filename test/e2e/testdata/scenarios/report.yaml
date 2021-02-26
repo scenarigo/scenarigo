@@ -1,0 +1,21 @@
+---
+title: /echo
+steps:
+- title: include
+  include: './included.yaml'
+- title: POST /echo
+  vars:
+    id: "123"
+    message: hello
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/echo"
+    header:
+      Authorization: "Bearer {{env.TEST_TOKEN}}"
+    body:
+      message: "{{vars.message}}"
+  expect:
+    code: 200
+    body:
+      message: "{{request.message}}"

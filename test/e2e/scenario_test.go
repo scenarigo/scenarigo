@@ -18,7 +18,12 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/zoncoen/scenarigo"
 	"github.com/zoncoen/scenarigo/assert"
@@ -26,10 +31,6 @@ import (
 	"github.com/zoncoen/scenarigo/protocol"
 	"github.com/zoncoen/scenarigo/reporter"
 	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 type testProtocol struct {
@@ -222,64 +223,8 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 		setup func(*testing.T) func()
 	}{
 		"http": {
-			ok: "testdata/scenarios/http.yaml",
-			setup: func(t *testing.T) func() {
-				t.Helper()
-				token := "XXXXX"
-				mux := http.NewServeMux()
-				mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusNotFound)
-				})
-				mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
-					auth := r.Header.Get("Authorization")
-					if auth != fmt.Sprintf("Bearer %s", token) {
-						w.WriteHeader(http.StatusForbidden)
-						return
-					}
-					switch r.Header.Get("Content-Type") {
-					case "application/x-www-form-urlencoded":
-						if err := r.ParseForm(); err != nil {
-							t.Fatalf("failed to parse form: %s", err)
-						}
-						w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-						_, _ = w.Write([]byte(strings.Join([]string{
-							r.Form.Get("id"),
-							r.Form.Get("message"),
-							r.Form.Get("bool"),
-						}, ", ")))
-					default:
-						body := map[string]string{}
-						d := json.NewDecoder(r.Body)
-						defer r.Body.Close()
-						if err := d.Decode(&body); err != nil {
-							t.Fatalf("failed to decode request body: %s", err)
-						}
-						b, err := json.Marshal(map[string]string{
-							"message": body["message"],
-							"id":      r.URL.Query().Get("id"),
-						})
-						if err != nil {
-							t.Fatalf("failed to marshal: %s", err)
-						}
-						w.Header().Set("Content-Type", "application/json")
-						_, _ = w.Write(b)
-					}
-				})
-
-				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					t.Fatalf("unexpected error: %s", err)
-				}
-				if err := os.Setenv("TEST_TOKEN", token); err != nil {
-					t.Fatalf("unexpected error: %s", err)
-				}
-
-				return func() {
-					s.Close()
-					os.Unsetenv("TEST_ADDR")
-					os.Unsetenv("TEST_TOKEN")
-				}
-			},
+			ok:    "testdata/scenarios/http.yaml",
+			setup: startHTTPServer,
 		},
 		"grpc": {
 			ok: "testdata/scenarios/grpc.yaml",
@@ -428,5 +373,136 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestRunner_GenerateTestReport(t *testing.T) {
+	teardown := startHTTPServer(t)
+	defer teardown()
+
+	r, err := scenarigo.NewRunner(scenarigo.WithScenarios("testdata/scenarios/report.yaml"))
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	var b bytes.Buffer
+	ok := reporter.Run(func(rptr reporter.Reporter) {
+		r.Run(context.New(rptr).WithPluginDir("testdata/gen/plugins"))
+
+		report, err := reporter.GenerateTestReport(rptr)
+		if err != nil {
+			t.Fatalf("failed to generate report: %s", err)
+		}
+
+		if diff := cmp.Diff(
+			&reporter.TestReport{
+				Result: reporter.TestResultPassed,
+				Files: []reporter.ScenarioFileReport{
+					{
+						Name:   "testdata/scenarios/report.yaml",
+						Result: reporter.TestResultPassed,
+						Scenarios: []reporter.ScenarioReport{
+							{
+								Name:   "/echo",
+								File:   "testdata/scenarios/report.yaml",
+								Result: reporter.TestResultPassed,
+								Steps: []reporter.StepReport{
+									{
+										Name:   "include",
+										Result: reporter.TestResultPassed,
+										SubSteps: []reporter.SubStepReport{
+											{
+												Name:   "testdata/scenarios/included.yaml",
+												Result: reporter.TestResultPassed,
+												SubSteps: []reporter.SubStepReport{
+													{
+														Name:   "step plugin",
+														Result: reporter.TestResultPassed,
+													},
+												},
+											},
+										},
+									},
+									{
+										Name:   "POST /echo",
+										Result: reporter.TestResultPassed,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			report,
+			cmp.FilterValues(func(_, _ reporter.TestDuration) bool {
+				return true
+			}, cmp.Ignore()),
+			cmp.FilterValues(func(_, _ reporter.ReportLogs) bool {
+				return true
+			}, cmp.Ignore()),
+		); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+	}, reporter.WithWriter(&b))
+	if !ok {
+		t.Fatalf("scenario failed:\n%s", b.String())
+	}
+}
+
+func startHTTPServer(t *testing.T) func() {
+	t.Helper()
+	token := "XXXXX"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if auth != fmt.Sprintf("Bearer %s", token) {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		switch r.Header.Get("Content-Type") {
+		case "application/x-www-form-urlencoded":
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("failed to parse form: %s", err)
+			}
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte(strings.Join([]string{
+				r.Form.Get("id"),
+				r.Form.Get("message"),
+				r.Form.Get("bool"),
+			}, ", ")))
+		default:
+			body := map[string]string{}
+			d := json.NewDecoder(r.Body)
+			defer r.Body.Close()
+			if err := d.Decode(&body); err != nil {
+				t.Fatalf("failed to decode request body: %s", err)
+			}
+			b, err := json.Marshal(map[string]string{
+				"message": body["message"],
+				"id":      r.URL.Query().Get("id"),
+			})
+			if err != nil {
+				t.Fatalf("failed to marshal: %s", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(b)
+		}
+	})
+
+	s := httptest.NewServer(mux)
+	if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if err := os.Setenv("TEST_TOKEN", token); err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	return func() {
+		s.Close()
+		os.Unsetenv("TEST_ADDR")
+		os.Unsetenv("TEST_TOKEN")
 	}
 }

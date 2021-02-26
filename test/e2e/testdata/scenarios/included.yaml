@@ -1,0 +1,9 @@
+---
+title: included scenario
+plugins:
+  simple: simple.so
+steps:
+- title: step plugin
+  vars:
+    step: step 
+  ref: '{{plugins.simple.DumpVarsStep}}'
