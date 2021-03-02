@@ -2,7 +2,6 @@ package scenarigo
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/lestrrat-go/backoff"
 	"golang.org/x/xerrors"
@@ -47,7 +46,7 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 		}
 		currentNode := ctx.Node()
 		ctx.Run(scenarios[0].Filepath(), func(ctx *context.Context) {
-			RunScenario(ctx.WithNode(includeNode), scenarios[0])
+			runScenario(ctx.WithNode(includeNode), scenarios[0])
 		})
 
 		// back node to current node
@@ -82,9 +81,7 @@ func runStep(ctx *context.Context, s *schema.Step, stepIdx int) *context.Context
 				),
 			)
 		}
-		startTime := time.Now()
 		ctx = stp.Run(ctx, s)
-		ctx.Reporter().Logf("Run %s: elapsed time %f sec", s.Ref, time.Since(startTime).Seconds())
 		return ctx
 	}
 
@@ -102,13 +99,12 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 
 	var i int
 	for backoff.Continue(b) {
-		ctx.Reporter().Logf("[%d] send request", i)
+		if i > 0 {
+			ctx.Reporter().Logf("[%d] retry step", i)
+		}
 		i++
 
-		reqTime := time.Now()
 		newCtx, resp, err := s.Request.Invoke(ctx)
-		ctx.Reporter().Logf("elapsed time: %f sec", time.Since(reqTime).Seconds())
-
 		if err != nil {
 			ctx.Reporter().Log(
 				errors.WithNodeAndColored(
