@@ -205,7 +205,7 @@ func (r *Runner) Run(ctx *context.Context) {
 				ctx = ctx.WithNode(node)
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
-					_ = RunScenario(ctx, scn)
+					_ = runScenario(ctx, scn)
 				})
 			}
 		})
@@ -229,7 +229,7 @@ func (r *Runner) Run(ctx *context.Context) {
 				ctx = ctx.WithNode(node)
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
-					_ = RunScenario(ctx, scn)
+					_ = runScenario(ctx, scn)
 				})
 			}
 		})

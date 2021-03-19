@@ -51,7 +51,31 @@ type Invoker interface {
 	Invoke(*context.Context) (*context.Context, interface{}, error)
 }
 
+// InvokerFunc is an adaptor to allow the use of ordinary functions as Invoker.
+func InvokerFunc(f func(*context.Context) (*context.Context, interface{}, error)) Invoker {
+	return invoker(f)
+}
+
+type invoker func(*context.Context) (*context.Context, interface{}, error)
+
+// Invoke implements Invoker interface.
+func (f invoker) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
+	return f(ctx)
+}
+
 // AssertionBuilder builds the assertion for the result of Invoke.
 type AssertionBuilder interface {
 	Build(*context.Context) (assert.Assertion, error)
+}
+
+// AssertionBuilderFunc is an adaptor to allow the use of ordinary functions as AssertionBuilder.
+func AssertionBuilderFunc(f func(*context.Context) (assert.Assertion, error)) AssertionBuilder {
+	return assertionBuilder(f)
+}
+
+type assertionBuilder func(*context.Context) (assert.Assertion, error)
+
+// Build implements AssertionBuilder interface.
+func (f assertionBuilder) Build(ctx *context.Context) (assert.Assertion, error) {
+	return f(ctx)
 }

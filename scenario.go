@@ -29,8 +29,23 @@ func loadPlugin(ctx *context.Context, path string) *plugin.Plugin {
 	return p
 }
 
-// RunScenario runs a test scenario s.
+// RunScenario is a simple function to run a test scenario directly instead of using scenario.Runner.
+// Generally, it is better to execute test scenarios written in YAML via the runner.
 func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
+	if s == nil {
+		ctx.Reporter().Error("scenario is nil")
+		return ctx
+	}
+	var scnCtx *context.Context
+	ctx.Run(s.Filepath(), func(ctx *context.Context) {
+		ctx.Run(s.Title, func(ctx *context.Context) {
+			scnCtx = runScenario(ctx, s)
+		})
+	})
+	return scnCtx
+}
+
+func runScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	ctx = ctx.WithScenarioFilepath(s.Filepath())
 	if s.Plugins != nil {
 		plugs := map[string]interface{}{}
