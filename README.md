@@ -260,3 +260,43 @@ steps:
     query:
       id: '{{vars[0]}}'
 ```
+
+### Plugin
+
+Scenarigo provides the extension feature by using [the plugin package of Go](https://golang.org/pkg/plugin/). It enables to use Go functions and variables in test scenarios. For example, you can use UUID in scenario yaml file.
+
+First, create plugin file in the plugins dir which is specified at `pluginDirectory` in scenarigo.yaml.
+
+```go gen.go
+package main
+import (
+    "github.com/google/uuid"
+)
+func UUID() string{
+    return uuid.New().String()
+}
+```
+
+Second, build the plugin file with `buildmode=plugin` option.
+
+**Notes**: You have to build the plugin with the same version of Go as the scnarigo run command.
+
+```shell
+$ go build -buildmode=plugin -o gen.so gen.go
+```
+
+Then, you can load the plugin `gen.so` and use `UUID()` function in the scenario yaml file.
+
+```yaml
+title: check /message
+plugins: # Specify Go plugin files
+  gen: gen.so
+steps:
+- title: POST /message
+  protocol: http
+  request:
+    method: POST
+    url: http://example.com/message
+    body:
+      id: '{{plugins.gen.UUID()}}' # Call Go plugin function
+```
