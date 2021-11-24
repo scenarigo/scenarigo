@@ -14,15 +14,14 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sergi/go-diff v1.2.0
 	github.com/sosedoff/gitkit v0.3.0
-	github.com/spf13/cobra v0.0.7
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/cobra v1.2.1
 	github.com/zoncoen/query-go v1.0.4
 	golang.org/x/mod v0.5.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211007075335-d3039528d8ac // indirect
 	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
-	google.golang.org/genproto v0.0.0-20210406143921-e86de6bf7a46
+	google.golang.org/genproto v0.0.0-20210602131652-f16073e35f0c
 	google.golang.org/grpc v1.41.0
 	google.golang.org/protobuf v1.27.1
 )
