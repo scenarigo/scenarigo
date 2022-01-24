@@ -23,7 +23,7 @@ jobs:
         token: ${{ steps.generate_token.outputs.token }}
     - name: Generate CREDITS
       run: make credits
-    - uses: EndBug/add-and-commit@v7.5.0
+    - uses: EndBug/add-and-commit@v8.0.1
       with:
         add: CREDITS
         default_author: github_actions
