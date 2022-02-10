@@ -7,7 +7,7 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     steps:
     - name: Install Go
-      uses: actions/setup-go@v2.1.5
+      uses: actions/setup-go@v2.2.0
       with:
         go-version: 1.17.x
     - name: Generate token # required to trigger actions on the commit
