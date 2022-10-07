@@ -18,7 +18,7 @@ require (
 	golang.org/x/mod v0.5.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/genproto v0.0.0-20220413183235-5e96e2839df9
-	google.golang.org/grpc v1.49.0
+	google.golang.org/grpc v1.50.0
 	google.golang.org/protobuf v1.28.1
 )
 
