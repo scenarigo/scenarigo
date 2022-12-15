@@ -29,11 +29,9 @@ ng:
 name: left arrow function w/ assertion
 yaml: |-
   {{assert.and <-}}:
-  - |-
-    {{assert.contains <-}}:
+  - "{{assert.contains <-}}":
       name: Alice
-  - |-
-    {{assert.contains <-}}:
+  - "{{assert.contains <-}}":
       name: Bob
 ok:
 -
