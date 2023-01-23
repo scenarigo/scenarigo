@@ -22,7 +22,7 @@ $(BIN_DIR):
 	@mkdir -p $(BIN_DIR)
 
 PROTOC := $(BIN_DIR)/protoc
-PROTOC_VERSION := 3.20.0
+PROTOC_VERSION := 21.12
 PROTOC_OS := $(UNAME_OS)
 ifeq "$(UNAME_OS)" "Darwin"
 	PROTOC_OS = osx
@@ -41,7 +41,7 @@ $(PROTOC): | $(BIN_DIR)
 
 PROTOC_GEN_GO := $(BIN_DIR)/protoc-gen-go
 $(PROTOC_GEN_GO): | $(BIN_DIR)
-	@$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
+	@$(GO) install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1
 
 PROTOC_GEN_GO_GRPC := $(BIN_DIR)/protoc-gen-go-grpc
 $(PROTOC_GEN_GO_GRPC): | $(BIN_DIR)
@@ -65,15 +65,15 @@ $(GOBUMP): | $(BIN_DIR)
 
 GIT_CHGLOG := $(BIN_DIR)/git-chglog
 $(GIT_CHGLOG): | $(BIN_DIR)
-	@$(GO) install github.com/git-chglog/git-chglog/cmd/git-chglog@v0.15.1
+	@$(GO) install github.com/git-chglog/git-chglog/cmd/git-chglog@v0.15.2
 
 GO_LICENSES := $(BIN_DIR)/go-licenses
 $(GO_LICENSES): | $(BIN_DIR)
-	@$(GO) install github.com/google/go-licenses@v1.3.0
+	@$(GO) install github.com/google/go-licenses@v1.6.0
 
 GOCREDITS := $(BIN_DIR)/gocredits
 $(GOCREDITS): | $(BIN_DIR)
-	@$(GO) install github.com/Songmu/gocredits/cmd/gocredits@v0.2.0
+	@$(GO) install github.com/Songmu/gocredits/cmd/gocredits@v0.3.0
 
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 GOLANGCI_LINT_VERSION := 1.48.0
