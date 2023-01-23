@@ -3,7 +3,7 @@ module github.com/zoncoen/scenarigo
 go 1.18
 
 require (
-	github.com/fatih/color v1.14.0
+	github.com/fatih/color v1.14.1
 	github.com/goccy/go-yaml v1.9.8
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
