@@ -15,7 +15,7 @@ require (
 	github.com/sosedoff/gitkit v0.3.0
 	github.com/spf13/cobra v1.6.1
 	github.com/zoncoen/query-go v1.2.1
-	github.com/zoncoen/query-go/extractor/yaml v0.1.0
+	github.com/zoncoen/query-go/extractor/yaml v0.1.1
 	golang.org/x/mod v0.7.0
 	golang.org/x/sync v0.1.0
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37
