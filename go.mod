@@ -17,7 +17,7 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/zoncoen/query-go v1.2.1
 	github.com/zoncoen/query-go/extractor/yaml v0.1.1
-	golang.org/x/mod v0.7.0
+	golang.org/x/mod v0.8.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/text v0.7.0
 	google.golang.org/genproto v0.0.0-20230119192704-9d59e20e5cd1
