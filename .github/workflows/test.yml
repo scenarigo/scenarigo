@@ -24,14 +24,14 @@ jobs:
       run: make test/ci
     - name: Upload cmd coverage
       if: matrix.os == 'ubuntu-latest' && startsWith(matrix.go-version, '1.20')
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage-cmd.out
         flags: cmd
         fail_ci_if_error: true
     - name: Upload module coverage
       if: matrix.os == 'ubuntu-latest' && startsWith(matrix.go-version, '1.20')
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage-module.out
         flags: module
