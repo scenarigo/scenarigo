@@ -15,7 +15,7 @@ require (
 	github.com/sergi/go-diff v1.3.1
 	github.com/sosedoff/gitkit v0.4.0
 	github.com/spf13/cobra v1.7.0
-	github.com/vmware-tanzu/carvel-ytt v0.45.4
+	github.com/vmware-tanzu/carvel-ytt v0.45.6
 	github.com/zoncoen/query-go v1.2.1
 	github.com/zoncoen/query-go/extractor/yaml v0.1.1
 	golang.org/x/mod v0.12.0
