@@ -26,6 +26,11 @@ steps:
       messageBody: "{{request.messageBody}}"
       state: ACTIVE
       nullableString: null
+      oneofMessages:
+        - a:
+            foo: foo
+        - b:
+            bar: bar
     header:
       content-type: '{{assert.notZero}}'
 

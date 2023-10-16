@@ -93,6 +93,22 @@ func (s *testGRPCServer) Echo(ctx gocontext.Context, req *test.EchoRequest) (*te
 		MessageBody: req.MessageBody,
 		UserType:    test.UserType_CUSTOMER,
 		State:       test.State_ACTIVE,
+		OneofMessages: []*test.OneofMessage{
+			{
+				Value: &test.OneofMessage_A_{
+					A: &test.OneofMessage_A{
+						Foo: "foo",
+					},
+				},
+			},
+			{
+				Value: &test.OneofMessage_B_{
+					B: &test.OneofMessage_B{
+						Bar: "bar",
+					},
+				},
+			},
+		},
 	}, nil
 }
 

@@ -32,6 +32,20 @@ message EchoResponse {
     UserType user_type = 4;
     State state = 5;
     StringValue nullable_string = 11;
+    repeated OneofMessage oneof_messages = 12;
+}
+
+message OneofMessage {
+    oneof value {
+        A a = 1;
+        B b = 2;
+    }
+    message A {
+      string foo = 1;
+    }
+    message B {
+      string bar = 1;
+    }
 }
 
 // ref. google/protobuf/wrappers.proto
