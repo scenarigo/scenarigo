@@ -13,6 +13,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/mattn/go-encoding"
+
 	"github.com/zoncoen/scenarigo/context"
 	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/internal/reflectutil"
@@ -96,6 +97,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		Body:   nil,
 		status: resp.Status,
 	}
+	ctx = ctx.WithResponseHeader(resp.Header)
 	if len(b) > 0 {
 		unmarshaler := unmarshaler.Get(resp.Header.Get("Content-Type"))
 		var respBody interface{}
