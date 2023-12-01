@@ -1,15 +1,14 @@
 package context
 
 const (
-	nameContext        = "ctx"
-	namePlugins        = "plugins"
-	nameVars           = "vars"
-	nameSteps          = "steps"
-	nameRequest        = "request"
-	nameResponse       = "response"
-	nameResponseHeader = "responseHeader"
-	nameEnv            = "env"
-	nameAssert         = "assert"
+	nameContext  = "ctx"
+	namePlugins  = "plugins"
+	nameVars     = "vars"
+	nameSteps    = "steps"
+	nameRequest  = "request"
+	nameResponse = "response"
+	nameEnv      = "env"
+	nameAssert   = "assert"
 )
 
 // ExtractByKey implements query.KeyExtractor interface.
@@ -39,11 +38,6 @@ func (c *Context) ExtractByKey(key string) (interface{}, bool) {
 		}
 	case nameResponse:
 		v := c.Response()
-		if v != nil {
-			return v, true
-		}
-	case nameResponseHeader:
-		v := c.ResponseHeader()
 		if v != nil {
 			return v, true
 		}

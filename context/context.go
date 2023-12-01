@@ -19,7 +19,6 @@ type (
 	keySteps            struct{}
 	keyRequest          struct{}
 	keyResponse         struct{}
-	keyResponseHeader   struct{}
 	keyYAMLNode         struct{}
 	keyEnabledColor     struct{}
 )
@@ -267,21 +266,4 @@ func RunWithRetry(c *Context, name string, f func(*Context), policy reporter.Ret
 		defer cancel()
 		f(c.WithRequestContext(reqCtx).WithReporter(r))
 	}, policy)
-}
-
-// WithResponseHeader returns a copy of c with response.
-func (c *Context) WithResponseHeader(respHeader interface{}) *Context {
-	if respHeader == nil {
-		return c
-	}
-	return newContext(
-		context.WithValue(c.ctx, keyResponseHeader{}, respHeader),
-		c.reqCtx,
-		c.reporter,
-	)
-}
-
-// ResponseHeader returns the response.
-func (c *Context) ResponseHeader() interface{} {
-	return c.ctx.Value(keyResponseHeader{})
 }

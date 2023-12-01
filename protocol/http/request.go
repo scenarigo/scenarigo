@@ -97,7 +97,6 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 		Body:   nil,
 		status: resp.Status,
 	}
-	ctx = ctx.WithResponseHeader(resp.Header)
 	if len(b) > 0 {
 		unmarshaler := unmarshaler.Get(resp.Header.Get("Content-Type"))
 		var respBody interface{}
@@ -105,13 +104,13 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 			return ctx, nil, errors.Errorf("failed to unmarshal response body as %s: %s: %s", unmarshaler.MediaType(), string(b), err)
 		}
 		rvalue.Body = respBody
-		ctx = ctx.WithResponse(respBody)
 		if b, err := yaml.Marshal(rvalue); err == nil {
 			ctx.Reporter().Logf("response:\n%s", r.addIndent(string(b), indentNum))
 		} else {
 			ctx.Reporter().Logf("failed to dump response:\n%s", err)
 		}
 	}
+	ctx = ctx.WithResponse(rvalue)
 	return ctx, rvalue, nil
 }
 
