@@ -43,6 +43,10 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		opts = append(opts, scenarigo.WithConfig(cfg))
 	}
+
+	//  TODO(kyu08): Make it possible to turn on and off with options
+	opts = append(opts, scenarigo.WithWriter(cmd.OutOrStdout()))
+
 	if len(args) > 0 {
 		opts = append(opts, scenarigo.WithScenarios(args...))
 	}
@@ -67,15 +71,20 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	var reportErr error
+	var printSummaryErr error
 	success := reporter.Run(
 		func(rptr reporter.Reporter) {
 			r.Run(context.New(rptr))
 			reportErr = r.CreateTestReport(rptr)
+			printSummaryErr = r.PrintSummary()
 		},
 		reporterOpts...,
 	)
 	if reportErr != nil {
 		return fmt.Errorf("failed to create test reports: %w", reportErr)
+	}
+	if printSummaryErr != nil {
+		return fmt.Errorf("failed to print summary: %w", printSummaryErr)
 	}
 	if !success {
 		return ErrTestFailed

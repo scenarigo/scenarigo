@@ -40,6 +40,8 @@ type Runner struct {
 	rootDir         string
 	inputConfig     schema.InputConfig
 	reportConfig    schema.ReportConfig
+	testSummary     testSummary
+	w               io.Writer
 }
 
 // NewRunner returns a new test runner.
@@ -143,6 +145,14 @@ func WithOptionsFromEnv(isEnv bool) func(*Runner) error {
 		if isEnv {
 			r.setOptionsFromEnv()
 		}
+		return nil
+	}
+}
+
+// WithWriter returns an option to set the writer.
+func WithWriter(w io.Writer) func(*Runner) error {
+	return func(r *Runner) error {
+		r.w = w
 		return nil
 	}
 }
@@ -263,6 +273,7 @@ FILE_LOOP:
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = RunScenario(ctx, scn)
+					r.testSummary.add(testName, ctx.Reporter())
 				})
 			}
 		})
@@ -279,6 +290,7 @@ FILE_LOOP:
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = RunScenario(ctx, scn)
+					r.testSummary.add(fmt.Sprintf("scenarigo-from-reader-%d", i), ctx.Reporter())
 				})
 			}
 		})
@@ -352,4 +364,13 @@ FILE_LOOP:
 		}
 	}
 	return nil
+}
+
+func (r *Runner) print(format string, a ...any) error {
+	_, err := fmt.Fprintf(r.w, format, a...)
+	return err
+}
+
+func (r *Runner) PrintSummary() error {
+	return r.print(r.testSummary.String())
 }
