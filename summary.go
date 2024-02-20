@@ -4,14 +4,26 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/fatih/color"
 	"github.com/zoncoen/scenarigo/reporter"
 )
 
 type testSummary struct {
-	mu      sync.Mutex
-	passed  []string
-	failed  []string
-	skipped []string
+	mu           sync.Mutex
+	enabledColor bool
+	passed       []string
+	failed       []string
+	skipped      []string
+}
+
+func newTestSummary(enabledColor bool) testSummary {
+	return testSummary{
+		mu:           sync.Mutex{},
+		enabledColor: enabledColor,
+		passed:       []string{},
+		failed:       []string{},
+		skipped:      []string{},
+	}
 }
 
 func (s *testSummary) add(testFileRelPath string, r reporter.Reporter) {
@@ -38,9 +50,13 @@ func (s *testSummary) add(testFileRelPath string, r reporter.Reporter) {
 //
 // TODO(kyu08): Add UT.
 func (s *testSummary) String() string {
+	totalText := fmt.Sprintf("%d tests run", len(s.passed)+len(s.failed)+len(s.skipped))
+	passedText := s.passColor().Sprintf("%d passed", len(s.passed))
+	failedText := s.failColor().Sprintf("%d failed", len(s.failed))
+	skippedText := s.skipColor().Sprintf("%d skipped", len(s.skipped))
 	return fmt.Sprintf(
-		"\n%d tests run: %d passed, %d failed, %d skipped\n\n%s",
-		len(s.passed)+len(s.failed)+len(s.skipped), len(s.passed), len(s.failed), len(s.skipped), s.failedFiles(),
+		"\n%s: %s, %s, %s\n\n%s",
+		totalText, passedText, failedText, skippedText, s.failedFiles(),
 	)
 }
 
@@ -61,4 +77,25 @@ func (s *testSummary) failedFiles() string {
 	result += "\n"
 
 	return result
+}
+
+func (s *testSummary) passColor() *color.Color {
+	if !s.enabledColor {
+		return color.New()
+	}
+	return color.New(color.FgGreen)
+}
+
+func (s *testSummary) failColor() *color.Color {
+	if !s.enabledColor {
+		return color.New()
+	}
+	return color.New(color.FgHiRed)
+}
+
+func (s *testSummary) skipColor() *color.Color {
+	if !s.enabledColor {
+		return color.New()
+	}
+	return color.New(color.FgYellow)
 }

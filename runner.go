@@ -60,6 +60,7 @@ func NewRunner(opts ...func(*Runner) error) (*Runner, error) {
 		}
 		r.rootDir = wd
 	}
+	r.testSummary = newTestSummary(r.enabledColor)
 	return r, nil
 }
 
