@@ -55,9 +55,10 @@ type YTTConfig struct {
 
 // OutputConfig represents an output configuration.
 type OutputConfig struct {
-	Verbose bool         `yaml:"verbose,omitempty"`
-	Colored *bool        `yaml:"colored,omitempty"`
-	Report  ReportConfig `yaml:"report,omitempty"`
+	Verbose   bool         `yaml:"verbose,omitempty"`
+	NoSummary bool         `yaml:"noSummary,omitempty"`
+	Colored   *bool        `yaml:"colored,omitempty"`
+	Report    ReportConfig `yaml:"report,omitempty"`
 }
 
 // ReportConfig represents a report configuration.

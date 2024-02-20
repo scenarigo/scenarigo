@@ -9,6 +9,7 @@ pluginDirectory: ./gen      # Specify the root directory of plugins.
 
 output:
   verbose: false   # Enable verbose output.
+  noSummary: false # Disable show summary.
   # colored: false # Enable colored output with ANSI color escape codes. It is enabled by default but disabled when a NO_COLOR environment variable is set (regardless of its value).
   # report:
   #   json:

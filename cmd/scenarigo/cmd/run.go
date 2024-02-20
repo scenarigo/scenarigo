@@ -44,8 +44,9 @@ func run(cmd *cobra.Command, args []string) error {
 		opts = append(opts, scenarigo.WithConfig(cfg))
 	}
 
-	//  TODO(kyu08): Make it possible to turn on and off with options
-	opts = append(opts, scenarigo.WithWriter(cmd.OutOrStdout()))
+	if cfg != nil && !cfg.Output.NoSummary {
+		opts = append(opts, scenarigo.WithWriter(cmd.OutOrStdout()))
+	}
 
 	if len(args) > 0 {
 		opts = append(opts, scenarigo.WithScenarios(args...))
