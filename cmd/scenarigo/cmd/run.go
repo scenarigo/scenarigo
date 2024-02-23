@@ -44,12 +44,12 @@ func run(cmd *cobra.Command, args []string) error {
 		opts = append(opts, scenarigo.WithConfig(cfg))
 	}
 
-	if cfg != nil && cfg.Output.Summary {
-		opts = append(opts, scenarigo.WithWriter(cmd.OutOrStdout()))
-	}
-
 	if len(args) > 0 {
 		opts = append(opts, scenarigo.WithScenarios(args...))
+	}
+
+	if cfg.Output.Summary {
+		opts = append(opts, scenarigo.EnableSummary())
 	}
 	r, err := scenarigo.NewRunner(opts...)
 	if err != nil {
@@ -77,7 +77,7 @@ func run(cmd *cobra.Command, args []string) error {
 		func(rptr reporter.Reporter) {
 			r.Run(context.New(rptr))
 			reportErr = r.CreateTestReport(rptr)
-			printSummaryErr = r.PrintSummary()
+			printSummaryErr = r.PrintSummary(rptr)
 		},
 		reporterOpts...,
 	)

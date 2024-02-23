@@ -37,11 +37,11 @@ type Runner struct {
 	scenarioFiles   []string
 	scenarioReaders []io.Reader
 	enabledColor    bool
+	enabledSummary  bool
+	testSummary     testSummary
 	rootDir         string
 	inputConfig     schema.InputConfig
 	reportConfig    schema.ReportConfig
-	testSummary     testSummary
-	w               io.Writer
 }
 
 // NewRunner returns a new test runner.
@@ -118,6 +118,14 @@ func WithScenarios(paths ...string) func(*Runner) error {
 	}
 }
 
+// EnableSummary returns a option which outputs test summary.
+func EnableSummary() func(*Runner) error {
+	return func(r *Runner) error {
+		r.enabledSummary = true
+		return nil
+	}
+}
+
 // WithPluginDir returns a option which sets plugin root directory.
 func WithPluginDir(path string) func(*Runner) error {
 	return func(r *Runner) error {
@@ -146,14 +154,6 @@ func WithOptionsFromEnv(isEnv bool) func(*Runner) error {
 		if isEnv {
 			r.setOptionsFromEnv()
 		}
-		return nil
-	}
-}
-
-// WithWriter returns an option to set the writer.
-func WithWriter(w io.Writer) func(*Runner) error {
-	return func(r *Runner) error {
-		r.w = w
 		return nil
 	}
 }
@@ -367,11 +367,9 @@ FILE_LOOP:
 	return nil
 }
 
-func (r *Runner) print(format string, a ...any) error {
-	_, err := fmt.Fprintf(r.w, format, a...)
-	return err
-}
-
-func (r *Runner) PrintSummary() error {
-	return r.print(r.testSummary.String())
+func (r *Runner) PrintSummary(rptr reporter.Reporter) error {
+	if !r.enabledSummary {
+		return nil
+	}
+	return rptr.PrintSummary(r.testSummary.String())
 }

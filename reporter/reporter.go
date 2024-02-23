@@ -36,6 +36,7 @@ type Reporter interface {
 	SkipNow()
 	Skipped() bool
 	Parallel()
+	PrintSummary(summary string) error
 	Run(name string, f func(r Reporter)) bool
 
 	runWithRetry(string, func(t Reporter), RetryPolicy) bool
@@ -223,6 +224,11 @@ func (r *reporter) Parallel() {
 	if r.context.verbose {
 		r.context.printf("=== CONT  %s\n", r.goTestName)
 	}
+}
+
+func (r *reporter) PrintSummary(summary string) error {
+	_, err := r.context.printf(summary)
+	return err
 }
 
 func (r *reporter) appendChildren(children ...*reporter) {
