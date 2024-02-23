@@ -43,7 +43,6 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		opts = append(opts, scenarigo.WithConfig(cfg))
 	}
-
 	if len(args) > 0 {
 		opts = append(opts, scenarigo.WithScenarios(args...))
 	}
