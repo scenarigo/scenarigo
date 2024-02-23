@@ -44,7 +44,7 @@ func run(cmd *cobra.Command, args []string) error {
 		opts = append(opts, scenarigo.WithConfig(cfg))
 	}
 
-	if cfg != nil && !cfg.Output.NoSummary {
+	if cfg != nil && cfg.Output.Summary {
 		opts = append(opts, scenarigo.WithWriter(cmd.OutOrStdout()))
 	}
 
