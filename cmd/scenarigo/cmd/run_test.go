@@ -112,6 +112,53 @@ FAIL	setup	0.000s
 FAIL
 `, filepath.Join(wd, "testdata", "plugin.so")), "\n"),
 		},
+		"print summary": {
+			args:        []string{},
+			config:      "./testdata/scenarigo-summary.yaml",
+			expectError: ErrTestFailed.Error(),
+			expectOutput: strings.TrimPrefix(`
+--- FAIL: scenarios/fail.yaml (0.00s)
+    --- FAIL: scenarios/fail.yaml//echo (0.00s)
+        --- FAIL: scenarios/fail.yaml//echo/POST_/echo (0.00s)
+                request:
+                  method: POST
+                  url: http://127.0.0.1:12345/echo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                  body:
+                    message: request
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "23"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    message: request
+                elapsed time: 0.000000 sec
+                expected response but got request
+                      12 |   expect:
+                      13 |     code: 200
+                      14 |     body:
+                    > 15 |       message: "response"
+                                          ^
+FAIL
+FAIL	scenarios/fail.yaml	0.000s
+FAIL
+ok  	scenarios/pass.yaml	0.000s
+
+2 tests run: 1 passed, 1 failed, 0 skipped
+
+Failed tests:
+	- scenarios/fail.yaml
+
+`, "\n"),
+		},
 		"create reports": {
 			args:        []string{},
 			config:      "./testdata/scenarigo-report.yaml",
