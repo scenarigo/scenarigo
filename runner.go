@@ -274,7 +274,7 @@ FILE_LOOP:
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = RunScenario(ctx, scn)
-					r.testSummary.add(testName, ctx.Reporter())
+					r.testSummary.add(testName, reporter.TestResultString(ctx.Reporter()))
 				})
 			}
 		})
@@ -291,7 +291,7 @@ FILE_LOOP:
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = RunScenario(ctx, scn)
-					r.testSummary.add(fmt.Sprintf("scenarigo-from-reader-%d", i), ctx.Reporter())
+					r.testSummary.add(fmt.Sprintf("scenarigo-from-reader-%d", i), reporter.TestResultString(ctx.Reporter()))
 				})
 			}
 		})

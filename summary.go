@@ -26,11 +26,11 @@ func newTestSummary(enabledColor bool) testSummary {
 	}
 }
 
-func (s *testSummary) add(testFileRelPath string, r reporter.Reporter) {
+func (s *testSummary) add(testFileRelPath string, testResultString string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	switch reporter.TestResultString(r) {
+	switch testResultString {
 	case reporter.TestResultPassed.String():
 		s.passed = append(s.passed, testFileRelPath)
 	case reporter.TestResultFailed.String():
