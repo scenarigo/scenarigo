@@ -85,6 +85,7 @@ plugins:                  # Specify configurations to build plugins.
 output:
   verbose: false # Enable verbose output.
   colored: false # Enable colored output with ANSI color escape codes. It is enabled by default but disabled when a NO_COLOR environment variable is set (regardless of its value).
+  summary: false # Enable summary output.
   report:
     json:
       filename: ./report.json # Specify a filename for test report output in JSON.
