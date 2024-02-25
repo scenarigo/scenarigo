@@ -47,8 +47,6 @@ func (s *testSummary) add(testFileRelPath string, testResultString string) {
 // Failed tests:
 //   - scenarios/scenario1.yaml
 //   - scenarios/scenario2.yaml
-//
-// TODO(kyu08): Add UT.
 func (s *testSummary) String() string {
 	totalText := fmt.Sprintf("%d tests run", len(s.passed)+len(s.failed)+len(s.skipped))
 	passedText := s.passColor().Sprintf("%d passed", len(s.passed))
@@ -60,7 +58,6 @@ func (s *testSummary) String() string {
 	)
 }
 
-// TODO(kyu08): Add UT.
 func (s *testSummary) failedFiles() string {
 	if len(s.failed) == 0 {
 		return ""
