@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sergi/go-diff/diffmatchpatch"
 
 	"github.com/zoncoen/scenarigo/context"
@@ -283,6 +284,11 @@ func TestWithConfig(t *testing.T) {
 		"nil": {
 			config: nil,
 			expect: &Runner{
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
 				rootDir: wd,
 			},
 		},
@@ -290,7 +296,12 @@ func TestWithConfig(t *testing.T) {
 			config: &schema.Config{},
 			expect: &Runner{
 				scenarioFiles: []string{},
-				rootDir:       wd,
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
+				rootDir: wd,
 			},
 		},
 		"vars": {
@@ -306,7 +317,12 @@ func TestWithConfig(t *testing.T) {
 					"bbb": 123,
 				},
 				scenarioFiles: []string{},
-				rootDir:       wd,
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
+				rootDir: wd,
 			},
 		},
 		"root directory": {
@@ -315,7 +331,12 @@ func TestWithConfig(t *testing.T) {
 			},
 			expect: &Runner{
 				scenarioFiles: []string{},
-				rootDir:       "/path/to/directory",
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
+				rootDir: "/path/to/directory",
 			},
 		},
 		"scenarios": {
@@ -324,7 +345,12 @@ func TestWithConfig(t *testing.T) {
 			},
 			expect: &Runner{
 				scenarioFiles: []string{filepath.Join(wd, "testdata/use_include.yaml")},
-				rootDir:       wd,
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
+				rootDir: wd,
 			},
 		},
 		"plugin directory": {
@@ -334,7 +360,12 @@ func TestWithConfig(t *testing.T) {
 			expect: &Runner{
 				scenarioFiles: []string{},
 				pluginDir:     &pluginDirAbs,
-				rootDir:       wd,
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
+				rootDir: wd,
 			},
 		},
 		"input ytt config": {
@@ -350,7 +381,12 @@ func TestWithConfig(t *testing.T) {
 			},
 			expect: &Runner{
 				scenarioFiles: []string{},
-				rootDir:       wd,
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
+				rootDir: wd,
 				inputConfig: schema.InputConfig{
 					YAML: schema.YAMLInputConfig{
 						YTT: schema.YTTConfig{
@@ -370,7 +406,13 @@ func TestWithConfig(t *testing.T) {
 			expect: &Runner{
 				scenarioFiles: []string{},
 				enabledColor:  colored,
-				rootDir:       wd,
+				testSummary: testSummary{
+					enabledColor: true,
+					passed:       []string{},
+					failed:       []string{},
+					skipped:      []string{},
+				},
+				rootDir: wd,
 			},
 		},
 		"output report": {
@@ -396,6 +438,11 @@ func TestWithConfig(t *testing.T) {
 						Filename: "report.json",
 					},
 				},
+				testSummary: testSummary{
+					passed:  []string{},
+					failed:  []string{},
+					skipped: []string{},
+				},
 				rootDir: wd,
 			},
 		},
@@ -407,7 +454,8 @@ func TestWithConfig(t *testing.T) {
 				t.Fatalf("unexpected error: %s", err)
 			}
 			if diff := cmp.Diff(test.expect, got,
-				cmp.AllowUnexported(Runner{}, schema.OrderedMap[string, schema.PluginConfig]{}),
+				cmp.AllowUnexported(Runner{}, schema.OrderedMap[string, schema.PluginConfig]{}, testSummary{}),
+				cmpopts.IgnoreFields(testSummary{}, "mu"),
 				cmp.FilterPath(func(p cmp.Path) bool {
 					switch p.String() {
 					case "pluginSetup", "pluginTeardown":
