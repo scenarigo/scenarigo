@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func Test_testSummaryAdd(t *testing.T) {
+func Test_testSummaryAppend(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
 		testSummary      testSummary
@@ -96,7 +96,7 @@ func Test_testSummaryAdd(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			tt.testSummary.add(tt.testFileRelPath, tt.testResultString)
+			tt.testSummary.append(tt.testFileRelPath, tt.testResultString)
 
 			if diff := cmp.Diff(tt.expect, tt.testSummary,
 				cmpopts.IgnoreFields(testSummary{}, "mu"),

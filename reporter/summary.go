@@ -25,7 +25,7 @@ func newTestSummary(enabledColor bool) testSummary {
 	}
 }
 
-func (s *testSummary) add(testFileRelPath string, testResultString string) {
+func (s *testSummary) append(testFileRelPath string, testResultString string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
