@@ -1,4 +1,4 @@
-package scenarigo
+package reporter
 
 import (
 	"strings"

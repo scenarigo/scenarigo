@@ -1,11 +1,10 @@
-package scenarigo
+package reporter
 
 import (
 	"fmt"
 	"sync"
 
 	"github.com/fatih/color"
-	"github.com/zoncoen/scenarigo/reporter"
 )
 
 type testSummary struct {
