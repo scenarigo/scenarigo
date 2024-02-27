@@ -30,11 +30,11 @@ func (s *testSummary) add(testFileRelPath string, testResultString string) {
 	defer s.mu.Unlock()
 
 	switch testResultString {
-	case reporter.TestResultPassed.String():
+	case TestResultPassed.String():
 		s.passed = append(s.passed, testFileRelPath)
-	case reporter.TestResultFailed.String():
+	case TestResultFailed.String():
 		s.failed = append(s.failed, testFileRelPath)
-	case reporter.TestResultSkipped.String():
+	case TestResultSkipped.String():
 		s.skipped = append(s.skipped, testFileRelPath)
 	default: // Do nothing
 	}

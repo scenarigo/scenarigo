@@ -47,9 +47,6 @@ func run(cmd *cobra.Command, args []string) error {
 		opts = append(opts, scenarigo.WithScenarios(args...))
 	}
 
-	if cfg != nil && cfg.Output.Summary {
-		opts = append(opts, scenarigo.EnableSummary())
-	}
 	r, err := scenarigo.NewRunner(opts...)
 	if err != nil {
 		return err
@@ -70,21 +67,20 @@ func run(cmd *cobra.Command, args []string) error {
 		reporterOpts = append(reporterOpts, reporter.WithNoColor())
 	}
 
+	if cfg != nil && cfg.Output.Summary {
+		reporterOpts = append(reporterOpts, reporter.WithTestSummary(!noColor))
+	}
+
 	var reportErr error
-	var printSummaryErr error
 	success := reporter.Run(
 		func(rptr reporter.Reporter) {
 			r.Run(context.New(rptr))
 			reportErr = r.CreateTestReport(rptr)
-			printSummaryErr = r.PrintSummary(rptr)
 		},
 		reporterOpts...,
 	)
 	if reportErr != nil {
 		return fmt.Errorf("failed to create test reports: %w", reportErr)
-	}
-	if printSummaryErr != nil {
-		return fmt.Errorf("failed to print summary: %w", printSummaryErr)
 	}
 	if !success {
 		return ErrTestFailed

@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/zoncoen/scenarigo/schema"
 )
 
 func Test_testSummaryAdd(t *testing.T) {
@@ -100,8 +99,8 @@ func Test_testSummaryAdd(t *testing.T) {
 			tt.testSummary.add(tt.testFileRelPath, tt.testResultString)
 
 			if diff := cmp.Diff(tt.expect, tt.testSummary,
-				cmp.AllowUnexported(Runner{}, schema.OrderedMap[string, schema.PluginConfig]{}, testSummary{}),
 				cmpopts.IgnoreFields(testSummary{}, "mu"),
+				cmp.AllowUnexported(testSummary{}),
 			); diff != "" {
 				t.Errorf("differs (-want +got):\n%s", diff)
 			}

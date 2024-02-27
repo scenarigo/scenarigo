@@ -36,7 +36,6 @@ type Reporter interface {
 	SkipNow()
 	Skipped() bool
 	Parallel()
-	PrintSummary(summary string) error
 	Run(name string, f func(r Reporter)) bool
 
 	runWithRetry(string, func(t Reporter), RetryPolicy) bool
@@ -48,12 +47,17 @@ type Reporter interface {
 	getLogs() *logRecorder
 	getChildren() []Reporter
 	isRoot() bool
+
+	// for test summary
+	printTestSummary()
 }
 
 // Run runs f with new Reporter which applied opts.
 // It reports whether f succeeded.
 func Run(f func(r Reporter), opts ...Option) bool {
 	r := run(f, opts...)
+	r.printTestSummary()
+
 	return !r.Failed()
 }
 
@@ -226,9 +230,11 @@ func (r *reporter) Parallel() {
 	}
 }
 
-func (r *reporter) PrintSummary(summary string) error {
-	_, err := r.context.printf(summary)
-	return err
+func (r *reporter) printTestSummary() {
+	if !r.context.enabledTestSummary {
+		return
+	}
+	_, _ = r.context.printf(r.context.testSummary.String())
 }
 
 func (r *reporter) appendChildren(children ...*reporter) {
@@ -282,6 +288,7 @@ func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPol
 	r.appendChildren(child)
 	if r.isRoot() {
 		printReport(child)
+		child.context.testSummary.add(name, TestResultString(child))
 	}
 	return !child.Failed()
 }

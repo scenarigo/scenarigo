@@ -37,8 +37,6 @@ type Runner struct {
 	scenarioFiles   []string
 	scenarioReaders []io.Reader
 	enabledColor    bool
-	enabledSummary  bool
-	testSummary     testSummary
 	rootDir         string
 	inputConfig     schema.InputConfig
 	reportConfig    schema.ReportConfig
@@ -60,7 +58,6 @@ func NewRunner(opts ...func(*Runner) error) (*Runner, error) {
 		}
 		r.rootDir = wd
 	}
-	r.testSummary = newTestSummary(r.enabledColor)
 	return r, nil
 }
 
@@ -114,14 +111,6 @@ func WithScenarios(paths ...string) func(*Runner) error {
 			return fmt.Errorf("failed to find test scenarios: %w", err)
 		}
 		r.scenarioFiles = files
-		return nil
-	}
-}
-
-// EnableSummary returns a option which outputs test summary.
-func EnableSummary() func(*Runner) error {
-	return func(r *Runner) error {
-		r.enabledSummary = true
 		return nil
 	}
 }
@@ -274,7 +263,6 @@ FILE_LOOP:
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = RunScenario(ctx, scn)
-					r.testSummary.add(testName, reporter.TestResultString(ctx.Reporter()))
 				})
 			}
 		})
@@ -291,7 +279,6 @@ FILE_LOOP:
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
 					_ = RunScenario(ctx, scn)
-					r.testSummary.add(fmt.Sprintf("scenarigo-from-reader-%d", i), reporter.TestResultString(ctx.Reporter()))
 				})
 			}
 		})
@@ -365,11 +352,4 @@ FILE_LOOP:
 		}
 	}
 	return nil
-}
-
-func (r *Runner) PrintSummary(rptr reporter.Reporter) error {
-	if !r.enabledSummary {
-		return nil
-	}
-	return rptr.PrintSummary(r.testSummary.String())
 }

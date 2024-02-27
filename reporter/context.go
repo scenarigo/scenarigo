@@ -38,6 +38,14 @@ func WithNoColor() Option {
 	}
 }
 
+// WithTestSummary returns an option to enable test summary.
+func WithTestSummary(enabledColor bool) Option {
+	return func(ctx *testContext) {
+		ctx.enabledTestSummary = true
+		ctx.testSummary = newTestSummary(enabledColor)
+	}
+}
+
 // testContext holds all fields that are common to all tests.
 type testContext struct {
 	m sync.Mutex
@@ -61,6 +69,9 @@ type testContext struct {
 	verbose bool
 
 	noColor bool
+
+	enabledTestSummary bool
+	testSummary        testSummary
 
 	// for FromT
 	matcher *matcher
