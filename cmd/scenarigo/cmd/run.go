@@ -46,7 +46,6 @@ func run(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		opts = append(opts, scenarigo.WithScenarios(args...))
 	}
-
 	r, err := scenarigo.NewRunner(opts...)
 	if err != nil {
 		return err
