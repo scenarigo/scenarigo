@@ -23,10 +23,13 @@ func newTestSummary() *testSummary {
 	}
 }
 
-func (s *testSummary) append(testFileRelPath string, testResultString string) {
+func (s *testSummary) append(testFileRelPath string, r Reporter) {
+	if s == nil {
+		return
+	}
+	testResultString := TestResultString(r)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	switch testResultString {
 	case TestResultPassed.String():
 		s.passed = append(s.passed, testFileRelPath)

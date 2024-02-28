@@ -287,7 +287,7 @@ func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPol
 	r.appendChildren(child)
 	if r.isRoot() {
 		printReport(child)
-		child.context.testSummary.append(name, TestResultString(child))
+		child.context.testSummary.append(name, child)
 	}
 	return !child.Failed()
 }

@@ -12,27 +12,11 @@ import (
 func Test_testSummaryAppend(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
-		testSummary      testSummary
-		testFileRelPath  string
-		testResultString string
-		expect           testSummary
+		testSummary     testSummary
+		testFileRelPath string
+		reportFunc      func(r *reporter)
+		expect          testSummary
 	}{
-		"undefined": {
-			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{},
-				skipped: []string{},
-			},
-			testFileRelPath:  "scenario/test.yaml",
-			testResultString: "undefined",
-			expect: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{},
-				skipped: []string{},
-			},
-		},
 		"passed": {
 			testSummary: testSummary{
 				mu:      sync.Mutex{},
@@ -40,8 +24,8 @@ func Test_testSummaryAppend(t *testing.T) {
 				failed:  []string{},
 				skipped: []string{},
 			},
-			testFileRelPath:  "scenario/test.yaml",
-			testResultString: "passed",
+			testFileRelPath: "scenario/test.yaml",
+			reportFunc:      func(r *reporter) {},
 			expect: testSummary{
 				mu:      sync.Mutex{},
 				passed:  []string{"scenario/test.yaml"},
@@ -56,8 +40,8 @@ func Test_testSummaryAppend(t *testing.T) {
 				failed:  []string{},
 				skipped: []string{},
 			},
-			testFileRelPath:  "scenario/test.yaml",
-			testResultString: "failed",
+			testFileRelPath: "scenario/test.yaml",
+			reportFunc:      func(r *reporter) { r.Fail() },
 			expect: testSummary{
 				mu:      sync.Mutex{},
 				passed:  []string{},
@@ -72,8 +56,8 @@ func Test_testSummaryAppend(t *testing.T) {
 				failed:  []string{},
 				skipped: []string{},
 			},
-			testFileRelPath:  "scenario/test.yaml",
-			testResultString: "skipped",
+			testFileRelPath: "scenario/test.yaml",
+			reportFunc:      func(r *reporter) { r.skipped = 1 },
 			expect: testSummary{
 				mu:      sync.Mutex{},
 				passed:  []string{},
@@ -88,7 +72,9 @@ func Test_testSummaryAppend(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			tt.testSummary.append(tt.testFileRelPath, tt.testResultString)
+			r := newReporter()
+			tt.reportFunc(r)
+			tt.testSummary.append(tt.testFileRelPath, r)
 
 			if diff := cmp.Diff(tt.expect, tt.testSummary,
 				cmpopts.IgnoreFields(testSummary{}, "mu"),

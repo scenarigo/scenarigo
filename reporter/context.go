@@ -71,7 +71,7 @@ type testContext struct {
 	noColor bool
 
 	enabledTestSummary bool
-	testSummary        testSummary
+	testSummary        *testSummary
 
 	// for FromT
 	matcher *matcher
