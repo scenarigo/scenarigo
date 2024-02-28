@@ -39,10 +39,10 @@ func WithNoColor() Option {
 }
 
 // WithTestSummary returns an option to enable test summary.
-func WithTestSummary(enabledColor bool) Option {
+func WithTestSummary() Option {
 	return func(ctx *testContext) {
 		ctx.enabledTestSummary = true
-		ctx.testSummary = newTestSummary(enabledColor)
+		ctx.testSummary = newTestSummary()
 	}
 }
 

@@ -234,7 +234,7 @@ func (r *reporter) printTestSummary() {
 	if !r.context.enabledTestSummary {
 		return
 	}
-	_, _ = r.context.printf(r.context.testSummary.String())
+	_, _ = r.context.printf(r.context.testSummary.String(r.context.noColor))
 }
 
 func (r *reporter) appendChildren(children ...*reporter) {

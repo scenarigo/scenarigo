@@ -67,7 +67,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if cfg != nil && cfg.Output.Summary {
-		reporterOpts = append(reporterOpts, reporter.WithTestSummary(!noColor))
+		reporterOpts = append(reporterOpts, reporter.WithTestSummary())
 	}
 
 	var reportErr error

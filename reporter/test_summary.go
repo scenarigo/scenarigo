@@ -8,20 +8,18 @@ import (
 )
 
 type testSummary struct {
-	mu           sync.Mutex
-	enabledColor bool
-	passed       []string
-	failed       []string
-	skipped      []string
+	mu      sync.Mutex
+	passed  []string
+	failed  []string
+	skipped []string
 }
 
-func newTestSummary(enabledColor bool) testSummary {
-	return testSummary{
-		mu:           sync.Mutex{},
-		enabledColor: enabledColor,
-		passed:       []string{},
-		failed:       []string{},
-		skipped:      []string{},
+func newTestSummary() *testSummary {
+	return &testSummary{
+		mu:      sync.Mutex{},
+		passed:  []string{},
+		failed:  []string{},
+		skipped: []string{},
 	}
 }
 
@@ -46,12 +44,12 @@ func (s *testSummary) append(testFileRelPath string, testResultString string) {
 // Failed tests:
 //   - scenarios/scenario1.yaml
 //   - scenarios/scenario2.yaml
-func (s *testSummary) String() string {
+func (s *testSummary) String(noColor bool) string {
 	totalText := fmt.Sprintf("%d tests run", len(s.passed)+len(s.failed)+len(s.skipped))
-	passedText := s.passColor().Sprintf("%d passed", len(s.passed))
-	failedText := s.failColor().Sprintf("%d failed", len(s.failed))
-	skippedText := s.skipColor().Sprintf("%d skipped", len(s.skipped))
-	failedFiles := s.failColor().Sprintf(s.failedFiles())
+	passedText := s.passColor(noColor).Sprintf("%d passed", len(s.passed))
+	failedText := s.failColor(noColor).Sprintf("%d failed", len(s.failed))
+	skippedText := s.skipColor(noColor).Sprintf("%d skipped", len(s.skipped))
+	failedFiles := s.failColor(noColor).Sprintf(s.failedFiles())
 	return fmt.Sprintf(
 		"\n%s: %s, %s, %s\n\n%s",
 		totalText, passedText, failedText, skippedText, failedFiles,
@@ -76,22 +74,22 @@ func (s *testSummary) failedFiles() string {
 	return result
 }
 
-func (s *testSummary) passColor() *color.Color {
-	if !s.enabledColor {
+func (s *testSummary) passColor(noColor bool) *color.Color {
+	if noColor {
 		return color.New()
 	}
 	return color.New(color.FgGreen)
 }
 
-func (s *testSummary) failColor() *color.Color {
-	if !s.enabledColor {
+func (s *testSummary) failColor(noColor bool) *color.Color {
+	if noColor {
 		return color.New()
 	}
 	return color.New(color.FgHiRed)
 }
 
-func (s *testSummary) skipColor() *color.Color {
-	if !s.enabledColor {
+func (s *testSummary) skipColor(noColor bool) *color.Color {
+	if noColor {
 		return color.New()
 	}
 	return color.New(color.FgYellow)
