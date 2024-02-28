@@ -57,7 +57,6 @@ type Reporter interface {
 func Run(f func(r Reporter), opts ...Option) bool {
 	r := run(f, opts...)
 	r.printTestSummary()
-
 	return !r.Failed()
 }
 
