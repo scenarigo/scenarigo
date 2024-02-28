@@ -19,50 +19,50 @@ func Test_testSummaryAppend(t *testing.T) {
 	}{
 		"passed": {
 			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{},
-				skipped: []string{},
+				mu:           sync.Mutex{},
+				passedCount:  0,
+				failed:       []string{},
+				skippedCount: 0,
 			},
 			testFileRelPath: "scenario/test.yaml",
 			reportFunc:      func(r *reporter) {},
 			expect: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{"scenario/test.yaml"},
-				failed:  []string{},
-				skipped: []string{},
+				mu:           sync.Mutex{},
+				passedCount:  1,
+				failed:       []string{},
+				skippedCount: 0,
 			},
 		},
 		"failed": {
 			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{},
-				skipped: []string{},
+				mu:           sync.Mutex{},
+				passedCount:  0,
+				failed:       []string{},
+				skippedCount: 0,
 			},
 			testFileRelPath: "scenario/test.yaml",
 			reportFunc:      func(r *reporter) { r.Fail() },
 			expect: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{"scenario/test.yaml"},
-				skipped: []string{},
+				mu:           sync.Mutex{},
+				passedCount:  0,
+				failed:       []string{"scenario/test.yaml"},
+				skippedCount: 0,
 			},
 		},
 		"skipped": {
 			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{},
-				skipped: []string{},
+				mu:           sync.Mutex{},
+				passedCount:  0,
+				failed:       []string{},
+				skippedCount: 0,
 			},
 			testFileRelPath: "scenario/test.yaml",
 			reportFunc:      func(r *reporter) { r.skipped = 1 },
 			expect: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{},
-				skipped: []string{"scenario/test.yaml"},
+				mu:           sync.Mutex{},
+				passedCount:  0,
+				failed:       []string{},
+				skippedCount: 1,
 			},
 		},
 	}
@@ -94,10 +94,10 @@ func Test_testSummaryString(t *testing.T) {
 	}{
 		"no failed test": {
 			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{"scenario/test1.yaml", "scenario/test2.yaml"},
-				failed:  []string{},
-				skipped: []string{"scenario/test3.yaml"},
+				mu:           sync.Mutex{},
+				passedCount:  2,
+				failed:       []string{},
+				skippedCount: 1,
 			},
 			expect: `
 3 tests run: 2 passed, 0 failed, 1 skipped
@@ -106,17 +106,17 @@ func Test_testSummaryString(t *testing.T) {
 		},
 		"some tests failed": {
 			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{"scenario/test1.yaml"},
-				failed:  []string{"scenario/test2.yaml", "scenario/test3.yaml"},
-				skipped: []string{"scenario/test4.yaml"},
+				mu:           sync.Mutex{},
+				passedCount:  1,
+				failed:       []string{"scenario/test1.yaml", "scenario/test2.yaml"},
+				skippedCount: 1,
 			},
 			expect: `
 4 tests run: 1 passed, 2 failed, 1 skipped
 
 Failed tests:
+	- scenario/test1.yaml
 	- scenario/test2.yaml
-	- scenario/test3.yaml
 
 `,
 		},
@@ -142,19 +142,19 @@ func Test_testSummaryFailedFiles(t *testing.T) {
 	}{
 		"no test failed": {
 			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{"scenario/test1.yaml", "scenario/test2.yaml"},
-				failed:  []string{},
-				skipped: []string{},
+				mu:           sync.Mutex{},
+				passedCount:  2,
+				failed:       []string{},
+				skippedCount: 0,
 			},
 			expect: ``,
 		},
 		"some tests failed": {
 			testSummary: testSummary{
-				mu:      sync.Mutex{},
-				passed:  []string{},
-				failed:  []string{"scenario/test1.yaml", "scenario/test2.yaml"},
-				skipped: []string{},
+				mu:           sync.Mutex{},
+				passedCount:  0,
+				failed:       []string{"scenario/test1.yaml", "scenario/test2.yaml"},
+				skippedCount: 0,
 			},
 			expect: strings.TrimPrefix(`
 Failed tests:

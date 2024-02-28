@@ -8,18 +8,18 @@ import (
 )
 
 type testSummary struct {
-	mu      sync.Mutex
-	passed  []string
-	failed  []string
-	skipped []string
+	mu           sync.Mutex
+	passedCount  int
+	failed       []string
+	skippedCount int
 }
 
 func newTestSummary() *testSummary {
 	return &testSummary{
-		mu:      sync.Mutex{},
-		passed:  []string{},
-		failed:  []string{},
-		skipped: []string{},
+		mu:           sync.Mutex{},
+		passedCount:  0,
+		failed:       []string{},
+		skippedCount: 0,
 	}
 }
 
@@ -32,11 +32,11 @@ func (s *testSummary) append(testFileRelPath string, r Reporter) {
 	defer s.mu.Unlock()
 	switch testResultString {
 	case TestResultPassed.String():
-		s.passed = append(s.passed, testFileRelPath)
+		s.passedCount++
 	case TestResultFailed.String():
 		s.failed = append(s.failed, testFileRelPath)
 	case TestResultSkipped.String():
-		s.skipped = append(s.skipped, testFileRelPath)
+		s.skippedCount++
 	default: // Do nothing
 	}
 }
@@ -48,10 +48,10 @@ func (s *testSummary) append(testFileRelPath string, r Reporter) {
 //   - scenarios/scenario1.yaml
 //   - scenarios/scenario2.yaml
 func (s *testSummary) String(noColor bool) string {
-	totalText := fmt.Sprintf("%d tests run", len(s.passed)+len(s.failed)+len(s.skipped))
-	passedText := s.passColor(noColor).Sprintf("%d passed", len(s.passed))
+	totalText := fmt.Sprintf("%d tests run", s.passedCount+len(s.failed)+s.skippedCount)
+	passedText := s.passColor(noColor).Sprintf("%d passed", s.passedCount)
 	failedText := s.failColor(noColor).Sprintf("%d failed", len(s.failed))
-	skippedText := s.skipColor(noColor).Sprintf("%d skipped", len(s.skipped))
+	skippedText := s.skipColor(noColor).Sprintf("%d skipped", s.skippedCount)
 	failedFiles := s.failColor(noColor).Sprintf(s.failedFiles())
 	return fmt.Sprintf(
 		"\n%s: %s, %s, %s\n\n%s",
