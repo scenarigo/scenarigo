@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/Masterminds/semver"
@@ -23,7 +24,7 @@ var (
 	ver              = os.Getenv("GO_VERSION")
 	rootDir          = os.Getenv("PJ_ROOT")
 	errImageNotFound = errors.New("image not found")
-	go1_21_0         = semver.MustParse("1.21.0")
+	go1_22_2         = semver.MustParse("1.22.2")
 )
 
 func main() {
@@ -47,8 +48,8 @@ func release() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse version: %w", err)
 	}
-	cc := "aarch64-apple-darwin21.4-clang"
-	if v.GreaterThan(go1_21_0) {
+	cc := "aarch64-apple-darwin23-clang"
+	if v.LessThan(go1_22_2) {
 		cc = "aarch64-apple-darwin22-clang"
 	}
 
@@ -75,21 +76,36 @@ func imageTag(ver, token string) (string, error) {
 		}
 		return "", fmt.Errorf("unhandled error: %s", err.Error())
 	}
+
 	v := fmt.Sprintf("v%s", ver)
 	prefix := fmt.Sprintf("%s-", v)
+	var sv *semver.Version
+	tags := []*semver.Version{}
 	for _, node := range getTags.Repository.Refs.Nodes {
-		if node.Name == v || strings.HasPrefix(node.Name, prefix) {
-			return node.Name, nil
+		if node.Name == v {
+			sv = semver.MustParse(node.Name)
+		}
+		if strings.HasPrefix(node.Name, prefix) {
+			tags = append(tags, semver.MustParse(node.Name))
 		}
 	}
-	if strings.Count(v, ".") == 1 {
-		v := fmt.Sprintf("v%s.0", ver)
-		prefix := fmt.Sprintf("%s-", v)
-		for _, node := range getTags.Repository.Refs.Nodes {
-			if node.Name == v || strings.HasPrefix(node.Name, prefix) {
-				return node.Name, nil
-			}
+	slices.SortFunc(tags, func(a, b *semver.Version) int {
+		return -a.Compare(b)
+	})
+	if sv != nil {
+		tags = append(tags, sv)
+	}
+
+	for _, tag := range tags {
+		v := tag.Original()
+		if err := exec.Command(
+			"docker", "manifest", "inspect",
+			fmt.Sprintf("ghcr.io/gythialy/golang-cross:%s", v),
+		).Run(); err != nil {
+			fmt.Println(v, "not found")
+			continue
 		}
+		return v, nil
 	}
 
 	return "", errImageNotFound
