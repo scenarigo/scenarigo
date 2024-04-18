@@ -20,6 +20,7 @@ import (
 type Config struct {
 	SchemaVersion   string                           `yaml:"schemaVersion,omitempty"`
 	Vars            map[string]any                   `yaml:"vars,omitempty"`
+	Secrets         map[string]any                   `yaml:"secrets,omitempty"`
 	Scenarios       []string                         `yaml:"scenarios,omitempty"`
 	PluginDirectory string                           `yaml:"pluginDirectory,omitempty"`
 	Plugins         OrderedMap[string, PluginConfig] `yaml:"plugins,omitempty"`
@@ -29,6 +30,7 @@ type Config struct {
 	// absolute path to the configuration file
 	Root     string          `yaml:"-"`
 	Comments yaml.CommentMap `yaml:"-"`
+	Node     ast.Node        `yaml:"-"`
 }
 
 // PluginConfig represents a plugin configuration.
@@ -123,7 +125,8 @@ func LoadConfigFromReader(r io.Reader, root string) (*Config, error) {
 		if len(cm) > 0 {
 			cfg.Comments = cm
 		}
-		if err := validate(&cfg, d.doc.Body); err != nil {
+		cfg.Node = d.doc.Body
+		if err := validate(&cfg); err != nil {
 			return nil, err
 		}
 		return &cfg, nil
@@ -138,16 +141,16 @@ func LoadConfigFromReader(r io.Reader, root string) (*Config, error) {
 	}
 }
 
-func validate(c *Config, node ast.Node) error {
+func validate(c *Config) error {
 	var errs []error
 	for i, p := range c.Scenarios {
-		if err := stat(c, p, (&yaml.PathBuilder{}).Root().Child("scenarios").Index(uint(i)).Build(), node); err != nil {
+		if err := stat(c, p, (&yaml.PathBuilder{}).Root().Child("scenarios").Index(uint(i)).Build()); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	for _, item := range c.Plugins.ToSlice() {
 		item := item
-		if err := stat(c, item.Value.Src, (&yaml.PathBuilder{}).Root().Child("plugins").Child(item.Key).Child("src").Build(), node); err != nil {
+		if err := stat(c, item.Value.Src, (&yaml.PathBuilder{}).Root().Child("plugins").Child(item.Key).Child("src").Build()); err != nil {
 			var neErr notExist
 			if errors.As(err, &neErr) {
 				m := item.Value.Src
@@ -169,14 +172,14 @@ func validate(c *Config, node ast.Node) error {
 
 type notExist error
 
-func stat(c *Config, p string, path *yaml.Path, node ast.Node) error {
+func stat(c *Config, p string, path *yaml.Path) error {
 	if _, err := os.Stat(filepathutil.From(c.Root, p)); err != nil {
 		if os.IsNotExist(err) {
 			err = notExist(errors.Errorf("%s: no such file or directory", p))
 		}
 		return errors.WithNodeAndColored(
 			errors.WithPath(err, strings.TrimPrefix(path.String(), "$.")),
-			node, !color.NoColor,
+			c.Node, !color.NoColor,
 		)
 	}
 	return nil

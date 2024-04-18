@@ -1,0 +1,35 @@
+title: bind
+scenarios:
+- filename: error/plugin.yaml
+  success: false
+  output:
+    stdout: error/plugin.txt
+
+- filename: error/scenario-vars.yaml
+  success: false
+  output:
+    stdout: error/scenario-vars.txt
+- filename: error/scenario-secrets.yaml
+  success: false
+  output:
+    stdout: error/scenario-secrets.txt
+
+- filename: error/step-vars.yaml
+  success: false
+  output:
+    stdout: error/step-vars.txt
+- filename: error/step-secrets.yaml
+  success: false
+  output:
+    stdout: error/step-secrets.txt
+
+- filename: error/bind-vars.yaml
+  mocks: error/echo.yaml
+  success: false
+  output:
+    stdout: error/bind-vars.txt
+- filename: error/bind-secrets.yaml
+  mocks: error/echo.yaml
+  success: false
+  output:
+    stdout: error/bind-secrets.txt

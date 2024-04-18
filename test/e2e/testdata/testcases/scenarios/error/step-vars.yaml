@@ -1,0 +1,14 @@
+schemaVersion: scenario/v1
+title: invalid step vars
+steps:
+- title: POST /echo
+  vars:
+    message: '{{'
+  protocol: http
+  request:
+    method: POST
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+    body:
+      message: '{{vars.message}}'
+  expect:
+    code: OK

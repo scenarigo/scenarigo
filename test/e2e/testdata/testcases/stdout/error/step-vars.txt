@@ -1,0 +1,16 @@
+--- FAIL: testdata/testcases/scenarios/error/step-vars.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/error/step-vars.yaml/invalid_step_vars (0.00s)
+        --- FAIL: testdata/testcases/scenarios/error/step-vars.yaml/invalid_step_vars/POST_/echo (0.00s)
+                invalid vars: failed to parse "{{": col 3: expected '}}', found 'EOF'
+                       3 | steps:
+                       4 | - title: POST /echo
+                       5 |   vars:
+                    >  6 |     message: '{{'
+                                        ^
+                       7 |   protocol: http
+                       8 |   request:
+                       9 |     method: POST
+                      10 |
+FAIL
+FAIL	testdata/testcases/scenarios/error/step-vars.yaml	0.000s
+FAIL

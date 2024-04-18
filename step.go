@@ -31,6 +31,20 @@ func runStep(ctx *context.Context, scenario *schema.Scenario, s *schema.Step, st
 		}
 		ctx = ctx.WithVars(vars)
 	}
+	if s.Secrets != nil {
+		secrets, err := ctx.ExecuteTemplate(s.Secrets)
+		if err != nil {
+			ctx.Reporter().Fatalf(
+				"invalid secrets: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, fmt.Sprintf("steps[%d].secrets", stepIdx)),
+					ctx.Node(),
+					ctx.EnabledColor(),
+				),
+			)
+		}
+		ctx = ctx.WithSecrets(secrets)
+	}
 
 	if s.Include != "" {
 		baseDir := filepath.Dir(scenario.Filepath())

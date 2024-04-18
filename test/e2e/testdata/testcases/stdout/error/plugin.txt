@@ -1,0 +1,11 @@
+--- FAIL: testdata/testcases/scenarios/error/plugin.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/error/plugin.yaml/plugin_not_found (0.00s)
+            failed to open plugin: plugin.Open("/go/src/github.com/zoncoen/scenarigo/test/e2e/testdata/gen/plugins/not-found.so"): realpath failed
+                   1 | schemaVersion: scenario/v1
+                   2 | title: plugin not found
+                   3 | plugins:
+                >  4 |   notFound: not-found.so
+                                   ^
+FAIL
+FAIL	testdata/testcases/scenarios/error/plugin.yaml	0.000s
+FAIL

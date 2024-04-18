@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/token"
 	"reflect"
-	"strings"
 
 	"github.com/goccy/go-yaml"
 
@@ -30,20 +29,6 @@ func Execute(ctx context.Context, i, data interface{}) (interface{}, error) {
 		return v.Interface(), nil
 	}
 	return nil, nil //nolint:nilnil
-}
-
-func structFieldName(field reflect.StructField) string {
-	fieldName := field.Name
-	tag := field.Tag.Get("yaml")
-	if tag == "" {
-		return fieldName
-	}
-
-	tagValues := strings.Split(tag, ",")
-	if len(tagValues) > 0 && tagValues[0] != "" {
-		return tagValues[0]
-	}
-	return fieldName
 }
 
 //nolint:gocyclo,cyclop,maintidx
@@ -138,11 +123,11 @@ func execute(ctx context.Context, in reflect.Value, data interface{}) (reflect.V
 			field := v.Field(i)
 			x, err := convert(field.Type())(execute(ctx, field, data))
 			if err != nil {
-				fieldName := structFieldName(v.Type().Field(i))
+				fieldName := reflectutil.StructFieldToKey(v.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
 			}
 			if err := reflectutil.Set(field, x); err != nil {
-				fieldName := structFieldName(v.Type().Field(i))
+				fieldName := reflectutil.StructFieldToKey(v.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
 			}
 		}
@@ -283,7 +268,7 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 				return reflect.Value{}, err
 			}
 			if err := reflectutil.Set(vv.Field(i), x); err != nil {
-				fieldName := structFieldName(vv.Type().Field(i))
+				fieldName := reflectutil.StructFieldToKey(vv.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
 			}
 		}

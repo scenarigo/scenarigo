@@ -1,0 +1,11 @@
+--- FAIL: testdata/testcases/scenarios/error/scenario-vars.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/error/scenario-vars.yaml/invalid_scenario_vars (0.00s)
+            invalid vars: failed to parse "{{": col 3: expected '}}', found 'EOF'
+                   1 | schemaVersion: scenario/v1
+                   2 | title: invalid scenario vars
+                   3 | vars:
+                >  4 |   foo: '{{'
+                              ^
+FAIL
+FAIL	testdata/testcases/scenarios/error/scenario-vars.yaml	0.000s
+FAIL

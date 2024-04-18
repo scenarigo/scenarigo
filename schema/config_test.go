@@ -117,6 +117,10 @@ func TestLoadConfig(t *testing.T) {
 					Root:     filepath.Join(wd, "testdata/config"),
 					Comments: test.expectComments,
 				}
+				if got.Node == nil {
+					t.Fatalf("node is nil")
+				}
+				got.Node = nil
 				if diff := cmp.Diff(expect, got, cmp.AllowUnexported(Regexp{}, OrderedMap[string, PluginConfig]{}), cmpopts.IgnoreUnexported(regexp.Regexp{})); diff != "" {
 					t.Errorf("differs (-want +got):\n%s", diff)
 				}

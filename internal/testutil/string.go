@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -25,6 +27,7 @@ func ReplaceOutput(s string) string {
 		ReplaceAddr,
 		ReplaceUserAgent,
 		ReplaceDateHeader,
+		ReplaceFilepath,
 	} {
 		s = f(s)
 	}
@@ -59,4 +62,21 @@ func ReplaceDateHeader(s string) string {
 		}
 	}
 	return s
+}
+
+// ReplaceFilepath replaces filepaths.
+func ReplaceFilepath(s string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return s
+	}
+	root := wd
+	parts := strings.Split(filepath.ToSlash(wd), "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] == "scenarigo" {
+			root = filepath.FromSlash(strings.Join(parts[:i+1], "/"))
+			break
+		}
+	}
+	return strings.ReplaceAll(s, root, filepath.FromSlash("/go/src/github.com/zoncoen/scenarigo"))
 }

@@ -4,6 +4,7 @@ const (
 	nameContext  = "ctx"
 	namePlugins  = "plugins"
 	nameVars     = "vars"
+	nameSecrets  = "secrets"
 	nameSteps    = "steps"
 	nameRequest  = "request"
 	nameResponse = "response"
@@ -23,6 +24,11 @@ func (c *Context) ExtractByKey(key string) (interface{}, bool) {
 		}
 	case nameVars:
 		v := c.Vars()
+		if v != nil {
+			return v, true
+		}
+	case nameSecrets:
+		v := c.Secrets()
 		if v != nil {
 			return v, true
 		}

@@ -3,12 +3,10 @@ package cmd
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -32,11 +30,6 @@ func TestRun(t *testing.T) {
 	defer srv.Close()
 
 	t.Setenv("TEST_ADDR", srv.URL)
-
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current directory: %s", err)
-	}
 
 	tests := map[string]struct {
 		args          []string
@@ -103,14 +96,14 @@ ok  	scenarios/pass.yaml	0.000s
 			config:      "./testdata/scenarigo-plugin-not-found.yaml",
 			args:        []string{"testdata/scenarios/pass.yaml"},
 			expectError: ErrTestFailed.Error(),
-			expectOutput: strings.TrimPrefix(fmt.Sprintf(`
+			expectOutput: strings.TrimPrefix(`
 --- FAIL: setup (0.00s)
     --- FAIL: setup/plugin.so (0.00s)
-            failed to open plugin: plugin.Open("%s"): realpath failed
+            failed to open plugin: plugin.Open("/go/src/github.com/zoncoen/scenarigo/cmd/testdata/plugin.so"): realpath failed
 FAIL
 FAIL	setup	0.000s
 FAIL
-`, filepath.Join(wd, "testdata", "plugin.so")), "\n"),
+`, "\n"),
 		},
 		"print summary": {
 			args:        []string{},

@@ -12,8 +12,8 @@ var (
 	opts = []query.Option{}
 )
 
-func New() *query.Query {
-	return query.New(Options()...)
+func New(opts ...query.Option) *query.Query {
+	return query.New(append(Options(), opts...)...)
 }
 
 func Options() []query.Option {

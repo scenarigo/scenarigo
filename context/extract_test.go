@@ -36,6 +36,13 @@ func TestContext_ExtractKey(t *testing.T) {
 			query:  "vars.foo",
 			expect: "bar",
 		},
+		"secrets": {
+			ctx: func(ctx *Context) *Context {
+				return ctx.WithSecrets(vars)
+			},
+			query:  "secrets.foo",
+			expect: "bar",
+		},
 		"steps": {
 			ctx: func(ctx *Context) *Context {
 				steps := NewSteps()

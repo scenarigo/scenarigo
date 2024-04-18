@@ -17,6 +17,7 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/internal/testutil"
 	"github.com/zoncoen/scenarigo/reporter"
 	"github.com/zoncoen/scenarigo/schema"
 )
@@ -107,24 +108,34 @@ func TestRunner(t *testing.T) {
 			yaml: `
 ---
 title: /echo
+vars:
+  var2: '{{"VAR2"}}'
+secrets:
+  sec2: '{{"SEC2"}}'
 steps:
 - title: POST /echo
+  vars:
+    var3: '{{"VAR3"}}'
+  secrets:
+    sec3: '{{"SEC3"}}'
   protocol: http
   request:
     method: POST
     url: "{{env.TEST_ADDR}}/echo"
     body:
-      message: '{{vars.msg}}'
+      message: '{{vars.var1}} {{secrets.sec1}} {{vars.var2}} {{secrets.sec2}} {{vars.var3}} {{secrets.sec3}}'
   expect:
     code: 200
     body:
-      message: "hello"
+      message: '{{request.body.message}}'
 `,
-			config: &schema.Config{
-				Vars: map[string]any{
-					"msg": "hello",
-				},
-			},
+			config: parseConfig(t, `
+schemaVersion: config/v1
+vars:
+  var1: '{{"VAR1"}}'
+secrets:
+  sec1: '{{"SEC1"}}'
+`),
 			setup: func(ctx *context.Context) func(*context.Context) {
 				mux := http.NewServeMux()
 				mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
@@ -196,15 +207,15 @@ steps:
 
 func TestRunnerFail(t *testing.T) {
 	tests := map[string]struct {
-		path  string
-		yaml  string
-		setup func(*testing.T) func()
+		path   string
+		yaml   string
+		config *schema.Config
+		setup  func(*context.Context) func(*context.Context)
+		expect string
 	}{
 		"include invalid yaml": {
 			path: filepath.Join("testdata", "use_include_error.yaml"),
-			setup: func(t *testing.T) func() {
-				t.Helper()
-
+			setup: func(ctx *context.Context) func(*context.Context) {
 				mux := http.NewServeMux()
 				mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 					defer r.Body.Close()
@@ -213,9 +224,11 @@ func TestRunnerFail(t *testing.T) {
 				})
 
 				s := httptest.NewServer(mux)
-				t.Setenv("TEST_ADDR", s.URL)
+				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
+					ctx.Reporter().Fatalf("unexpected error: %s", err)
+				}
 
-				return func() {
+				return func(*context.Context) {
 					s.Close()
 					os.Unsetenv("TEST_ADDR")
 				}
@@ -223,34 +236,109 @@ func TestRunnerFail(t *testing.T) {
 		},
 		"run with yaml": {
 			yaml: `invalid: value`,
-			setup: func(t *testing.T) func() {
-				t.Helper()
-				return func() {}
+		},
+		"secrets should be masked": {
+			config: parseConfig(t, `
+schemaVersion: config/v1
+vars:
+  var1: '{{"VAR1"}}'
+secrets:
+  sec1: '{{"SEC1"}}'
+scenarios:
+- testdata/use_secrets_error.yaml
+`),
+			setup: func(ctx *context.Context) func(*context.Context) {
+				mux := http.NewServeMux()
+				mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+					defer r.Body.Close()
+					w.Header().Set("Content-Type", "application/json")
+					io.Copy(w, r.Body)
+				})
+
+				s := httptest.NewServer(mux)
+				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
+					ctx.Reporter().Fatalf("unexpected error: %s", err)
+				}
+
+				return func(*context.Context) {
+					s.Close()
+					os.Unsetenv("TEST_ADDR")
+				}
 			},
+			expect: `--- FAIL: testdata/use_secrets_error.yaml (0.00s)
+    --- FAIL: testdata/use_secrets_error.yaml//echo (0.00s)
+        --- FAIL: testdata/use_secrets_error.yaml//echo/POST_/echo (0.00s)
+                request:
+                  method: POST
+                  url: http://127.0.0.1:12345/echo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                  body:
+                    message: VAR1 {{secrets.sec1}} VAR2 {{secrets.sec2}} VAR3 {{secrets.sec3}} var_not_found {{secrets.sec4}}
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "73"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    message: VAR1 {{secrets.sec1}} VAR2 {{secrets.sec2}} VAR3 {{secrets.sec3}} var_not_found {{secrets.sec4}}
+                elapsed time: 0.000000 sec
+                expected "VAR1 {{secrets.sec1}} VAR2 {{secrets.sec2}} VAR3 {{secrets.sec3}} VAR4 SEC4" but got "VAR1 {{secrets.sec1}} VAR2 {{secrets.sec2}} VAR3 {{secrets.sec3}} var_not_found {{secrets.sec4}}"
+                      40 |   expect:
+                      41 |     code: 200
+                      42 |     body:
+                    > 43 |       message: 'VAR1 {{secrets.sec1}} VAR2 {{secrets.sec2}} VAR3 {{secrets.sec3}} VAR4 SEC4'
+                                          ^
+FAIL
+FAIL	testdata/use_secrets_error.yaml	0.000s
+FAIL
+`,
 		},
 	}
-	for _, test := range tests {
-		teardown := test.setup(t)
-		defer teardown()
-
-		var opts []func(*Runner) error
-		if test.path != "" {
-			opts = append(opts, WithScenarios(test.path))
-		}
-		if test.yaml != "" {
-			opts = append(opts, WithScenariosFromReader(strings.NewReader(test.yaml)))
-		}
-		runner, err := NewRunner(opts...)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var b bytes.Buffer
-		ok := reporter.Run(func(rptr reporter.Reporter) {
-			runner.Run(context.New(rptr))
-		}, reporter.WithWriter(&b))
-		if ok {
-			t.Fatal("expected error but no error")
-		}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			var opts []func(*Runner) error
+			if test.path != "" {
+				opts = append(opts, WithScenarios(test.path))
+			}
+			if test.yaml != "" {
+				opts = append(opts, WithScenariosFromReader(strings.NewReader(test.yaml)))
+			}
+			if test.config != nil {
+				opts = append(opts, WithConfig(test.config))
+			}
+			runner, err := NewRunner(opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var b bytes.Buffer
+			ok := reporter.Run(func(rptr reporter.Reporter) {
+				ctx := context.New(rptr)
+				if test.setup != nil {
+					teardown := test.setup(ctx)
+					if teardown != nil {
+						defer teardown(ctx)
+					}
+				}
+				runner.Run(ctx)
+			}, reporter.WithWriter(&b))
+			if ok {
+				t.Fatal("expected error but no error")
+			}
+			if test.expect != "" {
+				if got := testutil.ReplaceOutput(b.String()); got != test.expect {
+					dmp := diffmatchpatch.New()
+					diffs := dmp.DiffMain(test.expect, got, false)
+					t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
+				}
+			}
+		})
 	}
 }
 
@@ -688,4 +776,13 @@ steps:
 			})
 		}
 	})
+}
+
+func parseConfig(t *testing.T, s string) *schema.Config {
+	t.Helper()
+	cfg, err := schema.LoadConfigFromReader(strings.NewReader(s), "")
+	if err != nil {
+		t.Fatalf("failed to parse config: %s", err)
+	}
+	return cfg
 }

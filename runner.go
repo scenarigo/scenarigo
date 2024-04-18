@@ -13,9 +13,10 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
-	"github.com/pkg/errors"
+	"github.com/goccy/go-yaml/ast"
 
 	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/scenarigo/errors"
 	"github.com/zoncoen/scenarigo/internal/filepathutil"
 	"github.com/zoncoen/scenarigo/plugin"
 	"github.com/zoncoen/scenarigo/protocol/grpc"
@@ -32,6 +33,7 @@ func init() {
 // Runner represents a test runner.
 type Runner struct {
 	vars            map[string]any
+	secrets         map[string]any
 	pluginDir       *string
 	plugins         schema.OrderedMap[string, schema.PluginConfig]
 	scenarioFiles   []string
@@ -40,6 +42,7 @@ type Runner struct {
 	rootDir         string
 	inputConfig     schema.InputConfig
 	reportConfig    schema.ReportConfig
+	configNode      ast.Node
 }
 
 // NewRunner returns a new test runner.
@@ -69,6 +72,7 @@ func WithConfig(config *schema.Config) func(*Runner) error {
 		}
 
 		r.vars = config.Vars
+		r.secrets = config.Secrets
 
 		r.rootDir = config.Root
 		scenarios := make([]string, len(config.Scenarios))
@@ -92,6 +96,7 @@ func WithConfig(config *schema.Config) func(*Runner) error {
 		}
 		r.inputConfig = config.Input
 		r.reportConfig = config.Output.Report
+		r.configNode = config.Node
 		return nil
 	}
 }
@@ -199,7 +204,32 @@ func (r *Runner) ScenarioFiles() []string {
 func (r *Runner) Run(ctx *context.Context) {
 	// setup context
 	if r.vars != nil {
-		ctx = ctx.WithVars(r.vars)
+		vars, err := ctx.ExecuteTemplate(r.vars)
+		if err != nil {
+			ctx.Reporter().Fatalf(
+				"invalid vars: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, "vars"),
+					r.configNode,
+					r.enabledColor,
+				),
+			)
+		}
+		ctx = ctx.WithVars(vars)
+	}
+	if r.secrets != nil {
+		secrets, err := ctx.ExecuteTemplate(r.secrets)
+		if err != nil {
+			ctx.Reporter().Fatalf(
+				"invalid secrets: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, "secrets"),
+					r.configNode,
+					r.enabledColor,
+				),
+			)
+		}
+		ctx = ctx.WithSecrets(secrets)
 	}
 	if r.pluginDir != nil {
 		ctx = ctx.WithPluginDir(*r.pluginDir)

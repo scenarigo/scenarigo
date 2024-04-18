@@ -327,6 +327,89 @@ steps:
       text: '{{request.body.text}}'
 ```
 
+You can also define global variables in the `scenarigo.yaml`. The defined variables can be used from all test scenarios.
+
+```yaml
+schemaVersion: config/v1
+vars:
+  name: zoncoen
+```
+
+### Secrets
+
+The `secrets` field allows defining variables like the `vars` field. Besides, the values defined by the `secrets` field are masked in the outputs.
+
+```yaml
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+vars:
+  clientId: abcdef
+secrets:
+  clientSecret: XXXXX
+title: get user profile
+steps:
+- title: get access token
+  protocol: http
+  request:
+    method: POST
+    url: 'http://example.com/oauth/token'
+    header:
+      Content-Type: application/x-www-form-urlencoded
+    body:
+      grant_type: client_credentials
+      client_id: '{{vars.clientId}}'
+      client_secret: '{{secrets.clientSecret}}'
+  expect:
+    code: OK
+    body:
+      access_token: '{{$ != ""}}'
+      token_type: Bearer
+  bind:
+    secrets:
+      accessToken: '{{response.body.access_token}}'
+- title: get user profile
+  protocol: http
+  request:
+    method: GET
+    url: 'http://example.com/users/zoncoen'
+    header:
+      Authorization: 'Bearer {{secrets.accessToken}}'
+  expect:
+    code: OK
+    body:
+      name: zoncoen
+```
+
+```shell
+...
+        --- PASS: scenarios/get-profile.yaml/get_user_profile/get_access_token (0.00s)
+                request:
+                  method: POST
+                  url: http://example.com/oauth/token
+                  header:
+                    Content-Type:
+                    - application/x-www-form-urlencoded
+                  body:
+                    client_id: abcdef
+                    client_secret: {{secrets.clientSecret}}
+                    grant_type: client_credentials
+                response:
+...
+                  body:
+                    access_token: {{secrets.accessToken}}
+                    token_type: Bearer
+                elapsed time: 0.001743 sec
+        --- PASS: scenarios/get-profile.yaml/get_user_profile/get_user_profile (0.00s)
+                request:
+                  method: GET
+                  url: http://example.com/users/zoncoen
+                  header:
+                    Authorization:
+                    - Bearer {{secrets.accessToken}}
+...
+```
+
 ### Timeout/Retry
 
 You can set timeout and retry policy for each step.

@@ -29,7 +29,14 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 			}
 			p, err := plugin.Open(path)
 			if err != nil {
-				ctx.Reporter().Fatalf("failed to open plugin: %s", err)
+				ctx.Reporter().Fatalf(
+					"failed to open plugin: %s",
+					errors.WithNodeAndColored(
+						errors.WithPath(err, fmt.Sprintf("plugins.'%s'", name)),
+						ctx.Node(),
+						ctx.EnabledColor(),
+					),
+				)
 			}
 			plugs[name] = p
 			if setup := p.GetSetupEachScenario(); setup != nil {
@@ -45,9 +52,30 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	if s.Vars != nil {
 		vars, err := ctx.ExecuteTemplate(s.Vars)
 		if err != nil {
-			ctx.Reporter().Fatalf("invalid vars: %s", err)
+			ctx.Reporter().Fatalf(
+				"invalid vars: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, "vars"),
+					ctx.Node(),
+					ctx.EnabledColor(),
+				),
+			)
 		}
 		ctx = ctx.WithVars(vars)
+	}
+	if s.Secrets != nil {
+		secrets, err := ctx.ExecuteTemplate(s.Secrets)
+		if err != nil {
+			ctx.Reporter().Fatalf(
+				"invalid secrets: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, "secrets"),
+					ctx.Node(),
+					ctx.EnabledColor(),
+				),
+			)
+		}
+		ctx = ctx.WithSecrets(secrets)
 	}
 
 	ctx, teardown := setups.setup(ctx)
@@ -114,6 +142,24 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 					)
 				}
 				scnCtx = scnCtx.WithVars(vars)
+			}
+			if step.Bind.Secrets != nil {
+				secrets, err := stepCtx.ExecuteTemplate(step.Bind.Secrets)
+				if err != nil {
+					stepCtx.Reporter().Fatal(
+						errors.WithNodeAndColored(
+							errors.WrapPath(
+								err,
+								fmt.Sprintf("steps[%d].bind.secrets", idx),
+								"invalid bind",
+							),
+							stepCtx.Node(),
+							stepCtx.EnabledColor(),
+						),
+					)
+				}
+				scnCtx = scnCtx.WithSecrets(secrets)
+				reporter.SetLogReplacer(stepCtx.Reporter(), scnCtx.Secrets())
 			}
 		}, step.Retry)
 		if !ok && !step.ContinueOnError {

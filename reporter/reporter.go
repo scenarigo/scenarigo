@@ -40,6 +40,7 @@ type Reporter interface {
 
 	runWithRetry(string, func(t Reporter), RetryPolicy) bool
 	setNoFailurePropagation()
+	setLogReplacer(LogReplacer)
 
 	// for test reports
 	getName() string
@@ -56,6 +57,20 @@ type Reporter interface {
 // It reports whether f succeeded.
 func Run(f func(r Reporter), opts ...Option) bool {
 	r := run(f, opts...)
+
+	// print global errors (e.g., invalid config)
+	if (r.Failed() && !r.noFailurePropagation) || r.context.verbose {
+		c := r.passColor()
+		if r.Failed() {
+			c = r.failColor()
+		} else if r.Skipped() {
+			c = r.skipColor()
+		}
+		for _, l := range r.logs.all() {
+			r.context.printf("%s\n", c.Sprint(l))
+		}
+	}
+
 	r.printTestSummary()
 	return !r.Failed()
 }
@@ -71,6 +86,11 @@ func run(f func(r Reporter), opts ...Option) *reporter {
 // NoFailurePropagation prevents propagation of the failure to the parent.
 func NoFailurePropagation(r Reporter) {
 	r.setNoFailurePropagation()
+}
+
+// SetLogReplacer sets a replacer to modify log outputs.
+func SetLogReplacer(r Reporter, rep LogReplacer) {
+	r.setLogReplacer(rep)
 }
 
 // reporter is an implementation of Reporter that
@@ -303,6 +323,7 @@ func (r *reporter) spawn(name string) *reporter {
 	child.name = name
 	child.goTestName = goTestName
 	child.depth = r.depth + 1
+	child.logs = r.logs.spawn()
 	child.durationMeasurer = r.durationMeasurer.spawn()
 	child.testing = r.testing
 	return child
@@ -489,6 +510,10 @@ func pad(s string, padding string) string {
 
 func (r *reporter) setNoFailurePropagation() {
 	r.noFailurePropagation = true
+}
+
+func (r *reporter) setLogReplacer(rep LogReplacer) {
+	r.logs.setReplacer(rep)
 }
 
 func (r *reporter) getName() string {

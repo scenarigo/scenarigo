@@ -17,12 +17,13 @@ var stepIDRegexp = regexp.MustCompile(stepIDPattern)
 
 // Scenario represents a test scenario.
 type Scenario struct {
-	SchemaVersion string                 `yaml:"schemaVersion,omitempty"`
-	Title         string                 `yaml:"title,omitempty"`
-	Description   string                 `yaml:"description,omitempty"`
-	Plugins       map[string]string      `yaml:"plugins,omitempty"`
-	Vars          map[string]interface{} `yaml:"vars,omitempty"`
-	Steps         []*Step                `yaml:"steps,omitempty"`
+	SchemaVersion string            `yaml:"schemaVersion,omitempty"`
+	Title         string            `yaml:"title,omitempty"`
+	Description   string            `yaml:"description,omitempty"`
+	Plugins       map[string]string `yaml:"plugins,omitempty"`
+	Vars          map[string]any    `yaml:"vars,omitempty"`
+	Secrets       map[string]any    `yaml:"secrets,omitempty"`
+	Steps         []*Step           `yaml:"steps,omitempty"`
 
 	// The strict YAML decoder fails to decode if finds an unknown field.
 	// Anchors is the field for enabling to define YAML anchors by avoiding the error.
@@ -82,7 +83,8 @@ type Step struct {
 	Description             string                    `yaml:"description,omitempty"`
 	If                      string                    `yaml:"if,omitempty"`
 	ContinueOnError         bool                      `yaml:"continueOnError,omitempty"`
-	Vars                    map[string]interface{}    `yaml:"vars,omitempty"`
+	Vars                    map[string]any            `yaml:"vars,omitempty"`
+	Secrets                 map[string]any            `yaml:"secrets,omitempty"`
 	Protocol                string                    `yaml:"protocol,omitempty"`
 	Request                 protocol.Invoker          `yaml:"request,omitempty"`
 	Expect                  protocol.AssertionBuilder `yaml:"expect,omitempty"`
@@ -103,19 +105,20 @@ func (r *rawMessage) UnmarshalYAML(b []byte) error {
 }
 
 type stepUnmarshaller struct {
-	ID                      string                 `yaml:"id,omitempty"`
-	Title                   string                 `yaml:"title,omitempty"`
-	Description             string                 `yaml:"description,omitempty"`
-	If                      string                 `yaml:"if,omitempty"`
-	ContinueOnError         bool                   `yaml:"continueOnError,omitempty"`
-	Vars                    map[string]interface{} `yaml:"vars,omitempty"`
-	Protocol                string                 `yaml:"protocol,omitempty"`
-	Include                 string                 `yaml:"include,omitempty"`
-	Ref                     interface{}            `yaml:"ref,omitempty"`
-	Bind                    Bind                   `yaml:"bind,omitempty"`
-	Timeout                 *Duration              `yaml:"timeout,omitempty"`
-	PostTimeoutWaitingLimit *Duration              `yaml:"postTimeoutWaitingLimit,omitempty"`
-	Retry                   *RetryPolicy           `yaml:"retry,omitempty"`
+	ID                      string         `yaml:"id,omitempty"`
+	Title                   string         `yaml:"title,omitempty"`
+	Description             string         `yaml:"description,omitempty"`
+	If                      string         `yaml:"if,omitempty"`
+	ContinueOnError         bool           `yaml:"continueOnError,omitempty"`
+	Vars                    map[string]any `yaml:"vars,omitempty"`
+	Secrets                 map[string]any `yaml:"secrets,omitempty"`
+	Protocol                string         `yaml:"protocol,omitempty"`
+	Include                 string         `yaml:"include,omitempty"`
+	Ref                     interface{}    `yaml:"ref,omitempty"`
+	Bind                    Bind           `yaml:"bind,omitempty"`
+	Timeout                 *Duration      `yaml:"timeout,omitempty"`
+	PostTimeoutWaitingLimit *Duration      `yaml:"postTimeoutWaitingLimit,omitempty"`
+	Retry                   *RetryPolicy   `yaml:"retry,omitempty"`
 
 	Request rawMessage `yaml:"request,omitempty"`
 	Expect  rawMessage `yaml:"expect,omitempty"`
@@ -135,6 +138,7 @@ func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	s.If = unmarshaled.If
 	s.ContinueOnError = unmarshaled.ContinueOnError
 	s.Vars = unmarshaled.Vars
+	s.Secrets = unmarshaled.Secrets
 	s.Protocol = unmarshaled.Protocol
 	s.Include = unmarshaled.Include
 	s.Ref = unmarshaled.Ref
@@ -168,7 +172,8 @@ func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // Bind represents bindings of variables.
 type Bind struct {
-	Vars map[string]interface{} `yaml:"vars"`
+	Vars    map[string]any `yaml:"vars,omitempty"`
+	Secrets map[string]any `yaml:"secrets,omitempty"`
 }
 
 type anchors struct{}

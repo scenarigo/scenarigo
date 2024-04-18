@@ -15,6 +15,7 @@ type (
 	keyPluginDir        struct{}
 	keyPlugins          struct{}
 	keyVars             struct{}
+	keySecrets          struct{}
 	keySteps            struct{}
 	keyRequest          struct{}
 	keyResponse         struct{}
@@ -64,6 +65,9 @@ func (c *Context) RequestContext() context.Context {
 
 // WithReporter returns a copy of c with new test reporter.
 func (c *Context) WithReporter(r reporter.Reporter) *Context {
+	if s := c.Secrets(); s != nil {
+		reporter.SetLogReplacer(c.reporter, s)
+	}
 	return newContext(c.ctx, c.reqCtx, r)
 }
 
@@ -154,6 +158,30 @@ func (c *Context) Vars() Vars {
 	vs, ok := c.ctx.Value(keyVars{}).(Vars)
 	if ok {
 		return vs
+	}
+	return nil
+}
+
+// WithSecrets returns a copy of c with v.
+func (c *Context) WithSecrets(s any) *Context {
+	if s == nil {
+		return c
+	}
+	secrets, _ := c.ctx.Value(keySecrets{}).(*Secrets)
+	secrets = secrets.Append(s)
+	reporter.SetLogReplacer(c.reporter, secrets)
+	return newContext(
+		context.WithValue(c.ctx, keySecrets{}, secrets),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+// Secrets returns the context secrets.
+func (c *Context) Secrets() *Secrets {
+	secrets, ok := c.ctx.Value(keySecrets{}).(*Secrets)
+	if ok {
+		return secrets
 	}
 	return nil
 }

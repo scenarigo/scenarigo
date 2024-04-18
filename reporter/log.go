@@ -11,9 +11,30 @@ type logRecorder struct {
 	infoIdxs  []int
 	errorIdxs []int
 	skipIdx   *int
+	replacer  LogReplacer
+}
+
+func (r *logRecorder) spawn() *logRecorder {
+	r.m.Lock()
+	defer r.m.Unlock()
+	return &logRecorder{
+		replacer: r.replacer,
+	}
+}
+
+func (r *logRecorder) setReplacer(rep LogReplacer) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.replacer = rep
+	for i, s := range r.strs {
+		r.strs[i] = r.replacer.ReplaceAll(s)
+	}
 }
 
 func (r *logRecorder) log(s string) {
+	if r.replacer != nil {
+		s = r.replacer.ReplaceAll(s)
+	}
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.strs = append(r.strs, s)
@@ -21,6 +42,9 @@ func (r *logRecorder) log(s string) {
 }
 
 func (r *logRecorder) error(s string) {
+	if r.replacer != nil {
+		s = r.replacer.ReplaceAll(s)
+	}
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.strs = append(r.strs, s)
@@ -28,6 +52,9 @@ func (r *logRecorder) error(s string) {
 }
 
 func (r *logRecorder) skip(s string) {
+	if r.replacer != nil {
+		s = r.replacer.ReplaceAll(s)
+	}
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.strs = append(r.strs, s)
@@ -110,4 +137,8 @@ func (r *logRecorder) append(s *logRecorder) {
 			sort.Ints(r.infoIdxs)
 		}
 	}
+}
+
+type LogReplacer interface {
+	ReplaceAll(string) string
 }
