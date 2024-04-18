@@ -1,6 +1,6 @@
 module github.com/zoncoen/scenarigo/examples/secrets/plugin/src
 
-go 1.22.2
+go 1.21.2
 
 require github.com/zoncoen/scenarigo v0.17.3
 

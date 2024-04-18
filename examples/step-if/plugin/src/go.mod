@@ -2,8 +2,6 @@ module github.com/zoncoen/scenarigo/examples/step-if/plugin
 
 go 1.21.2
 
-toolchain go1.22.2
-
 require (
 	github.com/google/uuid v1.6.0
 	github.com/zoncoen/scenarigo v0.17.3

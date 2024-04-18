@@ -2,8 +2,6 @@ module github.com/zoncoen/scenarigo/examples/assert/plugin
 
 go 1.21.2
 
-toolchain go1.22.2
-
 require github.com/zoncoen/scenarigo v0.17.3
 
 require (

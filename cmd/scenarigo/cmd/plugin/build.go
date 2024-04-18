@@ -469,6 +469,13 @@ func executeWithEnvs(ctx context.Context, envs []string, wd, name string, args .
 }
 
 func updateGoMod(cmd *cobra.Command, goCmd, name, gomodPath string, overrideKeys []string, overrides map[string]*overrideModule) error {
+	if err := editGoMod(cmd, goCmd, gomodPath, func(gomod *modfile.File) error {
+		gomod.DropToolchainStmt()
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to edit toolchain directive: %w", err)
+	}
+
 	initialRequires, initialReplaces, err := updateRequireDirectives(cmd, goCmd, gomodPath, overrides)
 	if err != nil {
 		return err
