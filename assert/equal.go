@@ -92,6 +92,8 @@ func Equal(expected interface{}, customEqs ...Equaler) Assertion {
 				}
 			}
 			return errors.Errorf("expected %T (%+v) but got %T (%+v)", expected, expected, v, v)
+		} else if t.Kind() == reflect.String {
+			return errors.Errorf("expected %q but got %q", expected, v)
 		}
 		return errors.Errorf("expected %+v but got %+v", expected, v)
 	})

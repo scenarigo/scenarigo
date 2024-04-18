@@ -97,7 +97,7 @@ func TestHandler(t *testing.T) {
 			})
 		}
 	})
-	t.Run("faulure", func(t *testing.T) {
+	t.Run("failure", func(t *testing.T) {
 		tests := map[string]struct {
 			filename string
 			steps    []step
@@ -160,7 +160,7 @@ func TestHandler(t *testing.T) {
 							header: http.Header{
 								"Content-Type": []string{"text/plain; charset=utf-8"},
 							},
-							body: `assertion error: .path: expected /echo but got /`,
+							body: `assertion error: .path: expected "/echo" but got "/"`,
 						},
 					},
 				},
@@ -179,7 +179,7 @@ func TestHandler(t *testing.T) {
 							header: http.Header{
 								"Content-Type": []string{"text/plain; charset=utf-8"},
 							},
-							body: `assertion error: .header.Content-Type: doesn't contain expected value: last error: expected application/json but got text/plain`,
+							body: `assertion error: .header.Content-Type: doesn't contain expected value: last error: expected "application/json" but got "text/plain"`,
 						},
 					},
 				},

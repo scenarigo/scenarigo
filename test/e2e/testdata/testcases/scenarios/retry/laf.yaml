@@ -1,5 +1,5 @@
 ---
-title: retry with lfa
+title: retry with laf
 steps:
 - protocol: http
   request:

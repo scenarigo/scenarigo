@@ -80,7 +80,7 @@ ok  	testdata/scenarios/pass.yaml	0.000s
                   body:
                     message: request
                 elapsed time: 0.000000 sec
-                expected response but got request
+                expected "response" but got "request"
                       12 |   expect:
                       13 |     code: 200
                       14 |     body:
@@ -141,7 +141,7 @@ FAIL
                   body:
                     message: request
                 elapsed time: 0.000000 sec
-                expected response but got request
+                expected "response" but got "request"
                       12 |   expect:
                       13 |     code: 200
                       14 |     body:
@@ -188,7 +188,7 @@ Failed tests:
                   body:
                     message: request
                 elapsed time: 0.000000 sec
-                expected response but got request
+                expected "response" but got "request"
                       12 |   expect:
                       13 |     code: 200
                       14 |     body:

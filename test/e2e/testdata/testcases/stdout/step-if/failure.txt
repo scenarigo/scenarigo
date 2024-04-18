@@ -40,7 +40,7 @@
                     Date:
                     - Mon, 01 Jan 0001 00:00:00 GMT
                 elapsed time: 0.000000 sec
-                expected OK but got Not Found
+                expected "OK" but got "Not Found"
                       19 |     method: GET
                       20 |     url: "http://{{env.TEST_HTTP_ADDR}}/bar"
                       21 |   expect:
@@ -66,7 +66,7 @@
                     Date:
                     - Mon, 01 Jan 0001 00:00:00 GMT
                 elapsed time: 0.000000 sec
-                expected OK but got Not Found
+                expected "OK" but got "Not Found"
                       36 |     method: GET
                       37 |     url: "http://{{env.TEST_HTTP_ADDR}}/hoge"
                       38 |   expect:

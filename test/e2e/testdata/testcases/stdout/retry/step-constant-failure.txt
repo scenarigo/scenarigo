@@ -18,7 +18,7 @@
                     Date:
                     - Mon, 01 Jan 0001 00:00:00 GMT
                 elapsed time: 0.000000 sec
-                expected OK but got Internal Server Error
+                expected "OK" but got "Internal Server Error"
                        6 |     method: GET
                        7 |     url: "http://{{env.TEST_HTTP_ADDR}}/echo"
                        8 |   expect:

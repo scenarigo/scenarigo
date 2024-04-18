@@ -31,7 +31,7 @@
                                      ^
                       14 |       message: '{{request.body.message}}'
                 
-                expected hello but got bye
+                expected "hello" but got "bye"
                       11 |     code: 200
                       12 |     body:
                       13 |       id: '{{int($) != 0}}'

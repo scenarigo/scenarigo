@@ -664,7 +664,7 @@ func TestExpect_Build(t *testing.T) {
 					},
 				},
 				expectAssertError: true,
-				expectError:       `.status.details[0]: expected google.rpc.Invalid but got google.rpc.LocalizedMessage`,
+				expectError:       `.status.details[0]: expected "google.rpc.Invalid" but got "google.rpc.LocalizedMessage"`,
 			},
 			"wrong status details: key is an invalid template": {
 				expect: &Expect{
@@ -787,7 +787,7 @@ func TestExpect_Build(t *testing.T) {
 					},
 				},
 				expectAssertError: true,
-				expectError:       `.status.details[0].'google.rpc.LocalizedMessage'.Locale: expected en-US but got ja-JP`,
+				expectError:       `.status.details[0].'google.rpc.LocalizedMessage'.Locale: expected "en-US" but got "ja-JP"`,
 			},
 		}
 		for name, test := range tests {

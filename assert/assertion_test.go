@@ -340,7 +340,7 @@ deps:
 				}
 				if err := assertion.Assert("foo"); err == nil {
 					t.Error("no error")
-				} else if got, expect := err.Error(), ".'{{call <-}}': expected FOO but got foo"; got != expect {
+				} else if got, expect := err.Error(), `.'{{call <-}}': expected "FOO" but got "foo"`; got != expect {
 					t.Errorf("expect %q but got %q", expect, got)
 				}
 			})

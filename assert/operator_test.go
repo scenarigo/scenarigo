@@ -26,7 +26,7 @@ func TestAnd(t *testing.T) {
 			},
 			ok:          "one",
 			ng:          "1",
-			expectError: "[0]: expected one but got 1",
+			expectError: `[0]: expected "one" but got "1"`,
 		},
 		"two": {
 			assertions: []Assertion{
@@ -35,7 +35,7 @@ func TestAnd(t *testing.T) {
 			},
 			ok:          "one",
 			ng:          "1",
-			expectError: "[0]: expected one but got 1",
+			expectError: `[0]: expected "one" but got "1"`,
 		},
 		"multi error": {
 			assertions: []Assertion{
@@ -43,8 +43,9 @@ func TestAnd(t *testing.T) {
 				Equal("un"),
 				NotZero(),
 			},
-			ng:          "1",
-			expectError: "2 errors occurred: [0]: expected one but got 1\n[1]: expected un but got 1",
+			ng: "1",
+			expectError: `2 errors occurred: [0]: expected "one" but got "1"
+[1]: expected "un" but got "1"`,
 		},
 	}
 	for _, test := range tests {
@@ -85,16 +86,17 @@ func TestOr(t *testing.T) {
 			},
 			ok:          "two",
 			ng:          "2",
-			expectError: "[0]: all assertions failed: expected two but got 2",
+			expectError: `[0]: all assertions failed: expected "two" but got "2"`,
 		},
 		"two": {
 			assertions: []Assertion{
 				Equal("one"),
 				Equal("two"),
 			},
-			ok:          "two",
-			ng:          "2",
-			expectError: "2 errors occurred: [0]: all assertions failed: expected one but got 2\n[1]: all assertions failed: expected two but got 2",
+			ok: "two",
+			ng: "2",
+			expectError: `2 errors occurred: [0]: all assertions failed: expected "one" but got "2"
+[1]: all assertions failed: expected "two" but got "2"`,
 		},
 	}
 	for _, test := range tests {
