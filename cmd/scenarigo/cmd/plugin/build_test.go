@@ -1287,8 +1287,7 @@ replace github.com/zoncoen/scenarigo v0.11.2 => github.com/zoncoen/scenarigo v0.
 
 go 1.21
 `,
-			expectStdout: `WARN: test.so: remove require github.com/zoncoen/scenarigo v0.11.2
-WARN: test.so: remove replace github.com/zoncoen/scenarigo v0.11.2 => github.com/zoncoen/scenarigo v0.11.0
+			expectStdout: `WARN: test.so: remove replace github.com/zoncoen/scenarigo v0.11.2 => github.com/zoncoen/scenarigo v0.11.0
 `,
 		},
 		"add require": {
@@ -1320,15 +1319,15 @@ go 1.21
 require google.golang.org/grpc v1.37.1
 
 require (
-	github.com/golang/protobuf v1.4.2 // indirect
-	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
-	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
-	golang.org/x/text v0.3.0 // indirect
-	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
-	google.golang.org/protobuf v1.25.0 // indirect
+	github.com/golang/protobuf v1.5.0 // indirect
+	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 )
 `,
-			expectStdout: `WARN: test.so: add require google.golang.org/grpc v1.37.1 by test
+			expectStdout: `WARN: test.so: change require google.golang.org/grpc v1.63.2 ==> v1.37.1 by test
 `,
 		},
 		"overwrite require by require": {

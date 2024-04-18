@@ -3,7 +3,7 @@ package queryutil
 import (
 	"sync"
 
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go"
 	yamlextractor "github.com/zoncoen/query-go/extractor/yaml"
 )
 

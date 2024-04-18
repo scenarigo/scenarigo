@@ -77,7 +77,7 @@ $(GOCREDITS): | $(BIN_DIR)
 	@$(GO) install github.com/Songmu/gocredits/cmd/gocredits@v0.3.0
 
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
-GOLANGCI_LINT_VERSION := 1.52.2
+GOLANGCI_LINT_VERSION := 1.57.2
 GOLANGCI_LINT_OS_ARCH := $(shell echo golangci-lint-$(GOLANGCI_LINT_VERSION)-$(GOOS)-$(GOARCH))
 GOLANGCI_LINT_GZIP := $(GOLANGCI_LINT_OS_ARCH).tar.gz
 $(GOLANGCI_LINT): | $(BIN_DIR)
