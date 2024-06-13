@@ -1137,12 +1137,6 @@ func TestFindGoCmd(t *testing.T) {
 				},
 				expect: "go",
 			},
-			"minimum go version": {
-				cmds: map[string]string{
-					"go": fmt.Sprintf("go version %s linux/amd64", goMinVer),
-				},
-				expect: "go",
-			},
 		}
 		for name, test := range tests {
 			test := test
@@ -1169,12 +1163,6 @@ func TestFindGoCmd(t *testing.T) {
 		}{
 			"command not found": {
 				expect: "go command required",
-			},
-			"old go version": {
-				cmds: map[string]string{
-					"go": "go version go1.20 linux/amd64",
-				},
-				expect: fmt.Sprintf("required go %s or later but installed 1.20", goMinVer),
 			},
 		}
 		for name, test := range tests {
@@ -2174,5 +2162,35 @@ func createExecutable(t *testing.T, path, stdout string) {
 	defer f.Close()
 	if _, err := f.Write([]byte(fmt.Sprintf("#!%s\n%s %q", bash, echo, stdout))); err != nil {
 		t.Fatalf("failed to write %s: %s", path, err)
+	}
+}
+
+func TestValidateGoVersion(t *testing.T) {
+	if tip {
+		t.Skip("skip on tip")
+	}
+	tests := map[string]struct {
+		targetVer string
+		expect    string
+	}{
+		"same version": {
+			targetVer: goVer,
+		},
+		"different version": {
+			targetVer: "go100.0.0",
+			expect:    "require sceanrigo built by go100.0.0, please re-install scenarigo",
+		},
+	}
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			err := validateGoVersion(context.Background(), "", "go", test.targetVer)
+			if test.expect == "" && err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			if test.expect != "" && err == nil {
+				t.Fatal("no error")
+			}
+		})
 	}
 }

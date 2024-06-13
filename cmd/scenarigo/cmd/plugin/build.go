@@ -216,9 +216,6 @@ func findGoCmd(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("go command required: %w", err)
 	}
-	if err := checkGoVersion(ctx, goCmd, goMinVer); err != nil {
-		return "", fmt.Errorf("failed to check go version: %w", err)
-	}
 	return goCmd, nil
 }
 
@@ -286,29 +283,6 @@ func replacePathVersion(p, v string) string {
 		return p
 	}
 	return fmt.Sprintf("%s %s", p, v)
-}
-
-func checkGoVersion(ctx context.Context, goCmd, minVer string) error {
-	var stdout bytes.Buffer
-	cmd := exec.CommandContext(ctx, goCmd, "version")
-	cmd.Stdout = &stdout
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	items := strings.Split(stdout.String(), " ")
-	if len(items) != 4 {
-		if len(items) > 4 && items[2] == "devel" {
-			// gotip
-			items[2] = strings.Split(items[3], "-")[0]
-		} else {
-			return errors.New("invalid version output or scenarigo bug")
-		}
-	}
-	ver := strings.TrimPrefix(items[2], "go")
-	if compareVers(ver, minVer) == -1 {
-		return fmt.Errorf(`required go %s or later but installed %s`, minVer, ver)
-	}
-	return nil
 }
 
 func downloadModule(ctx context.Context, goCmd, p string) (string, string, *modfile.Require, func(), error) {
@@ -492,8 +466,37 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 	if err := os.RemoveAll(pb.out); err != nil {
 		return fmt.Errorf("failed to delete the old plugin %s: %w", pb.out, err)
 	}
+	if err := validateGoVersion(ctx, pb.dir, goCmd, goVer); err != nil {
+		return err
+	}
 	if _, err := execute(ctx, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
 		return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
+	}
+	return nil
+}
+
+func validateGoVersion(ctx context.Context, wd, goCmd, targetVer string) error {
+	if tip {
+		return nil
+	}
+
+	stdout, err := execute(ctx, wd, goCmd, "version")
+	if err != nil {
+		return fmt.Errorf(`%s: "go version" failed: %w`, wd, err)
+	}
+	items := strings.Split(stdout, " ")
+	if len(items) != 4 {
+		if len(items) > 4 && items[2] == "devel" {
+			// gotip
+			items[2] = strings.Split(items[3], "-")[0]
+		} else {
+			return fmt.Errorf("invalid version output or scenarigo bug: %s", stdout)
+		}
+	}
+	ver := strings.TrimPrefix(items[2], "go")
+	targetVer = strings.TrimPrefix(targetVer, "go")
+	if compareVers(ver, targetVer) != 0 {
+		return fmt.Errorf(`require sceanrigo built by go%s, please re-install scenarigo`, targetVer)
 	}
 	return nil
 }
