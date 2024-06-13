@@ -1,5 +1,5 @@
-carvel.dev/ytt v0.48.0 h1:NNLW6mHBxYFhz8tRlaUW4xjtDmq8u8unmC0dcsCKPxU=
-carvel.dev/ytt v0.48.0/go.mod h1:ss9N6IKCUxg5yH5xomguFBQmuLnEwQr8slbAjTToCPQ=
+carvel.dev/ytt v0.49.1 h1:s9Qnb+wMsSRvaT08E4U7WCumwPs2kgdlIEfJ3G1NPeo=
+carvel.dev/ytt v0.49.1/go.mod h1:8ytmTEAsjvkDfNNV3U4ex/DoumV4JqnkIgaZgxqPxNQ=
 github.com/BurntSushi/toml v1.2.1 h1:9F2/+DoOYIOksmaJFPw1tGFy1eDnIJXg+UHjuD8lTak=
 github.com/BurntSushi/toml v1.2.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
