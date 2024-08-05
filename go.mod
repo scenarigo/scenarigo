@@ -1,11 +1,8 @@
 module github.com/zoncoen/scenarigo
 
 go 1.21.2
-
-toolchain go1.22.3
-
 require (
-	carvel.dev/ytt v0.48.0
+	carvel.dev/ytt v0.50.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fatih/color v1.17.0
 	github.com/goccy/go-yaml v1.12.0
