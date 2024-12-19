@@ -7,7 +7,7 @@ require (
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fatih/color v1.18.0
-	github.com/goccy/go-yaml v1.12.0
+	github.com/goccy/go-yaml v1.15.11
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.6.0
 	github.com/hashicorp/go-multierror v1.1.1
@@ -17,9 +17,9 @@ require (
 	github.com/sergi/go-diff v1.3.1
 	github.com/sosedoff/gitkit v0.4.0
 	github.com/spf13/cobra v1.8.1
-	github.com/zoncoen/query-go v1.3.1
+	github.com/zoncoen/query-go v1.3.2
 	github.com/zoncoen/query-go/extractor/protobuf v0.1.3
-	github.com/zoncoen/query-go/extractor/yaml v0.2.1
+	github.com/zoncoen/query-go/extractor/yaml v0.2.2
 	golang.org/x/mod v0.21.0
 	golang.org/x/sync v0.8.0
 	golang.org/x/text v0.19.0
@@ -41,5 +41,4 @@ require (
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
 )
