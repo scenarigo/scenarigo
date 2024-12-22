@@ -1,5 +1,5 @@
-carvel.dev/ytt v0.48.0 h1:NNLW6mHBxYFhz8tRlaUW4xjtDmq8u8unmC0dcsCKPxU=
-carvel.dev/ytt v0.48.0/go.mod h1:ss9N6IKCUxg5yH5xomguFBQmuLnEwQr8slbAjTToCPQ=
+carvel.dev/ytt v0.51.1 h1:XWM+9tA+rJnhSel3dJf1jgrCES2wHw68cclkQhZcNRM=
+carvel.dev/ytt v0.51.1/go.mod h1:bvN7TWCAHhpPgdulWTQ+gi80aR6TOZ1PJPOEHcKtvQY=
 dario.cat/mergo v1.0.1 h1:Ra4+bf83h2ztPIQYNP99R6m+Y7KfnARDfID+a+vLl4s=
 dario.cat/mergo v1.0.1/go.mod h1:uNxQE+84aUszobStD9th8a29P2fMDhsBdgRYvZOxGmk=
 github.com/BurntSushi/toml v1.2.1 h1:9F2/+DoOYIOksmaJFPw1tGFy1eDnIJXg+UHjuD8lTak=

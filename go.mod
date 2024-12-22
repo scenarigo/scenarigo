@@ -1,9 +1,10 @@
 module github.com/zoncoen/scenarigo
 
 go 1.22.0
+toolchain go1.23.4
 
 require (
-	carvel.dev/ytt v0.48.0
+	carvel.dev/ytt v0.51.1
 	dario.cat/mergo v1.0.1
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/cenkalti/backoff/v4 v4.3.0
