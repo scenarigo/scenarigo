@@ -1234,6 +1234,61 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
+			"coalesce": {
+				src: "{{coalesce(a.b, 42)}}",
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.COALESCE,
+						lit: "coalesce",
+					},
+					{
+						pos: 11,
+						tok: token.LPAREN,
+						lit: "(",
+					},
+					{
+						pos: 12,
+						tok: token.IDENT,
+						lit: "a",
+					},
+					{
+						pos: 13,
+						tok: token.PERIOD,
+						lit: ".",
+					},
+					{
+						pos: 14,
+						tok: token.IDENT,
+						lit: "b",
+					},
+					{
+						pos: 15,
+						tok: token.COMMA,
+						lit: ",",
+					},
+					{
+						pos: 17,
+						tok: token.INT,
+						lit: "42",
+					},
+					{
+						pos: 19,
+						tok: token.RPAREN,
+						lit: ")",
+					},
+					{
+						pos: 20,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
 		}
 		for name, test := range tests {
 			test := test

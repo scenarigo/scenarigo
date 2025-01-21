@@ -113,6 +113,15 @@ type (
 		Arg        Expr
 		Rparen     int
 	}
+
+	// CoalesceExpr node represents a coalesce() expression.
+	CoalesceExpr struct {
+		CoalescePos int
+		Lparen      int
+		MaybeUndef  Expr
+		Default     Expr
+		Rparen      int
+	}
 )
 
 // Pos implements Node.
@@ -129,6 +138,7 @@ func (e *IndexExpr) Pos() int       { return e.Lbrack }
 func (e *CallExpr) Pos() int        { return e.Lparen }
 func (e *LeftArrowExpr) Pos() int   { return e.Larrow }
 func (e *DefinedExpr) Pos() int     { return e.DefinedPos }
+func (e *CoalesceExpr) Pos() int    { return e.CoalescePos }
 
 // exprNode implements Expr.
 func (e *BadExpr) exprNode()         {}
@@ -143,4 +153,5 @@ func (e *SelectorExpr) exprNode()    {}
 func (e *IndexExpr) exprNode()       {}
 func (e *LeftArrowExpr) exprNode()   {}
 func (e *DefinedExpr) exprNode()     {}
+func (e *CoalesceExpr) exprNode()    {}
 func (e *CallExpr) exprNode()        {}

@@ -45,7 +45,8 @@ const (
 	CONCAT    // implicit concatenation
 	LINEBREAK // end of a larrow expression argument
 
-	DEFINED // defined
+	DEFINED  // defined
+	COALESCE // coalesce
 )
 
 // String returns t as string.
@@ -123,6 +124,8 @@ func (t Token) String() string {
 		return "line break"
 	case DEFINED:
 		return "defined"
+	case COALESCE:
+		return "coalesce"
 	}
 	return "unknown"
 }

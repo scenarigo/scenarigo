@@ -186,6 +186,8 @@ scan:
 		return s.pos - runesLen(str), token.BOOL, str
 	case "defined":
 		return s.pos - runesLen(str), token.DEFINED, str
+	case "coalesce":
+		return s.pos - runesLen(str), token.COALESCE, str
 	}
 	return s.pos - runesLen(str), token.IDENT, str
 }

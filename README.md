@@ -1037,6 +1037,11 @@ The template feature provides functions to convert types.
       <td><code>defined(a) ? a : b</code></td>
     </tr>
     <tr>
+      <td>coalesce</td>
+      <td>returns the value of a variable (first argument) if the variable is defined, otherwise returns the default value (second argument)</td>
+      <td><code>coalesce(a, "default foo")</code></td>
+    </tr>
+    <tr>
       <td rowspan=4>size</td>
       <td>returns the string length</td>
       <td><code>size("foo")</code></td>

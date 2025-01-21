@@ -389,6 +389,25 @@ func TestTemplate_Execute_UnaryExpr(t *testing.T) {
 			str:         "{{defined(true)}}",
 			expectError: "failed to execute: {{defined(true)}}: invalid argument to defined()",
 		},
+
+		"coalesce": {
+			// "default" + true should not be executed
+			str: `{{coalesce(a.b, "default" + true)}}`,
+			data: map[string]any{
+				"a": map[string]any{
+					"b": 57,
+				},
+			},
+			expect: 57,
+		},
+		"coalesce not defined": {
+			str:    "{{coalesce(a.b, 42)}}",
+			expect: int64(42),
+		},
+		"invalid argument to coalesce()": {
+			str:         "{{coalesce(true, 42)}}",
+			expectError: "failed to execute: {{coalesce(true, 42)}}: invalid argument to coalesce()",
+		},
 	}
 	runExecute(t, tests)
 }

@@ -100,6 +100,8 @@ func (t *Template) executeExpr(ctx context.Context, expr ast.Expr, data interfac
 		return t.executeLeftArrowExpr(ctx, e, data)
 	case *ast.DefinedExpr:
 		return t.executeDefinedExpr(e, data)
+	case *ast.CoalesceExpr:
+		return t.executeCoalesceExpr(ctx, e, data)
 	default:
 		return nil, errors.Errorf(`unknown expression "%T"`, e)
 	}
@@ -611,6 +613,23 @@ func (t *Template) executeDefinedExpr(e *ast.DefinedExpr, data interface{}) (int
 		return true, nil
 	}
 	return nil, errors.New("invalid argument to defined()")
+}
+
+func (t *Template) executeCoalesceExpr(ctx context.Context, e *ast.CoalesceExpr, data interface{}) (interface{}, error) {
+	switch e.MaybeUndef.(type) {
+	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
+		extracted, err := extract(e.MaybeUndef, data)
+		if err != nil {
+			var notDefined errNotDefined
+			if errors.As(err, &notDefined) {
+				return t.executeExpr(ctx, e.Default, data)
+			}
+			return nil, err
+		}
+
+		return extracted, nil
+	}
+	return nil, errors.New("invalid argument to coalesce()")
 }
 
 func (t *Template) executeLeftArrowExprArg(ctx context.Context, arg ast.Expr, data interface{}) (interface{}, error) {

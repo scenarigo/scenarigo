@@ -707,6 +707,33 @@ func TestParser_Parse(t *testing.T) {
 					Rdbrace: 15,
 				},
 			},
+			"coalesce": {
+				src: `{{coalesce(a.b, 42)}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.CoalesceExpr{
+						CoalescePos: 3,
+						Lparen:      11,
+						MaybeUndef: &ast.SelectorExpr{
+							X: &ast.Ident{
+								NamePos: 12,
+								Name:    "a",
+							},
+							Sel: &ast.Ident{
+								NamePos: 14,
+								Name:    "b",
+							},
+						},
+						Default: &ast.BasicLit{
+							ValuePos: 17,
+							Kind:     token.INT,
+							Value:    "42",
+						},
+						Rparen: 19,
+					},
+					Rdbrace: 20,
+				},
+			},
 		}
 		for name, test := range tests {
 			test := test

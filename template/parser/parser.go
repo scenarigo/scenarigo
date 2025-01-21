@@ -225,6 +225,24 @@ func (p *Parser) parseUnaryExpr() ast.Expr {
 			Arg:        p.parseExpr(),
 			Rparen:     p.expect(token.RPAREN),
 		}
+	case token.COALESCE:
+		pos := p.pos
+		p.next()
+
+		coaleacePos := pos
+		lparen := p.expect(token.LPAREN)
+		maybeUndef := p.parseExpr()
+		p.expect(token.COMMA)
+		default_ := p.parseExpr()
+		rparen := p.expect(token.RPAREN)
+
+		e = &ast.CoalesceExpr{
+			CoalescePos: coaleacePos,
+			Lparen:      lparen,
+			MaybeUndef:  maybeUndef,
+			Default:     default_,
+			Rparen:      rparen,
+		}
 	default:
 		return nil
 	}
