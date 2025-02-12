@@ -15,7 +15,7 @@ for p in $(find ${root_dir} -name 'go.mod'); do
     echo ${p}
     cd $(dirname ${p})
     go mod edit -go=${prev_major_minor}
-    if [ ${p} != ${root_dir}/go.mod ]; then  
+    if [[ ${p} =~ ${root_dir}/examples/ ]]; then
         go mod edit -toolchain=go${latest}
     fi
 done

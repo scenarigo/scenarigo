@@ -4,12 +4,12 @@ go 1.23
 
 toolchain go1.24.0
 
-require github.com/zoncoen/scenarigo v0.18.0
+require github.com/zoncoen/scenarigo v0.19.0
 
 require github.com/stretchr/testify v1.9.0 // indirect
 
 require (
-	carvel.dev/ytt v0.48.0 // indirect
+	carvel.dev/ytt v0.50.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/goccy/go-yaml v1.15.22 // indirect
@@ -23,8 +23,6 @@ require (
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
 	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 )
