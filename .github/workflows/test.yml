@@ -80,7 +80,7 @@ jobs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: go-${{ matrix.os }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+        key: go-ubuntu-latest-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
         restore-keys: |
           go-${{ steps.setup-go.outputs.go-version }}-
     - name: Generate codes
