@@ -7,10 +7,9 @@
 A scenario-based API testing tool for HTTP/gRPC server.
 
 [![godoc](https://godoc.org/github.com/scenarigo/scenarigo?status.svg)](https://pkg.go.dev/github.com/scenarigo/scenarigo)
-![test](https://github.com/scenarigo/scenarigo/workflows/test/badge.svg?branch=main)
+![test](https://github.com/scenarigo/scenarigo/actions/workflows/test.yml/badge.svg?branch=main)
 [![codecov](https://codecov.io/gh/scenarigo/scenarigo/branch/main/graph/badge.svg)](https://codecov.io/gh/scenarigo/scenarigo)
 [![go report](https://goreportcard.com/badge/scenarigo/scenarigo)](https://goreportcard.com/report/github.com/scenarigo/scenarigo)
-[![codebeat](https://codebeat.co/badges/93ee2453-1a25-4db6-b98e-c430c994b4b8)](https://codebeat.co/projects/github-com-scenarigo-scenarigo-main)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Overview
