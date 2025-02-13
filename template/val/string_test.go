@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/zoncoen/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestStringType_Name(t *testing.T) {

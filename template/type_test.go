@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zoncoen/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestTypeFunctions(t *testing.T) {

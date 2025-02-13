@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/scenarigo/scenarigo"
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
-	"github.com/zoncoen/scenarigo/reporter"
 )
 
 var listCmd = &cobra.Command{

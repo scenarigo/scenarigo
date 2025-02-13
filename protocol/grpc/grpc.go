@@ -9,7 +9,7 @@ import (
 	"github.com/zoncoen/query-go"
 	protobufextractor "github.com/zoncoen/query-go/extractor/protobuf"
 
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/scenarigo/scenarigo/protocol"
 )
 
 var grpcProtocol = &GRPC{}

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/zoncoen/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/errors"
 )
 
 var (

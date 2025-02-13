@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/zoncoen/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/plugin"
 )
 
 func init() {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/zoncoen/scenarigo/internal/ptr"
+	"github.com/scenarigo/scenarigo/internal/ptr"
 )
 
 func TestLogRecorder(t *testing.T) {

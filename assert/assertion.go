@@ -8,9 +8,9 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/query-go"
 
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/template"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/template"
 )
 
 // Assertion implements value assertion.

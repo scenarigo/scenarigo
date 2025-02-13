@@ -15,14 +15,14 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/filepathutil"
-	"github.com/zoncoen/scenarigo/plugin"
-	"github.com/zoncoen/scenarigo/protocol/grpc"
-	"github.com/zoncoen/scenarigo/protocol/http"
-	"github.com/zoncoen/scenarigo/reporter"
-	"github.com/zoncoen/scenarigo/schema"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/protocol/grpc"
+	"github.com/scenarigo/scenarigo/protocol/http"
+	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 func init() {

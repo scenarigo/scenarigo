@@ -13,13 +13,13 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/mattn/go-encoding"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
-	"github.com/zoncoen/scenarigo/protocol/http/marshaler"
-	"github.com/zoncoen/scenarigo/protocol/http/unmarshaler"
-	"github.com/zoncoen/scenarigo/version"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/protocol/http/marshaler"
+	"github.com/scenarigo/scenarigo/protocol/http/unmarshaler"
+	"github.com/scenarigo/scenarigo/version"
 )
 
 var defaultUserAgent = fmt.Sprintf("scenarigo/%s", version.String())

@@ -5,7 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/zoncoen/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/assert"
 )
 
 type assertions struct {

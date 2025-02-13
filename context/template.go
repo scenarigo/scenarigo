@@ -3,7 +3,7 @@ package context
 import (
 	"fmt"
 
-	"github.com/zoncoen/scenarigo/template"
+	"github.com/scenarigo/scenarigo/template"
 )
 
 // ExecuteTemplate executes template strings in context.

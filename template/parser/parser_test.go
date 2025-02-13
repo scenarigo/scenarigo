@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/zoncoen/scenarigo/template/ast"
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/ast"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 func TestParser_Parse(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	"github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 	"google.golang.org/protobuf/proto"
 )
 

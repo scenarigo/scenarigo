@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zoncoen/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/plugin"
 )
 
 func init() {

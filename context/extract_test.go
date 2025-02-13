@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/reporter"
 )
 
 func TestContext_ExtractKey(t *testing.T) {

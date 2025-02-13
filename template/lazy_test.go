@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
 )
 
 func TestLazy(t *testing.T) {

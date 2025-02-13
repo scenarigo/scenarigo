@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	sub "github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
+	sub "github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 )
 
 var configCmd = &cobra.Command{

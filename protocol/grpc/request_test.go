@@ -19,13 +19,13 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/zoncoen/query-go"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/mockutil"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/internal/testutil"
-	"github.com/zoncoen/scenarigo/internal/yamlutil"
-	"github.com/zoncoen/scenarigo/reporter"
-	testpb "github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/mockutil"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
+	"github.com/scenarigo/scenarigo/reporter"
+	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
 
 func TestRequestExtractor(t *testing.T) {

@@ -12,9 +12,9 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"golang.org/x/mod/module"
 
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/filepathutil"
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/protocol"
 )
 
 // Config represents a configuration.

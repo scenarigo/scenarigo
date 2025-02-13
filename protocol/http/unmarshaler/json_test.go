@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/assert"
 )
 
 func TestJSON_Unmarshal_BigInt(t *testing.T) {

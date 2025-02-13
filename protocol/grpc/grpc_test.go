@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/protocol"
 )
 
 func TestMain(m *testing.M) {

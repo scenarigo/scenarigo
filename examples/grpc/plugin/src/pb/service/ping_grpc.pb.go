@@ -8,7 +8,7 @@ package service
 
 import (
 	context "context"
-	empty "github.com/zoncoen/scenarigo/examples/grpc/plugin/src/pb/empty"
+	empty "github.com/scenarigo/scenarigo/examples/grpc/plugin/src/pb/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"

@@ -3,9 +3,9 @@ package assert
 import (
 	"reflect"
 
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 // Contains returns an assertion to ensure a value contains the value.

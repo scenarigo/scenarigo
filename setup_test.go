@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/testutil"
-	"github.com/zoncoen/scenarigo/plugin"
-	"github.com/zoncoen/scenarigo/reporter"
 )
 
 func TestSetupMap_Setup(t *testing.T) {

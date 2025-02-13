@@ -16,12 +16,12 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/text/encoding/japanese"
 
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/version"
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/internal/testutil"
-	"github.com/zoncoen/scenarigo/reporter"
-	"github.com/zoncoen/scenarigo/version"
 )
 
 func TestRequestExtractor(t *testing.T) {

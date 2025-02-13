@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/zoncoen/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestIntType_Name(t *testing.T) {

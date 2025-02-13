@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	testpb "github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )

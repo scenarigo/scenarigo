@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/zoncoen/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestTimeType_Name(t *testing.T) {

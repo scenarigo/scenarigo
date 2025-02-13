@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/context"
+	"github.com/scenarigo/scenarigo/context"
 )
 
 func TestExpect_Build(t *testing.T) {

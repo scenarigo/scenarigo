@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/zoncoen/scenarigo"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/reporter"
-	"github.com/zoncoen/scenarigo/schema"
+	"github.com/scenarigo/scenarigo"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 func TestFromT(t *testing.T) {

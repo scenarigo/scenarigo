@@ -9,9 +9,9 @@ import (
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/token"
 	"github.com/pkg/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
 )
 
 func validatePath(t *testing.T, e *PathError, path string) {

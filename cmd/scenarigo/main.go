@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd"
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd"
 )
 
 func main() {

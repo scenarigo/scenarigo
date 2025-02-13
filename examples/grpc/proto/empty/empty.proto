@@ -2,6 +2,6 @@ syntax = "proto3";
 
 package scenarigo.examples.grpc.empty;
 
-option go_package = "github.com/zoncoen/scenarigo/examples/grpc/plugin/src/pb/empty;empty";
+option go_package = "github.com/scenarigo/scenarigo/examples/grpc/plugin/src/pb/empty;empty";
 
 message Empty {}

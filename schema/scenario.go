@@ -7,8 +7,8 @@ import (
 
 	"github.com/goccy/go-yaml/ast"
 
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/protocol"
 )
 
 const stepIDPattern = `^[a-zA-Z0-9\-_]+$`

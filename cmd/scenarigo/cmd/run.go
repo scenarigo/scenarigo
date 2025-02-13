@@ -5,11 +5,11 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/pkg/errors"
+	"github.com/scenarigo/scenarigo"
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/reporter"
 )
 
 // ErrTestFailed is the error returned when the test failed.

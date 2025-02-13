@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml/ast"
-	"github.com/zoncoen/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/reporter"
 )
 
 type (

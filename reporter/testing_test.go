@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/internal/testutil"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/zoncoen/scenarigo/internal/testutil"
 )
 
 func TestFromT(t *testing.T) {

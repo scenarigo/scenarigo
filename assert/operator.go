@@ -1,8 +1,8 @@
 package assert
 
 import (
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
 )
 
 // And returns a new assertion to ensure that value passes all assertions.

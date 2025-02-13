@@ -7,7 +7,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 
-	"github.com/zoncoen/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/errors"
 )
 
 func TestRetryPolicyConstant(t *testing.T) {
