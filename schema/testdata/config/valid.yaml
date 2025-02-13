@@ -7,9 +7,9 @@ plugins:
   local.so:
     src: ./plugin
   remote.so:
-    src: github.com/zoncoen/scenarigo
+    src: github.com/scenarigo/scenarigo
   remote-with-version.so:
-    src: github.com/zoncoen/scenarigo@v1.0.0
+    src: github.com/scenarigo/scenarigo@v1.0.0
 protocols:
   grpc:
     request:

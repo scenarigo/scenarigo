@@ -7,9 +7,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/zoncoen/query-go"
 
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/template/ast"
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/template/ast"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 type errNotDefined struct {

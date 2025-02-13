@@ -1,4 +1,4 @@
-module github.com/zoncoen/scenarigo/scripts/cross-build
+module github.com/scenarigo/scenarigo/scripts/cross-build
 
 go 1.23
 

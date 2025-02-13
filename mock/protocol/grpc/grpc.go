@@ -13,9 +13,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/zoncoen/scenarigo/logger"
-	"github.com/zoncoen/scenarigo/mock/protocol"
-	"github.com/zoncoen/scenarigo/protocol/grpc/proto"
+	"github.com/scenarigo/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/mock/protocol"
+	"github.com/scenarigo/scenarigo/protocol/grpc/proto"
 )
 
 var waitInterval = 100 * time.Millisecond

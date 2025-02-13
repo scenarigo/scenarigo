@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/zoncoen/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/plugin"
 
-	emptypb "github.com/zoncoen/scenarigo/examples/grpc/plugin/src/pb/empty"
-	servicepb "github.com/zoncoen/scenarigo/examples/grpc/plugin/src/pb/service"
+	emptypb "github.com/scenarigo/scenarigo/examples/grpc/plugin/src/pb/empty"
+	servicepb "github.com/scenarigo/scenarigo/examples/grpc/plugin/src/pb/service"
 )
 
 func init() {

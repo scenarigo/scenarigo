@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/zoncoen/scenarigo/version"
+	"github.com/scenarigo/scenarigo/version"
 )
 
 var (
@@ -78,5 +78,5 @@ func ReplaceFilepath(s string) string {
 			break
 		}
 	}
-	return strings.ReplaceAll(s, root, filepath.FromSlash("/go/src/github.com/zoncoen/scenarigo"))
+	return strings.ReplaceAll(s, root, filepath.FromSlash("/go/src/github.com/scenarigo/scenarigo"))
 }

@@ -1,4 +1,4 @@
-module github.com/zoncoen/scenarigo
+module github.com/scenarigo/scenarigo
 
 go 1.23
 

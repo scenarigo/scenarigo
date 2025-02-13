@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
-	testpb "github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
 
 func StartTestGRPCServer(t *testing.T, srv testpb.TestServer, optFuncs ...TestGRPCServerOption) string {

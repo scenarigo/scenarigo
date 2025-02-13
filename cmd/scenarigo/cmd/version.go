@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/scenarigo/scenarigo/version"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo/version"
 )
 
 func init() {

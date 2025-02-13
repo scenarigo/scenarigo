@@ -10,8 +10,8 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/scenarigo/scenarigo/protocol"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/zoncoen/scenarigo/protocol"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -77,13 +77,13 @@ func TestLoadConfig(t *testing.T) {
 							{
 								Key: "remote.so",
 								Value: PluginConfig{
-									Src: "github.com/zoncoen/scenarigo",
+									Src: "github.com/scenarigo/scenarigo",
 								},
 							},
 							{
 								Key: "remote-with-version.so",
 								Value: PluginConfig{
-									Src: "github.com/zoncoen/scenarigo@v1.0.0",
+									Src: "github.com/scenarigo/scenarigo@v1.0.0",
 								},
 							},
 						},

@@ -13,9 +13,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	grpcproto "github.com/zoncoen/scenarigo/protocol/grpc/proto"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	grpcproto "github.com/scenarigo/scenarigo/protocol/grpc/proto"
 )
 
 var (

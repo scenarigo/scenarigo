@@ -8,9 +8,9 @@ import (
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/zoncoen/scenarigo/internal/yamlutil"
-	"github.com/zoncoen/scenarigo/mock/protocol"
-	"github.com/zoncoen/scenarigo/protocol/grpc/proto"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
+	"github.com/scenarigo/scenarigo/mock/protocol"
+	"github.com/scenarigo/scenarigo/protocol/grpc/proto"
 )
 
 func TestUnaryHandler_failure(t *testing.T) {

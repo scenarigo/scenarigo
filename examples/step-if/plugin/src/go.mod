@@ -1,4 +1,4 @@
-module github.com/zoncoen/scenarigo/examples/step-if/plugin
+module github.com/scenarigo/scenarigo/examples/step-if/plugin
 
 go 1.23
 
@@ -6,7 +6,7 @@ toolchain go1.24.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/zoncoen/scenarigo v0.19.0
+	github.com/scenarigo/scenarigo v0.19.0
 )
 
 require github.com/stretchr/testify v1.9.0 // indirect

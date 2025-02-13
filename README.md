@@ -1,4 +1,4 @@
-<a href="https://github.com/zoncoen/scenarigo">
+<a href="https://github.com/scenarigo/scenarigo">
   <p align="center">
     <img alt="Scenarigo" src="https://user-images.githubusercontent.com/2238852/205980597-37eaaf03-fd35-4a04-93c4-884c95f48df3.png" width="485px">
   </p>
@@ -6,11 +6,11 @@
 
 A scenario-based API testing tool for HTTP/gRPC server.
 
-[![godoc](https://godoc.org/github.com/zoncoen/scenarigo?status.svg)](https://pkg.go.dev/github.com/zoncoen/scenarigo)
-![test](https://github.com/zoncoen/scenarigo/workflows/test/badge.svg?branch=main)
-[![codecov](https://codecov.io/gh/zoncoen/scenarigo/branch/main/graph/badge.svg)](https://codecov.io/gh/zoncoen/scenarigo)
-[![go report](https://goreportcard.com/badge/zoncoen/scenarigo)](https://goreportcard.com/report/github.com/zoncoen/scenarigo)
-[![codebeat](https://codebeat.co/badges/93ee2453-1a25-4db6-b98e-c430c994b4b8)](https://codebeat.co/projects/github-com-zoncoen-scenarigo-main)
+[![godoc](https://godoc.org/github.com/scenarigo/scenarigo?status.svg)](https://pkg.go.dev/github.com/scenarigo/scenarigo)
+![test](https://github.com/scenarigo/scenarigo/workflows/test/badge.svg?branch=main)
+[![codecov](https://codecov.io/gh/scenarigo/scenarigo/branch/main/graph/badge.svg)](https://codecov.io/gh/scenarigo/scenarigo)
+[![go report](https://goreportcard.com/badge/scenarigo/scenarigo)](https://goreportcard.com/report/github.com/scenarigo/scenarigo)
+[![codebeat](https://codebeat.co/badges/93ee2453-1a25-4db6-b98e-c430c994b4b8)](https://codebeat.co/projects/github-com-scenarigo-scenarigo-main)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Overview
@@ -22,7 +22,7 @@ You can write test scenarios as YAML files and executes them.
 ```yaml github.yaml
 title: get scenarigo repository
 vars:
-  user: zoncoen
+  user: scenarigo
   repo: scenarigo
 steps:
 - title: get repository
@@ -42,19 +42,19 @@ steps:
 ### go install command (recommend)
 
 ```shell
-$ go install github.com/zoncoen/scenarigo/cmd/scenarigo@latest
+$ go install github.com/scenarigo/scenarigo/cmd/scenarigo@latest
 ```
 
 ### from release page
 
-Go to the [releases page](https://github.com/zoncoen/scenarigo/releases) and download the zip file. Unpack the zip file, and put the binary to a directory in your `$PATH`.
+Go to the [releases page](https://github.com/scenarigo/scenarigo/releases) and download the zip file. Unpack the zip file, and put the binary to a directory in your `$PATH`.
 
 You can download the latest command into the `./scenarigo` directory with the following one-liner code. Place the binary `./scenarigo/scenarigo` into your `$PATH`.
 
 ```shell
-$ version=$(curl -s https://api.github.com/repos/zoncoen/scenarigo/releases/latest | jq -r '.tag_name') && \
+$ version=$(curl -s https://api.github.com/repos/scenarigo/scenarigo/releases/latest | jq -r '.tag_name') && \
     go_version=$(echo -n $(curl -s 'https://go.dev/VERSION?m=text' | head -n 1)) && \
-    curl -sLJ https://github.com/zoncoen/scenarigo/releases/download/${version}/scenarigo_${version}_${go_version}_$(uname)_$(uname -m).tar.gz -o scenarigo.tar.gz && \
+    curl -sLJ https://github.com/scenarigo/scenarigo/releases/download/${version}/scenarigo_${version}_${go_version}_$(uname)_$(uname -m).tar.gz -o scenarigo.tar.gz && \
     mkdir ./scenarigo && tar -zxvf ./scenarigo.tar.gz -C ./scenarigo && rm scenarigo.tar.gz
 ```
 
@@ -107,9 +107,9 @@ scenarios:
 ```yaml github.yaml
 title: get scenarigo repository
 steps:
-- title: GET https://api.github.com/repos/zoncoen/scenarigo
+- title: GET https://api.github.com/repos/scenarigo/scenarigo
   vars:
-    user: zoncoen
+    user: scenarigo
     repo: scenarigo
   protocol: http
   request:
@@ -1199,7 +1199,7 @@ plugins:
 
 #### Setup Funciton
 
-[`plugin.RegisterSetup`](https://pkg.go.dev/github.com/zoncoen/scenarigo/plugin#RegisterSetup) registers a setup function that will be called before running scenario tests once only. If the registered function returns a non-nil function as a second returned value, it will be executed after finished all tests.
+[`plugin.RegisterSetup`](https://pkg.go.dev/github.com/scenarigo/scenarigo/plugin#RegisterSetup) registers a setup function that will be called before running scenario tests once only. If the registered function returns a non-nil function as a second returned value, it will be executed after finished all tests.
 
 ```go main.go
 package main
@@ -1209,7 +1209,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zoncoen/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/plugin"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
@@ -1255,13 +1255,13 @@ plugins:
     src: ./plugins/date # call "setupClient" before running test scenarios
 ```
 
-Similarly, [`plugin.RegisterSetupEachScenario`](https://pkg.go.dev/github.com/zoncoen/scenarigo/plugin#RegisterSetupEachScenario) can register a setup function. The registered function will be called before each test scenario that uses the plugin.
+Similarly, [`plugin.RegisterSetupEachScenario`](https://pkg.go.dev/github.com/scenarigo/scenarigo/plugin#RegisterSetupEachScenario) can register a setup function. The registered function will be called before each test scenario that uses the plugin.
 
 ```go main.go
 package main
 
 import (
-	"github.com/zoncoen/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/plugin"
 
 	"github.com/google/uuid"
 )
@@ -1303,8 +1303,8 @@ Generally, a `step` represents sending a request in Scenarigo. However, you can 
 package main
 
 import (
-	"github.com/zoncoen/scenarigo/plugin"
-	"github.com/zoncoen/scenarigo/schema"
+	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 var Nop = plugin.StepFunc(func(ctx *plugin.Context, step *schema.Step) *plugin.Context {
@@ -1333,7 +1333,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/zoncoen/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/plugin"
 )
 
 var CoolFunc plugin.LeftArrowFunc = &fn{}

@@ -16,12 +16,12 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/assertutil"
-	"github.com/zoncoen/scenarigo/internal/yamlutil"
-	grpcprotocol "github.com/zoncoen/scenarigo/protocol/grpc"
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/assertutil"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
+	grpcprotocol "github.com/scenarigo/scenarigo/protocol/grpc"
 )
 
 func (s *server) convertToServicDesc(sd protoreflect.ServiceDescriptor) *grpc.ServiceDesc {

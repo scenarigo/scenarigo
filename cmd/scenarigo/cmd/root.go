@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
 )
 
 const appName = "scenarigo"

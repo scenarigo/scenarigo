@@ -3,7 +3,7 @@ package val
 import (
 	"reflect"
 
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 var boolType = basicType{

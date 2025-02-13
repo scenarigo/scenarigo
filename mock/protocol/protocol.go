@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/zoncoen/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/logger"
 )
 
 var (

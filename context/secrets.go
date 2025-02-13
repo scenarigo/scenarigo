@@ -9,8 +9,8 @@ import (
 
 	"github.com/zoncoen/query-go"
 
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 // Secrets represents context secrets.

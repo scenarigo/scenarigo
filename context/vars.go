@@ -1,6 +1,6 @@
 package context
 
-import "github.com/zoncoen/scenarigo/internal/queryutil"
+import "github.com/scenarigo/scenarigo/internal/queryutil"
 
 // Vars represents context variables.
 type Vars []any

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 func TestScanner_Read(t *testing.T) {

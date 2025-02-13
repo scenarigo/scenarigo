@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
 )
 
 // Lazy represents a value with lazy initialization.

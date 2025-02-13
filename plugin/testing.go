@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/context"
+	"github.com/scenarigo/scenarigo/context"
 )
 
 func init() {

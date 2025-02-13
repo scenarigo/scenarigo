@@ -9,7 +9,7 @@ import (
 
 	yamltoken "github.com/goccy/go-yaml/token"
 
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 // eof represents invalid code points.

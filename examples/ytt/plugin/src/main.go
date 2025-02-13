@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/zoncoen/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/plugin"
 )
 
 func init() {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/protocol/grpc/proto"
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/protocol/grpc/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 )

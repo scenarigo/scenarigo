@@ -3,7 +3,7 @@ package marshaler
 import (
 	"reflect"
 
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 func init() {

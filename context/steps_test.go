@@ -3,7 +3,7 @@ package context
 import (
 	"testing"
 
-	"github.com/zoncoen/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/reporter"
 )
 
 func TestSteps(t *testing.T) {

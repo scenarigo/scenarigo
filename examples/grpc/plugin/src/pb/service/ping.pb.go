@@ -7,7 +7,7 @@
 package service
 
 import (
-	empty "github.com/zoncoen/scenarigo/examples/grpc/plugin/src/pb/empty"
+	empty "github.com/scenarigo/scenarigo/examples/grpc/plugin/src/pb/empty"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

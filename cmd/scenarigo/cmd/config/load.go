@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/zoncoen/scenarigo/schema"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 var (

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 var durationType = basicType{

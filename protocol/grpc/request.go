@@ -23,12 +23,12 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/zoncoen/query-go"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/filepathutil"
-	"github.com/zoncoen/scenarigo/internal/queryutil"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
-	"github.com/zoncoen/scenarigo/internal/yamlutil"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
 )
 
 var tlsVers = map[string]uint16{

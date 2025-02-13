@@ -25,8 +25,8 @@ import (
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 
-	"github.com/zoncoen/scenarigo"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo"
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 )
 
 var (
@@ -1409,9 +1409,9 @@ require (
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
-replace github.com/zoncoen/scenarigo v0.11.2 => github.com/zoncoen/scenarigo v0.11.0
+replace github.com/scenarigo/scenarigo v0.11.2 => github.com/scenarigo/scenarigo v0.11.0
 `, goVersion),
 				overrides: map[string]*overrideModule{
 					"google.golang.org/grpc": {
@@ -1428,7 +1428,7 @@ replace github.com/zoncoen/scenarigo v0.11.2 => github.com/zoncoen/scenarigo v0.
 
 go %s
 `, goVersion),
-				expectStdout: `WARN: test.so: remove replace github.com/zoncoen/scenarigo v0.11.2 => github.com/zoncoen/scenarigo v0.11.0
+				expectStdout: `WARN: test.so: remove replace github.com/scenarigo/scenarigo v0.11.2 => github.com/scenarigo/scenarigo v0.11.0
 `,
 			},
 			"add require": {
@@ -1642,7 +1642,7 @@ require (
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -1666,7 +1666,7 @@ require (
 				src: `package main
 
 import (
-	_ "github.com/zoncoen/scenarigo/protocol/grpc"
+	_ "github.com/scenarigo/scenarigo/protocol/grpc"
 )
 `,
 				overrides: map[string]*overrideModule{
@@ -1695,7 +1695,7 @@ import (
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -1726,7 +1726,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -1752,7 +1752,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 				src: `package main
 
 import (
-	_ "github.com/zoncoen/scenarigo/protocol/grpc"
+	_ "github.com/scenarigo/scenarigo/protocol/grpc"
 )
 `,
 				overrides: map[string]*overrideModule{
@@ -1781,7 +1781,7 @@ import (
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -1812,7 +1812,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.1
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -1838,7 +1838,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 				src: `package main
 
 import (
-	_ "github.com/zoncoen/scenarigo/protocol/grpc"
+	_ "github.com/scenarigo/scenarigo/protocol/grpc"
 )
 `,
 				overrides: map[string]*overrideModule{
@@ -1867,7 +1867,7 @@ import (
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -1965,7 +1965,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -1991,7 +1991,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 				src: `package main
 
 import (
-	_ "github.com/zoncoen/scenarigo/protocol/grpc"
+	_ "github.com/scenarigo/scenarigo/protocol/grpc"
 )
 `,
 				overrides: map[string]*overrideModule{
@@ -2012,7 +2012,7 @@ import (
 
 go %s
 
-require github.com/zoncoen/scenarigo v0.11.2
+require github.com/scenarigo/scenarigo v0.11.2
 
 require (
 	github.com/fatih/color v1.13.0 // indirect
@@ -2038,7 +2038,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 				src: `package main
 
 import (
-	_ "github.com/zoncoen/scenarigo/protocol/grpc"
+	_ "github.com/scenarigo/scenarigo/protocol/grpc"
 )
 `,
 				overrides: map[string]*overrideModule{

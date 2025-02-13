@@ -3,7 +3,7 @@ package template
 import (
 	"fmt"
 
-	"github.com/zoncoen/scenarigo/template/val"
+	"github.com/scenarigo/scenarigo/template/val"
 )
 
 var functions = map[string]any{

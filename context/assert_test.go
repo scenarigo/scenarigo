@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/internal/testutil"
-	"github.com/zoncoen/scenarigo/template"
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/template"
 )
 
 func TestAssertions(t *testing.T) {

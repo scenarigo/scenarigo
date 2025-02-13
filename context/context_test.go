@@ -7,8 +7,8 @@ import (
 
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/token"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/schema"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 func TestContext(t *testing.T) {

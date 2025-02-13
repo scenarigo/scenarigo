@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/scenarigo/scenarigo/protocol"
 )
 
 func TestHTTP(t *testing.T) {

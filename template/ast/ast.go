@@ -2,7 +2,7 @@
 package ast
 
 import (
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 // All node types implement the Node interface.

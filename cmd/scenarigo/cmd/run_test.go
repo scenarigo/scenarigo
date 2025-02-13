@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo/internal/testutil"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
-	"github.com/zoncoen/scenarigo/internal/testutil"
 )
 
 func TestRun(t *testing.T) {
@@ -99,7 +99,7 @@ ok  	scenarios/pass.yaml	0.000s
 			expectOutput: strings.TrimPrefix(`
 --- FAIL: setup (0.00s)
     --- FAIL: setup/plugin.so (0.00s)
-            failed to open plugin: plugin.Open("/go/src/github.com/zoncoen/scenarigo/cmd/testdata/plugin.so"): realpath failed
+            failed to open plugin: plugin.Open("/go/src/github.com/scenarigo/scenarigo/cmd/testdata/plugin.so"): realpath failed
 FAIL
 FAIL	setup	0.000s
 FAIL

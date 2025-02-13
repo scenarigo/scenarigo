@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
 )
 
 func TestList(t *testing.T) {

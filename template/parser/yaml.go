@@ -8,7 +8,7 @@ import (
 	"github.com/goccy/go-yaml/printer"
 	yamltoken "github.com/goccy/go-yaml/token"
 
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 type yamlScanner struct {

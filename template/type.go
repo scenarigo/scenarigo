@@ -1,6 +1,6 @@
 package template
 
-import "github.com/zoncoen/scenarigo/template/val"
+import "github.com/scenarigo/scenarigo/template/val"
 
 var typeFunctions typeFunctionExtractor
 

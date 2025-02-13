@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/google/go-cmp/cmp"
-	testpb "github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
 
 func TestStartTestGRPCServer(t *testing.T) {
