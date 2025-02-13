@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [v0.20.0](https://github.com/scenarigo/scenarigo/compare/v0.19.0...v0.20.0) - 2025-02-13
+### New Features
+- change module name from zoncoen/scenarigo to scenarigo/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/521
+
 ## [v0.19.0](https://github.com/scenarigo/scenarigo/compare/v0.18.0...v0.19.0) - 2025-02-12
 ### New Features
 - Introduce nullish coalescing operator by @youxkei in https://github.com/scenarigo/scenarigo/pull/495
