@@ -50,7 +50,7 @@ func (fds FileDescriptors) ListServices() ([]protoreflect.FullName, error) {
 	names := []protoreflect.FullName{}
 	for _, f := range fds.Files() {
 		svcs := f.Services()
-		for i := 0; i < svcs.Len(); i++ {
+		for i := range svcs.Len() {
 			names = append(names, svcs.Get(i).FullName())
 		}
 	}

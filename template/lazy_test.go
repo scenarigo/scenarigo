@@ -114,7 +114,7 @@ func TestWaitContext(t *testing.T) {
 
 	// ignore canceled if the value is already set
 	cancel()
-	for i := 0; i < 10; i++ { // HACK: try many times for converage...
+	for range 10 { // HACK: try many times for converage...
 		if got, expect := extractVal(t, "$.$", wc), "BAR"; got != expect {
 			t.Fatalf("expect %q but got %q", expect, got)
 		}

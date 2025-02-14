@@ -29,7 +29,7 @@ func (s *server) convertToServicDesc(sd protoreflect.ServiceDescriptor) *grpc.Se
 		ServiceName: string(sd.FullName()),
 		Metadata:    sd.ParentFile().Path(),
 	}
-	for i := 0; i < sd.Methods().Len(); i++ {
+	for i := range sd.Methods().Len() {
 		m := sd.Methods().Get(i)
 		// TODO: streaming RPC
 		// if m.IsStreamingServer() || m.IsStreamingClient() {
