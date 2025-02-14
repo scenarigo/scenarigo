@@ -33,6 +33,7 @@ import (
 
 const (
 	versionTooHighErrorPattern = `^go: go.mod requires go >= ([\d\.]+) .+$`
+	toolchainLocal             = "local"
 )
 
 var (
@@ -53,7 +54,7 @@ func parseGoVersion(ver string) (string, string) {
 	// gotip
 	if strings.HasPrefix(ver, "devel ") {
 		ver = strings.Split(strings.TrimPrefix(ver, "devel "), "-")[0]
-		tc = "local"
+		tc = toolchainLocal
 	}
 	// workaround for weird environments (e.g., go1.23.2 X:rangefunc)
 	if !goversion.IsValid(ver) {
@@ -61,7 +62,7 @@ func parseGoVersion(ver string) (string, string) {
 			ver = v
 			tc = v
 		} else {
-			tc = "local"
+			tc = toolchainLocal
 		}
 	}
 	return ver, tc
@@ -662,7 +663,7 @@ func executeWithEnvs(ctx context.Context, envs []string, wd, name string, args .
 
 func (pb *pluginBuilder) updateGoMod(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule) error {
 	if err := pb.editGoMod(cmd, goCmd, func(gomod *modfile.File) error {
-		if toolchain == "local" {
+		if toolchain == toolchainLocal {
 			if gomod.Toolchain != nil {
 				warnLog(cmd.OutOrStdout(), "%s: remove toolchain by scenarigo", pb.name)
 				gomod.DropToolchainStmt()
