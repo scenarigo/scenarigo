@@ -64,7 +64,6 @@ func TestRequestExtractor(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			q, err := query.ParseString(
 				test.query,
@@ -131,7 +130,6 @@ func TestResponseExtractor(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			q, err := query.ParseString(
 				test.query,
@@ -447,7 +445,6 @@ func TestRequest_Invoke(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx := context.FromT(t)
 			if test.vars != nil {
@@ -543,7 +540,6 @@ func TestRequest_Invoke_Error(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx := context.FromT(t)
 			if test.vars != nil {
@@ -664,7 +660,6 @@ func TestRequest_buildRequest(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx := context.FromT(t)
 			req, body, err := test.req.buildRequest(ctx)

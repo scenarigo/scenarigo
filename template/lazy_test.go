@@ -49,7 +49,6 @@ func TestLazy(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()

@@ -29,7 +29,6 @@ func TestNew(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			_, err := New(test.str)
 			if !test.expectError && err != nil {
@@ -1310,7 +1309,6 @@ type executeTestCase struct {
 func runExecute(t *testing.T, tests map[string]executeTestCase) {
 	t.Helper()
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			tmpl, err := New(test.str)
 			if err != nil {
@@ -1424,7 +1422,6 @@ suffix: -suf
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			lines := []string{"{{dump <-}}:"}
 			for _, line := range strings.Split(test.str, "\n") {
@@ -1504,7 +1501,6 @@ func TestTemplate_ExecuteDirect(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()

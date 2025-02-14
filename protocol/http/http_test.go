@@ -36,7 +36,6 @@ func TestHTTP_UnmarshalRequest(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				invoker, err := p.UnmarshalRequest(test.bytes)
@@ -64,7 +63,6 @@ method: GET`),
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				_, err := p.UnmarshalRequest(test.bytes)
@@ -94,7 +92,6 @@ func TestHTTP_UnmarshalExpect(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				builder, err := p.UnmarshalExpect(test.bytes)
@@ -120,7 +117,6 @@ func TestHTTP_UnmarshalExpect(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				_, err := p.UnmarshalExpect(test.bytes)

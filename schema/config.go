@@ -203,7 +203,6 @@ func validate(c *Config) error {
 		}
 	}
 	for _, item := range c.Plugins.ToSlice() {
-		item := item
 		if err := stat(c, item.Value.Src, (&yaml.PathBuilder{}).Root().Child("plugins").Child(item.Key).Child("src").Build()); err != nil {
 			var neErr notExist
 			if errors.As(err, &neErr) {

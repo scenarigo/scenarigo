@@ -52,7 +52,6 @@ func TestGreater(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := Greater(tc.expected)
 					if err := assertion.Assert(tc.actual); err != nil {
@@ -110,7 +109,6 @@ func TestGreater(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := Greater(tc.expected)
 					if err := assertion.Assert(tc.actual); err == nil {
@@ -166,7 +164,6 @@ func TestGreaterOrEqual(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := GreaterOrEqual(tc.expected)
 					if err := assertion.Assert(tc.actual); err != nil {
@@ -224,7 +221,6 @@ func TestGreaterOrEqual(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := GreaterOrEqual(tc.expected)
 					if err := assertion.Assert(tc.actual); err == nil {

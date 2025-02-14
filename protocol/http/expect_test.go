@@ -119,7 +119,6 @@ func TestExpect_Build(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				if test.vars != nil {
@@ -232,7 +231,6 @@ func TestExpect_Build(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				assertion, err := test.expect.Build(ctx)

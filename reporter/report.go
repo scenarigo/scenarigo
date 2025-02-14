@@ -24,14 +24,12 @@ func GenerateTestReport(r Reporter) (*TestReport, error) {
 		Result: testResult(r),
 	}
 	for _, file := range r.getChildren() {
-		file := file
 		fileReport := ScenarioFileReport{
 			Name:     file.getName(),
 			Result:   testResult(file),
 			Duration: TestDuration(file.getDuration()),
 		}
 		for _, scenario := range file.getChildren() {
-			scenario := scenario
 			scenarioReport := ScenarioReport{
 				Name:     scenario.getName(),
 				File:     file.getName(),
@@ -39,7 +37,6 @@ func GenerateTestReport(r Reporter) (*TestReport, error) {
 				Duration: TestDuration(scenario.getDuration()),
 			}
 			for _, step := range scenario.getChildren() {
-				step := step
 				logs := step.getLogs()
 				stepReport := StepReport{
 					Name:     step.getName(),
@@ -68,7 +65,6 @@ func generateSubStepReports(r Reporter) []SubStepReport {
 	}
 	reports := make([]SubStepReport, len(children))
 	for i, child := range children {
-		child := child
 		logs := child.getLogs()
 		reports[i] = SubStepReport{
 			Name:     child.getName(),
@@ -130,7 +126,6 @@ type xmlScenarioFileReport ScenarioFileReport
 func (r ScenarioFileReport) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	var failures int
 	for _, scenario := range r.Scenarios {
-		scenario := scenario
 		if scenario.Result == TestResultFailed {
 			failures++
 		}

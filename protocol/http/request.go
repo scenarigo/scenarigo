@@ -247,7 +247,6 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 			return nil, nil, errors.WrapPathf(err, "header", "failed to set header")
 		}
 		for k, vs := range hdr {
-			vs := vs
 			for _, v := range vs {
 				header.Add(k, v)
 			}
@@ -281,7 +280,6 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	req = req.WithContext(ctx.RequestContext())
 
 	for k, vs := range header {
-		vs := vs
 		for _, v := range vs {
 			req.Header.Add(k, v)
 		}
@@ -316,7 +314,6 @@ func (r *Request) buildURL(ctx *context.Context) (string, error) {
 			return "", errors.WrapPathf(err, "query", "failed to set query")
 		}
 		for k, vs := range q {
-			vs := vs
 			for _, v := range vs {
 				query.Add(k, v)
 			}

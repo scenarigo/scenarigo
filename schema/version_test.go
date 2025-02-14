@@ -24,7 +24,6 @@ func TestReadDocWithSchemaVersions(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				docs, err := readDocsWithSchemaVersion(test.path)
 				if err != nil {
@@ -59,7 +58,6 @@ func TestReadDocWithSchemaVersions(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				_, err := readDocsWithSchemaVersion(test.path)
 				if err == nil {

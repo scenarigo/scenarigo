@@ -60,7 +60,6 @@ func TestRun_NilPanic(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		opts := []Option{}
 		if test.maxParallel != 0 {
 			opts = append(opts, WithMaxParallel(test.maxParallel))
@@ -72,7 +71,6 @@ func TestRun_NilPanic(t *testing.T) {
 				start := time.Now()
 				r := run(func(r Reporter) {
 					for i, f := range test.fs {
-						f := f
 						r.Run(strconv.Itoa(i), func(r Reporter) {
 							f(r)
 						})
@@ -94,7 +92,6 @@ func TestRun_NilPanic(t *testing.T) {
 				start := time.Now()
 				r := run(func(r Reporter) {
 					for i, f := range test.fs {
-						f := f
 						r.Run(strconv.Itoa(i), func(r Reporter) {
 							r.Parallel()
 							f(r)

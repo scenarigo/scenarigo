@@ -56,7 +56,6 @@ func TestGRPC_UnmarshalRequest(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &GRPC{}
 				invoker, err := p.UnmarshalRequest(test.bytes)
@@ -89,7 +88,6 @@ message: test`),
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &GRPC{}
 				_, err := p.UnmarshalRequest(test.bytes)
@@ -131,7 +129,6 @@ func TestGRPC_UnmarshalExpect(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &GRPC{}
 				builder, err := p.UnmarshalExpect(test.bytes)
@@ -162,7 +159,6 @@ message: test`),
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &GRPC{}
 				_, err := p.UnmarshalExpect(test.bytes)

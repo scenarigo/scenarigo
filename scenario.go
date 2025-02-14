@@ -23,7 +23,6 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	if s.Plugins != nil {
 		plugs := map[string]interface{}{}
 		for name, path := range s.Plugins {
-			path := path
 			if root := ctx.PluginDir(); root != "" {
 				path = filepath.Join(root, path)
 			}
@@ -89,7 +88,6 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	scnCtx := ctx
 	var failed bool
 	for idx, step := range s.Steps {
-		step := step
 		var stepCtx *context.Context
 		ok := context.RunWithRetry(scnCtx, step.Title, func(ctx *context.Context) {
 			stepCtx = ctx

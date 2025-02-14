@@ -31,7 +31,6 @@ func TestConvertStringsMap(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := ConvertStringsMap(reflect.ValueOf(test.v))
 				if err != nil {
@@ -55,7 +54,6 @@ func TestConvertStringsMap(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, err := ConvertStringsMap(reflect.ValueOf(test.v)); err == nil {
 					t.Fatal("expected error but no error")
@@ -97,7 +95,6 @@ func TestConvertStrings(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := ConvertStrings(reflect.ValueOf(test.v))
 				if err != nil {
@@ -127,7 +124,6 @@ func TestConvertStrings(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, err := ConvertStrings(reflect.ValueOf(test.v)); err == nil {
 					t.Fatal("expected error but no error")
@@ -161,7 +157,6 @@ func TestConvertString(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := ConvertString(reflect.ValueOf(test.v))
 				if err != nil {
@@ -188,7 +183,6 @@ func TestConvertString(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, err := ConvertString(reflect.ValueOf(test.v)); err == nil {
 					t.Fatal("expected error but no error")

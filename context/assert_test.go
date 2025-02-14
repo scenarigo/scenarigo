@@ -63,7 +63,6 @@ func TestLeftArrowFunc(t *testing.T) {
 		},
 	}
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			var i interface{}
 			if err := yaml.Unmarshal([]byte(tc.yaml), &i); err != nil {

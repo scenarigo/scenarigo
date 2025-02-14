@@ -54,7 +54,6 @@ func TestHTTP_Server(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			p := protocol.Get("http")
 			if p == nil {
@@ -129,7 +128,6 @@ func TestHTTP_Server_Start_Failure(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()

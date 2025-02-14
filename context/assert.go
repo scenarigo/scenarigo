@@ -86,7 +86,6 @@ func buildArgs(ctx context.Context, base func(...assert.Assertion) assert.Assert
 	return func(args ...interface{}) assert.Assertion {
 		var assertions []assert.Assertion
 		for _, arg := range args {
-			arg := arg
 			assertion, ok := arg.(assert.Assertion)
 			if !ok {
 				assertion = assert.MustBuild(ctx, arg)

@@ -74,7 +74,6 @@ func TestContext_ExtractKey(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx := New(reporter.FromT(t))
 			if test.ctx != nil {

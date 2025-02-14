@@ -120,7 +120,6 @@ func TestValidateMethod(t *testing.T) {
 			},
 		}
 		for name, tc := range tests {
-			tc := tc
 			t.Run(name, func(t *testing.T) {
 				if err := validateMethod(tc.method); err == nil {
 					t.Fatal("no error")

@@ -330,7 +330,6 @@ func TestLoadScenarios(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := LoadScenarios(test.path, test.opts...)
 				if err != nil {
@@ -474,7 +473,6 @@ func TestLoadScenarios(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				_, err := LoadScenarios(test.path, test.opts...)
 				if err == nil {
@@ -548,7 +546,6 @@ steps:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &testProtocol{
 					name: "test",
@@ -594,7 +591,6 @@ a:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				_, err := LoadScenariosFromReader(test.r)
 				if err == nil {

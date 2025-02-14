@@ -45,7 +45,6 @@ config/gen/remote.so
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			wd, err := os.Getwd()
 			if err != nil {

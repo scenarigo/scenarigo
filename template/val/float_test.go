@@ -34,7 +34,6 @@ func TestFloatType_NewValue(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := floatType.NewValue(test.v)
 			if test.expectError == "" && err != nil {
@@ -95,7 +94,6 @@ func TestFloatType_Convert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := floatType.Convert(test.v)
 			if test.expectError == "" && err != nil {
@@ -147,7 +145,6 @@ func TestFloat_Neg(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Neg()
 			if test.expectError == "" && err != nil {
@@ -193,7 +190,6 @@ func TestFloat_Equal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Equal(test.y)
 			if test.expectError == "" && err != nil {
@@ -243,7 +239,6 @@ func TestFloat_Compare(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Compare(test.y)
 			if test.expectError == "" && err != nil {
@@ -283,7 +278,6 @@ func TestFloat_Add(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Add(test.y)
 			if test.expectError == "" && err != nil {
@@ -328,7 +322,6 @@ func TestFloat_Sub(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Sub(test.y)
 			if test.expectError == "" && err != nil {
@@ -368,7 +361,6 @@ func TestFloat_Mul(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Mul(test.y)
 			if test.expectError == "" && err != nil {
@@ -413,7 +405,6 @@ func TestFloat_Div(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Div(test.y)
 			if test.expectError == "" && err != nil {

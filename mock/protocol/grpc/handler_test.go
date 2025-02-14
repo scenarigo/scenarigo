@@ -168,7 +168,6 @@ func TestUnaryHandler_failure(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			iter := protocol.NewMockIterator(test.mocks)
 			srv := &server{

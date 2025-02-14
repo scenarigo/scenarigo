@@ -44,7 +44,6 @@ func TestHTMLUnUnmarshaler_Unmarshal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var um htmlUnmarshaler
 			var got interface{}

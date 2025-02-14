@@ -56,7 +56,6 @@ func TestSet(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			err := Set(test.target, test.v)
 			if err != nil {
@@ -160,7 +159,6 @@ func TestConvert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, ok, err := Convert(test.target, test.v)
 			if err != nil {
@@ -215,7 +213,6 @@ func TestConvertInterface(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, ok, err := ConvertInterface(test.target, test.v)
 			if err != nil {

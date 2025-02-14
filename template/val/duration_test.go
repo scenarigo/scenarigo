@@ -38,7 +38,6 @@ func TestDurationType_NewValue(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := durationType.NewValue(test.v)
 			if test.expectError == "" && err != nil {
@@ -95,7 +94,6 @@ func TestDurationType_Convert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := durationType.Convert(test.v)
 			if test.expectError == "" && err != nil {
@@ -155,7 +153,6 @@ func TestDuration_Neg(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Neg()
 			if test.expectError == "" && err != nil {
@@ -201,7 +198,6 @@ func TestDuration_Equal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Equal(test.y)
 			if test.expectError == "" && err != nil {
@@ -251,7 +247,6 @@ func TestDuration_Compare(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Compare(test.y)
 			if test.expectError == "" && err != nil {
@@ -298,7 +293,6 @@ func TestDuration_Add(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Add(test.y)
 			if test.expectError == "" && err != nil {
@@ -344,7 +338,6 @@ func TestDuration_Sub(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Sub(test.y)
 			if test.expectError == "" && err != nil {

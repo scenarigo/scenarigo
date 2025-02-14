@@ -69,7 +69,6 @@ func TestMockIterator(t *testing.T) {
 		}
 
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var mocks []Mock
 				if err := yaml.Unmarshal([]byte(test.in), &mocks); err != nil {

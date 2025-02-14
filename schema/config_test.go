@@ -43,7 +43,6 @@ func TestLoadConfig(t *testing.T) {
 		}
 		re := regexp.MustCompile(".ytt.yaml$")
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				wd, err := os.Getwd()
 				if err != nil {
@@ -284,7 +283,6 @@ func TestProtocolOptions_Set(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if test.protocol != nil {
 				protocol.Register(test.protocol)

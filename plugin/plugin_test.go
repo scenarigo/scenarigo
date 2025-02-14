@@ -28,7 +28,6 @@ func TestOpen(t *testing.T) {
 		}
 
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				resetCache()
 

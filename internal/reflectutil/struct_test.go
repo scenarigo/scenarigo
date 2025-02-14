@@ -25,7 +25,6 @@ func TestStructFieldToKey(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := StructFieldToKey(test.field)
 			if got != test.expect {

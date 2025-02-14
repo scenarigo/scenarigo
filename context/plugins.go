@@ -15,7 +15,6 @@ func (plugins Plugins) Append(ps map[string]interface{}) Plugins {
 // ExtractByKey implements query.KeyExtractor interface.
 func (plugins Plugins) ExtractByKey(key string) (interface{}, bool) {
 	for _, ps := range plugins {
-		ps := ps
 		if p, ok := ps[key]; ok {
 			return p, true
 		}

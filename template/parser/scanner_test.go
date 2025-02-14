@@ -31,7 +31,6 @@ func TestScanner_Read(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			s := newScanner(strings.NewReader(test.s))
 			s.buf = test.buf
@@ -1276,7 +1275,6 @@ func TestScanner_Scan(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				s := newScanner(strings.NewReader(test.src))
 				for i, e := range test.expected {
@@ -1337,7 +1335,6 @@ func TestScanner_Scan(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				s := newScanner(strings.NewReader(test.src))
 				for {

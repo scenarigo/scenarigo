@@ -39,7 +39,6 @@ func TestLength(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			assertion := Length(test.expect)
 			t.Run("ok", func(t *testing.T) {

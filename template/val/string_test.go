@@ -36,7 +36,6 @@ func TestStringType_NewValue(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := stringType.NewValue(test.v)
 			if test.expectError == "" && err != nil {
@@ -109,7 +108,6 @@ func TestStringType_Convert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := stringType.Convert(test.v)
 			if test.expectError == "" && err != nil {
@@ -169,7 +167,6 @@ func TestString_Equal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Equal(test.y)
 			if test.expectError == "" && err != nil {
@@ -219,7 +216,6 @@ func TestString_Compare(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Compare(test.y)
 			if test.expectError == "" && err != nil {
@@ -259,7 +255,6 @@ func TestString_Add(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Add(test.y)
 			if test.expectError == "" && err != nil {
@@ -296,7 +291,6 @@ func TestString_Size(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.v.Size()
 			if test.expectError == "" && err != nil {

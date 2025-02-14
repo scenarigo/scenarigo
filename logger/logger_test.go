@@ -53,7 +53,6 @@ func TestLogger(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
 			l := NewLogger(log.New(&b, "", 0), test.level)

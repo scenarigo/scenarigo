@@ -31,7 +31,6 @@ func TestElem(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := Elem(reflect.ValueOf(test.v))
 			if k := got.Kind(); k != test.expect {

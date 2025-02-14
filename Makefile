@@ -140,13 +140,12 @@ test/examples/%:
 	scenarigo plugin build && scenarigo run
 
 .PHONY: lint
-lint: $(GOLANGCI_LINT) $(LOOPPOINTER) ## run lint
+lint: $(GOLANGCI_LINT) ## run lint
 	@$(GOLANGCI_LINT) run
 
 .PHONY: lint/fix
-lint/fix: $(GOLANGCI_LINT) $(LOOPPOINTER) ## fix lint errors
+lint/fix: $(GOLANGCI_LINT) ## fix lint errors
 	@$(GOLANGCI_LINT) run --fix
-	@$(LOOPPOINTER) -fix ./...
 
 .PHONY: lint/ci
 lint/ci:

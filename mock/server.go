@@ -28,7 +28,6 @@ func NewServer(config *ServerConfig, l logger.Logger) (*Server, error) {
 	protocols := protocol.All()
 	servers := map[string]protocol.Server{}
 	for name, p := range protocols {
-		p := p
 		var b []byte
 		if config.Protocols != nil {
 			if msg, ok := config.Protocols[p.Name()]; ok {
@@ -68,8 +67,6 @@ type ServerConfig struct {
 func (s *Server) Start(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, s := range s.servers {
-		name := name
-		s := s
 		eg.Go(func() error {
 			defer func() {
 				_ = s.Stop(context.Background())
@@ -86,8 +83,6 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) Wait(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, s := range s.servers {
-		name := name
-		s := s
 		eg.Go(func() error {
 			if err := s.Wait(ctx); err != nil {
 				return fmt.Errorf("failed to wait %s server: %w", name, err)
@@ -105,8 +100,6 @@ func (s *Server) Stop(ctx context.Context) error {
 		wg   sync.WaitGroup
 	)
 	for name, s := range s.servers {
-		name := name
-		s := s
 		wg.Add(1)
 		go func() {
 			if err := s.Stop(ctx); err != nil {
@@ -134,8 +127,6 @@ func (s *Server) Stop(ctx context.Context) error {
 func (s *Server) Addrs() (map[string]string, error) {
 	addrs := map[string]string{}
 	for name, s := range s.servers {
-		name := name
-		s := s
 		addr, err := s.Addr()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get %s server address: %w", name, err)

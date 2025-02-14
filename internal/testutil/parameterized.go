@@ -13,7 +13,6 @@ import (
 func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...string) {
 	r.Helper()
 	for _, file := range files {
-		file := file
 		run(r, file, func(r Reporter) {
 			f, err := os.Open(file)
 			if err != nil {
@@ -41,7 +40,6 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 					})
 					run(r, "OK", func(r Reporter) {
 						for i, ok := range p.OKs {
-							ok := ok
 							run(r, fmt.Sprint(i), func(r Reporter) {
 								err := exec(r, ok)
 								if err != nil {
@@ -52,7 +50,6 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 					})
 					run(r, "NG", func(r Reporter) {
 						for i, ng := range p.NGs {
-							ng := ng
 							run(r, fmt.Sprint(i), func(r Reporter) {
 								err := exec(r, ng)
 								if err == nil {

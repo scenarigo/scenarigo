@@ -165,7 +165,6 @@ secrets:
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var opts []func(*Runner) error
 			if test.path != "" {
@@ -550,7 +549,6 @@ func TestWriteTestReport(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			r, err := NewRunner(WithConfig(&schema.Config{
@@ -700,7 +698,6 @@ steps:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				r, err := NewRunner(WithConfig(test.config))
 				if err != nil {
@@ -742,7 +739,6 @@ steps:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				r, err := NewRunner(WithConfig(test.config))
 				if err != nil {

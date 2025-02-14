@@ -35,7 +35,6 @@ func TestRegexp_UnmarshalYAML(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var r Regexp
 				if err := r.UnmarshalYAML([]byte(test.in)); err != nil {
@@ -64,7 +63,6 @@ func TestRegexp_UnmarshalYAML(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var r Regexp
 				err := r.UnmarshalYAML([]byte(test.in))

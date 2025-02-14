@@ -76,7 +76,6 @@ func TestIsUnimplementedReflectionServiceError(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := IsUnimplementedReflectionServiceError(test.err)
 			if got != test.expect {

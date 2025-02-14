@@ -86,7 +86,6 @@ func TestEqual(t *testing.T) {
 		},
 	}
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			assertion := Equal(tc.expected, tc.customEqs...)
 			if err := assertion.Assert(tc.ok); err != nil {
@@ -160,7 +159,6 @@ func TestCustomEqualer(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			gotError := Equal(test.expected).Assert(test.got)
 			if gotError == nil {
@@ -196,7 +194,6 @@ func TestConvert(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		test := test
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			_, err := convert(test.expected, test.got)
 			if test.ok && err != nil {
@@ -258,7 +255,6 @@ func TestIsNil(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if got, expect := isNil(test.v), test.expect; got != expect {
 				t.Fatalf("expect %t but got %t", expect, got)

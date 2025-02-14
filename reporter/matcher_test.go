@@ -47,7 +47,6 @@ func TestMatcher_Match(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			m, err := newMatcher(test.run)
 			if err != nil {

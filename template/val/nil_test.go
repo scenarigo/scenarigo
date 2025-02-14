@@ -39,7 +39,6 @@ func TestNilType_NewValue(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := nilType.NewValue(test.v)
 			if test.expectError == "" && err != nil {
@@ -80,7 +79,6 @@ func TestNilType_Convert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := nilType.Convert(test.v)
 			if test.expectError == "" && err != nil {
@@ -150,7 +148,6 @@ func TestNil_Equal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Equal(test.y)
 			if test.expectError == "" && err != nil {

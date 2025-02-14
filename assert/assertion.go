@@ -66,7 +66,6 @@ func Build(ctx context.Context, expect any, fs ...BuildOpt) (Assertion, error) {
 	return AssertionFunc(func(v interface{}) error {
 		errs := []error{}
 		for _, assertion := range assertions {
-			assertion := assertion
 			if err := assertion.Assert(v); err != nil {
 				errs = append(errs, err)
 			}
@@ -99,7 +98,6 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 	switch v := expect.(type) {
 	case yaml.MapSlice:
 		for _, item := range v {
-			item := item
 			k, err := template.Execute(ctx, item.Key, opt.tmplData)
 			if err != nil {
 				return nil, err
@@ -118,7 +116,6 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 					return nil, errors.WithPath(err, path)
 				}
 				for i, a := range as {
-					a := a
 					as[i] = AssertionFunc(func(v any) error {
 						if err := a.Assert(v); err != nil {
 							return errors.ReplacePath(err, q.String(), q.String()+path)
@@ -137,7 +134,6 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 		}
 	case []interface{}:
 		for i, elm := range v {
-			elm := elm
 			as, err := build(ctx, q.Index(i), elm, opt)
 			if err != nil {
 				return nil, errors.WithPath(err, fmt.Sprintf("[%d]", i))

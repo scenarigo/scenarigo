@@ -497,7 +497,6 @@ FAIL
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
 			Run(func(r Reporter) {
@@ -532,7 +531,6 @@ func TestReporter_PrivateMethods(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var r Reporter
 			test.run(t, func(rptr Reporter) {

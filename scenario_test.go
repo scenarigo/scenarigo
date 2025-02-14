@@ -81,7 +81,6 @@ func TestExecuteIf(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t).WithVars(test.vars)
 				got, err := executeIf(ctx, test.expr)
@@ -109,7 +108,6 @@ func TestExecuteIf(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				if _, err := executeIf(ctx, test.expr); err == nil {

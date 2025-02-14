@@ -431,7 +431,6 @@ func TestPathError_prependError(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			pe := &PathError{
 				Path: test.base,
