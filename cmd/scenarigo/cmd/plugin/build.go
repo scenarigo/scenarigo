@@ -27,6 +27,7 @@ import (
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/schema"
 	"github.com/scenarigo/scenarigo/version"
 )
 
@@ -147,27 +148,10 @@ func buildRun(cmd *cobra.Command, args []string) error {
 	pluginModules := map[string]*overrideModule{}
 	pluginDir := filepathutil.From(cfg.Root, cfg.PluginDirectory)
 	for _, item := range cfg.Plugins.ToSlice() {
-		out := item.Key
-		mod := filepathutil.From(cfg.Root, item.Value.Src)
-		var src string
-		if _, err := os.Stat(mod); err != nil {
-			m, s, r, clean, err := downloadModule(ctx(cmd), goCmd, item.Value.Src)
-			defer clean()
-			if err != nil {
-				return fmt.Errorf("failed to build plugin %s: %w", out, err)
-			}
-			mod = m
-			src = s
-			pluginModules[r.Mod.Path] = &overrideModule{
-				require:    r,
-				requiredBy: out,
-			}
-		}
-		// NOTE: All module names must be unique and different from the standard modules.
-		defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, ".so"))
-		pb, err := newPluginBuilder(ctx(cmd), goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
+		pb, clean, err := createPluginBuilder(cmd, goCmd, pluginModules, cfg.Root, pluginDir, item)
+		defer clean()
 		if err != nil {
-			return fmt.Errorf("failed to build plugin %s: %w", out, err)
+			return err
 		}
 		pbs = append(pbs, pb)
 	}
@@ -264,6 +248,34 @@ func findGoCmd(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to check go version: %w", err)
 	}
 	return goCmd, nil
+}
+
+// 2nd return value should always be called.
+func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig]) (*pluginBuilder, func(), error) {
+	out := item.Key
+	mod := filepathutil.From(root, item.Value.Src)
+	var src string
+	clean := func() {}
+	if _, err := os.Stat(mod); err != nil {
+		m, s, r, f, err := downloadModule(ctx(cmd), goCmd, item.Value.Src)
+		clean = f
+		if err != nil {
+			return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
+		}
+		mod = m
+		src = s
+		pluginModules[r.Mod.Path] = &overrideModule{
+			require:    r,
+			requiredBy: out,
+		}
+	}
+	// NOTE: All module names must be unique and different from the standard modules.
+	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, ".so"))
+	pb, err := newPluginBuilder(ctx(cmd), goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
+	if err != nil {
+		return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
+	}
+	return pb, clean, nil
 }
 
 func checkGowork(ctx context.Context, goCmd string, pbs []*pluginBuilder) (string, error) {

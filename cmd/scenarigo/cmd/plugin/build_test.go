@@ -1301,6 +1301,7 @@ func TestFindGoCmd(t *testing.T) {
 	})
 }
 
+//nolint:cyclop
 func TestUpdateGoMod(t *testing.T) {
 	goVersion := strings.TrimPrefix(goVer, "go")
 

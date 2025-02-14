@@ -228,6 +228,7 @@ func (s *scanner) scan() (int, token.Token, string) {
 	return s.scanToken()
 }
 
+//nolint:cyclop,gocyclo
 func (s *scanner) scanToken() (int, token.Token, string) {
 	s.skipSpaces()
 	ch := s.read()

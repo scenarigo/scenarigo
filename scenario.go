@@ -21,31 +21,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 
 	var setups setupFuncList
 	if s.Plugins != nil {
-		plugs := map[string]interface{}{}
-		for name, path := range s.Plugins {
-			if root := ctx.PluginDir(); root != "" {
-				path = filepath.Join(root, path)
-			}
-			p, err := plugin.Open(path)
-			if err != nil {
-				ctx.Reporter().Fatalf(
-					"failed to open plugin: %s",
-					errors.WithNodeAndColored(
-						errors.WithPath(err, fmt.Sprintf("plugins.'%s'", name)),
-						ctx.Node(),
-						ctx.EnabledColor(),
-					),
-				)
-			}
-			plugs[name] = p
-			if setup := p.GetSetupEachScenario(); setup != nil {
-				setups = append(setups, setupFunc{
-					name: name,
-					f:    setup,
-				})
-			}
-		}
-		ctx = ctx.WithPlugins(plugs)
+		ctx, setups = openPlugins(ctx, s)
 	}
 
 	if s.Vars != nil {
@@ -178,6 +154,36 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	}
 
 	return scnCtx
+}
+
+func openPlugins(ctx *context.Context, s *schema.Scenario) (*context.Context, setupFuncList) {
+	var setups setupFuncList
+	plugs := map[string]interface{}{}
+	for name, path := range s.Plugins {
+		if root := ctx.PluginDir(); root != "" {
+			path = filepath.Join(root, path)
+		}
+		p, err := plugin.Open(path)
+		if err != nil {
+			ctx.Reporter().Fatalf(
+				"failed to open plugin: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, fmt.Sprintf("plugins.'%s'", name)),
+					ctx.Node(),
+					ctx.EnabledColor(),
+				),
+			)
+		}
+		plugs[name] = p
+		if setup := p.GetSetupEachScenario(); setup != nil {
+			setups = append(setups, setupFunc{
+				name: name,
+				f:    setup,
+			})
+		}
+	}
+	ctx = ctx.WithPlugins(plugs)
+	return ctx, setups
 }
 
 func executeIf(ctx *context.Context, expr string) (bool, error) {
