@@ -626,7 +626,7 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 			f, err := os.OpenFile(goworkPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 			if err == nil {
 				defer f.Close()
-				f.Write(gowork)
+				_, _ = f.Write(gowork)
 			}
 		}()
 		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "work", "use", "."); err != nil {

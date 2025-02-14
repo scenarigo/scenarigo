@@ -243,7 +243,9 @@ scenarios:
 				mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
 					defer r.Body.Close()
 					w.Header().Set("Content-Type", "application/json")
-					io.Copy(w, r.Body)
+					if _, err := io.Copy(w, r.Body); err != nil {
+						ctx.Reporter().Fatal(err)
+					}
 				})
 
 				s := httptest.NewServer(mux)
