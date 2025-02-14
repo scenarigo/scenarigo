@@ -47,7 +47,7 @@ steps:
 
 func createTempScenario(t *testing.T, scenario string) string {
 	t.Helper()
-	f, err := os.CreateTemp("", "*.yaml")
+	f, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %s", err)
 	}

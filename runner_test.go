@@ -69,9 +69,7 @@ func TestRunner(t *testing.T) {
 				})
 
 				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					ctx.Reporter().Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", s.URL)
 
 				return func(*context.Context) {
 					s.Close()
@@ -94,9 +92,7 @@ func TestRunner(t *testing.T) {
 				})
 
 				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					ctx.Reporter().Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", s.URL)
 
 				return func(*context.Context) {
 					s.Close()
@@ -145,9 +141,7 @@ secrets:
 				})
 
 				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					ctx.Reporter().Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", s.URL)
 
 				return func(*context.Context) {
 					s.Close()
@@ -224,9 +218,7 @@ func TestRunnerFail(t *testing.T) {
 				})
 
 				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					ctx.Reporter().Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", s.URL)
 
 				return func(*context.Context) {
 					s.Close()
@@ -256,9 +248,7 @@ scenarios:
 				})
 
 				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					ctx.Reporter().Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", s.URL)
 
 				return func(*context.Context) {
 					s.Close()
