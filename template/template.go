@@ -345,7 +345,7 @@ func (t *Template) executeCoalescingExpr(ctx context.Context, e *ast.BinaryExpr,
 	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
 		extracted, err := extract(e.X, data)
 		if err != nil {
-			var notDefined errNotDefined
+			var notDefined notDefinedError
 			if errors.As(err, &notDefined) {
 				return t.executeExpr(ctx, e.Y, data)
 			}
@@ -634,7 +634,7 @@ func (t *Template) executeDefinedExpr(e *ast.DefinedExpr, data interface{}) (int
 	switch e.Arg.(type) {
 	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
 		if _, err := extract(e.Arg, data); err != nil {
-			var notDefined errNotDefined
+			var notDefined notDefinedError
 			if errors.As(err, &notDefined) {
 				return false, nil
 			}

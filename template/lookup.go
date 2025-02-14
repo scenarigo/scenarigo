@@ -12,7 +12,7 @@ import (
 	"github.com/scenarigo/scenarigo/template/token"
 )
 
-type errNotDefined struct {
+type notDefinedError struct {
 	error
 }
 
@@ -40,7 +40,7 @@ func extract(node ast.Node, data interface{}) (interface{}, error) {
 	}
 	v, err = q.Extract(data)
 	if err != nil {
-		return nil, errNotDefined{err}
+		return nil, notDefinedError{err}
 	}
 	return v, nil
 }
