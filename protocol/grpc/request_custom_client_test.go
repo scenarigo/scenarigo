@@ -86,22 +86,22 @@ func TestValidateMethod(t *testing.T) {
 			},
 			"number of arguments must be 3": {
 				method: reflect.ValueOf(func() (proto.Message, error) {
-					return nil, nil
+					return nil, nil //nolint:nilnil
 				}),
 			},
 			"first argument must be context.Context": {
 				method: reflect.ValueOf(func(ctx struct{}, in proto.Message, opts ...grpc.CallOption) (proto.Message, error) {
-					return nil, nil
+					return nil, nil //nolint:nilnil
 				}),
 			},
 			"second argument must be proto.Message": {
 				method: reflect.ValueOf(func(ctx gocontext.Context, in struct{}, opts ...grpc.CallOption) (proto.Message, error) {
-					return nil, nil
+					return nil, nil //nolint:nilnil
 				}),
 			},
 			"third argument must be []grpc.CallOption": {
 				method: reflect.ValueOf(func(ctx gocontext.Context, in proto.Message, opts ...struct{}) (proto.Message, error) {
-					return nil, nil
+					return nil, nil //nolint:nilnil
 				}),
 			},
 			"number of return values must be 2": {

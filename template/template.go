@@ -687,5 +687,5 @@ func (f *FuncCall) Do(ctx context.Context, v, data any) (any, error) {
 	if val.IsValid() && val.CanInterface() {
 		return val.Interface(), nil
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
