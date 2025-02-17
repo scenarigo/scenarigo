@@ -26,7 +26,12 @@ func equalEnum(expected interface{}, got interface{}) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	if string(enum.Descriptor().Values().ByNumber(enum.Number()).Name()) == s {
+	number := enum.Descriptor().Values().ByNumber(enum.Number())
+	if number == nil {
+		// If enum.Number() is a reserved value or unknown value, the number variable will be nil.
+		return false, nil
+	}
+	if string(number.Name()) == s {
 		return true, nil
 	}
 	return false, nil

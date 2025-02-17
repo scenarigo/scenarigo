@@ -8,6 +8,8 @@ enum UserType {
     USER_TYPE_UNSPECIFIED = 0;
     CUSTOMER = 1;
     STAFF = 2;
+
+    reserved 3;
 }
 
 enum State {
