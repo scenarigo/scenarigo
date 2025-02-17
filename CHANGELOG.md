@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [v0.20.1](https://github.com/scenarigo/scenarigo/compare/v0.20.0...v0.20.1) - 2025-02-17
+### Bug Fixes
+- fix(test): fix module name and version by @zoncoen in https://github.com/scenarigo/scenarigo/pull/522
+### Other Changes
+- Fix enum equal for reserved or unknown value by @goccy in https://github.com/scenarigo/scenarigo/pull/526
+
 ## [v0.20.0](https://github.com/scenarigo/scenarigo/compare/v0.19.0...v0.20.0) - 2025-02-13
 ### New Features
 - change module name from zoncoen/scenarigo to scenarigo/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/521
