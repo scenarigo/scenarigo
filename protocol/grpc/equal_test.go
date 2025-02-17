@@ -33,6 +33,14 @@ func TestEqualEnum(t *testing.T) {
 			expected: "CUSTOMER",
 			got:      test.UserType_STAFF,
 		},
+		"reserved": {
+			expected: "CUSTOMER",
+			got:      test.UserType(3), // reserved number.
+		},
+		"unknown": {
+			expected: "CUSTOMER",
+			got:      test.UserType(9999), // unknown value.
+		},
 	}
 	for name, test := range tests {
 		test := test
