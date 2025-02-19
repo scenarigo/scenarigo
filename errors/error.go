@@ -167,10 +167,10 @@ func WithNodeAndColored(err error, node ast.Node, colored bool) error {
 }
 
 // ReplacePath replaces the path if errors instance is PathError or MultiPathError.
-func ReplacePath(err error, old, new string) error {
+func ReplacePath(err error, old, newPath string) error {
 	var e Error
 	if errors.As(err, &e) {
-		e.replacePath(old, new)
+		e.replacePath(old, newPath)
 		return e
 	}
 	return err
@@ -203,8 +203,8 @@ func (e *PathError) prependPath(path string) {
 	e.Path = path + e.Path
 }
 
-func (e *PathError) replacePath(old, new string) {
-	e.Path = strings.Replace(e.Path, old, new, 1)
+func (e *PathError) replacePath(old, newPath string) {
+	e.Path = strings.Replace(e.Path, old, newPath, 1)
 }
 
 func (e *PathError) wrapf(message string, args ...interface{}) {
@@ -298,13 +298,13 @@ func (e *MultiPathError) prependPath(path string) {
 	}
 }
 
-func (e *MultiPathError) replacePath(old, new string) {
+func (e *MultiPathError) replacePath(old, newPath string) {
 	for _, err := range e.Errs {
 		var e Error
 		if !errors.As(err, &e) {
 			continue
 		}
-		e.replacePath(old, new)
+		e.replacePath(old, newPath)
 	}
 }
 

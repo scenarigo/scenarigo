@@ -104,9 +104,9 @@ func TestLogRecorder(t *testing.T) {
 	}
 }
 
-func replacer(old, new string) LogReplacer {
+func replacer(old, newStr string) LogReplacer {
 	return logReplacer(func(s string) string {
-		return strings.ReplaceAll(s, old, new)
+		return strings.ReplaceAll(s, old, newStr)
 	})
 }
 
