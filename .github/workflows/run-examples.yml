@@ -26,7 +26,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.0
+    - uses: actions/cache/restore@v4.2.1
       id: go-cache
       with:
         path: |
@@ -69,7 +69,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.0
+    - uses: actions/cache/restore@v4.2.1
       id: go-cache
       with:
         path: |
