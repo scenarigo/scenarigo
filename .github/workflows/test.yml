@@ -21,7 +21,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.0
+    - uses: actions/cache/restore@v4.2.1
       id: go-cache
       with:
         path: |
@@ -36,7 +36,7 @@ jobs:
       env:
         SCENARIGO_GO_MOD_TIDY_RETRY: 1
       run: make test/ci
-    - uses: actions/cache/save@v4.2.0
+    - uses: actions/cache/save@v4.2.1
       if: github.ref_name == 'main'
       with:
         path: |
@@ -74,7 +74,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.0
+    - uses: actions/cache/restore@v4.2.1
       id: go-cache
       with:
         path: |
