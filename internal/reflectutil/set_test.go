@@ -98,19 +98,19 @@ func TestConvert(t *testing.T) {
 			ok:     true,
 		},
 		"convert string to *string": {
-			target: reflect.PtrTo(reflect.TypeOf("")),
+			target: reflect.PointerTo(reflect.TypeOf("")),
 			v:      reflect.ValueOf(str),
 			expect: &str,
 			ok:     true,
 		},
 		"convert (*string)(nil) to *string": {
-			target: reflect.PtrTo(reflect.TypeOf("")),
+			target: reflect.PointerTo(reflect.TypeOf("")),
 			v:      reflect.ValueOf((*string)(nil)),
 			expect: (*string)(nil),
 			ok:     true,
 		},
 		"convert untyped nil to *string": {
-			target: reflect.PtrTo(reflect.TypeOf("")),
+			target: reflect.PointerTo(reflect.TypeOf("")),
 			v:      reflect.ValueOf(nil),
 			expect: (*string)(nil),
 			ok:     true,
@@ -122,7 +122,7 @@ func TestConvert(t *testing.T) {
 			ok:     true,
 		},
 		"convert string to *Stringer": {
-			target: reflect.PtrTo(reflect.TypeOf(stringer(""))),
+			target: reflect.PointerTo(reflect.TypeOf(stringer(""))),
 			v:      reflect.ValueOf(str),
 			expect: (*stringer)(&str),
 			ok:     true,
