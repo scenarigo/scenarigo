@@ -17,15 +17,19 @@ linters:
     - gochecknoinits
     - gocognit
     - godox
+    - inamedparam
     - interfacebloat
     - ireturn
     - lll
+    - maintidx
     - mnd
     - nestif
     - nlreturn
     - paralleltest
     - perfsprint
     - prealloc
+    - recvcheck
+    - revive
     - testpackage
     - tparallel
     - unparam
@@ -35,28 +39,6 @@ linters:
 
     # deprecated
     - tenv
-
-    # disabled because of generics
-    - rowserrcheck
-    - wastedassign
-
-    # TODO: fix
-    - copyloopvar
-    - cyclop
-    - errcheck
-    - forbidigo
-    - goconst
-    - gocyclo
-    - govet
-    - inamedparam
-    - intrange
-    - maintidx
-    - nilnil
-    - predeclared
-    - revive
-    - staticcheck
-    - stylecheck
-    - tagliatelle
 
   skip-dirs:
     - gen
