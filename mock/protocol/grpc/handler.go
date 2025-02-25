@@ -180,7 +180,7 @@ type Response grpcprotocol.Expect
 
 func (resp *Response) extract(msg proto.Message) (proto.Message, *status.Status, error) {
 	if resp.Status.Code != "" {
-		code := codes.OK
+		var code codes.Code
 		c, err := strToCode(resp.Status.Code)
 		if err != nil {
 			return nil, nil, errors.WithPath(err, "status.code")
