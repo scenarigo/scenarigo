@@ -25,7 +25,6 @@ func TestStructFieldToKey(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := StructFieldToKey(test.field)
 			if got != test.expect {
@@ -44,6 +43,7 @@ func getField(t *testing.T, v reflect.Value, name string) reflect.StructField {
 	return f
 }
 
+//nolint:govet
 type testStruct struct {
 	YAML string `json:"jsontag" yaml:"yamltag"`
 	JSON string `json:"jsontag"`

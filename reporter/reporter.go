@@ -253,7 +253,7 @@ func (r *reporter) printTestSummary() {
 	if !r.context.enabledTestSummary {
 		return
 	}
-	_, _ = r.context.print(r.context.testSummary.String(r.context.noColor))
+	_, _ = r.context.print(r.context.testSummary.String(r.context.noColor)) //nolint:forbidigo
 }
 
 func (r *reporter) appendChildren(children ...*reporter) {
@@ -446,7 +446,7 @@ func printReport(r *reporter) {
 	results := collectOutput(r)
 	r.context.printf("%s\n", strings.Join(results, "\n"))
 	if r.Failed() && !r.testing {
-		r.context.print(r.failColor().Sprintln("FAIL"))
+		r.context.print(r.failColor().Sprintln("FAIL")) //nolint:forbidigo
 	}
 }
 

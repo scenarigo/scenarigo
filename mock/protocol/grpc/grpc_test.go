@@ -99,7 +99,6 @@ proto:
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			p := protocol.Get("grpc")
 			if p == nil {

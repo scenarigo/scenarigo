@@ -206,7 +206,6 @@ ok  	scenarios/pass.yaml	0.000s
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			for _, file := range test.expectReports {
 				if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {

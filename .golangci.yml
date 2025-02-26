@@ -17,15 +17,19 @@ linters:
     - gochecknoinits
     - gocognit
     - godox
+    - inamedparam
     - interfacebloat
     - ireturn
     - lll
+    - maintidx
     - mnd
     - nestif
     - nlreturn
     - paralleltest
     - perfsprint
     - prealloc
+    - recvcheck
+    - revive
     - testpackage
     - tparallel
     - unparam
@@ -34,31 +38,7 @@ linters:
     - wsl
 
     # deprecated
-    - execinquery
-    - exportloopref
-    - gomnd
-
-    # disabled because of generics
-    - rowserrcheck
-    - wastedassign
-
-    # TODO: fix
-    - copyloopvar
-    - cyclop
-    - errcheck
-    - forbidigo
-    - goconst
-    - gocyclo
-    - govet
-    - inamedparam
-    - intrange
-    - maintidx
-    - nilnil
-    - predeclared
-    - revive
-    - staticcheck
-    - stylecheck
-    - tagliatelle
+    - tenv
 
   skip-dirs:
     - gen
@@ -68,7 +48,6 @@ issues:
     - path: _test.go
       linters:
         - dupword
-        - exhaustruct
         - forcetypeassert
         - goconst
         - maintidx
@@ -82,24 +61,6 @@ linters-settings:
     max-complexity: 25
   exhaustive:
     default-signifies-exhaustive: true
-  exhaustruct:
-    exclude:
-    - 'cobra\.Command$'
-    - 'http\.Client$'
-    - 'http\.Server$'
-    - 'xml\.Name$'
-    - 'github\.com/zoncoen/scenarigo/cmd/scenarigo/cmd/plugin.overrideModule$'
-    - 'github\.com/zoncoen/scenarigo/cmd/scenarigo/cmd/plugin.replaceDiff$'
-    - 'github\.com/zoncoen/scenarigo/cmd/scenarigo/cmd/plugin.requireDiff$'
-    - 'github\.com/zoncoen/scenarigo/errors\.MultiPathError$'
-    - 'github\.com/zoncoen/scenarigo/errors\.PathError$'
-    - 'github\.com/zoncoen/scenarigo/internal/testutil\.reporter$'
-    - 'github\.com/zoncoen/scenarigo/mock/protocol/http\.server$'
-    - 'github\.com/zoncoen/scenarigo/reporter\..+Report$'
-    - 'github\.com/zoncoen/scenarigo/reporter\.[a-z].+$'
-    - 'github\.com/zoncoen/scenarigo/template/ast\..+$'
-    - 'github\.com/zoncoen/scenarigo/template/parser\..+$'
-    - 'github\.com/zoncoen/scenarigo/template\.Template$'
   gosec:
     excludes:
       - G115

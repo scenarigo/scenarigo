@@ -49,7 +49,6 @@ func TestAnd(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		and := And(test.assertions...)
 		if test.ok != nil {
 			if err := and.Assert(test.ok); err != nil {
@@ -100,7 +99,6 @@ func TestOr(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		or := Or(test.assertions...)
 		if test.ok != nil {
 			if err := or.Assert(test.ok); err != nil {

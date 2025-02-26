@@ -116,7 +116,6 @@ func TestGenerateTestReport(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				t.Run("Run", func(t *testing.T) {
 					r := run(func(r Reporter) {
@@ -203,7 +202,6 @@ func TestGenerateTestReport(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				t.Run("reporter", func(t *testing.T) {
 					r := run(func(r Reporter) {
@@ -274,7 +272,6 @@ func TestTestResult(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.expect, func(t *testing.T) {
 			t.Run("json", func(t *testing.T) {
 				b, err := json.Marshal(test.result)
@@ -323,7 +320,6 @@ func TestTestDuration(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.expect, func(t *testing.T) {
 			t.Run("json", func(t *testing.T) {
 				b, err := json.Marshal(test.duration)
@@ -447,7 +443,6 @@ func TestTestReport_MarshalXML(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			b, err := xml.MarshalIndent(test.report, "", "  ")
 			if err != nil {

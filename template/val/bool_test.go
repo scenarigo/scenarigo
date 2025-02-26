@@ -38,7 +38,6 @@ func TestBoolType_NewValue(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := boolType.NewValue(test.v)
 			if test.expectError == "" && err != nil {
@@ -87,7 +86,6 @@ func TestBoolType_Convert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := boolType.Convert(test.v)
 			if test.expectError == "" && err != nil {
@@ -147,7 +145,6 @@ func TestBool_Equal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Equal(test.y)
 			if test.expectError == "" && err != nil {
@@ -183,7 +180,6 @@ func TestBool_IsTruthy(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if got, expect := test.x.IsTruthy(), test.expect; got != expect {
 				t.Errorf("expect %v but got %v", expect, got)

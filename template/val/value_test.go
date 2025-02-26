@@ -60,7 +60,6 @@ func TestNewValue(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := NewValue(test.v)
 			if diff := cmp.Diff(test.expect, got, cmp.AllowUnexported(Time{}, time.Location{}, Nil{}, Any{})); diff != "" {

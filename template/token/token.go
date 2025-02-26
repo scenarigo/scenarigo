@@ -50,6 +50,8 @@ const (
 )
 
 // String returns t as string.
+//
+//nolint:cyclop,gocyclo
 func (t Token) String() string {
 	switch t {
 	case ILLEGAL:

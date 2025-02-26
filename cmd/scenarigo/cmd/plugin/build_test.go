@@ -75,7 +75,6 @@ func TestParseGoVersion(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, gotToolchain := parseGoVersion(test.version)
 			if got != test.expect {
@@ -815,7 +814,6 @@ plugins:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				configPath := filepath.Join(tmpDir, config.DefaultConfigFileName)
@@ -1192,7 +1190,6 @@ plugins:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				var configPath string
@@ -1254,7 +1251,6 @@ func TestFindGoCmd(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				for cmd, stdout := range test.cmds {
@@ -1287,7 +1283,6 @@ func TestFindGoCmd(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				for cmd, stdout := range test.cmds {
@@ -1306,6 +1301,7 @@ func TestFindGoCmd(t *testing.T) {
 	})
 }
 
+//nolint:cyclop
 func TestUpdateGoMod(t *testing.T) {
 	goVersion := strings.TrimPrefix(goVer, "go")
 
@@ -1894,7 +1890,6 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				gomod := filepath.Join(tmpDir, "go.mod")
@@ -2067,7 +2062,6 @@ import (
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				gomod := filepath.Join(tmpDir, "go.mod")
@@ -2129,7 +2123,6 @@ go 100.0.0
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				gomod := filepath.Join(tmpDir, "go.mod")
@@ -2351,7 +2344,6 @@ func TestCheckGowork(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			pbs := make([]*pluginBuilder, 0, len(test.plugins))

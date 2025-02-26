@@ -301,7 +301,6 @@ ok  	setup	0.000s
 	}
 
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
 			reporter.Run(func(r reporter.Reporter) {

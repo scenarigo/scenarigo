@@ -43,7 +43,6 @@ func TestEqualEnum(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ok, err := equalEnum(test.expected, test.got)
 			if ok != test.ok {
@@ -111,7 +110,6 @@ func TestEqualMessage(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ok, err := equalMessage(test.expected, test.got)
 			if ok != test.ok {

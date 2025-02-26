@@ -43,7 +43,6 @@ func TestProtoMessage_Matches(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			m := ProtoMessage(test.msg)
 			if expect, got := test.match, m.Matches(test.v); expect != got {

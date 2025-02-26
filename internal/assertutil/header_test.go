@@ -94,7 +94,6 @@ foo: '{{$ != ""}}'
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var expect yaml.MapSlice
 			if err := yaml.NewDecoder(strings.NewReader(test.in)).Decode(&expect); err != nil {
@@ -138,7 +137,6 @@ func Test_BuildHeaderAssertion_Error(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if _, err := BuildHeaderAssertion(context.FromT(t), test.expect); err == nil {
 				t.Error("no error")
@@ -220,7 +218,6 @@ func Test_Stringify(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := stringify(test.in)
 			if !reflect.DeepEqual(got, test.expect) {

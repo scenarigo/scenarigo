@@ -83,7 +83,6 @@ func TestOrderedMap_Set(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			test.m.Set(test.key, test.value)
 			if diff := cmp.Diff(test.expect, test.m, cmp.AllowUnexported(OrderedMap[string, int]{})); diff != "" {
@@ -153,7 +152,6 @@ func TestOrderedMap_Get(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, ok := test.m.Get(test.key)
 			if expect := test.expect; got != expect {
@@ -344,7 +342,6 @@ func TestOrderedMap_Delete(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ok := test.m.Delete(test.key)
 			if got, expect := ok, test.ok; got != expect {
@@ -457,7 +454,6 @@ false: {}
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var got OrderedMap[string, testStruct]
 				if err := got.UnmarshalYAML([]byte(test.in)); err != nil {
@@ -486,7 +482,6 @@ false: {}
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var m OrderedMap[string, testStruct]
 				err := m.UnmarshalYAML([]byte(test.in))
@@ -534,7 +529,6 @@ bar:
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			b, err := test.in.MarshalYAML()
 			if err != nil {

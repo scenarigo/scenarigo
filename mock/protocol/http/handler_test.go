@@ -65,7 +65,6 @@ func TestHandler(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				f, err := os.Open(test.filename)
 				if err != nil {
@@ -203,7 +202,6 @@ func TestHandler(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				f, err := os.Open(test.filename)
 				if err != nil {
@@ -269,7 +267,6 @@ func TestExtract(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, _, _, err := test.resp.extract(); err == nil {
 					t.Fatalf("no error")

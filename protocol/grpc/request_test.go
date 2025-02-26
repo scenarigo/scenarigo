@@ -67,7 +67,6 @@ func TestRequestExtractor(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			q, err := query.ParseString(
 				test.query,
@@ -137,7 +136,6 @@ func TestResponseExtractor(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			q, err := query.ParseString(
 				test.query,
@@ -313,7 +311,6 @@ func TestRequest_Invoke(t *testing.T) {
 			},
 		}
 		for name, tc := range tests {
-			tc := tc
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				if tc.vars != nil {
@@ -410,7 +407,6 @@ ok  	test.yaml	0.000s
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -499,7 +495,6 @@ func TestBuildRequestBody(t *testing.T) {
 		},
 	}
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			ctx := context.FromT(t)
 			if tc.vars != nil {
@@ -563,7 +558,6 @@ metadata:
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			b, err := yaml.Marshal(Request{
 				Method:   "Foo",

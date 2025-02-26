@@ -114,7 +114,6 @@ func TestRunner_Run(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var invoked, built bool
 				p := &testProtocol{
@@ -178,7 +177,6 @@ func TestRunner_Run(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var invoked, built bool
 				p := &testProtocol{
@@ -325,7 +323,6 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			teardown := tc.setup(t)
 			defer teardown()

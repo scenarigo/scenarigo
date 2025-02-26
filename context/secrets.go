@@ -72,7 +72,7 @@ func build(q *query.Query, in reflect.Value) []queryValue {
 	case reflect.Invalid:
 		return nil
 	case reflect.Slice:
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			result = append(result, build(q.Index(i), v.Index(i))...)
 		}
 	case reflect.Map:
@@ -80,7 +80,7 @@ func build(q *query.Query, in reflect.Value) []queryValue {
 			result = append(result, build(q.Key(fmt.Sprint(k.Interface())), v.MapIndex(k))...)
 		}
 	case reflect.Struct:
-		for i := 0; i < v.NumField(); i++ {
+		for i := range v.NumField() {
 			ft := v.Type().Field(i)
 			if !token.IsExported(ft.Name) {
 				continue // skip unexported field

@@ -36,7 +36,7 @@ var tlsVers = map[string]uint16{
 	tls.VersionName(tls.VersionTLS11): tls.VersionTLS11,
 	tls.VersionName(tls.VersionTLS12): tls.VersionTLS12,
 	tls.VersionName(tls.VersionTLS13): tls.VersionTLS13,
-	tls.VersionName(tls.VersionSSL30): tls.VersionSSL30,
+	tls.VersionName(tls.VersionSSL30): tls.VersionSSL30, //nolint:staticcheck
 }
 
 // Request represents a request.

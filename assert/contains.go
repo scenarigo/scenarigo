@@ -51,7 +51,7 @@ func contains(assertion Assertion, v reflect.Value) error {
 		return errors.New("empty")
 	}
 	var err error
-	for i := 0; i < v.Len(); i++ {
+	for i := range v.Len() {
 		e := v.Index(i).Interface()
 		if err = assertion.Assert(e); err == nil {
 			return nil

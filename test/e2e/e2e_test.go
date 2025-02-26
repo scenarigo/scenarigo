@@ -202,7 +202,7 @@ func runMockServer(t *testing.T, filename string) func(*testing.T) {
 		t.Fatal(err)
 	}
 	for p, addr := range addrs {
-		os.Setenv(fmt.Sprintf("TEST_%s_ADDR", strings.ToUpper(p)), addr)
+		t.Setenv(fmt.Sprintf("TEST_%s_ADDR", strings.ToUpper(p)), addr)
 	}
 	return func(t *testing.T) {
 		t.Helper()

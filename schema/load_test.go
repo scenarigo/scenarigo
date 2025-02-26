@@ -35,7 +35,7 @@ func (p *testProtocol) UnmarshalRequest(b []byte) (protocol.Invoker, error) {
 	var r request
 	if err := yaml.Unmarshal(b, &r); err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		}
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (p *testProtocol) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, err
 	var e expect
 	if err := yaml.NewDecoder(bytes.NewBuffer(b), yaml.UseOrderedMap()).Decode(&e); err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, nil
+			return nil, nil //nolint:nilnil
 		}
 		return nil, err
 	}
@@ -330,7 +330,6 @@ func TestLoadScenarios(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := LoadScenarios(test.path, test.opts...)
 				if err != nil {
@@ -474,7 +473,6 @@ func TestLoadScenarios(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				_, err := LoadScenarios(test.path, test.opts...)
 				if err == nil {
@@ -548,7 +546,6 @@ steps:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &testProtocol{
 					name: "test",
@@ -594,7 +591,6 @@ a:
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				_, err := LoadScenariosFromReader(test.r)
 				if err == nil {

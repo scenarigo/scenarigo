@@ -47,7 +47,7 @@ steps:
 
 func createTempScenario(t *testing.T, scenario string) string {
 	t.Helper()
-	f, err := os.CreateTemp("", "*.yaml")
+	f, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %s", err)
 	}
@@ -81,7 +81,6 @@ func TestExecuteIf(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t).WithVars(test.vars)
 				got, err := executeIf(ctx, test.expr)
@@ -109,7 +108,6 @@ func TestExecuteIf(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				if _, err := executeIf(ctx, test.expr); err == nil {

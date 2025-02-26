@@ -31,7 +31,6 @@ func TestContains(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			assertion := Contains(Equal(test.contains))
 			err := assertion.Assert(test.in)
@@ -71,7 +70,6 @@ func TestNotContains(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			assertion := NotContains(Equal(test.notContains))
 			err := assertion.Assert(test.in)

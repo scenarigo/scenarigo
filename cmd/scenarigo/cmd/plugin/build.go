@@ -27,11 +27,13 @@ import (
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/schema"
 	"github.com/scenarigo/scenarigo/version"
 )
 
 const (
 	versionTooHighErrorPattern = `^go: go.mod requires go >= ([\d\.]+) .+$`
+	toolchainLocal             = "local"
 )
 
 var (
@@ -52,7 +54,7 @@ func parseGoVersion(ver string) (string, string) {
 	// gotip
 	if strings.HasPrefix(ver, "devel ") {
 		ver = strings.Split(strings.TrimPrefix(ver, "devel "), "-")[0]
-		tc = "local"
+		tc = toolchainLocal
 	}
 	// workaround for weird environments (e.g., go1.23.2 X:rangefunc)
 	if !goversion.IsValid(ver) {
@@ -60,7 +62,7 @@ func parseGoVersion(ver string) (string, string) {
 			ver = v
 			tc = v
 		} else {
-			tc = "local"
+			tc = toolchainLocal
 		}
 	}
 	return ver, tc
@@ -147,27 +149,10 @@ func buildRun(cmd *cobra.Command, args []string) error {
 	pluginModules := map[string]*overrideModule{}
 	pluginDir := filepathutil.From(cfg.Root, cfg.PluginDirectory)
 	for _, item := range cfg.Plugins.ToSlice() {
-		out := item.Key
-		mod := filepathutil.From(cfg.Root, item.Value.Src)
-		var src string
-		if _, err := os.Stat(mod); err != nil {
-			m, s, r, clean, err := downloadModule(ctx(cmd), goCmd, item.Value.Src)
-			defer clean()
-			if err != nil {
-				return fmt.Errorf("failed to build plugin %s: %w", out, err)
-			}
-			mod = m
-			src = s
-			pluginModules[r.Mod.Path] = &overrideModule{
-				require:    r,
-				requiredBy: out,
-			}
-		}
-		// NOTE: All module names must be unique and different from the standard modules.
-		defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, ".so"))
-		pb, err := newPluginBuilder(ctx(cmd), goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
+		pb, clean, err := createPluginBuilder(cmd, goCmd, pluginModules, cfg.Root, pluginDir, item)
+		defer clean()
 		if err != nil {
-			return fmt.Errorf("failed to build plugin %s: %w", out, err)
+			return err
 		}
 		pbs = append(pbs, pb)
 	}
@@ -264,6 +249,34 @@ func findGoCmd(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to check go version: %w", err)
 	}
 	return goCmd, nil
+}
+
+// 2nd return value should always be called.
+func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig]) (*pluginBuilder, func(), error) {
+	out := item.Key
+	mod := filepathutil.From(root, item.Value.Src)
+	var src string
+	clean := func() {}
+	if _, err := os.Stat(mod); err != nil {
+		m, s, r, f, err := downloadModule(ctx(cmd), goCmd, item.Value.Src)
+		clean = f
+		if err != nil {
+			return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
+		}
+		mod = m
+		src = s
+		pluginModules[r.Mod.Path] = &overrideModule{
+			require:    r,
+			requiredBy: out,
+		}
+	}
+	// NOTE: All module names must be unique and different from the standard modules.
+	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, ".so"))
+	pb, err := newPluginBuilder(ctx(cmd), goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
+	if err != nil {
+		return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
+	}
+	return pb, clean, nil
 }
 
 func checkGowork(ctx context.Context, goCmd string, pbs []*pluginBuilder) (string, error) {
@@ -614,7 +627,7 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 			f, err := os.OpenFile(goworkPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 			if err == nil {
 				defer f.Close()
-				f.Write(gowork)
+				_, _ = f.Write(gowork)
 			}
 		}()
 		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "work", "use", "."); err != nil {
@@ -650,7 +663,7 @@ func executeWithEnvs(ctx context.Context, envs []string, wd, name string, args .
 
 func (pb *pluginBuilder) updateGoMod(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule) error {
 	if err := pb.editGoMod(cmd, goCmd, func(gomod *modfile.File) error {
-		if toolchain == "local" {
+		if toolchain == toolchainLocal {
 			if gomod.Toolchain != nil {
 				warnLog(cmd.OutOrStdout(), "%s: remove toolchain by scenarigo", pb.name)
 				gomod.DropToolchainStmt()

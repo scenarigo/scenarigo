@@ -54,7 +54,7 @@ func ConvertStrings(v reflect.Value) ([]string, error) {
 		return []string{v.String()}, nil
 	case reflect.Slice:
 		var strs []string
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			x := v.Index(i)
 			str, err := ConvertString(x)
 			if err != nil {

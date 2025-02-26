@@ -439,7 +439,7 @@ func TestProtoClient(t *testing.T) {
 				opts = append(opts, testutil.EnableTLS(serverCert, serverKey))
 			}
 			target := testutil.StartTestGRPCServer(t, srv, opts...)
-			t.Cleanup(func() { connPool.closeConnection(target) })
+			t.Cleanup(func() { _ = connPool.closeConnection(target) })
 			ctx := context.FromT(t).WithVars(map[string]any{
 				"target": target,
 			})

@@ -14,7 +14,6 @@ func And(assertions ...Assertion) Assertion {
 		}
 		errs := []error{}
 		for i, assertion := range assertions {
-			assertion := assertion
 			err := assertion.Assert(v)
 			if err != nil {
 				errs = append(errs, errors.WithQuery(err, queryutil.New().Index(i)))
@@ -39,7 +38,6 @@ func Or(assertions ...Assertion) Assertion {
 		}
 		errs := []error{}
 		for i, assertion := range assertions {
-			assertion := assertion
 			err := assertion.Assert(v)
 			if err == nil {
 				return nil

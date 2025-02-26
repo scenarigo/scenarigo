@@ -52,7 +52,6 @@ func TestLess(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := Less(tc.expected)
 					if err := assertion.Assert(tc.actual); err != nil {
@@ -110,7 +109,6 @@ func TestLess(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := Less(tc.expected)
 					if err := assertion.Assert(tc.actual); err == nil {
@@ -166,7 +164,6 @@ func TestLessOrEqual(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := LessOrEqual(tc.expected)
 					if err := assertion.Assert(tc.actual); err != nil {
@@ -224,7 +221,6 @@ func TestLessOrEqual(t *testing.T) {
 				},
 			}
 			for name, tc := range tests {
-				tc := tc
 				t.Run(name, func(t *testing.T) {
 					assertion := LessOrEqual(tc.expected)
 					if err := assertion.Assert(tc.actual); err == nil {

@@ -70,7 +70,6 @@ steps:
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			cmd := &cobra.Command{}
 			var buf bytes.Buffer

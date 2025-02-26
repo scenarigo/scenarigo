@@ -69,7 +69,7 @@ $(GOCREDITS): | $(BIN_DIR)
 	@$(GO) install github.com/Songmu/gocredits/cmd/gocredits@v0.3.0
 
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
-GOLANGCI_LINT_VERSION := 1.61.0
+GOLANGCI_LINT_VERSION := 1.64.5
 GOLANGCI_LINT_OS_ARCH := $(shell echo golangci-lint-$(GOLANGCI_LINT_VERSION)-$(GOOS)-$(GOARCH))
 GOLANGCI_LINT_GZIP := $(GOLANGCI_LINT_OS_ARCH).tar.gz
 $(GOLANGCI_LINT): | $(BIN_DIR)
@@ -140,13 +140,12 @@ test/examples/%:
 	scenarigo plugin build && scenarigo run
 
 .PHONY: lint
-lint: $(GOLANGCI_LINT) $(LOOPPOINTER) ## run lint
+lint: $(GOLANGCI_LINT) ## run lint
 	@$(GOLANGCI_LINT) run
 
 .PHONY: lint/fix
-lint/fix: $(GOLANGCI_LINT) $(LOOPPOINTER) ## fix lint errors
+lint/fix: $(GOLANGCI_LINT) ## fix lint errors
 	@$(GOLANGCI_LINT) run --fix
-	@$(LOOPPOINTER) -fix ./...
 
 .PHONY: lint/ci
 lint/ci:

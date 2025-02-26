@@ -30,7 +30,6 @@ func TestTextUnUnmarshaler_Unmarshal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var um textUnmarshaler
 			var got interface{}

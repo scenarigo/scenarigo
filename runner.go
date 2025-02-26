@@ -296,7 +296,6 @@ FILE_LOOP:
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
 			for _, scn := range scns {
-				scn := scn
 				ctx = ctx.WithNode(scn.Node)
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()
@@ -312,7 +311,6 @@ FILE_LOOP:
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
 			for _, scn := range scns {
-				scn := scn
 				ctx = ctx.WithNode(scn.Node)
 				ctx.Run(scn.Title, func(ctx *context.Context) {
 					ctx.Reporter().Parallel()

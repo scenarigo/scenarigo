@@ -32,7 +32,6 @@ func TestDuration_UnmarshalYAML(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var d Duration
 				if err := d.UnmarshalYAML([]byte(test.in)); err != nil {
@@ -55,7 +54,6 @@ func TestDuration_UnmarshalYAML(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var d Duration
 				err := d.UnmarshalYAML([]byte(test.in))

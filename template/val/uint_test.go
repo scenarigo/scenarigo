@@ -37,7 +37,6 @@ func TestUintType_NewValue(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := uintType.NewValue(test.v)
 			if test.expectError == "" && err != nil {
@@ -110,7 +109,6 @@ func TestUintType_Convert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := uintType.Convert(test.v)
 			if test.expectError == "" && err != nil {
@@ -171,7 +169,6 @@ func TestUint_Equal(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Equal(test.y)
 			if test.expectError == "" && err != nil {
@@ -221,7 +218,6 @@ func TestUint_Compare(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Compare(test.y)
 			if test.expectError == "" && err != nil {
@@ -271,7 +267,6 @@ func TestUint_Add(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Add(test.y)
 			if test.expectError == "" && err != nil {
@@ -316,7 +311,6 @@ func TestUint_Sub(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Sub(test.y)
 			if test.expectError == "" && err != nil {
@@ -366,7 +360,6 @@ func TestUint_Mul(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Mul(test.y)
 			if test.expectError == "" && err != nil {
@@ -411,7 +404,6 @@ func TestUint_Div(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Div(test.y)
 			if test.expectError == "" && err != nil {
@@ -456,7 +448,6 @@ func TestUint_Mod(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, err := test.x.Mod(test.y)
 			if test.expectError == "" && err != nil {

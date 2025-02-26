@@ -29,7 +29,7 @@ func (s *server) convertToServicDesc(sd protoreflect.ServiceDescriptor) *grpc.Se
 		ServiceName: string(sd.FullName()),
 		Metadata:    sd.ParentFile().Path(),
 	}
-	for i := 0; i < sd.Methods().Len(); i++ {
+	for i := range sd.Methods().Len() {
 		m := sd.Methods().Get(i)
 		// TODO: streaming RPC
 		// if m.IsStreamingServer() || m.IsStreamingClient() {
@@ -180,7 +180,7 @@ type Response grpcprotocol.Expect
 
 func (resp *Response) extract(msg proto.Message) (proto.Message, *status.Status, error) {
 	if resp.Status.Code != "" {
-		code := codes.OK
+		var code codes.Code
 		c, err := strToCode(resp.Status.Code)
 		if err != nil {
 			return nil, nil, errors.WithPath(err, "status.code")

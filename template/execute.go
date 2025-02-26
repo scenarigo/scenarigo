@@ -68,7 +68,7 @@ func execute(ctx context.Context, in reflect.Value, data interface{}) (reflect.V
 			}
 		}
 	case reflect.Slice:
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			e := v.Index(i)
 			if !isNil(e) {
 				if !e.CanSet() {
@@ -116,7 +116,7 @@ func execute(ctx context.Context, in reflect.Value, data interface{}) (reflect.V
 		if !v.CanSet() {
 			v = makePtr(v).Elem() // create pointer to enable to set values
 		}
-		for i := 0; i < v.NumField(); i++ {
+		for i := range v.NumField() {
 			if !token.IsExported(v.Type().Field(i).Name) {
 				continue // skip unexported field
 			}
@@ -245,7 +245,7 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 		v = vv
 	case reflect.Slice:
 		vv := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			e := v.Index(i)
 			if !isNil(e) {
 				x, err := replaceFuncs(e, s)
@@ -258,7 +258,7 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 		v = vv
 	case reflect.Struct:
 		vv := reflect.New(v.Type()).Elem()
-		for i := 0; i < v.NumField(); i++ {
+		for i := range v.NumField() {
 			if !token.IsExported(v.Type().Field(i).Name) {
 				continue // skip unexported field
 			}

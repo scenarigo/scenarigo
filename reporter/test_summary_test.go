@@ -12,13 +12,13 @@ import (
 func Test_testSummaryAppend(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
-		testSummary     testSummary
+		testSummary     *testSummary
 		testFileRelPath string
 		reportFunc      func(r *reporter)
-		expect          testSummary
+		expect          *testSummary
 	}{
 		"passed": {
-			testSummary: testSummary{
+			testSummary: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  0,
 				failed:       []string{},
@@ -26,7 +26,7 @@ func Test_testSummaryAppend(t *testing.T) {
 			},
 			testFileRelPath: "scenario/test.yaml",
 			reportFunc:      func(r *reporter) {},
-			expect: testSummary{
+			expect: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  1,
 				failed:       []string{},
@@ -34,7 +34,7 @@ func Test_testSummaryAppend(t *testing.T) {
 			},
 		},
 		"failed": {
-			testSummary: testSummary{
+			testSummary: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  0,
 				failed:       []string{},
@@ -42,7 +42,7 @@ func Test_testSummaryAppend(t *testing.T) {
 			},
 			testFileRelPath: "scenario/test.yaml",
 			reportFunc:      func(r *reporter) { r.Fail() },
-			expect: testSummary{
+			expect: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  0,
 				failed:       []string{"scenario/test.yaml"},
@@ -50,7 +50,7 @@ func Test_testSummaryAppend(t *testing.T) {
 			},
 		},
 		"skipped": {
-			testSummary: testSummary{
+			testSummary: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  0,
 				failed:       []string{},
@@ -58,7 +58,7 @@ func Test_testSummaryAppend(t *testing.T) {
 			},
 			testFileRelPath: "scenario/test.yaml",
 			reportFunc:      func(r *reporter) { r.skipped = 1 },
-			expect: testSummary{
+			expect: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  0,
 				failed:       []string{},
@@ -68,15 +68,14 @@ func Test_testSummaryAppend(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		tt := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			r := newReporter()
-			tt.reportFunc(r)
-			tt.testSummary.append(tt.testFileRelPath, r)
+			test.reportFunc(r)
+			test.testSummary.append(test.testFileRelPath, r)
 
-			if diff := cmp.Diff(tt.expect, tt.testSummary,
+			if diff := cmp.Diff(test.expect, test.testSummary,
 				cmpopts.IgnoreFields(testSummary{}, "mu"),
 				cmp.AllowUnexported(testSummary{}),
 			); diff != "" {
@@ -89,11 +88,11 @@ func Test_testSummaryAppend(t *testing.T) {
 func Test_testSummaryString(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
-		testSummary testSummary
+		testSummary *testSummary
 		expect      string
 	}{
 		"no failed test": {
-			testSummary: testSummary{
+			testSummary: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  2,
 				failed:       []string{},
@@ -105,7 +104,7 @@ func Test_testSummaryString(t *testing.T) {
 `,
 		},
 		"some tests failed": {
-			testSummary: testSummary{
+			testSummary: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  1,
 				failed:       []string{"scenario/test1.yaml", "scenario/test2.yaml"},
@@ -123,11 +122,10 @@ Failed tests:
 	}
 
 	for name, test := range tests {
-		tt := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := tt.testSummary.String(true)
-			if diff := cmp.Diff(tt.expect, got); diff != "" {
+			got := test.testSummary.String(true)
+			if diff := cmp.Diff(test.expect, got); diff != "" {
 				t.Errorf("differs (-want +got):\n%s", diff)
 			}
 		})
@@ -137,11 +135,11 @@ Failed tests:
 func Test_testSummaryFailedFiles(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
-		testSummary testSummary
+		testSummary *testSummary
 		expect      string
 	}{
 		"no test failed": {
-			testSummary: testSummary{
+			testSummary: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  2,
 				failed:       []string{},
@@ -150,7 +148,7 @@ func Test_testSummaryFailedFiles(t *testing.T) {
 			expect: ``,
 		},
 		"some tests failed": {
-			testSummary: testSummary{
+			testSummary: &testSummary{
 				mu:           sync.Mutex{},
 				passedCount:  0,
 				failed:       []string{"scenario/test1.yaml", "scenario/test2.yaml"},
@@ -166,11 +164,10 @@ Failed tests:
 	}
 
 	for name, test := range tests {
-		tt := test
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := tt.testSummary.failedFiles()
-			if diff := cmp.Diff(tt.expect, got); diff != "" {
+			got := test.testSummary.failedFiles()
+			if diff := cmp.Diff(test.expect, got); diff != "" {
 				t.Errorf("differs (-want +got):\n%s", diff)
 			}
 		})

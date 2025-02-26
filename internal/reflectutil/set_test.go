@@ -56,7 +56,6 @@ func TestSet(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			err := Set(test.target, test.v)
 			if err != nil {
@@ -99,19 +98,19 @@ func TestConvert(t *testing.T) {
 			ok:     true,
 		},
 		"convert string to *string": {
-			target: reflect.PtrTo(reflect.TypeOf("")),
+			target: reflect.PointerTo(reflect.TypeOf("")),
 			v:      reflect.ValueOf(str),
 			expect: &str,
 			ok:     true,
 		},
 		"convert (*string)(nil) to *string": {
-			target: reflect.PtrTo(reflect.TypeOf("")),
+			target: reflect.PointerTo(reflect.TypeOf("")),
 			v:      reflect.ValueOf((*string)(nil)),
 			expect: (*string)(nil),
 			ok:     true,
 		},
 		"convert untyped nil to *string": {
-			target: reflect.PtrTo(reflect.TypeOf("")),
+			target: reflect.PointerTo(reflect.TypeOf("")),
 			v:      reflect.ValueOf(nil),
 			expect: (*string)(nil),
 			ok:     true,
@@ -123,7 +122,7 @@ func TestConvert(t *testing.T) {
 			ok:     true,
 		},
 		"convert string to *Stringer": {
-			target: reflect.PtrTo(reflect.TypeOf(stringer(""))),
+			target: reflect.PointerTo(reflect.TypeOf(stringer(""))),
 			v:      reflect.ValueOf(str),
 			expect: (*stringer)(&str),
 			ok:     true,
@@ -160,7 +159,6 @@ func TestConvert(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, ok, err := Convert(test.target, test.v)
 			if err != nil {
@@ -215,7 +213,6 @@ func TestConvertInterface(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got, ok, err := ConvertInterface(test.target, test.v)
 			if err != nil {
