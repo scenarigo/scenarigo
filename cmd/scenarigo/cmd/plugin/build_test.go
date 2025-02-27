@@ -141,9 +141,11 @@ go %s
 		tests := map[string]struct {
 			config            string
 			files             map[string]string
+			opts              buildOpts
 			envGowork         string
 			expectPluginPaths []string
 			expectGoMod       map[string]string
+			fileValidator     map[string]func(s string) error
 			skipOpen          bool
 		}{
 			"no plugins": {
@@ -812,6 +814,107 @@ plugins:
 					"src/go.mod": gomod("plugins/plugin"),
 				},
 			},
+			"replace zoncoen/scenarigo to scenarigo/scenarigo": {
+				config: `
+schemaVersion: config/v1
+plugins:
+  plugin.so:
+    src: src/main.go
+`,
+				files: map[string]string{
+					"src/main.go": `package main
+
+import (
+	_ "github.com/zoncoen/scenarigo" // old module path
+)
+`,
+					"src/go.mod": fmt.Sprintf(`module plugins/plugin
+
+go %s
+
+require github.com/zoncoen/scenarigo v0.19.0
+`, goVersion),
+				},
+				expectPluginPaths: []string{"plugin.so"},
+				fileValidator: map[string]func(string) error{
+					"src/main.go": func(s string) error {
+						expect := `package main
+
+import (
+	_ "github.com/scenarigo/scenarigo" // old module path
+)
+`
+						if got := s; got != expect {
+							dmp := diffmatchpatch.New()
+							diffs := dmp.DiffMain(expect, got, false)
+							t.Errorf("main.go differs:\n%s", dmp.DiffPrettyText(diffs))
+						}
+						return nil
+					},
+					"src/go.mod": func(s string) error {
+						if strings.Contains(s, oldScenarigoModPath) {
+							return fmt.Errorf("%q found", oldScenarigoModPath)
+						}
+						if !strings.Contains(s, newScenarigoModPath) {
+							return fmt.Errorf("%q not found", newScenarigoModPath)
+						}
+						return nil
+					},
+				},
+				skipOpen: true,
+			},
+			"skip migration": {
+				config: `
+schemaVersion: config/v1
+plugins:
+  plugin.so:
+    src: src/main.go
+`,
+				files: map[string]string{
+					"src/main.go": `package main
+
+import (
+	_ "github.com/zoncoen/scenarigo" // old module path
+)
+`,
+					"src/go.mod": fmt.Sprintf(`module plugins/plugin
+
+go %s
+
+require github.com/zoncoen/scenarigo v0.19.0
+`, goVersion),
+				},
+				opts: buildOpts{
+					skipMigration: true,
+				},
+				expectPluginPaths: []string{"plugin.so"},
+				fileValidator: map[string]func(string) error{
+					"src/main.go": func(s string) error {
+						expect := `package main
+
+import (
+	_ "github.com/zoncoen/scenarigo" // old module path
+)
+`
+						if got := s; got != expect {
+							dmp := diffmatchpatch.New()
+							diffs := dmp.DiffMain(expect, got, false)
+							t.Errorf("main.go differs:\n%s", dmp.DiffPrettyText(diffs))
+						}
+						return nil
+					},
+					"src/go.mod": func(s string) error {
+						if !strings.Contains(s, oldScenarigoModPath) {
+							return fmt.Errorf("%q not found", oldScenarigoModPath)
+						}
+						if strings.Contains(s, newScenarigoModPath) {
+							return fmt.Errorf("%q found", newScenarigoModPath)
+						}
+						return nil
+					},
+				},
+				skipOpen: true,
+			},
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {
@@ -826,7 +929,7 @@ plugins:
 				}
 				cmd := &cobra.Command{}
 				config.ConfigPath = configPath
-				if err := buildRun(cmd, []string{}); err != nil {
+				if err := buildRunWithOpts(cmd, []string{}, &test.opts); err != nil {
 					t.Fatal(err)
 				}
 				for _, p := range test.expectPluginPaths {
@@ -848,6 +951,15 @@ plugins:
 						t.Errorf("go.mod differs:\n%s", dmp.DiffPrettyText(diffs))
 						t.Errorf("==== got =====\n%s\n", got)
 						t.Errorf("=== expect ===\n%s\n", expect)
+					}
+				}
+				for path, validate := range test.fileValidator {
+					b, err := os.ReadFile(filepath.Join(tmpDir, path))
+					if err != nil {
+						t.Fatalf("failed read: %s", err)
+					}
+					if err := validate(string(b)); err != nil {
+						t.Fatalf("failed to validate file content: %s\n%s\n", err, string(b))
 					}
 				}
 			})
