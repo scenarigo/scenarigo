@@ -5,7 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/build"
+	"go/format"
+	"go/parser"
+	"go/token"
 	goversion "go/version"
 	"io"
 	"io/fs"
@@ -34,6 +38,8 @@ import (
 const (
 	versionTooHighErrorPattern = `^go: go.mod requires go >= ([\d\.]+) .+$`
 	toolchainLocal             = "local"
+	oldScenarigoModPath        = "github.com/zoncoen/scenarigo"
+	newScenarigoModPath        = "github.com/scenarigo/scenarigo"
 )
 
 var (
@@ -68,7 +74,10 @@ func parseGoVersion(ver string) (string, string) {
 	return ver, tc
 }
 
-var verbose bool
+var (
+	verbose       bool
+	skipMigration bool
+)
 
 func newBuildCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -85,6 +94,7 @@ This command requires go command in $PATH.
 		SilenceUsage:  true,
 	}
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
+	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "skip migration")
 	return cmd
 }
 
@@ -123,7 +133,17 @@ func (o *overrideModule) requireReplace() (*modfile.Require, string, *modfile.Re
 	return o.require, o.requiredBy, o.replace, o.replacedBy
 }
 
+type buildOpts struct {
+	skipMigration bool
+}
+
 func buildRun(cmd *cobra.Command, args []string) error {
+	return buildRunWithOpts(cmd, args, &buildOpts{
+		skipMigration: skipMigration,
+	})
+}
+
+func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error {
 	runtimeVersion := runtime.Version()
 	debugLog(cmd.OutOrStderr(), "scenarigo was built with %s", runtimeVersion)
 	if !goversion.IsValid(goVer) {
@@ -149,7 +169,7 @@ func buildRun(cmd *cobra.Command, args []string) error {
 	pluginModules := map[string]*overrideModule{}
 	pluginDir := filepathutil.From(cfg.Root, cfg.PluginDirectory)
 	for _, item := range cfg.Plugins.ToSlice() {
-		pb, clean, err := createPluginBuilder(cmd, goCmd, pluginModules, cfg.Root, pluginDir, item)
+		pb, clean, err := createPluginBuilder(cmd, goCmd, pluginModules, cfg.Root, pluginDir, item, opts)
 		defer clean()
 		if err != nil {
 			return err
@@ -252,7 +272,7 @@ func findGoCmd(ctx context.Context) (string, error) {
 }
 
 // 2nd return value should always be called.
-func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig]) (*pluginBuilder, func(), error) {
+func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig], opts *buildOpts) (*pluginBuilder, func(), error) {
 	out := item.Key
 	mod := filepathutil.From(root, item.Value.Src)
 	var src string
@@ -276,6 +296,54 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 	if err != nil {
 		return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
 	}
+
+	if !opts.skipMigration {
+		// replace zoncoen/scenarigo to scenarigo/scenarigo
+		if _, ok := pb.initialRequires[oldScenarigoModPath]; ok {
+			fset := token.NewFileSet()
+			if err := filepath.Walk(pb.dir, func(path string, info fs.FileInfo, err error) error {
+				if info.IsDir() || filepath.Ext(info.Name()) != ".go" {
+					return nil
+				}
+				b, err := os.ReadFile(path)
+				if err != nil {
+					return fmt.Errorf("failed to read file: %w", err)
+				}
+				f, err := parser.ParseFile(fset, info.Name(), b, parser.ParseComments)
+				if err != nil {
+					return fmt.Errorf("failed to parse file: %w", err)
+				}
+				var inspErr error
+				ast.Inspect(f, func(n ast.Node) bool {
+					if x, ok := n.(*ast.ImportSpec); ok {
+						p, err := strconv.Unquote(x.Path.Value)
+						if err != nil {
+							inspErr = err
+							return false
+						}
+						if strings.HasPrefix(p, oldScenarigoModPath) {
+							x.Path.Value = strconv.Quote(strings.Replace(p, oldScenarigoModPath, newScenarigoModPath, 1))
+						}
+					}
+					return true
+				})
+				if inspErr != nil {
+					return fmt.Errorf("failed to modify import path: %w", err)
+				}
+				fd, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, info.Mode())
+				if err != nil {
+					return fmt.Errorf("failed to open file: %w", err)
+				}
+				if err := format.Node(fd, fset, f); err != nil {
+					return fmt.Errorf("failed to modify import path: %w", err)
+				}
+				return nil
+			}); err != nil {
+				return nil, clean, err
+			}
+		}
+	}
+
 	return pb, clean, nil
 }
 
@@ -550,6 +618,7 @@ func newPluginBuilder(ctx context.Context, goCmd, name, mod, src, out, defaultMo
 	}
 
 	initialRequires, initialReplaces := getInitialState(gomod)
+
 	return &pluginBuilder{
 		name:            name,
 		dir:             dir,
