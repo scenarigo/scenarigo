@@ -5,6 +5,7 @@ go {{.goVersion}}
 require google.golang.org/grpc {{index .modules "google.golang.org/grpc"}}
 
 require (
+	github.com/google/go-cmp {{index .modules "github.com/google/go-cmp"}} // indirect
 	golang.org/x/net {{index .modules "golang.org/x/net"}} // indirect
 	golang.org/x/sys {{index .modules "golang.org/x/sys"}} // indirect
 	golang.org/x/text {{index .modules "golang.org/x/text"}} // indirect
