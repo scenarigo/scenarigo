@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.21.0](https://github.com/scenarigo/scenarigo/compare/v0.20.0...v0.21.0) - 2025-02-28
+### New Features
+- feat(plugin): migrate automatically from zoncoen/scenarigo to scenarigo/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/530
+### Bug Fixes
+- fix(test): fix module name and version by @zoncoen in https://github.com/scenarigo/scenarigo/pull/522
+- Fix enum equal for reserved or unknown value by @goccy in https://github.com/scenarigo/scenarigo/pull/526
+### Dependency Upgrades
+- chore(deps): bump actions/cache from 4.2.0 to 4.2.1 by @dependabot in https://github.com/scenarigo/scenarigo/pull/527
+- chore(deps): bump github.com/goccy/go-yaml from 1.15.22 to 1.15.23 by @dependabot in https://github.com/scenarigo/scenarigo/pull/525
+- chore(deps): bump github.com/spf13/cobra from 1.8.1 to 1.9.1 by @dependabot in https://github.com/scenarigo/scenarigo/pull/524
+- chore(deps): bump github.com/google/go-cmp from 0.6.0 to 0.7.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/528
+- chore(deps): bump actions/cache from 4.2.1 to 4.2.2 by @dependabot in https://github.com/scenarigo/scenarigo/pull/531
+
 ## [v0.20.0](https://github.com/scenarigo/scenarigo/compare/v0.19.0...v0.20.0) - 2025-02-13
 ### New Features
 - change module name from zoncoen/scenarigo to scenarigo/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/521
