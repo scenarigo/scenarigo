@@ -14,7 +14,7 @@ prev_major_minor=$(echo ${prev} | perl -wlne '/(\d+.\d+).*/ and print $1')
 for p in $(find ${root_dir} -name 'go.mod'); do
     echo ${p}
     cd $(dirname ${p})
-    go mod edit -go=${prev_major_minor}
+    go mod edit -go=${prev}
     if [[ ${p} =~ ${root_dir}/examples/ ]]; then
         go mod edit -toolchain=go${latest}
     fi
