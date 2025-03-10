@@ -1,6 +1,6 @@
 module github.com/scenarigo/scenarigo
 
-go 1.23
+go 1.23.0
 
 require (
 	carvel.dev/ytt v0.50.0
