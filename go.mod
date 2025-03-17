@@ -2,13 +2,15 @@ module github.com/scenarigo/scenarigo
 
 go 1.23.0
 
+toolchain go1.24.1
+
 require (
 	carvel.dev/ytt v0.50.0
 	dario.cat/mergo v1.0.1
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fatih/color v1.18.0
-	github.com/goccy/go-yaml v1.15.23
+	github.com/goccy/go-yaml v1.16.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/go-multierror v1.1.1
