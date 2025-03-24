@@ -28,7 +28,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.2
+    - uses: actions/cache/restore@v4.2.3
       id: go-cache
       with:
         path: |
