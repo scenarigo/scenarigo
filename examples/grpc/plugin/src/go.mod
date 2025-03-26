@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/scenarigo/scenarigo v0.20.0
 	google.golang.org/grpc v1.71.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.6
 )
 
 require github.com/stretchr/testify v1.9.0 // indirect
