@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v0.21.0](https://github.com/scenarigo/scenarigo/compare/v0.20.0...v0.21.0) - 2025-03-26
+### New Features
+- feat(plugin): migrate automatically from zoncoen/scenarigo to scenarigo/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/530
+### Bug Fixes
+- fix(test): fix module name and version by @zoncoen in https://github.com/scenarigo/scenarigo/pull/522
+- Fix enum equal for reserved or unknown value by @goccy in https://github.com/scenarigo/scenarigo/pull/526
+### Dependency Upgrades
+- chore(deps): bump actions/cache from 4.2.0 to 4.2.1 by @dependabot in https://github.com/scenarigo/scenarigo/pull/527
+- chore(deps): bump github.com/goccy/go-yaml from 1.15.22 to 1.15.23 by @dependabot in https://github.com/scenarigo/scenarigo/pull/525
+- chore(deps): bump github.com/spf13/cobra from 1.8.1 to 1.9.1 by @dependabot in https://github.com/scenarigo/scenarigo/pull/524
+- chore(deps): bump github.com/google/go-cmp from 0.6.0 to 0.7.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/528
+- chore(deps): bump actions/cache from 4.2.1 to 4.2.2 by @dependabot in https://github.com/scenarigo/scenarigo/pull/531
+- chore(deps): bump google.golang.org/grpc from 1.70.0 to 1.71.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/532
+- chore(deps): bump golang.org/x/mod from 0.23.0 to 0.24.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/535
+- chore(deps): bump golang.org/x/text from 0.22.0 to 0.23.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/534
+- chore(deps): bump golang.org/x/net from 0.35.0 to 0.36.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/538
+- chore(deps): bump github.com/goccy/go-yaml from 1.15.23 to 1.16.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/539
+- chore(deps): bump actions/cache from 4.2.2 to 4.2.3 by @dependabot in https://github.com/scenarigo/scenarigo/pull/540
+- chore(deps): bump google.golang.org/protobuf from 1.36.5 to 1.36.6 by @dependabot in https://github.com/scenarigo/scenarigo/pull/541
+
 ## [v0.20.0](https://github.com/scenarigo/scenarigo/compare/v0.19.0...v0.20.0) - 2025-02-13
 ### New Features
 - change module name from zoncoen/scenarigo to scenarigo/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/521
