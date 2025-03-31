@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [v0.21.1](https://github.com/scenarigo/scenarigo/compare/v0.21.0...v0.21.1) - 2025-03-31
+### Dependency Upgrades
+- Update goccy/go-yaml to v1.17.1 by @goccy in https://github.com/scenarigo/scenarigo/pull/542
+
 ## [v0.21.0](https://github.com/scenarigo/scenarigo/compare/v0.20.0...v0.21.0) - 2025-03-26
 ### New Features
 - feat(plugin): migrate automatically from zoncoen/scenarigo to scenarigo/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/530
