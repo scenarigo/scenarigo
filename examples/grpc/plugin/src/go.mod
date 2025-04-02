@@ -5,8 +5,8 @@ go 1.23.0
 toolchain go1.24.1
 
 require (
-	github.com/scenarigo/scenarigo v0.20.0
-	google.golang.org/grpc v1.71.0
+	github.com/scenarigo/scenarigo v0.21.1
+	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
 )
 
@@ -17,7 +17,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
