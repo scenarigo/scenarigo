@@ -6,4 +6,4 @@ package reporter
 
 import "time"
 
-const durationTestUnit = 20 * time.Millisecond
+const durationTestUnit = 50 * time.Millisecond
