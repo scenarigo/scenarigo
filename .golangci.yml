@@ -1,8 +1,6 @@
-run:
-  timeout: 10m
-
+version: "2"
 linters:
-  enable-all: true
+  default: all
   disable:
     - containedctx
     - contextcheck
@@ -12,7 +10,6 @@ linters:
     - exhaustive
     - exhaustruct
     - funlen
-    - gci
     - gochecknoglobals
     - gochecknoinits
     - gocognit
@@ -36,39 +33,57 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
-
-    # deprecated
-    - tenv
-
-  skip-dirs:
-    - gen
-
-issues:
-  exclude-rules:
-    - path: _test.go
-      linters:
-        - dupword
-        - forcetypeassert
-        - goconst
-        - maintidx
-        - noctx
-    - linters:
-        - staticcheck
-      text: 'SA1019: "github.com/golang/protobuf' # TODO
-
-linters-settings:
-  cyclop:
-    max-complexity: 25
-  exhaustive:
-    default-signifies-exhaustive: true
-  gosec:
-    excludes:
-      - G115
-  maintidx:
-    under: 30
-  stylecheck:
-    checks:
-    - all
-    # revive has same rules
-    - -ST1005
-    - -ST1006
+  settings:
+    cyclop:
+      max-complexity: 25
+    exhaustive:
+      default-signifies-exhaustive: true
+    gosec:
+      excludes:
+        - G115
+    maintidx:
+      under: 30
+    staticcheck:
+      checks:
+        - all
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupword
+          - forcetypeassert
+          - goconst
+          - maintidx
+          - noctx
+          - cyclop
+          - gocyclo
+        path: _test.go
+      - linters:
+          - staticcheck
+        text: "ST1005"
+      - linters:
+          - staticcheck
+        text: "ST1006"
+      - linters:
+          - staticcheck
+        text: 'SA1019: "github.com/golang/protobuf'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

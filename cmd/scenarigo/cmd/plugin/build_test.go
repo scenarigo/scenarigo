@@ -1413,7 +1413,6 @@ func TestFindGoCmd(t *testing.T) {
 	})
 }
 
-//nolint:cyclop
 func TestUpdateGoMod(t *testing.T) {
 	goVersion := strings.TrimPrefix(goVer, "go")
 
@@ -2025,7 +2024,8 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 
 				cmd := &cobra.Command{}
 				var stdout bytes.Buffer
-				cmd.SetOutput(&stdout)
+				cmd.SetOut(&stdout)
+				cmd.SetErr(&stdout)
 				pb, err := newPluginBuilder(ctx, goCmd, "test.so", gomod, test.src, filepath.Join(tmpDir, "test.so"), "test")
 				if err != nil {
 					t.Fatalf("failed to create plugin builder: %s", err)
@@ -2197,7 +2197,8 @@ import (
 
 				cmd := &cobra.Command{}
 				var stdout bytes.Buffer
-				cmd.SetOutput(&stdout)
+				cmd.SetOut(&stdout)
+				cmd.SetErr(&stdout)
 
 				pb := &pluginBuilder{
 					name:      "test.so",
@@ -2258,7 +2259,8 @@ go 100.0.0
 
 				cmd := &cobra.Command{}
 				var stdout bytes.Buffer
-				cmd.SetOutput(&stdout)
+				cmd.SetOut(&stdout)
+				cmd.SetErr(&stdout)
 
 				pb := &pluginBuilder{
 					name:      "test.so",
@@ -2408,7 +2410,7 @@ func createExecutable(t *testing.T, path, stdout string) {
 		t.Fatalf("failed to create %s: %s", path, err)
 	}
 	defer f.Close()
-	if _, err := f.WriteString(fmt.Sprintf("#!%s\n%s %q", bash, echo, stdout)); err != nil {
+	if _, err := fmt.Fprintf(f, "#!%s\n%s %q", bash, echo, stdout); err != nil {
 		t.Fatalf("failed to write %s: %s", path, err)
 	}
 }

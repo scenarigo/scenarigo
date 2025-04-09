@@ -9,7 +9,6 @@ import (
 	"github.com/scenarigo/scenarigo/errors"
 )
 
-//nolint:cyclop,gocyclo
 func TestBuild(t *testing.T) {
 	str := `
 deps:

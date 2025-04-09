@@ -190,7 +190,7 @@ func TestRequest_Invoke(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id"))))
+		_, _ = fmt.Fprintf(w, `{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id"))
 	})
 	m.HandleFunc("/echo/gzipped", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
@@ -573,7 +573,7 @@ func TestRequest_Invoke_Log(t *testing.T) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"message": "%s"}`, body["message"])))
+			_, _ = fmt.Fprintf(w, `{"message": "%s"}`, body["message"])
 		})
 		srv := httptest.NewServer(m)
 		defer srv.Close()

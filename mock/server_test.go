@@ -179,7 +179,6 @@ func TestServer_Success(t *testing.T) {
 	}
 }
 
-//nolint:cyclop
 func TestServer_Failure(t *testing.T) {
 	t.Run("Start() failed", func(t *testing.T) {
 		expect := errors.New("failed")
