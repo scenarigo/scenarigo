@@ -62,20 +62,18 @@ func (s *yamlScanner) scan() (int, token.Token, string) {
 
 	tokens := make([]*yamltoken.Token, 0, len(s.tokens))
 L:
-	for {
-		if len(s.tokens) == 0 {
-			break
-		}
+	for len(s.tokens) != 0 {
 		var tok *yamltoken.Token
 		tok, s.tokens = s.tokens[0], s.tokens[1:]
 		switch tok.Type {
 		case yamltoken.StringType, yamltoken.SingleQuoteType, yamltoken.DoubleQuoteType:
 			str := tok.Origin
 			pos := s.pos
-			if tok.Type == yamltoken.SingleQuoteType {
+			switch tok.Type {
+			case yamltoken.SingleQuoteType:
 				str = strings.Replace(str, "'"+tok.Value+"'", tok.Value, 1)
 				pos++
-			} else if tok.Type == yamltoken.DoubleQuoteType {
+			case yamltoken.DoubleQuoteType:
 				str = strings.Replace(str, strconv.Quote(tok.Value), tok.Value, 1)
 				pos++
 			}

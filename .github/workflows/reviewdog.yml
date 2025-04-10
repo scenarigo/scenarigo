@@ -17,4 +17,4 @@ jobs:
       uses: reviewdog/action-golangci-lint@v2
       with:
         reviewdog_flags: '-conf=.reviewdog.yml -diff="git diff main"'
-        golangci_lint_version: v1.64.5
+        golangci_lint_version: v2.0.2

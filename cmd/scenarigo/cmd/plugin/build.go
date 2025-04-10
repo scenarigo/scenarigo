@@ -302,6 +302,9 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 		if _, ok := pb.initialRequires[oldScenarigoModPath]; ok {
 			fset := token.NewFileSet()
 			if err := filepath.Walk(pb.dir, func(path string, info fs.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
 				if info.IsDir() || filepath.Ext(info.Name()) != ".go" {
 					return nil
 				}
@@ -380,7 +383,7 @@ func checkGowork(ctx context.Context, goCmd string, pbs []*pluginBuilder) (strin
 		if gowork != "" && gowork != f.gowork {
 			buf := bytes.NewBufferString("found multiple workspace files\n")
 			for _, f := range files {
-				buf.WriteString(fmt.Sprintf("    %s:\n      %s\n", f.out, f.gowork))
+				fmt.Fprintf(buf, "    %s:\n      %s\n", f.out, f.gowork)
 			}
 			return "", errors.New(buf.String())
 		}
