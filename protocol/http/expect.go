@@ -14,7 +14,7 @@ import (
 type Expect struct {
 	Code   string        `yaml:"code,omitempty"`
 	Header yaml.MapSlice `yaml:"header,omitempty"`
-	Body   interface{}   `yaml:"body,omitempty"`
+	Body   any           `yaml:"body,omitempty"`
 }
 
 // Build implements protocol.AssertionBuilder interface.
@@ -39,7 +39,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		return nil, errors.WrapPathf(err, "body", "invalid expect response body")
 	}
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	return assert.AssertionFunc(func(v any) error {
 		res, ok := v.(response)
 		if !ok {
 			return errors.Errorf("expected response but got %T", v)

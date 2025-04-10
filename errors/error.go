@@ -15,7 +15,7 @@ import (
 )
 
 // Errorf call fmt.Errorf.
-func Errorf(format string, args ...interface{}) error {
+func Errorf(format string, args ...any) error {
 	return fmt.Errorf(format, args...)
 }
 
@@ -30,12 +30,12 @@ func Is(err, target error) bool {
 }
 
 // As call errors.As.
-func As(err error, target interface{}) bool {
+func As(err error, target any) bool {
 	return errors.As(err, target)
 }
 
 // ErrorPathf create PathError instance with path and error message.
-func ErrorPathf(path, msg string, args ...interface{}) error {
+func ErrorPathf(path, msg string, args ...any) error {
 	pe := &PathError{
 		Err: Errorf(msg, args...),
 	}
@@ -44,7 +44,7 @@ func ErrorPathf(path, msg string, args ...interface{}) error {
 }
 
 // ErrorQueryf create PathError instance by query.Query.
-func ErrorQueryf(q *query.Query, format string, args ...interface{}) error {
+func ErrorQueryf(q *query.Query, format string, args ...any) error {
 	pe := &PathError{
 		Err: Errorf(format, args...),
 	}
@@ -97,7 +97,7 @@ func WrapPath(err error, path, message string) error {
 }
 
 // Wrapf wrap error while paying attention to PathError and MultiPathError.
-func Wrapf(err error, format string, args ...interface{}) error {
+func Wrapf(err error, format string, args ...any) error {
 	var e Error
 	if errors.As(err, &e) {
 		e.wrapf(format, args...)
@@ -109,7 +109,7 @@ func Wrapf(err error, format string, args ...interface{}) error {
 }
 
 // WrapPathf wrap error with path while paying attention to PathError and MultiPathError.
-func WrapPathf(err error, path, message string, args ...interface{}) error {
+func WrapPathf(err error, path, message string, args ...any) error {
 	var e Error
 	if errors.As(err, &e) {
 		e.wrapf(message, args...)
@@ -180,7 +180,7 @@ func ReplacePath(err error, old, newPath string) error {
 type Error interface {
 	prependPath(string)
 	replacePath(string, string)
-	wrapf(string, ...interface{})
+	wrapf(string, ...any)
 	setNodeAndColored(ast.Node, bool)
 	Error() string
 }
@@ -207,7 +207,7 @@ func (e *PathError) replacePath(old, newPath string) {
 	e.Path = strings.Replace(e.Path, old, newPath, 1)
 }
 
-func (e *PathError) wrapf(message string, args ...interface{}) {
+func (e *PathError) wrapf(message string, args ...any) {
 	e.Err = Wrapf(e.Err, message, args...)
 }
 
@@ -308,7 +308,7 @@ func (e *MultiPathError) replacePath(old, newPath string) {
 	}
 }
 
-func (e *MultiPathError) wrapf(message string, args ...interface{}) {
+func (e *MultiPathError) wrapf(message string, args ...any) {
 	for idx, err := range e.Errs {
 		var pathErr Error
 		if errors.As(err, &e) {

@@ -7,7 +7,7 @@ import (
 
 func TestBinaryUnmarshaler_Unmarshal(t *testing.T) {
 	var um binaryUnmarshaler
-	var i interface{}
+	var i any
 	d := []byte("test")
 	if err := um.Unmarshal(d, &i); err != nil {
 		t.Fatal(err)

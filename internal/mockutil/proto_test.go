@@ -11,7 +11,7 @@ import (
 func TestProtoMessage_Matches(t *testing.T) {
 	tests := map[string]struct {
 		msg   proto.Message
-		v     interface{}
+		v     any
 		match bool
 	}{
 		"match": {

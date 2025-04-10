@@ -19,6 +19,6 @@ func (msg *RawMessage) UnmarshalYAML(bytes []byte) error {
 }
 
 // Unmarshal decodes msg into v.
-func (msg RawMessage) Unmarshal(v interface{}) error {
+func (msg RawMessage) Unmarshal(v any) error {
 	return yaml.UnmarshalWithOptions([]byte(msg), v, yaml.UseOrderedMap(), yaml.Strict())
 }

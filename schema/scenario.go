@@ -89,7 +89,7 @@ type Step struct {
 	Request                 protocol.Invoker          `yaml:"request,omitempty"`
 	Expect                  protocol.AssertionBuilder `yaml:"expect,omitempty"`
 	Include                 string                    `yaml:"include,omitempty"`
-	Ref                     interface{}               `yaml:"ref,omitempty"`
+	Ref                     any                       `yaml:"ref,omitempty"`
 	Bind                    Bind                      `yaml:"bind,omitempty"`
 	Timeout                 *Duration                 `yaml:"timeout,omitempty"`
 	PostTimeoutWaitingLimit *Duration                 `yaml:"postTimeoutWaitingLimit,omitempty"`
@@ -120,7 +120,7 @@ type stepUnmarshaller struct {
 	Secrets                 map[string]any `yaml:"secrets,omitempty"`
 	Protocol                string         `yaml:"protocol,omitempty"`
 	Include                 string         `yaml:"include,omitempty"`
-	Ref                     interface{}    `yaml:"ref,omitempty"`
+	Ref                     any            `yaml:"ref,omitempty"`
 	Bind                    Bind           `yaml:"bind,omitempty"`
 	Timeout                 *Duration      `yaml:"timeout,omitempty"`
 	PostTimeoutWaitingLimit *Duration      `yaml:"postTimeoutWaitingLimit,omitempty"`
@@ -131,7 +131,7 @@ type stepUnmarshaller struct {
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (s *Step) UnmarshalYAML(unmarshal func(any) error) error {
 	// unmarshal into stepUnmarshaller instead of Step for dynamic unmarshalling Request/Expect
 	var unmarshaled stepUnmarshaller
 	if err := unmarshal(&unmarshaled); err != nil {
@@ -185,6 +185,6 @@ type Bind struct {
 type anchors struct{}
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (a anchors) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (a anchors) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }

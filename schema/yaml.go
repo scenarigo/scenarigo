@@ -2,6 +2,7 @@ package schema
 
 import (
 	"github.com/goccy/go-yaml"
+	"slices"
 )
 
 // NewOrderedMap creates a new order-preserving map.
@@ -62,7 +63,7 @@ func (m *OrderedMap[K, V]) Delete(key K) bool {
 		return false
 	}
 	delete(m.idx, key)
-	m.items = append(m.items[:i], m.items[i+1:]...)
+	m.items = slices.Delete(m.items, i, i+1)
 	for j, item := range m.items[i:] {
 		m.idx[item.Key] = i + j
 	}

@@ -31,7 +31,7 @@ func TestTypeFunctions(t *testing.T) {
 		},
 		"bool(*bool)": {
 			str: `{{bool(v)}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"v": testutil.ToPtr(true),
 			},
 			expect: true,

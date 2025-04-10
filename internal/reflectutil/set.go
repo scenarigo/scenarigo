@@ -89,7 +89,7 @@ func convertibleTo(src reflect.Type, dst reflect.Type) bool {
 }
 
 // ConvertInterface returns the value v converted to type t.
-func ConvertInterface(t reflect.Type, v interface{}) (interface{}, bool, error) {
+func ConvertInterface(t reflect.Type, v any) (any, bool, error) {
 	vv, ok, err := Convert(t, reflect.ValueOf(v))
 	if err != nil {
 		return vv, ok, err

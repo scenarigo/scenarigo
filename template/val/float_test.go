@@ -132,7 +132,7 @@ func TestFloat_GoValue(t *testing.T) {
 func TestFloat_Neg(t *testing.T) {
 	tests := map[string]struct {
 		x           Float
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1.1": {
@@ -169,7 +169,7 @@ func TestFloat_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Float
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1.1 == 1.1": {
@@ -214,7 +214,7 @@ func TestFloat_Compare(t *testing.T) {
 	tests := map[string]struct {
 		x           Float
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1.1 == 1.1": {
@@ -263,7 +263,7 @@ func TestFloat_Add(t *testing.T) {
 	tests := map[string]struct {
 		x           Float
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1.1 + 1.1": {
@@ -302,7 +302,7 @@ func TestFloat_Sub(t *testing.T) {
 	tests := map[string]struct {
 		x           Float
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1.1 - 1.1": {
@@ -346,7 +346,7 @@ func TestFloat_Mul(t *testing.T) {
 	tests := map[string]struct {
 		x           Float
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1.1 * 0.5": {
@@ -385,7 +385,7 @@ func TestFloat_Div(t *testing.T) {
 	tests := map[string]struct {
 		x           Float
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1.1 / 2.0": {

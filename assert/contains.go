@@ -10,7 +10,7 @@ import (
 
 // Contains returns an assertion to ensure a value contains the value.
 func Contains(assertion Assertion) Assertion {
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		vv, err := arrayOrSlice(v)
 		if err != nil {
 			return err
@@ -24,7 +24,7 @@ func Contains(assertion Assertion) Assertion {
 
 // NotContains returns an assertion to ensure a value doesn't contain the value.
 func NotContains(assertion Assertion) Assertion {
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		vv, err := arrayOrSlice(v)
 		if err != nil {
 			return err
@@ -36,7 +36,7 @@ func NotContains(assertion Assertion) Assertion {
 	})
 }
 
-func arrayOrSlice(v interface{}) (reflect.Value, error) {
+func arrayOrSlice(v any) (reflect.Value, error) {
 	vv := reflectutil.Elem(reflect.ValueOf(v))
 	switch vv.Kind() {
 	case reflect.Array, reflect.Slice:

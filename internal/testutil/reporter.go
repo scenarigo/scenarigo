@@ -11,8 +11,8 @@ import (
 type Reporter interface {
 	Fail()
 	Failed() bool
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
 	Helper()
 }
 
@@ -31,13 +31,13 @@ func (r *reporter) Failed() bool {
 }
 
 // Fatal is equivalent to Log followed by FailNow.
-func (r *reporter) Fatal(args ...interface{}) {
+func (r *reporter) Fatal(args ...any) {
 	r.Fail()
 	panic(fmt.Sprint(args...))
 }
 
 // Fatalf is equivalent to Logf followed by FailNow.
-func (r *reporter) Fatalf(format string, args ...interface{}) {
+func (r *reporter) Fatalf(format string, args ...any) {
 	r.Fatal(fmt.Sprintf(format, args...))
 }
 

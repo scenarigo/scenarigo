@@ -108,7 +108,7 @@ go %s
 	}
 	vs := getModuleVersions(t)
 	var b bytes.Buffer
-	if err := tmpl.Execute(&b, map[string]interface{}{
+	if err := tmpl.Execute(&b, map[string]any{
 		"goVersion": goVersion,
 		"modules":   vs,
 	}); err != nil {

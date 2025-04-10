@@ -213,7 +213,7 @@ func TestRequest_Invoke(t *testing.T) {
 			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
-		res := []byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id")))
+		res := fmt.Appendf(nil, `{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id"))
 		gz := new(bytes.Buffer)
 		ww := gzip.NewWriter(gz)
 		if _, err := ww.Write(res); err != nil {
@@ -248,7 +248,7 @@ func TestRequest_Invoke(t *testing.T) {
 			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
-		b, err := japanese.ShiftJIS.NewEncoder().Bytes([]byte(fmt.Sprintf(`{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id"))))
+		b, err := japanese.ShiftJIS.NewEncoder().Bytes(fmt.Appendf(nil, `{"message": "%s", "id": "%s"}`, body["message"], req.URL.Query().Get("id")))
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -260,7 +260,7 @@ func TestRequest_Invoke(t *testing.T) {
 	defer srv.Close()
 
 	tests := map[string]struct {
-		vars        interface{}
+		vars        any
 		request     *Request
 		response    response
 		requestDump *RequestExtractor
@@ -293,7 +293,7 @@ func TestRequest_Invoke(t *testing.T) {
 			response: response{
 				Status:     "200 OK",
 				StatusCode: 200,
-				Body:       map[string]interface{}{"message": "hey", "id": "123"},
+				Body:       map[string]any{"message": "hey", "id": "123"},
 			},
 			requestDump: &RequestExtractor{
 				Method: http.MethodPost,
@@ -317,7 +317,7 @@ func TestRequest_Invoke(t *testing.T) {
 			response: response{
 				Status:     "200 OK",
 				StatusCode: 200,
-				Body:       map[string]interface{}{"message": "hey", "id": "123"},
+				Body:       map[string]any{"message": "hey", "id": "123"},
 			},
 			requestDump: &RequestExtractor{
 				Method: http.MethodPost,
@@ -343,7 +343,7 @@ func TestRequest_Invoke(t *testing.T) {
 			response: response{
 				Status:     "200 OK",
 				StatusCode: 200,
-				Body:       map[string]interface{}{"message": "hey", "id": "123"},
+				Body:       map[string]any{"message": "hey", "id": "123"},
 			},
 			requestDump: &RequestExtractor{
 				Method: http.MethodPost,
@@ -369,7 +369,7 @@ func TestRequest_Invoke(t *testing.T) {
 			response: response{
 				Status:     "200 OK",
 				StatusCode: 200,
-				Body:       map[string]interface{}{"message": "hey", "id": "123"},
+				Body:       map[string]any{"message": "hey", "id": "123"},
 			},
 			requestDump: &RequestExtractor{
 				Method: http.MethodPost,
@@ -399,7 +399,7 @@ func TestRequest_Invoke(t *testing.T) {
 			response: response{
 				Status:     "200 OK",
 				StatusCode: 200,
-				Body:       map[string]interface{}{"message": "hey", "id": "123"},
+				Body:       map[string]any{"message": "hey", "id": "123"},
 			},
 			requestDump: &RequestExtractor{
 				Method: http.MethodPost,
@@ -413,7 +413,7 @@ func TestRequest_Invoke(t *testing.T) {
 			},
 		},
 		"custom client": {
-			vars: map[string]interface{}{
+			vars: map[string]any{
 				"client": &http.Client{
 					Transport: roundTripper(func(req *http.Request) (*http.Response, error) {
 						req.Header.Set("Authorization", auth)
@@ -431,7 +431,7 @@ func TestRequest_Invoke(t *testing.T) {
 			response: response{
 				Status:     "200 OK",
 				StatusCode: 200,
-				Body:       map[string]interface{}{"message": "hey", "id": "123"},
+				Body:       map[string]any{"message": "hey", "id": "123"},
 			},
 			requestDump: &RequestExtractor{
 				Method: http.MethodPost,
@@ -490,7 +490,7 @@ func TestRequest_Invoke_Error(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	tests := map[string]struct {
-		vars    interface{}
+		vars    any
 		request *Request
 		expect  string
 	}{
@@ -499,7 +499,7 @@ func TestRequest_Invoke_Error(t *testing.T) {
 			expect:  `failed to send request: Get "": unsupported protocol scheme ""`,
 		},
 		"failed to send request": {
-			vars: map[string]interface{}{
+			vars: map[string]any{
 				"client": &http.Client{
 					Transport: roundTripper(func(req *http.Request) (*http.Response, error) {
 						return nil, errors.New("error occurred")
@@ -630,7 +630,7 @@ func TestRequest_buildRequest(t *testing.T) {
 	tests := map[string]struct {
 		req        *Request
 		expectReq  func(*testing.T) *http.Request
-		expectBody interface{}
+		expectBody any
 	}{
 		"empty request": {
 			req: &Request{},

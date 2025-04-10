@@ -12,8 +12,8 @@ func TestNotZero(t *testing.T) {
 		name string
 	}
 	tests := []struct {
-		ok interface{}
-		ng interface{}
+		ok any
+		ng any
 	}{
 		{
 			ok: 1,

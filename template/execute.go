@@ -20,7 +20,7 @@ var (
 )
 
 // Execute executes templates of i with data.
-func Execute(ctx context.Context, i, data interface{}) (interface{}, error) {
+func Execute(ctx context.Context, i, data any) (any, error) {
 	v, err := execute(ctx, reflect.ValueOf(i), data)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func Execute(ctx context.Context, i, data interface{}) (interface{}, error) {
 }
 
 //nolint:gocyclo,cyclop,maintidx
-func execute(ctx context.Context, in reflect.Value, data interface{}) (reflect.Value, error) {
+func execute(ctx context.Context, in reflect.Value, data any) (reflect.Value, error) {
 	v := reflectutil.Elem(in)
 	switch v.Kind() {
 	case reflect.Invalid:
@@ -179,7 +179,7 @@ func executeLeftArrowFunction(ctx context.Context, f Func, v reflect.Value, data
 	if err != nil {
 		return reflect.Value{}, fmt.Errorf("failed to marshal argument to YAML: %w", err)
 	}
-	arg, err := f.UnmarshalArg(func(v interface{}) error {
+	arg, err := f.UnmarshalArg(func(v any) error {
 		if err := yaml.UnmarshalWithOptions(b, v, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
 			return err
 		}
@@ -211,7 +211,7 @@ func executeLeftArrowFunction(ctx context.Context, f Func, v reflect.Value, data
 	// HACK: return error with path
 	if str != "" {
 		if as, ok := res.(interface {
-			Assert(v interface{}) error
+			Assert(v any) error
 		}); ok {
 			res = assertionFunc(func(v any) error {
 				if err := as.Assert(v); err != nil {
@@ -317,8 +317,8 @@ func makePtr(v reflect.Value) reflect.Value {
 	return ptr
 }
 
-type assertionFunc func(v interface{}) error
+type assertionFunc func(v any) error
 
-func (f assertionFunc) Assert(v interface{}) error {
+func (f assertionFunc) Assert(v any) error {
 	return f(v)
 }

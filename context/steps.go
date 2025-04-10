@@ -43,7 +43,7 @@ func (s *Steps) Get(id string) *Step {
 }
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (s *Steps) ExtractByKey(key string) (interface{}, bool) {
+func (s *Steps) ExtractByKey(key string) (any, bool) {
 	step := s.Get(key)
 	if step != nil {
 		return step, true

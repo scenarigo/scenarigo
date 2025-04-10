@@ -29,7 +29,7 @@ steps:
 		log bytes.Buffer
 	)
 	ok := reporter.Run(func(rptr reporter.Reporter) {
-		ctx := context.New(rptr).WithPlugins(map[string]interface{}{
+		ctx := context.New(rptr).WithPlugins(map[string]any{
 			"getScenarioFilepath": plugin.StepFunc(func(ctx *context.Context, step *schema.Step) *context.Context {
 				got = ctx.ScenarioFilepath()
 				return ctx

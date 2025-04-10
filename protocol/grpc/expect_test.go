@@ -21,7 +21,7 @@ import (
 func TestExpect_Build(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		tests := map[string]struct {
-			vars   interface{}
+			vars   any
 			expect *Expect
 			v      *response
 		}{
@@ -678,7 +678,7 @@ func TestExpect_Build(t *testing.T) {
 	t.Run("invalid type for assertion.Assert", func(t *testing.T) {
 		tests := map[string]struct {
 			expect *Expect
-			v      interface{}
+			v      any
 		}{
 			"invalid type for assertion.Assert": {
 				expect: &Expect{},

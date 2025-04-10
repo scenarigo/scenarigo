@@ -20,7 +20,7 @@ func (m *textMarshaler) MediaType() string {
 }
 
 // Marshal implements RequestMarshaler interface.
-func (m *textMarshaler) Marshal(v interface{}) ([]byte, error) {
+func (m *textMarshaler) Marshal(v any) ([]byte, error) {
 	s, err := reflectutil.ConvertString(reflect.ValueOf(v))
 	if err != nil {
 		return nil, err

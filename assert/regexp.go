@@ -10,11 +10,11 @@ import (
 func Regexp(expr string) Assertion {
 	pattern, err := regexp.Compile(expr)
 	if err != nil {
-		return AssertionFunc(func(v interface{}) error {
+		return AssertionFunc(func(v any) error {
 			return err
 		})
 	}
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		if s, ok := v.(string); ok {
 			if pattern.MatchString(s) {
 				return nil

@@ -142,7 +142,7 @@ func validateMethod(method reflect.Value) error {
 	return nil
 }
 
-func buildRequestMsg(ctx *context.Context, req interface{}, src interface{}) error {
+func buildRequestMsg(ctx *context.Context, req any, src any) error {
 	x, err := ctx.ExecuteTemplate(src)
 	if err != nil {
 		return err

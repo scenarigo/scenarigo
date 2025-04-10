@@ -11,8 +11,8 @@ func TestAnd(t *testing.T) {
 
 	tests := map[string]struct {
 		assertions  []Assertion
-		ok          interface{}
-		ng          interface{}
+		ok          any
+		ng          any
 		expectError string
 	}{
 		"empty": {
@@ -70,8 +70,8 @@ func TestOr(t *testing.T) {
 
 	tests := map[string]struct {
 		assertions  []Assertion
-		ok          interface{}
-		ng          interface{}
+		ok          any
+		ng          any
 		expectError string
 	}{
 		"empty": {

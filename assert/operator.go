@@ -8,7 +8,7 @@ import (
 // And returns a new assertion to ensure that value passes all assertions.
 // If the assertions are empty, it returns an error.
 func And(assertions ...Assertion) Assertion {
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		if len(assertions) == 0 {
 			return errors.New("empty assertion list")
 		}
@@ -32,7 +32,7 @@ func And(assertions ...Assertion) Assertion {
 // Or returns new assertion to ensure that value passes at least one of assertions.
 // If the assertions are empty, it returns an error.
 func Or(assertions ...Assertion) Assertion {
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		if len(assertions) == 0 {
 			return errors.New("empty assertion list")
 		}

@@ -15,14 +15,14 @@ import (
 
 // Assertion implements value assertion.
 type Assertion interface {
-	Assert(v interface{}) error
+	Assert(v any) error
 }
 
 // AssertionFunc is an adaptor to allow the use of ordinary functions as assertions.
-type AssertionFunc func(v interface{}) error
+type AssertionFunc func(v any) error
 
 // Assert asserts the v.
-func (f AssertionFunc) Assert(v interface{}) error {
+func (f AssertionFunc) Assert(v any) error {
 	return f(v)
 }
 
@@ -63,7 +63,7 @@ func Build(ctx context.Context, expect any, fs ...BuildOpt) (Assertion, error) {
 			return nil, fmt.Errorf("failed to build assertion: %w", err)
 		}
 	}
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		errs := []error{}
 		for _, assertion := range assertions {
 			if err := assertion.Assert(v); err != nil {
@@ -132,7 +132,7 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 				assertions = append(assertions, as...)
 			}
 		}
-	case []interface{}:
+	case []any:
 		for i, elm := range v {
 			as, err := build(ctx, q.Index(i), elm, opt)
 			if err != nil {
@@ -145,7 +145,7 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 		case string:
 			return buildAssertion(ctx, q, v, opt)
 		case Assertion:
-			assertions = append(assertions, AssertionFunc(func(val interface{}) error {
+			assertions = append(assertions, AssertionFunc(func(val any) error {
 				got, err := q.Extract(val)
 				if err != nil {
 					return err
@@ -182,7 +182,7 @@ func buildAssertion(ctx context.Context, q *query.Query, expect any, opt *buildO
 }
 
 func lazyAssertion(q *query.Query, f template.Lazy) Assertion {
-	return AssertionFunc(func(val interface{}) error {
+	return AssertionFunc(func(val any) error {
 		v, err := q.Extract(val)
 		if err != nil {
 			return err

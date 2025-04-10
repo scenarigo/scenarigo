@@ -124,7 +124,7 @@ func TestBool_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Bool
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"true == true": {

@@ -12,8 +12,8 @@ import (
 
 func TestEqualEnum(t *testing.T) {
 	tests := map[string]struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		ok       bool
 	}{
 		"expected is not string": {
@@ -57,8 +57,8 @@ func TestEqualEnum(t *testing.T) {
 
 func TestEqualMessage(t *testing.T) {
 	tests := map[string]struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		ok       bool
 	}{
 		"expected is not proto message": {
@@ -126,12 +126,12 @@ func echoResponse(t *testing.T, id, body string) *test.EchoResponse {
 	t.Helper()
 
 	var msg test.EchoResponse
-	if err := protojson.Unmarshal([]byte(fmt.Sprintf(`
+	if err := protojson.Unmarshal(fmt.Appendf(nil, `
 {
   "messageId": "%s",
   "messageBody": "%s"
 }
-`, id, body)), &msg); err != nil {
+`, id, body), &msg); err != nil {
 		t.Fatalf("failed to unmarshal: %s", err)
 	}
 

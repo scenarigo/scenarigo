@@ -140,7 +140,7 @@ func (p *openedPlugin) getSetup(setups []SetupFunc) SetupFunc {
 }
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (p *openedPlugin) ExtractByKey(key string) (interface{}, bool) {
+func (p *openedPlugin) ExtractByKey(key string) (any, bool) {
 	sym, err := p.Lookup(key)
 	if err != nil {
 		return nil, false

@@ -10,8 +10,8 @@ import (
 func TestMockIterator(t *testing.T) {
 	type expect struct {
 		protocol string
-		expect   interface{}
-		response interface{}
+		expect   any
+		response any
 	}
 	t.Run("success", func(t *testing.T) {
 		tests := map[string]struct {
@@ -83,14 +83,14 @@ func TestMockIterator(t *testing.T) {
 					if mock.Protocol != expect.protocol {
 						t.Fatalf("expect protocol %q but got %q", expect.protocol, mock.Protocol)
 					}
-					var req interface{}
+					var req any
 					if err := mock.Expect.Unmarshal(&req); err != nil {
 						t.Fatalf("failed to unmarshal expect: %s", err)
 					}
 					if diff := cmp.Diff(expect.expect, req); diff != "" {
 						t.Errorf("differs (-want +got):\n%s", diff)
 					}
-					var resp interface{}
+					var resp any
 					if err := mock.Response.Unmarshal(&resp); err != nil {
 						t.Fatalf("failed to unmarshal response: %s", err)
 					}

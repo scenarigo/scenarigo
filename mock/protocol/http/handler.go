@@ -52,7 +52,7 @@ func NewHandler(iter *protocol.MockIterator, l logger.Logger) http.Handler {
 			writeError(w, fmt.Errorf("failed to read request body: %w", err), l)
 			return
 		}
-		var body interface{}
+		var body any
 		if len(b) > 0 {
 			mt := r.Header.Get("Content-Type")
 			if mt == "" {
@@ -64,7 +64,7 @@ func NewHandler(iter *protocol.MockIterator, l logger.Logger) http.Handler {
 				return
 			}
 		}
-		newCtx := ctx.WithRequest(map[string]interface{}{
+		newCtx := ctx.WithRequest(map[string]any{
 			"header": r.Header,
 			"body":   body,
 		})
@@ -112,17 +112,17 @@ func writeError(w http.ResponseWriter, err error, l logger.Logger) {
 type request struct {
 	path   string
 	header http.Header
-	body   interface{}
+	body   any
 }
 
 type expect struct {
 	Path   *string       `yaml:"path"`
 	Header yaml.MapSlice `yaml:"header"`
-	Body   interface{}   `yaml:"body"`
+	Body   any           `yaml:"body"`
 }
 
 func (e *expect) build(ctx *context.Context) (assert.Assertion, error) {
-	var pathAssertion assert.Assertion = assert.AssertionFunc(func(_ interface{}) error {
+	var pathAssertion assert.Assertion = assert.AssertionFunc(func(_ any) error {
 		return nil
 	})
 	if e.Path != nil {
@@ -143,7 +143,7 @@ func (e *expect) build(ctx *context.Context) (assert.Assertion, error) {
 		return nil, errors.WrapPathf(err, "body", "invalid expect response body")
 	}
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	return assert.AssertionFunc(func(v any) error {
 		req, ok := v.(*request)
 		if !ok {
 			return errors.Errorf("expected request but got %T", v)

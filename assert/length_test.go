@@ -6,9 +6,9 @@ import (
 
 func TestLength(t *testing.T) {
 	tests := map[string]struct {
-		expect interface{}
-		ok     interface{}
-		ng     interface{}
+		expect any
+		ok     any
+		ng     any
 	}{
 		"string": {
 			expect: 1,

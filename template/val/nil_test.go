@@ -117,7 +117,7 @@ func TestNil_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Nil
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"(*int)(nil) == (*int)(nil)": {

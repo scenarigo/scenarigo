@@ -17,6 +17,7 @@ import (
 
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"slices"
 )
 
 // LoadScenarios loads test scenarios from path.
@@ -55,7 +56,7 @@ func loadScenarios(path string, b []byte, opts ...LoadOption) ([]*Scenario, erro
 		if err != nil {
 			return nil, err
 		}
-		files := append([]*yttfiles.File{}, opt.defaultYTTFiles...)
+		files := slices.Clone(opt.defaultYTTFiles)
 		files = append(files, f)
 		b, err = runYTT(opt.yttOpts, opt.yttUI, files...)
 		if err != nil {
@@ -88,7 +89,7 @@ func loadScenarios(path string, b []byte, opts ...LoadOption) ([]*Scenario, erro
 				)
 			}
 
-			files := append([]*yttfiles.File{}, opt.defaultYTTFiles...)
+			files := slices.Clone(opt.defaultYTTFiles)
 			var y YTT
 			if err := yaml.NodeToValue(doc.doc.Body, &y, yaml.Strict()); err != nil {
 				return nil, err

@@ -29,7 +29,7 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 					}
 				}
 				run(r, p.Name, func(r Reporter) {
-					exec := e(r, func(v interface{}) {
+					exec := e(r, func(v any) {
 						b, err := yaml.Marshal(p.YAML)
 						if err != nil {
 							r.Fatalf("failed to marshal YAML: %s", err)
@@ -66,11 +66,11 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 
 // TestParameter is a parameters for parameterized testing.
 type TestParameter struct {
-	Name string        `yaml:"name"`
-	YAML interface{}   `yaml:"yaml"`
-	OKs  []interface{} `yaml:"ok"`
-	NGs  []interface{} `yaml:"ng"`
+	Name string `yaml:"name"`
+	YAML any    `yaml:"yaml"`
+	OKs  []any  `yaml:"ok"`
+	NGs  []any  `yaml:"ng"`
 }
 
 // ParameterizedTestExecutor represents a executor for parameterized testing.
-type ParameterizedTestExecutor func(Reporter, func(interface{})) func(Reporter, interface{}) error
+type ParameterizedTestExecutor func(Reporter, func(any)) func(Reporter, any) error

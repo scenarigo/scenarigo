@@ -18,7 +18,7 @@ func TestTextUnUnmarshaler_Unmarshal(t *testing.T) {
 	r := utf8.RuneError
 	tests := map[string]struct {
 		data   []byte
-		expect interface{}
+		expect any
 	}{
 		"utf8 string": {
 			data:   []byte("test"),
@@ -32,7 +32,7 @@ func TestTextUnUnmarshaler_Unmarshal(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			var um textUnmarshaler
-			var got interface{}
+			var got any
 			if err := um.Unmarshal(test.data, &got); err != nil {
 				t.Fatal(err)
 			}

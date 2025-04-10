@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/scenarigo/scenarigo/logger"
+	"maps"
 )
 
 var (
@@ -33,9 +34,7 @@ func All() map[string]Protocol {
 	m.Lock()
 	defer m.Unlock()
 	protocols := map[string]Protocol{}
-	for name, p := range registry {
-		protocols[name] = p
-	}
+	maps.Copy(protocols, registry)
 	return protocols
 }
 
@@ -53,8 +52,8 @@ func Get(name string) Protocol {
 // Protocol is the interface that creates mock server.
 type Protocol interface {
 	Name() string
-	UnmarshalConfig([]byte) (interface{}, error)
-	NewServer(iter *MockIterator, l logger.Logger, config interface{}) (Server, error)
+	UnmarshalConfig([]byte) (any, error)
+	NewServer(iter *MockIterator, l logger.Logger, config any) (Server, error)
 }
 
 // Server represents a mock server.

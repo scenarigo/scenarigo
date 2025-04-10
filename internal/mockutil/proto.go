@@ -21,7 +21,7 @@ type protoMessageMatcher struct {
 }
 
 // Matches implements gomock.Matcher interface.
-func (p *protoMessageMatcher) Matches(v interface{}) bool {
+func (p *protoMessageMatcher) Matches(v any) bool {
 	return cmp.Equal(v, p.message, protocmp.Transform())
 }
 

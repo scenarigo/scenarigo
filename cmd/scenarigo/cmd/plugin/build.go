@@ -33,6 +33,7 @@ import (
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
 	"github.com/scenarigo/scenarigo/schema"
 	"github.com/scenarigo/scenarigo/version"
+	"slices"
 )
 
 const (
@@ -231,10 +232,8 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 				var re *retriableError
 				if errors.As(err, &re) {
 					msg := fmt.Sprintf("%s: %s", pb.name, err)
-					for _, e := range retriableErrors {
-						if e == msg {
-							return fmt.Errorf("failed to build plugin %s: failed to unify the module version: %w", pb.name, err)
-						}
+					if slices.Contains(retriableErrors, msg) {
+						return fmt.Errorf("failed to build plugin %s: failed to unify the module version: %w", pb.name, err)
 					}
 					retriableErrors = append(retriableErrors, msg)
 					retry = true

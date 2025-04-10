@@ -132,7 +132,7 @@ func TestTime_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Time
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"x == x": {
@@ -179,7 +179,7 @@ func TestTime_Compare(t *testing.T) {
 	tests := map[string]struct {
 		x           Time
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		`x == y`: {

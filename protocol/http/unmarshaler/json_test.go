@@ -10,14 +10,14 @@ import (
 
 func TestJSON_Unmarshal_BigInt(t *testing.T) {
 	in := 8608570626085064778
-	b := []byte(fmt.Sprintf(`{"id": %d}`, in))
-	var v interface{}
+	b := fmt.Appendf(nil, `{"id": %d}`, in)
+	var v any
 	um := &jsonUnmarshaler{}
 	if err := um.Unmarshal(b, &v); err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
 
-	m, ok := v.(map[string]interface{})
+	m, ok := v.(map[string]any)
 	if !ok {
 		t.Fatalf("expect map[string]interface{} but got %T", v)
 	}
@@ -35,7 +35,7 @@ func TestJSON_Unmarshal_BigInt(t *testing.T) {
 	}
 }
 
-func jsonString(t *testing.T, v interface{}) string {
+func jsonString(t *testing.T, v any) string {
 	t.Helper()
 	b, err := json.Marshal(v)
 	if err != nil {

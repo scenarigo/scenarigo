@@ -23,13 +23,13 @@ import (
 // Expect represents expected response values.
 type Expect struct {
 	Code    string        `yaml:"code,omitempty"`
-	Message interface{}   `yaml:"message,omitempty"`
+	Message any           `yaml:"message,omitempty"`
 	Status  ExpectStatus  `yaml:"status,omitempty"`
 	Header  yaml.MapSlice `yaml:"header,omitempty"`
 	Trailer yaml.MapSlice `yaml:"trailer,omitempty"`
 
 	// for backward compatibility
-	Body interface{} `yaml:"body,omitempty"`
+	Body any `yaml:"body,omitempty"`
 }
 
 // ExpectStatus represents expected gRPC status.
@@ -82,7 +82,7 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		return nil, errors.WrapPathf(err, "message", "invalid expect response message")
 	}
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	return assert.AssertionFunc(func(v any) error {
 		resp, ok := v.(*response)
 		if !ok {
 			return errors.Errorf(`failed to convert to response type. type is %s`, reflect.TypeOf(v))
@@ -135,7 +135,7 @@ func (e *Expect) buildStatusDetailAssertions(ctx *context.Context) ([]assert.Ass
 					return nil, errors.WrapPathf(err, fmt.Sprintf("status.details[%d].'%s'", i, k), "invalid expect status detail")
 				}
 
-				statusDetailAssertions[i] = assert.AssertionFunc(func(v interface{}) error {
+				statusDetailAssertions[i] = assert.AssertionFunc(func(v any) error {
 					m, ok := v.(proto.Message)
 					if !ok {
 						return fmt.Errorf("expect proto.Message but got %T", v)

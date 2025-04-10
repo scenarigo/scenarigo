@@ -32,7 +32,7 @@ type GRPC struct{}
 func (_ GRPC) Name() string { return "grpc" } //nolint:revive
 
 // UnmarshalConfig implements protocol.Protocol interface.
-func (_ GRPC) UnmarshalConfig(b []byte) (interface{}, error) { //nolint:revive
+func (_ GRPC) UnmarshalConfig(b []byte) (any, error) { //nolint:revive
 	var config ServerConfig
 	if err := yaml.Unmarshal(b, &config); err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (_ GRPC) UnmarshalConfig(b []byte) (interface{}, error) { //nolint:revive
 }
 
 // NewServer implements protocol.Protocol interface.
-func (_ *GRPC) NewServer(iter *protocol.MockIterator, l logger.Logger, config interface{}) (protocol.Server, error) { //nolint:revive
+func (_ *GRPC) NewServer(iter *protocol.MockIterator, l logger.Logger, config any) (protocol.Server, error) { //nolint:revive
 	if iter == nil {
 		return nil, errors.New("mock iterator is nil")
 	}
