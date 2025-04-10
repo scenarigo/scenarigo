@@ -29,11 +29,11 @@ type testProtocol struct{}
 
 func (_ *testProtocol) Name() string { return "test" } //nolint:revive
 
-func (_ *testProtocol) UnmarshalConfig(b []byte) (interface{}, error) { //nolint:revive
+func (_ *testProtocol) UnmarshalConfig(b []byte) (any, error) { //nolint:revive
 	return nil, nil //nolint:nilnil
 }
 
-func (_ *testProtocol) NewServer(iter *MockIterator, l logger.Logger, cfg interface{}) (Server, error) { //nolint:revive
+func (_ *testProtocol) NewServer(iter *MockIterator, l logger.Logger, cfg any) (Server, error) { //nolint:revive
 	if iter == nil {
 		return nil, errors.New("mock iterator is nil")
 	}

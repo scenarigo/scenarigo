@@ -20,7 +20,7 @@ deps:
   tags:
     - go
     - '{{$ == "test"}}'`
-	var in interface{}
+	var in any
 	if err := yaml.NewDecoder(strings.NewReader(str), yaml.UseOrderedMap()).Decode(&in); err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -40,7 +40,7 @@ deps:
 	}
 
 	type info struct {
-		Deps []map[string]interface{} `yaml:"deps"`
+		Deps []map[string]any `yaml:"deps"`
 	}
 
 	t.Run("no assertion", func(t *testing.T) {
@@ -71,7 +71,7 @@ deps:
 	})
 	t.Run("ok", func(t *testing.T) {
 		v := info{
-			Deps: []map[string]interface{}{
+			Deps: []map[string]any{
 				{
 					"name": "scenarigo",
 					"version": map[string]int{
@@ -89,7 +89,7 @@ deps:
 	})
 	t.Run("ng", func(t *testing.T) {
 		v := info{
-			Deps: []map[string]interface{}{
+			Deps: []map[string]any{
 				{
 					"name": "Ruby on Rails",
 					"version": map[string]int{
@@ -351,11 +351,11 @@ deps:
 type callFunc struct{}
 
 type callArg struct {
-	F   interface{} `yaml:"f"`
-	Arg string      `yaml:"arg"`
+	F   any    `yaml:"f"`
+	Arg string `yaml:"arg"`
 }
 
-func (*callFunc) Exec(in interface{}) (interface{}, error) {
+func (*callFunc) Exec(in any) (any, error) {
 	arg, ok := in.(*callArg)
 	if !ok {
 		return nil, errors.New("arg must be a callArg")
@@ -367,7 +367,7 @@ func (*callFunc) Exec(in interface{}) (interface{}, error) {
 	return f(arg.Arg), nil
 }
 
-func (*callFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (*callFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	var arg callArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err

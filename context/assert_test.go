@@ -14,13 +14,13 @@ import (
 )
 
 func TestAssertions(t *testing.T) {
-	executor := func(r testutil.Reporter, decode func(interface{})) func(testutil.Reporter, interface{}) error {
-		return func(r testutil.Reporter, v interface{}) error {
-			var i interface{}
+	executor := func(r testutil.Reporter, decode func(any)) func(testutil.Reporter, any) error {
+		return func(r testutil.Reporter, v any) error {
+			var i any
 			decode(&i)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			return assert.MustBuild(ctx, i, assert.FromTemplate(map[string]interface{}{
+			return assert.MustBuild(ctx, i, assert.FromTemplate(map[string]any{
 				"assert": &assertions{ctx},
 			})).Assert(v)
 		}
@@ -36,8 +36,8 @@ func TestAssertions(t *testing.T) {
 func TestLeftArrowFunc(t *testing.T) {
 	tests := map[string]struct {
 		yaml string
-		ok   interface{}
-		ng   interface{}
+		ok   any
+		ng   any
 	}{
 		"simple": {
 			yaml: `'{{f <-}}: 1'`,
@@ -50,13 +50,13 @@ func TestLeftArrowFunc(t *testing.T) {
   ids: |-
     {{f <-}}: 1
 `, "\n")),
-			ok: []interface{}{
-				map[string]interface{}{
+			ok: []any{
+				map[string]any{
 					"ids": []int{0, 1},
 				},
 			},
-			ng: []interface{}{
-				map[string]interface{}{
+			ng: []any{
+				map[string]any{
 					"ids": []int{2, 3},
 				},
 			},
@@ -64,13 +64,13 @@ func TestLeftArrowFunc(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			var i interface{}
+			var i any
 			if err := yaml.Unmarshal([]byte(tc.yaml), &i); err != nil {
 				t.Fatalf("failed to unmarshal: %s", err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			v, err := template.Execute(ctx, i, map[string]interface{}{
+			v, err := template.Execute(ctx, i, map[string]any{
 				"f": &leftArrowFunc{
 					ctx: ctx,
 					f:   buildArg(context.Background(), assert.Contains),

@@ -8,8 +8,8 @@ func TestRegexp(t *testing.T) {
 	type myString string
 	tests := map[string]struct {
 		expr string
-		ok   interface{}
-		ng   interface{}
+		ok   any
+		ng   any
 	}{
 		"simple": {
 			expr: "a",

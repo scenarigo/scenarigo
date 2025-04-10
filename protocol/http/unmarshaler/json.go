@@ -19,7 +19,7 @@ func (um *jsonUnmarshaler) MediaType() string {
 }
 
 // Unmarshal implements ResponseUnmarshaler interface.
-func (um *jsonUnmarshaler) Unmarshal(data []byte, v interface{}) error {
+func (um *jsonUnmarshaler) Unmarshal(data []byte, v any) error {
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
 	return d.Decode(v)

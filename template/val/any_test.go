@@ -106,7 +106,7 @@ func TestAny_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Any
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1 == 1": {

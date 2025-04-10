@@ -21,6 +21,6 @@ func ExecuteTemplate[T any](c *Context, v T) (T, error) {
 }
 
 // ExecuteTemplate executes template strings in context.
-func (c *Context) ExecuteTemplate(i interface{}) (interface{}, error) {
+func (c *Context) ExecuteTemplate(i any) (any, error) {
 	return template.Execute(c.RequestContext(), i, c)
 }

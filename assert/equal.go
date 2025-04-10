@@ -17,7 +17,7 @@ var (
 type Equaler interface {
 	// Equal checks two values are equal or not.
 	// If the ok is true, the err should be used as result.
-	Equal(expected, got interface{}) (ok bool, err error)
+	Equal(expected, got any) (ok bool, err error)
 }
 
 // RegisterCustomEqualer appends eq as a custom equaler.
@@ -29,20 +29,20 @@ func RegisterCustomEqualer(eq Equaler) {
 }
 
 // EqualerFunc is an adaptor to allow the use of ordinary functions as Equaler.
-func EqualerFunc(eq func(interface{}, interface{}) (bool, error)) Equaler {
+func EqualerFunc(eq func(any, any) (bool, error)) Equaler {
 	return equaler(eq)
 }
 
-type equaler func(interface{}, interface{}) (bool, error)
+type equaler func(any, any) (bool, error)
 
 // Equal implements Equaler interface.
-func (eq equaler) Equal(expected, got interface{}) (bool, error) {
+func (eq equaler) Equal(expected, got any) (bool, error) {
 	return eq(expected, got)
 }
 
 // Equal returns an assertion to ensure a value equals the expected value.
-func Equal(expected interface{}, customEqs ...Equaler) Assertion {
-	return AssertionFunc(func(v interface{}) error {
+func Equal(expected any, customEqs ...Equaler) Assertion {
+	return AssertionFunc(func(v any) error {
 		if n, ok := v.(json.Number); ok {
 			switch expected.(type) {
 			case int, int8, int16, int32, int64,
@@ -99,7 +99,7 @@ func Equal(expected interface{}, customEqs ...Equaler) Assertion {
 	})
 }
 
-func isNil(i interface{}) bool {
+func isNil(i any) bool {
 	defer func() {
 		// return false if IsNil panics
 		_ = recover()

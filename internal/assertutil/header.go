@@ -46,14 +46,14 @@ func BuildHeaderAssertion(ctx *context.Context, in yaml.MapSlice) (assert.Assert
 	return assert.Build(ctx.RequestContext(), expects, opts...)
 }
 
-func stringify(i interface{}) interface{} {
+func stringify(i any) any {
 	switch v := i.(type) {
 	case yaml.MapSlice:
 		for i, item := range v {
 			v[i].Value = stringify(item.Value)
 		}
 		return v
-	case []interface{}:
+	case []any:
 		for i, elm := range v {
 			v[i] = stringify(elm)
 		}

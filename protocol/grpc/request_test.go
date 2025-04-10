@@ -182,7 +182,7 @@ func TestRequest_Invoke(t *testing.T) {
 						yaml.MapItem{Key: "messageBody", Value: "hello"},
 					},
 				}
-				ctx := context.FromT(t).WithVars(map[string]interface{}{
+				ctx := context.FromT(t).WithVars(map[string]any{
 					"client": client,
 				})
 				ctx, result, err := r.Invoke(ctx)
@@ -229,7 +229,7 @@ func TestRequest_Invoke(t *testing.T) {
 						yaml.MapItem{Key: "messageBody", Value: "hello"},
 					},
 				}
-				ctx := context.FromT(t).WithVars(map[string]interface{}{
+				ctx := context.FromT(t).WithVars(map[string]any{
 					"client": client,
 				})
 				ctx, result, err := r.Invoke(ctx)
@@ -263,7 +263,7 @@ func TestRequest_Invoke(t *testing.T) {
 
 	t.Run("failure", func(t *testing.T) {
 		tests := map[string]struct {
-			vars        map[string]interface{}
+			vars        map[string]any
 			client      string
 			method      string
 			metadata    any
@@ -275,7 +275,7 @@ func TestRequest_Invoke(t *testing.T) {
 				expectError: "failed to get client",
 			},
 			"invalid client": {
-				vars: map[string]interface{}{
+				vars: map[string]any{
 					"client": nil,
 				},
 				client:      "{{vars.client}}",
@@ -283,16 +283,16 @@ func TestRequest_Invoke(t *testing.T) {
 				expectError: `.client: client "{{vars.client}}" is invalid`,
 			},
 			"invalid metadata: invalid template": {
-				vars: map[string]interface{}{
+				vars: map[string]any{
 					"client": testpb.NewTestClient(nil),
 				},
 				method:      "Echo",
 				client:      "{{vars.client}}",
-				metadata:    map[string]interface{}{"a": "{{b}}"},
+				metadata:    map[string]any{"a": "{{b}}"},
 				expectError: `.metadata.'a': failed to set metadata: failed to execute: {{b}}: ".b" not found`,
 			},
 			"invalid metadata: must be map": {
-				vars: map[string]interface{}{
+				vars: map[string]any{
 					"client": testpb.NewTestClient(nil),
 				},
 				method:      "Echo",
@@ -301,7 +301,7 @@ func TestRequest_Invoke(t *testing.T) {
 				expectError: ".metadata: failed to set metadata: expected map but got int",
 			},
 			"invalid message": {
-				vars: map[string]interface{}{
+				vars: map[string]any{
 					"client": testpb.NewTestClient(nil),
 				},
 				method:      "Echo",
@@ -428,7 +428,7 @@ ok  	test.yaml	0.000s
 			var b bytes.Buffer
 			reporter.Run(func(rptr reporter.Reporter) {
 				rptr.Run("test.yaml", func(rptr reporter.Reporter) {
-					ctx := context.New(rptr).WithVars(map[string]interface{}{
+					ctx := context.New(rptr).WithVars(map[string]any{
 						"client": client,
 					})
 					if _, _, err := r.Invoke(ctx); err != nil {
@@ -447,8 +447,8 @@ ok  	test.yaml	0.000s
 
 func TestBuildRequestBody(t *testing.T) {
 	tests := map[string]struct {
-		vars   interface{}
-		src    interface{}
+		vars   any
+		src    any
 		expect *testpb.EchoRequest
 		error  bool
 	}{

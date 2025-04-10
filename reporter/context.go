@@ -125,7 +125,7 @@ func (c *testContext) print(a ...any) (int, error) {
 	return fmt.Fprint(c.w, a...)
 }
 
-func (c *testContext) printf(format string, a ...interface{}) (int, error) {
+func (c *testContext) printf(format string, a ...any) (int, error) {
 	if c.w == nil {
 		return 0, nil
 	}

@@ -55,7 +55,7 @@ type Protocol interface {
 
 // Invoker is the interface that sends the request and returns response sent from the server.
 type Invoker interface {
-	Invoke(*context.Context) (*context.Context, interface{}, error)
+	Invoke(*context.Context) (*context.Context, any, error)
 }
 
 // AssertionBuilder builds the assertion for the result of Invoke.

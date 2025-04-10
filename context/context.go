@@ -117,7 +117,7 @@ func (c *Context) PluginDir() string {
 }
 
 // WithPlugins returns a copy of c with ps.
-func (c *Context) WithPlugins(ps map[string]interface{}) *Context {
+func (c *Context) WithPlugins(ps map[string]any) *Context {
 	if ps == nil {
 		return c
 	}
@@ -140,7 +140,7 @@ func (c *Context) Plugins() Plugins {
 }
 
 // WithVars returns a copy of c with v.
-func (c *Context) WithVars(v interface{}) *Context {
+func (c *Context) WithVars(v any) *Context {
 	if v == nil {
 		return c
 	}
@@ -208,7 +208,7 @@ func (c *Context) Steps() *Steps {
 }
 
 // WithRequest returns a copy of c with request.
-func (c *Context) WithRequest(req interface{}) *Context {
+func (c *Context) WithRequest(req any) *Context {
 	if req == nil {
 		return c
 	}
@@ -220,12 +220,12 @@ func (c *Context) WithRequest(req interface{}) *Context {
 }
 
 // Request returns the request.
-func (c *Context) Request() interface{} {
+func (c *Context) Request() any {
 	return c.ctx.Value(keyRequest{})
 }
 
 // WithResponse returns a copy of c with response.
-func (c *Context) WithResponse(resp interface{}) *Context {
+func (c *Context) WithResponse(resp any) *Context {
 	if resp == nil {
 		return c
 	}
@@ -237,7 +237,7 @@ func (c *Context) WithResponse(resp interface{}) *Context {
 }
 
 // Response returns the response.
-func (c *Context) Response() interface{} {
+func (c *Context) Response() any {
 	return c.ctx.Value(keyResponse{})
 }
 

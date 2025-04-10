@@ -132,7 +132,7 @@ func TestDuration_GoValue(t *testing.T) {
 func TestDuration_Neg(t *testing.T) {
 	tests := map[string]struct {
 		x           Duration
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1s": {
@@ -177,7 +177,7 @@ func TestDuration_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Duration
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1s == 1s": {
@@ -222,7 +222,7 @@ func TestDuration_Compare(t *testing.T) {
 	tests := map[string]struct {
 		x           Duration
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1s == 1s": {
@@ -318,7 +318,7 @@ func TestDuration_Sub(t *testing.T) {
 	tests := map[string]struct {
 		x           Duration
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1s - 1s": {

@@ -51,9 +51,9 @@ func (p *testProtocol) UnmarshalExpect(_ []byte) (protocol.AssertionBuilder, err
 	return p.builder, nil
 }
 
-type invoker func(*context.Context) (*context.Context, interface{}, error)
+type invoker func(*context.Context) (*context.Context, any, error)
 
-func (f invoker) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
+func (f invoker) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	return f(ctx)
 }
 
@@ -102,14 +102,14 @@ func TestRunner_Run(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tests := map[string]struct {
 			scenario string
-			invoker  func(*context.Context) (*context.Context, interface{}, error)
+			invoker  func(*context.Context) (*context.Context, any, error)
 			builder  func(*context.Context) (assert.Assertion, error)
 		}{
 			"simple": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
+				invoker:  func(ctx *context.Context) (*context.Context, any, error) { return ctx, nil, nil },
 				builder: func(ctx *context.Context) (assert.Assertion, error) {
-					return assert.AssertionFunc(func(_ interface{}) error { return nil }), nil
+					return assert.AssertionFunc(func(_ any) error { return nil }), nil
 				},
 			},
 		}
@@ -118,7 +118,7 @@ func TestRunner_Run(t *testing.T) {
 				var invoked, built bool
 				p := &testProtocol{
 					name: "test",
-					invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
+					invoker: invoker(func(ctx *context.Context) (*context.Context, any, error) {
 						invoked = true
 						return test.invoker(ctx)
 					}),
@@ -154,25 +154,25 @@ func TestRunner_Run(t *testing.T) {
 	t.Run("failure", func(t *testing.T) {
 		tests := map[string]struct {
 			scenario string
-			invoker  func(*context.Context) (*context.Context, interface{}, error)
+			invoker  func(*context.Context) (*context.Context, any, error)
 			builder  func(*context.Context) (assert.Assertion, error)
 		}{
 			"failed to invoke": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker: func(ctx *context.Context) (*context.Context, interface{}, error) {
+				invoker: func(ctx *context.Context) (*context.Context, any, error) {
 					return nil, nil, errors.New("some error occurred")
 				},
 			},
 			"failed to build the assertion": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
+				invoker:  func(ctx *context.Context) (*context.Context, any, error) { return ctx, nil, nil },
 				builder:  func(ctx *context.Context) (assert.Assertion, error) { return nil, errors.New("some error occurred") },
 			},
 			"assertion error": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
+				invoker:  func(ctx *context.Context) (*context.Context, any, error) { return ctx, nil, nil },
 				builder: func(ctx *context.Context) (assert.Assertion, error) {
-					return assert.AssertionFunc(func(_ interface{}) error { return errors.New("some error occurred") }), nil
+					return assert.AssertionFunc(func(_ any) error { return errors.New("some error occurred") }), nil
 				},
 			},
 		}
@@ -181,7 +181,7 @@ func TestRunner_Run(t *testing.T) {
 				var invoked, built bool
 				p := &testProtocol{
 					name: "test",
-					invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
+					invoker: invoker(func(ctx *context.Context) (*context.Context, any, error) {
 						invoked = true
 						return test.invoker(ctx)
 					}),

@@ -25,14 +25,14 @@ type Reporter interface {
 	Fail()
 	Failed() bool
 	FailNow()
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Skip(args ...interface{})
-	Skipf(format string, args ...interface{})
+	Log(args ...any)
+	Logf(format string, args ...any)
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Skip(args ...any)
+	Skipf(format string, args ...any)
 	SkipNow()
 	Skipped() bool
 	Parallel()
@@ -156,49 +156,49 @@ func (r *reporter) FailNow() {
 // Log formats its arguments using default formatting, analogous to fmt.Print,
 // and records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
-func (r *reporter) Log(args ...interface{}) {
+func (r *reporter) Log(args ...any) {
 	r.logs.log(fmt.Sprint(args...))
 }
 
 // Logf formats its arguments according to the format, analogous to fmt.Printf, and
 // records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
-func (r *reporter) Logf(format string, args ...interface{}) {
+func (r *reporter) Logf(format string, args ...any) {
 	r.logs.log(fmt.Sprintf(format, args...))
 }
 
 // Error is equivalent to Log followed by Fail.
-func (r *reporter) Error(args ...interface{}) {
+func (r *reporter) Error(args ...any) {
 	r.Fail()
 	r.logs.error(fmt.Sprint(args...))
 }
 
 // Errorf is equivalent to Logf followed by Fail.
-func (r *reporter) Errorf(format string, args ...interface{}) {
+func (r *reporter) Errorf(format string, args ...any) {
 	r.Fail()
 	r.logs.error(fmt.Sprintf(format, args...))
 }
 
 // Fatal is equivalent to Log followed by FailNow.
-func (r *reporter) Fatal(args ...interface{}) {
+func (r *reporter) Fatal(args ...any) {
 	r.Error(args...)
 	runtime.Goexit()
 }
 
 // Fatalf is equivalent to Logf followed by FailNow.
-func (r *reporter) Fatalf(format string, args ...interface{}) {
+func (r *reporter) Fatalf(format string, args ...any) {
 	r.Errorf(format, args...)
 	runtime.Goexit()
 }
 
 // Skip is equivalent to Log followed by SkipNow.
-func (r *reporter) Skip(args ...interface{}) {
+func (r *reporter) Skip(args ...any) {
 	r.logs.skip(fmt.Sprint(args...))
 	r.SkipNow()
 }
 
 // Skipf is equivalent to Logf followed by SkipNow.
-func (r *reporter) Skipf(format string, args ...interface{}) {
+func (r *reporter) Skipf(format string, args ...any) {
 	r.logs.skip(fmt.Sprintf(format, args...))
 	r.SkipNow()
 }

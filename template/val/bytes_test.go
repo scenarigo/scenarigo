@@ -125,7 +125,7 @@ func TestBytes_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Bytes
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"foo == foo": {
@@ -170,7 +170,7 @@ func TestBytes_Compare(t *testing.T) {
 	tests := map[string]struct {
 		x           Bytes
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"foo == foo": {
@@ -219,7 +219,7 @@ func TestBytes_Add(t *testing.T) {
 	tests := map[string]struct {
 		x           Bytes
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"foo + bar": {

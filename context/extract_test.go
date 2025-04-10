@@ -18,11 +18,11 @@ func TestContext_ExtractKey(t *testing.T) {
 	tests := map[string]struct {
 		ctx    func(*Context) *Context
 		query  string
-		expect interface{}
+		expect any
 	}{
 		"plugins": {
 			ctx: func(ctx *Context) *Context {
-				return ctx.WithPlugins(map[string]interface{}{
+				return ctx.WithPlugins(map[string]any{
 					"key": "value",
 				})
 			},

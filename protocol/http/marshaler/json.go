@@ -20,7 +20,7 @@ func (m *jsonMarshaler) MediaType() string {
 }
 
 // Marshal implements RequestMarshaler interface.
-func (m *jsonMarshaler) Marshal(v interface{}) ([]byte, error) {
+func (m *jsonMarshaler) Marshal(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := yaml.NewEncoder(&buf, yaml.JSON()).Encode(v); err != nil {
 		return nil, err

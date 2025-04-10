@@ -148,7 +148,7 @@ func TestUint_Equal(t *testing.T) {
 	tests := map[string]struct {
 		x           Uint
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1 == 1": {
@@ -193,7 +193,7 @@ func TestUint_Compare(t *testing.T) {
 	tests := map[string]struct {
 		x           Uint
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1 == 1": {
@@ -242,7 +242,7 @@ func TestUint_Add(t *testing.T) {
 	tests := map[string]struct {
 		x           Uint
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1 + 1": {
@@ -291,7 +291,7 @@ func TestUint_Sub(t *testing.T) {
 	tests := map[string]struct {
 		x           Uint
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"1 - 1": {
@@ -335,7 +335,7 @@ func TestUint_Mul(t *testing.T) {
 	tests := map[string]struct {
 		x           Uint
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"2 * 3": {
@@ -384,7 +384,7 @@ func TestUint_Div(t *testing.T) {
 	tests := map[string]struct {
 		x           Uint
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"3 / 2": {
@@ -428,7 +428,7 @@ func TestUint_Mod(t *testing.T) {
 	tests := map[string]struct {
 		x           Uint
 		y           Value
-		expect      interface{}
+		expect      any
 		expectError string
 	}{
 		"5 % 3": {

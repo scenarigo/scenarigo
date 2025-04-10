@@ -46,11 +46,11 @@ func New(str string) (*Template, error) {
 
 // Execute applies a parsed template to the specified data.
 // If the Lazy isn't called, the context value should be canceled to avoid a goroutine leak.
-func (t *Template) Execute(ctx context.Context, data interface{}) (interface{}, error) {
+func (t *Template) Execute(ctx context.Context, data any) (any, error) {
 	return t.executeLazyTemplate(ctx, data)
 }
 
-func (t *Template) execute(ctx context.Context, data interface{}) (_ interface{}, retErr error) {
+func (t *Template) execute(ctx context.Context, data any) (_ any, retErr error) {
 	defer func() {
 		if err := recover(); err != nil {
 			retErr = fmt.Errorf("failed to execute: panic: %s", err)
@@ -66,7 +66,7 @@ func (t *Template) execute(ctx context.Context, data interface{}) (_ interface{}
 	return v, nil
 }
 
-func (t *Template) executeExpr(ctx context.Context, expr ast.Expr, data interface{}) (interface{}, error) {
+func (t *Template) executeExpr(ctx context.Context, expr ast.Expr, data any) (any, error) {
 	switch e := expr.(type) {
 	case *ast.BasicLit:
 		return t.executeBasicLit(e)
@@ -105,7 +105,7 @@ func (t *Template) executeExpr(ctx context.Context, expr ast.Expr, data interfac
 	}
 }
 
-func (t *Template) executeBasicLit(lit *ast.BasicLit) (interface{}, error) {
+func (t *Template) executeBasicLit(lit *ast.BasicLit) (any, error) {
 	switch lit.Kind {
 	case token.STRING:
 		return lit.Value, nil
@@ -135,7 +135,7 @@ func (t *Template) executeBasicLit(lit *ast.BasicLit) (interface{}, error) {
 	}
 }
 
-func (t *Template) executeParameterExpr(ctx context.Context, e *ast.ParameterExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeParameterExpr(ctx context.Context, e *ast.ParameterExpr, data any) (any, error) {
 	if e.X == nil {
 		return "", nil
 	}
@@ -175,7 +175,7 @@ func typeValue(v val.Value) string {
 	return fmt.Sprintf("%s(%v)", v.Type().Name(), v.GoValue())
 }
 
-func (t *Template) executeUnaryExpr(ctx context.Context, e *ast.UnaryExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeUnaryExpr(ctx context.Context, e *ast.UnaryExpr, data any) (any, error) {
 	x, err := t.executeExpr(ctx, e.X, data)
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (t *Template) executeUnaryOperation(op token.Token, x val.Value) (val.Value
 	return nil, val.ErrOperationNotDefined
 }
 
-func (t *Template) executeBinaryExpr(ctx context.Context, e *ast.BinaryExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeBinaryExpr(ctx context.Context, e *ast.BinaryExpr, data any) (any, error) {
 	// coalescing expr allows undefined variables as the left-hand side expr
 	if e.Op == token.COALESCING {
 		return t.executeCoalescingExpr(ctx, e, data)
@@ -340,7 +340,7 @@ func (t *Template) executeBinaryOperation(op token.Token, x, y val.Value, yExpr 
 	return nil, val.ErrOperationNotDefined
 }
 
-func (t *Template) executeCoalescingExpr(ctx context.Context, e *ast.BinaryExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeCoalescingExpr(ctx context.Context, e *ast.BinaryExpr, data any) (any, error) {
 	switch e.X.(type) {
 	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
 		extracted, err := extract(e.X, data)
@@ -383,7 +383,7 @@ func oneOf(x val.Value, ys ...val.Value) (val.Bool, error) {
 	return val.Bool(false), val.ErrOperationNotDefined
 }
 
-func (t *Template) executeConditionalExpr(ctx context.Context, e *ast.ConditionalExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeConditionalExpr(ctx context.Context, e *ast.ConditionalExpr, data any) (any, error) {
 	c, err := t.executeExpr(ctx, e.Condition, data)
 	if err != nil {
 		return nil, err
@@ -449,7 +449,7 @@ func (t *Template) requiredFuncArgType(funcType reflect.Type, argIdx int) reflec
 	return funcType.In(lastArgIdx).Elem()
 }
 
-func (t *Template) executeFuncCall(ctx context.Context, call *ast.CallExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeFuncCall(ctx context.Context, call *ast.CallExpr, data any) (any, error) {
 	var fn reflect.Value
 	fnName := "function"
 	args := make([]reflect.Value, 0, len(call.Args)+1)
@@ -559,7 +559,7 @@ func getMethod(in reflect.Value, name string) (reflect.Value, *reflect.Method, b
 	return reflect.Value{}, nil, false
 }
 
-func (t *Template) executeArgs(ctx context.Context, fnName string, fnType reflect.Type, vs []reflect.Value, args []ast.Expr, data interface{}) ([]reflect.Value, error) {
+func (t *Template) executeArgs(ctx context.Context, fnName string, fnType reflect.Type, vs []reflect.Value, args []ast.Expr, data any) ([]reflect.Value, error) {
 	for i, arg := range args {
 		a, err := t.executeExpr(ctx, arg, data)
 		if err != nil {
@@ -582,7 +582,7 @@ func (t *Template) executeArgs(ctx context.Context, fnName string, fnType reflec
 	return vs, nil
 }
 
-func (t *Template) executeLeftArrowExpr(ctx context.Context, e *ast.LeftArrowExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeLeftArrowExpr(ctx context.Context, e *ast.LeftArrowExpr, data any) (any, error) {
 	v, err := t.executeExpr(ctx, e.Fun, data)
 	if err != nil {
 		return nil, err
@@ -605,7 +605,7 @@ func (t *Template) executeLeftArrowExpr(ctx context.Context, e *ast.LeftArrowExp
 	if !ok {
 		return nil, errors.Errorf(`expect string but got %T`, v)
 	}
-	arg, err := f.UnmarshalArg(func(v interface{}) error {
+	arg, err := f.UnmarshalArg(func(v any) error {
 		if err := yaml.NewDecoder(strings.NewReader(argStr), yaml.UseOrderedMap(), yaml.Strict()).Decode(v); err != nil {
 			return err
 		}
@@ -630,7 +630,7 @@ func (t *Template) executeLeftArrowExpr(ctx context.Context, e *ast.LeftArrowExp
 	return f.Exec(arg)
 }
 
-func (t *Template) executeDefinedExpr(e *ast.DefinedExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeDefinedExpr(e *ast.DefinedExpr, data any) (any, error) {
 	switch e.Arg.(type) {
 	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
 		if _, err := extract(e.Arg, data); err != nil {
@@ -645,7 +645,7 @@ func (t *Template) executeDefinedExpr(e *ast.DefinedExpr, data interface{}) (int
 	return nil, errors.New("invalid argument to defined()")
 }
 
-func (t *Template) executeLeftArrowExprArg(ctx context.Context, arg ast.Expr, data interface{}) (interface{}, error) {
+func (t *Template) executeLeftArrowExprArg(ctx context.Context, arg ast.Expr, data any) (any, error) {
 	tt := &Template{
 		expr:                      arg,
 		executingLeftArrowExprArg: true,
@@ -655,9 +655,9 @@ func (t *Template) executeLeftArrowExprArg(ctx context.Context, arg ast.Expr, da
 	return v, err
 }
 
-type funcStash map[string]interface{}
+type funcStash map[string]any
 
-func (s *funcStash) save(f interface{}) string {
+func (s *funcStash) save(f any) string {
 	if *s == nil {
 		*s = funcStash{}
 	}
@@ -668,8 +668,8 @@ func (s *funcStash) save(f interface{}) string {
 
 // Func represents a left arrow function.
 type Func interface {
-	Exec(arg interface{}) (interface{}, error)
-	UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error)
+	Exec(arg any) (any, error)
+	UnmarshalArg(unmarshal func(any) error) (any, error)
 }
 
 // FuncCall represents a left arrow function call like '{{func <-}}'.

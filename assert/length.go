@@ -8,19 +8,19 @@ import (
 )
 
 // Length returns an assertion to ensure a value length is the expected value.
-func Length(expected interface{}) Assertion {
+func Length(expected any) Assertion {
 	var assertion Assertion
 	if a, ok := expected.(Assertion); ok {
 		assertion = a
 	} else {
 		if !isKindOfInt(expected) {
-			return AssertionFunc(func(v interface{}) error {
+			return AssertionFunc(func(v any) error {
 				return fmt.Errorf("invalid expected length %#v", expected)
 			})
 		}
 		assertion = Equal(expected)
 	}
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		if s, ok := v.(string); ok {
 			v = []rune(s)
 		}

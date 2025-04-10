@@ -20,14 +20,14 @@ func TestExecute(t *testing.T) {
 			unexported string
 		}
 		var (
-			tmpl              = `{{"test"}}`
-			str               = "test"
-			iface interface{} = `{{"test"}}`
+			tmpl      = `{{"test"}}`
+			str       = "test"
+			iface any = `{{"test"}}`
 		)
 		tests := map[string]struct {
-			in       interface{}
-			expected interface{}
-			vars     interface{}
+			in       any
+			expected any
+			vars     any
 		}{
 			"string": {
 				in:       "test",
@@ -53,12 +53,12 @@ func TestExecute(t *testing.T) {
 				expected: nil,
 			},
 			"nil map": {
-				in:       map[interface{}]interface{}(nil),
-				expected: map[interface{}]interface{}(nil),
+				in:       map[any]any(nil),
+				expected: map[any]any(nil),
 			},
 			"nil slice": {
-				in:       []interface{}(nil),
-				expected: []interface{}(nil),
+				in:       []any(nil),
+				expected: []any(nil),
 			},
 			"map[string]string": {
 				in: map[string]string{
@@ -77,12 +77,12 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			"map[string]interface{}": {
-				in: map[string]interface{}{
+				in: map[string]any{
 					"env":     `{{"test"}}`,
 					"version": "{{1}}",
 					"nil":     nil,
 				},
-				expected: map[string]interface{}{
+				expected: map[string]any{
 					"env":     "test",
 					"version": int64(1),
 					"nil":     nil,
@@ -113,8 +113,8 @@ func TestExecute(t *testing.T) {
 				expected: []*string{&str},
 			},
 			"[]interface{}": {
-				in:       []interface{}{`{{"one"}}`, `{{1}}`, nil},
-				expected: []interface{}{"one", int64(1), nil},
+				in:       []any{`{{"one"}}`, `{{1}}`, nil},
+				expected: []any{"one", int64(1), nil},
 			},
 			"yaml.MapSlice": {
 				in: yaml.MapSlice{
@@ -216,13 +216,13 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			"left arrow function (map)": {
-				in: map[string]interface{}{
-					"{{echo <-}}": map[string]interface{}{
-						"message": map[string]interface{}{
-							"{{join <-}}": map[string]interface{}{
+				in: map[string]any{
+					"{{echo <-}}": map[string]any{
+						"message": map[string]any{
+							"{{join <-}}": map[string]any{
 								"prefix": "pre-",
-								"text": map[string]interface{}{
-									"{{call <-}}": map[string]interface{}{
+								"text": map[string]any{
+									"{{call <-}}": map[string]any{
 										"f":   "{{f}}",
 										"arg": "{{text}}",
 									},
@@ -233,7 +233,7 @@ func TestExecute(t *testing.T) {
 					},
 				},
 				expected: "pre-test-suf",
-				vars: map[string]interface{}{
+				vars: map[string]any{
 					"echo": &echoFunc{},
 					"join": &joinFunc{},
 					"call": &callFunc{},
@@ -286,7 +286,7 @@ func TestExecute(t *testing.T) {
 					},
 				},
 				expected: "pre-test-suf",
-				vars: map[string]interface{}{
+				vars: map[string]any{
 					"echo": &echoFunc{},
 					"join": &joinFunc{},
 					"call": &callFunc{},

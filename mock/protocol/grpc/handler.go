@@ -154,7 +154,7 @@ func (e *expect) build(ctx *context.Context) (assert.Assertion, error) {
 		return nil, errors.WrapPathf(err, "message", "invalid expect response message")
 	}
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	return assert.AssertionFunc(func(v any) error {
 		req, ok := v.(*request)
 		if !ok {
 			return errors.Errorf("expected request but got %T", v)

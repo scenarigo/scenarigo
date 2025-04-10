@@ -22,7 +22,7 @@ func (um *binaryUnmarshaler) MediaType() string {
 
 // Unmarshal implements ResponseUnmarshaler interface.
 // It unmarshals the data as just a sequence of bytes.
-func (um *binaryUnmarshaler) Unmarshal(data []byte, v interface{}) error {
+func (um *binaryUnmarshaler) Unmarshal(data []byte, v any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr {
 		return errors.New("v must be a pointer")

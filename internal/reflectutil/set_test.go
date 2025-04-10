@@ -16,7 +16,7 @@ func TestSet(t *testing.T) {
 	tests := map[string]struct {
 		target reflect.Value
 		v      reflect.Value
-		expect interface{}
+		expect any
 		error  error
 	}{
 		"success": {
@@ -81,7 +81,7 @@ func TestConvert(t *testing.T) {
 	tests := map[string]struct {
 		target reflect.Type
 		v      reflect.Value
-		expect interface{}
+		expect any
 		ok     bool
 		error  string
 	}{
@@ -188,8 +188,8 @@ func TestConvertInterface(t *testing.T) {
 	str := "test"
 	tests := map[string]struct {
 		target reflect.Type
-		v      interface{}
-		expect interface{}
+		v      any
+		expect any
 		ok     bool
 		error  error
 	}{

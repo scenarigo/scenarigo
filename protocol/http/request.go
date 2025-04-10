@@ -26,19 +26,19 @@ var defaultUserAgent = fmt.Sprintf("scenarigo/%s", version.String())
 
 // Request represents a request.
 type Request struct {
-	Client string      `yaml:"client,omitempty"`
-	Method string      `yaml:"method,omitempty"`
-	URL    string      `yaml:"url,omitempty"`
-	Query  interface{} `yaml:"query,omitempty"`
-	Header interface{} `yaml:"header,omitempty"`
-	Body   interface{} `yaml:"body,omitempty"`
+	Client string `yaml:"client,omitempty"`
+	Method string `yaml:"method,omitempty"`
+	URL    string `yaml:"url,omitempty"`
+	Query  any    `yaml:"query,omitempty"`
+	Header any    `yaml:"header,omitempty"`
+	Body   any    `yaml:"body,omitempty"`
 }
 
 // RequestExtractor represents a request dump.
 type RequestExtractor Request
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (r RequestExtractor) ExtractByKey(key string) (interface{}, bool) {
+func (r RequestExtractor) ExtractByKey(key string) (any, bool) {
 	q := queryutil.New().Key(key)
 	if v, err := q.Extract(Request(r)); err == nil {
 		return v, true
@@ -54,14 +54,14 @@ type response struct {
 	Status     string              `yaml:"status,omitempty"` // http.Response.Status format e.g. "200 OK"
 	StatusCode int                 `yaml:"statusCode,omitempty"`
 	Header     map[string][]string `yaml:"header,omitempty"`
-	Body       interface{}         `yaml:"body,omitempty"`
+	Body       any                 `yaml:"body,omitempty"`
 }
 
 // ResponseExtractor represents a response dump.
 type ResponseExtractor response
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (r ResponseExtractor) ExtractByKey(key string) (interface{}, bool) {
+func (r ResponseExtractor) ExtractByKey(key string) (any, bool) {
 	q := queryutil.New().Key(key)
 	if v, err := q.Extract(response(r)); err == nil {
 		return v, true
@@ -91,7 +91,7 @@ func (r *Request) addIndent(s string, indentNum int) string {
 }
 
 // Invoke implements protocol.Invoker interface.
-func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
+func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	client, err := r.buildClient(ctx)
 	if err != nil {
 		return ctx, nil, errors.WithPath(err, "client")
@@ -134,7 +134,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, e
 	}
 	if len(b) > 0 {
 		unmarshaler := unmarshaler.Get(resp.Header.Get("Content-Type"))
-		var respBody interface{}
+		var respBody any
 		if err := unmarshaler.Unmarshal(b, &respBody); err != nil {
 			return ctx, nil, errors.Errorf("failed to unmarshal response body as %s: %s: %s", unmarshaler.MediaType(), string(b), err)
 		}
@@ -225,7 +225,7 @@ func (rt *encodingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	return resp, err
 }
 
-func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}, error) {
+func (r *Request) buildRequest(ctx *context.Context) (*http.Request, any, error) {
 	method := http.MethodGet
 	if r.Method != "" {
 		method = r.Method
@@ -257,7 +257,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, interface{}
 	}
 
 	var reader io.Reader
-	var body interface{}
+	var body any
 	if r.Body != nil {
 		x, err := ctx.ExecuteTemplate(r.Body)
 		if err != nil {

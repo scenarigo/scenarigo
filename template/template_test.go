@@ -124,7 +124,7 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"function call (with nil error)": {
 			str: `{{f("ok")}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"f": func(s string) (string, error) { return s, nil },
 			},
 			expect: "ok",
@@ -160,7 +160,7 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"invalid function argument type (selector)": {
 			str: `{{m.fn("1")}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"m": map[string]func(int){
 					"fn": func(a int) {},
 				},
@@ -169,22 +169,22 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"function call (second value is not an error)": {
 			str: `{{f()}}`,
-			data: map[string]interface{}{
-				"f": func() (interface{}, interface{}) { return nil, error(nil) },
+			data: map[string]any{
+				"f": func() (any, any) { return nil, error(nil) },
 			},
 			expectError: "second returned value must be an error",
 		},
 		"function call (with error)": {
 			str: `{{f()}}`,
-			data: map[string]interface{}{
-				"f": func() (interface{}, error) { return nil, errors.New("f() error") },
+			data: map[string]any{
+				"f": func() (any, error) { return nil, errors.New("f() error") },
 			},
 			expectError: "f() error",
 		},
 
 		"method call": {
 			str: `{{s.Echo("a") + s.Repeat("b") + p.Echo("c") + p.Self().Repeat(d)}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"s": echoStruct{},
 				"p": &echoStruct{},
 				"d": testutil.ToPtr("d"),
@@ -193,14 +193,14 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"method not found": {
 			str: `{{p.Invalid()}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"p": &echoStruct{},
 			},
 			expectError: `failed to execute: {{p.Invalid()}}: ".Invalid" not found`,
 		},
 		"invalid method argument": {
 			str: `{{p.Repeat(a)}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"p": &echoStruct{},
 				"a": 1.2,
 			},
@@ -212,7 +212,7 @@ func TestTemplate_Execute(t *testing.T) {
 {{echo <-}}:
   message: '{{message}}'
 `, "\n"),
-			data: map[string]interface{}{
+			data: map[string]any{
 				"echo":    &echoFunc{},
 				"message": "hello",
 			},
@@ -222,7 +222,7 @@ func TestTemplate_Execute(t *testing.T) {
 			str: strings.Trim(`
 {{exec <-}}: '{{f}}'
 `, "\n"),
-			data: map[string]interface{}{
+			data: map[string]any{
 				"exec": &execFunc{},
 				"f":    func() string { return "hello" },
 			},
@@ -239,7 +239,7 @@ func TestTemplate_Execute(t *testing.T) {
       suffix: -sufin
   suffix: -sufout
 `, "\n"),
-			data: map[string]interface{}{
+			data: map[string]any{
 				"join": &joinFunc{},
 				"f":    func(s string) string { return s },
 				"text": "test",
@@ -250,9 +250,9 @@ func TestTemplate_Execute(t *testing.T) {
 			str: strings.Trim(`
 {{join <-}}: '{{arg}}'
 `, "\n"),
-			data: map[string]interface{}{
+			data: map[string]any{
 				"join": &joinFunc{},
-				"arg": map[string]interface{}{
+				"arg": map[string]any{
 					"prefix": "pre-",
 					"text":   "{{text}}",
 					"suffix": "-suf",
@@ -273,7 +273,7 @@ func TestTemplate_Execute(t *testing.T) {
           arg: '{{text}}'
       suffix: -suf
 `, "\n"),
-			data: map[string]interface{}{
+			data: map[string]any{
 				"echo": &echoFunc{},
 				"join": &joinFunc{},
 				"call": &callFunc{},
@@ -284,7 +284,7 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"callable": {
 			str: "{{f(a, b)}}",
-			data: map[string]interface{}{
+			data: map[string]any{
 				"f": &joinFunc{},
 				"a": "foo",
 				"b": "bar",
@@ -297,14 +297,14 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"size([]int)": {
 			str: `{{size(v)}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"v": []int{0},
 			},
 			expect: int64(1),
 		},
 		"size(struct)": {
 			str: `{{size(v)}}`,
-			data: map[string]interface{}{
+			data: map[string]any{
 				"v": struct{}{},
 			},
 			expectError: "failed to execute: {{size(v)}}: size(any[struct {}]) is not defined",
@@ -322,7 +322,7 @@ func TestTemplate_Execute(t *testing.T) {
 		},
 		"panic": {
 			str: "{{panic()}}",
-			data: map[string]interface{}{
+			data: map[string]any{
 				"panic": func() { panic("omg") },
 			},
 			expectError: "omg",
@@ -344,28 +344,28 @@ func TestTemplate_Execute_UnaryExpr(t *testing.T) {
 
 		"negative int": {
 			str: "{{-v}}",
-			data: map[string]interface{}{
+			data: map[string]any{
 				"v": math.MaxInt,
 			},
 			expect: int64(-math.MaxInt),
 		},
 		"negative float": {
 			str: "{{-v}}",
-			data: map[string]interface{}{
+			data: map[string]any{
 				"v": float64(math.MaxFloat64),
 			},
 			expect: -float64(math.MaxFloat64),
 		},
 		"negative duration": {
 			str: "{{-v}}",
-			data: map[string]interface{}{
+			data: map[string]any{
 				"v": time.Second,
 			},
 			expect: -time.Second,
 		},
 		"negative uint": {
 			str: "{{-v}}",
-			data: map[string]interface{}{
+			data: map[string]any{
 				"v": uint(math.MaxInt),
 			},
 			expectError: `failed to execute: {{-v}}: invalid operation: operator - not defined on uint(9223372036854775807)`,
@@ -397,7 +397,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 		tests := map[string]executeTestCase{
 			"add ints": {
 				str: `{{v + int(1)}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": int64(math.MaxInt64 - 1),
 				},
 				expect: int64(math.MaxInt64),
@@ -416,7 +416,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"add bytes": {
 				str: "{{a + b}}",
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -442,7 +442,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 		tests := map[string]executeTestCase{
 			"sub positive int": {
 				str: `{{v - int(1)}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": int64(math.MinInt64 + 1),
 				},
 				expect: int64(math.MinInt64),
@@ -461,7 +461,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"sub durations": {
 				str: `{{x - y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Second,
 					"y": time.Minute,
 				},
@@ -573,14 +573,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")==bytes("a")`: {
 				str: `{{a==a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 				},
 				expect: true,
 			},
 			`bytes("a")==bytes("b")`: {
 				str: `{{a==b}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -588,14 +588,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time == time (true)`: {
 				str: `{{v==v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 				},
 				expect: true,
 			},
 			`time == time (false)`: {
 				str: `{{x==y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -603,14 +603,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1s")==duration("1s")`: {
 				str: `{{v==v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Second,
 				},
 				expect: true,
 			},
 			`duration("1s")==duration("1ms")`: {
 				str: `{{x==y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Second,
 					"y": time.Millisecond,
 				},
@@ -618,7 +618,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"nil==nil": {
 				str: `{{v==v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": nil,
 				},
 				expect: true,
@@ -663,14 +663,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")!=bytes("a")`: {
 				str: `{{a!=a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 				},
 				expect: false,
 			},
 			`bytes("a")!=bytes("b")`: {
 				str: `{{a!=b}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -678,14 +678,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time != time (false)`: {
 				str: `{{v!=v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 				},
 				expect: false,
 			},
 			`time != time (true)`: {
 				str: `{{x!=y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -693,14 +693,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1s")!=duration("1s")`: {
 				str: `{{v!=v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Second,
 				},
 				expect: false,
 			},
 			`duration("1s")!=duration("1ms")`: {
 				str: `{{x!=y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Second,
 					"y": time.Millisecond,
 				},
@@ -708,7 +708,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"nil!=nil": {
 				str: `{{v!=v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": nil,
 				},
 				expect: false,
@@ -769,7 +769,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")<bytes("b")`: {
 				str: `{{a<b}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -777,14 +777,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")<bytes("a")`: {
 				str: `{{a<a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 				},
 				expect: false,
 			},
 			`bytes("b")<bytes("a")`: {
 				str: `{{b<a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -792,7 +792,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time < time (true)`: {
 				str: `{{x<y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -800,7 +800,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time < time (false)`: {
 				str: `{{y<x}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -808,7 +808,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1ms")<duration("1s")`: {
 				str: `{{x<y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Millisecond,
 					"y": time.Second,
 				},
@@ -816,7 +816,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1s")<duration("1s")`: {
 				str: `{{v<v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Second,
 				},
 				expect: false,
@@ -877,7 +877,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")<=bytes("b")`: {
 				str: `{{a<=b}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -885,14 +885,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")<=bytes("a")`: {
 				str: `{{a<=a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 				},
 				expect: true,
 			},
 			`bytes("b")<=bytes("a")`: {
 				str: `{{b<=a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -900,7 +900,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time <= time (true)`: {
 				str: `{{x<=y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -908,7 +908,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time < time (false)`: {
 				str: `{{y<=x}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -916,14 +916,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1s")<=duration("1s")`: {
 				str: `{{v<=v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Second,
 				},
 				expect: true,
 			},
 			`duration("1s")<=duration("1ms")`: {
 				str: `{{x<=y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Second,
 					"y": time.Millisecond,
 				},
@@ -985,7 +985,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")>bytes("b")`: {
 				str: `{{a>b}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -993,14 +993,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")>bytes("a")`: {
 				str: `{{a>a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 				},
 				expect: false,
 			},
 			`bytes("b")>bytes("a")`: {
 				str: `{{b>a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -1008,7 +1008,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time > time (false)`: {
 				str: `{{x>y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -1016,7 +1016,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time > time (true)`: {
 				str: `{{y>x}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -1024,7 +1024,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1s")>duration("1ms")`: {
 				str: `{{x>y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Second,
 					"y": time.Millisecond,
 				},
@@ -1032,7 +1032,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1s")>duration("1s")`: {
 				str: `{{v>v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Second,
 				},
 				expect: false,
@@ -1093,7 +1093,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")>=bytes("b")`: {
 				str: `{{a>=b}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -1101,14 +1101,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`bytes("a")>=bytes("a")`: {
 				str: `{{a>=a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 				},
 				expect: true,
 			},
 			`bytes("b")>=bytes("a")`: {
 				str: `{{b>=a}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"a": []byte("a"),
 					"b": []byte("b"),
 				},
@@ -1116,7 +1116,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time >= time (false)`: {
 				str: `{{x>=y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -1124,7 +1124,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`time >= time (true)`: {
 				str: `{{y>=x}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC),
 					"y": time.Date(2009, time.November, 10, 23, 0, 1, 0, time.UTC),
 				},
@@ -1132,14 +1132,14 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			`duration("1s")>=duration("1s")`: {
 				str: `{{v>=v}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": time.Second,
 				},
 				expect: true,
 			},
 			`duration("1ms")>=duration("1s")`: {
 				str: `{{x>=y}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"x": time.Millisecond,
 					"y": time.Second,
 				},
@@ -1181,8 +1181,8 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 		tests := map[string]executeTestCase{
 			"lhs defined": {
 				str: `{{a.b ?? true + "default"}}`, // the right-hand side is not executed
-				data: map[string]interface{}{
-					"a": map[string]interface{}{
+				data: map[string]any{
+					"a": map[string]any{
 						"b": "something",
 					},
 				},
@@ -1190,8 +1190,8 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"lhs nil": {
 				str: `{{a.b ?? "default"}}`,
-				data: map[string]interface{}{
-					"a": map[string]interface{}{
+				data: map[string]any{
+					"a": map[string]any{
 						"b": nil,
 					},
 				},
@@ -1199,8 +1199,8 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"lhs typed nil": {
 				str: `{{a.b ?? "default"}}`,
-				data: map[string]interface{}{
-					"a": map[string]interface{}{
+				data: map[string]any{
+					"a": map[string]any{
 						"b": []int(nil),
 					},
 				},
@@ -1212,8 +1212,8 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"lhs expr": {
 				str: `{{a.b + " new" ?? true + "default"}}`, // the right-hand side is not executed
-				data: map[string]interface{}{
-					"a": map[string]interface{}{
+				data: map[string]any{
+					"a": map[string]any{
 						"b": "something",
 					},
 				},
@@ -1221,8 +1221,8 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"lhs expr nil": {
 				str: `{{(true ? a.b : a.b) ?? "default"}}`,
-				data: map[string]interface{}{
-					"a": map[string]interface{}{
+				data: map[string]any{
+					"a": map[string]any{
 						"b": nil,
 					},
 				},
@@ -1230,8 +1230,8 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			},
 			"lhs expr typed nil": {
 				str: `{{(true ? a.b : a.b) ?? "default"}}`,
-				data: map[string]interface{}{
-					"a": map[string]interface{}{
+				data: map[string]any{
+					"a": map[string]any{
 						"b": []int(nil),
 					},
 				},
@@ -1262,7 +1262,7 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 			`defined(v) ? v : "default" + true`: {
 				// "default" + true should not be evaluated
 				str: `{{defined(v) ? v : "default" + true}}`,
-				data: map[string]interface{}{
+				data: map[string]any{
 					"v": "override",
 				},
 				expect: "override",
@@ -1301,8 +1301,8 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 
 type executeTestCase struct {
 	str         string
-	data        interface{}
-	expect      interface{}
+	data        any
+	expect      any
 	expectError string
 }
 
@@ -1338,15 +1338,15 @@ func runExecute(t *testing.T, tests map[string]executeTestCase) {
 func TestLeftArrowFunctionArg(t *testing.T) {
 	tests := map[string]struct {
 		str    string
-		data   map[string]interface{}
-		expect interface{}
+		data   map[string]any
+		expect any
 	}{
 		"no template": {
 			str: strings.TrimPrefix(`
 a: 1
 b: 2
 `, "\n"),
-			expect: map[string]interface{}{
+			expect: map[string]any{
 				"a": uint64(1),
 				"b": uint64(2),
 			},
@@ -1368,15 +1368,15 @@ b: 2
 users:
   - '{{user}}'
 `, "\n"),
-			data: map[string]interface{}{
-				"user": map[string]interface{}{
+			data: map[string]any{
+				"user": map[string]any{
 					"name": "Alice",
 					"age":  20,
 				},
 			},
-			expect: map[string]interface{}{
-				"users": []interface{}{
-					map[string]interface{}{
+			expect: map[string]any{
+				"users": []any{
+					map[string]any{
 						"name": "Alice",
 						"age":  uint64(20),
 					},
@@ -1387,14 +1387,14 @@ users:
 			str: strings.TrimPrefix(`
 admin: '{{user}}'
 `, "\n"),
-			data: map[string]interface{}{
-				"user": map[string]interface{}{
+			data: map[string]any{
+				"user": map[string]any{
 					"name": "Alice",
 					"age":  20,
 				},
 			},
-			expect: map[string]interface{}{
-				"admin": map[string]interface{}{
+			expect: map[string]any{
+				"admin": map[string]any{
 					"name": "Alice",
 					"age":  uint64(20),
 				},
@@ -1409,12 +1409,12 @@ text: |-
     arg: '{{text}}'
 suffix: -suf
 `, "\n"),
-			data: map[string]interface{}{
+			data: map[string]any{
 				"call": &callFunc{},
 				"f":    func(s string) string { return s },
 				"text": "test",
 			},
-			expect: map[string]interface{}{
+			expect: map[string]any{
 				"prefix": "pre-",
 				"text":   "test",
 				"suffix": "-suf",
@@ -1434,7 +1434,7 @@ suffix: -suf
 			tmpl.executingLeftArrowExprArg = true
 			data := test.data
 			if data == nil {
-				data = map[string]interface{}{
+				data = map[string]any{
 					"dump": &dumpFunc{},
 				}
 			} else {
@@ -1450,7 +1450,7 @@ suffix: -suf
 			if !ok {
 				t.Fatalf("expect string but got %T", v)
 			}
-			var i interface{}
+			var i any
 			if err := yaml.Unmarshal([]byte(s), &i); err != nil {
 				t.Fatal(err)
 			}
@@ -1463,9 +1463,9 @@ suffix: -suf
 
 func TestTemplate_ExecuteDirect(t *testing.T) {
 	tests := map[string]struct {
-		i           interface{}
-		data        interface{}
-		expect      interface{}
+		i           any
+		data        any
+		expect      any
 		expectError bool
 	}{
 		"not found by MapItem": {
@@ -1524,7 +1524,7 @@ func (s *echoStruct) Self() *echoStruct {
 	return s
 }
 
-func (s echoStruct) Echo(str string) interface{} {
+func (s echoStruct) Echo(str string) any {
 	return str
 }
 
@@ -1540,7 +1540,7 @@ type echoArg struct {
 	Message string `yaml:"message"`
 }
 
-func (*echoFunc) Exec(in interface{}) (interface{}, error) {
+func (*echoFunc) Exec(in any) (any, error) {
 	arg, ok := in.(echoArg)
 	if !ok {
 		return nil, errors.New("arg must be a echoArg")
@@ -1548,7 +1548,7 @@ func (*echoFunc) Exec(in interface{}) (interface{}, error) {
 	return arg.Message, nil
 }
 
-func (*echoFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (*echoFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	var arg echoArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
@@ -1560,7 +1560,7 @@ var _ Func = &execFunc{}
 
 type execFunc struct{}
 
-func (*execFunc) Exec(in interface{}) (interface{}, error) {
+func (*execFunc) Exec(in any) (any, error) {
 	v := reflect.ValueOf(in)
 	if !v.IsValid() {
 		return nil, errors.New("invalid value")
@@ -1578,8 +1578,8 @@ func (*execFunc) Exec(in interface{}) (interface{}, error) {
 	return v.Call(nil)[0].Interface(), nil
 }
 
-func (*execFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
-	var arg interface{}
+func (*execFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	var arg any
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
 	}
@@ -1594,7 +1594,7 @@ type joinArg struct {
 	Suffix string `yaml:"suffix"`
 }
 
-func (*joinFunc) Exec(in interface{}) (interface{}, error) {
+func (*joinFunc) Exec(in any) (any, error) {
 	arg, ok := in.(*joinArg)
 	if !ok {
 		return nil, errors.New("arg must be a joinArg")
@@ -1602,7 +1602,7 @@ func (*joinFunc) Exec(in interface{}) (interface{}, error) {
 	return arg.Prefix + arg.Text + arg.Suffix, nil
 }
 
-func (*joinFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (*joinFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	var arg joinArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
@@ -1617,11 +1617,11 @@ func (*joinFunc) Call(strs ...string) (string, error) {
 type callFunc struct{}
 
 type callArg struct {
-	F   interface{} `yaml:"f"`
-	Arg string      `yaml:"arg"`
+	F   any    `yaml:"f"`
+	Arg string `yaml:"arg"`
 }
 
-func (*callFunc) Exec(in interface{}) (interface{}, error) {
+func (*callFunc) Exec(in any) (any, error) {
 	arg, ok := in.(*callArg)
 	if !ok {
 		return nil, errors.New("arg must be a callArg")
@@ -1633,7 +1633,7 @@ func (*callFunc) Exec(in interface{}) (interface{}, error) {
 	return f(arg.Arg), nil
 }
 
-func (*callFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
+func (*callFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	var arg callArg
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
@@ -1653,12 +1653,12 @@ var _ Func = &dumpFunc{}
 
 type dumpFunc struct{}
 
-func (*dumpFunc) Exec(in interface{}) (interface{}, error) {
+func (*dumpFunc) Exec(in any) (any, error) {
 	return in, nil
 }
 
-func (*dumpFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
-	var arg interface{}
+func (*dumpFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	var arg any
 	if err := unmarshal(&arg); err != nil {
 		return nil, err
 	}

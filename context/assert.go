@@ -13,7 +13,7 @@ type assertions struct {
 }
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (a *assertions) ExtractByKey(key string) (interface{}, bool) {
+func (a *assertions) ExtractByKey(key string) (any, bool) {
 	switch key {
 	case "and":
 		return listArgsLeftArrowFunc(buildArgs(a.ctx, assert.And)), true
@@ -47,8 +47,8 @@ func (a *assertions) ExtractByKey(key string) (interface{}, bool) {
 	return nil, false
 }
 
-func buildArg(ctx context.Context, base func(assert.Assertion) assert.Assertion) func(interface{}) assert.Assertion {
-	return func(arg interface{}) assert.Assertion {
+func buildArg(ctx context.Context, base func(assert.Assertion) assert.Assertion) func(any) assert.Assertion {
+	return func(arg any) assert.Assertion {
 		assertion, ok := arg.(assert.Assertion)
 		if !ok {
 			assertion = assert.MustBuild(ctx, arg)
@@ -59,14 +59,14 @@ func buildArg(ctx context.Context, base func(assert.Assertion) assert.Assertion)
 
 type leftArrowFunc struct {
 	ctx context.Context
-	f   func(interface{}) assert.Assertion
+	f   func(any) assert.Assertion
 }
 
 func (laf *leftArrowFunc) Call(v any) assert.Assertion {
 	return laf.f(v)
 }
 
-func (laf *leftArrowFunc) Exec(arg interface{}) (interface{}, error) {
+func (laf *leftArrowFunc) Exec(arg any) (any, error) {
 	assertion, ok := arg.(assert.Assertion)
 	if !ok {
 		return nil, errors.New("argument must be a assert.Assertion")
@@ -74,16 +74,16 @@ func (laf *leftArrowFunc) Exec(arg interface{}) (interface{}, error) {
 	return laf.f(assertion), nil
 }
 
-func (laf *leftArrowFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
-	var i interface{}
+func (laf *leftArrowFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	var i any
 	if err := unmarshal(&i); err != nil {
 		return nil, err
 	}
 	return assert.Build(laf.ctx, i)
 }
 
-func buildArgs(ctx context.Context, base func(...assert.Assertion) assert.Assertion) func(...interface{}) assert.Assertion {
-	return func(args ...interface{}) assert.Assertion {
+func buildArgs(ctx context.Context, base func(...assert.Assertion) assert.Assertion) func(...any) assert.Assertion {
+	return func(args ...any) assert.Assertion {
 		var assertions []assert.Assertion
 		for _, arg := range args {
 			assertion, ok := arg.(assert.Assertion)
@@ -96,18 +96,18 @@ func buildArgs(ctx context.Context, base func(...assert.Assertion) assert.Assert
 	}
 }
 
-type listArgsLeftArrowFunc func(args ...interface{}) assert.Assertion
+type listArgsLeftArrowFunc func(args ...any) assert.Assertion
 
-func (f listArgsLeftArrowFunc) Exec(arg interface{}) (interface{}, error) {
-	assertions, ok := arg.([]interface{})
+func (f listArgsLeftArrowFunc) Exec(arg any) (any, error) {
+	assertions, ok := arg.([]any)
 	if !ok {
 		return nil, errors.New("argument must be a slice of interface{}")
 	}
 	return f(assertions...), nil
 }
 
-func (listArgsLeftArrowFunc) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error) {
-	var args []interface{}
+func (listArgsLeftArrowFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	var args []any
 	if err := unmarshal(&args); err != nil {
 		return nil, err
 	}

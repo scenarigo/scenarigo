@@ -53,13 +53,13 @@ func (p *testProtocol) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, err
 	return &e, nil
 }
 
-type request map[interface{}]interface{}
+type request map[any]any
 
-func (r request) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
+func (r request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	return ctx, nil, nil
 }
 
-type expect map[interface{}]interface{}
+type expect map[any]any
 
 func (e expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	return assert.Build(ctx.RequestContext(), e)
@@ -89,7 +89,7 @@ func TestLoadScenarios(t *testing.T) {
 			path             string
 			opts             []LoadOption
 			scenarios        []*Scenario
-			assertionBuilder interface{}
+			assertionBuilder any
 		}{
 			"valid": {
 				path: "testdata/valid.yaml",
@@ -97,7 +97,7 @@ func TestLoadScenarios(t *testing.T) {
 					{
 						Title:       "echo-service",
 						Description: "check echo-service",
-						Vars:        map[string]interface{}{"message": "hello"},
+						Vars:        map[string]any{"message": "hello"},
 						Steps: []*Step{
 							{
 								ID:          "POST-say_01",
@@ -106,7 +106,7 @@ func TestLoadScenarios(t *testing.T) {
 								Vars:        nil,
 								Protocol:    "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},
@@ -126,7 +126,7 @@ func TestLoadScenarios(t *testing.T) {
 								Vars:        nil,
 								Protocol:    "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},
@@ -150,7 +150,7 @@ func TestLoadScenarios(t *testing.T) {
 					{
 						Title:       "echo-service",
 						Description: "check echo-service",
-						Vars:        map[string]interface{}{"message": "hello"},
+						Vars:        map[string]any{"message": "hello"},
 						Steps: []*Step{
 							{
 								Title:       "POST /say",
@@ -158,7 +158,7 @@ func TestLoadScenarios(t *testing.T) {
 								Vars:        nil,
 								Protocol:    "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},
@@ -182,7 +182,7 @@ func TestLoadScenarios(t *testing.T) {
 					{
 						Title:       "echo-service",
 						Description: "check echo-service",
-						Vars:        map[string]interface{}{"message": "hello"},
+						Vars:        map[string]any{"message": "hello"},
 						Steps: []*Step{
 							{
 								Include: "./valid.yaml",
@@ -198,7 +198,7 @@ func TestLoadScenarios(t *testing.T) {
 					{
 						Title:       "echo-service",
 						Description: "check echo-service",
-						Vars:        map[string]interface{}{"message": "hello"},
+						Vars:        map[string]any{"message": "hello"},
 						Steps: []*Step{
 							{
 								Title:       "POST /say",
@@ -206,7 +206,7 @@ func TestLoadScenarios(t *testing.T) {
 								Vars:        nil,
 								Protocol:    "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},
@@ -231,14 +231,14 @@ func TestLoadScenarios(t *testing.T) {
 					{
 						SchemaVersion: "scenario/v1",
 						Title:         "echo",
-						Vars:          map[string]interface{}{"message": "hello"},
+						Vars:          map[string]any{"message": "hello"},
 						Steps: []*Step{
 							{
 								Title:    "POST /say",
 								Vars:     nil,
 								Protocol: "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},
@@ -275,14 +275,14 @@ func TestLoadScenarios(t *testing.T) {
 					{
 						SchemaVersion: "scenario/v1",
 						Title:         "1",
-						Vars:          map[string]interface{}{"message": "hellohello"},
+						Vars:          map[string]any{"message": "hellohello"},
 						Steps: []*Step{
 							{
 								Title:    "POST /say",
 								Vars:     nil,
 								Protocol: "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},
@@ -302,14 +302,14 @@ func TestLoadScenarios(t *testing.T) {
 					{
 						SchemaVersion: "scenario/v1",
 						Title:         "2",
-						Vars:          map[string]interface{}{"message": "worldworld"},
+						Vars:          map[string]any{"message": "worldworld"},
 						Steps: []*Step{
 							{
 								Title:    "POST /say",
 								Vars:     nil,
 								Protocol: "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},
@@ -518,7 +518,7 @@ steps:
 					{
 						Title:       "echo-service",
 						Description: "check echo-service",
-						Vars:        map[string]interface{}{"message": "hello"},
+						Vars:        map[string]any{"message": "hello"},
 						Steps: []*Step{
 							{
 								Title:       "POST /say",
@@ -526,7 +526,7 @@ steps:
 								Vars:        nil,
 								Protocol:    "test",
 								Request: &request{
-									"body": map[string]interface{}{
+									"body": map[string]any{
 										"message": "{{vars.message}}",
 									},
 								},

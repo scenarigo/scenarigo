@@ -16,7 +16,7 @@ type notDefinedError struct {
 	error
 }
 
-func lookup(ctx context.Context, node ast.Node, data interface{}) (interface{}, error) {
+func lookup(ctx context.Context, node ast.Node, data any) (any, error) {
 	v, err := extract(node, data)
 	if err != nil {
 		return nil, err
@@ -24,7 +24,7 @@ func lookup(ctx context.Context, node ast.Node, data interface{}) (interface{}, 
 	return Execute(ctx, v, data)
 }
 
-func extract(node ast.Node, data interface{}) (interface{}, error) {
+func extract(node ast.Node, data any) (any, error) {
 	q, err := buildQuery(queryutil.New(), node)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create query from AST")

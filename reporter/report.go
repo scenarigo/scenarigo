@@ -269,7 +269,7 @@ func (r TestResult) String() string {
 
 // MarshalJSON implements json.Marshaler interface.
 func (r TestResult) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%q", r.String())), nil
+	return fmt.Appendf(nil, "%q", r.String()), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
@@ -324,7 +324,7 @@ type TestDuration time.Duration
 
 // MarshalJSON implements json.Marshaler interface.
 func (d TestDuration) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%q", time.Duration(d).String())), nil
+	return fmt.Appendf(nil, "%q", time.Duration(d).String()), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.

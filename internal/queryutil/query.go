@@ -54,7 +54,7 @@ type keyExtractor struct {
 }
 
 // ExtractByKey implements the query.KeyExtractorContext interface.
-func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (interface{}, bool) {
+func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, bool) {
 	ci := query.IsCaseInsensitive(ctx)
 	if ci {
 		key = strings.ToLower(key)

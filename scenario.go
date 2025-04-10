@@ -158,7 +158,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 
 func openPlugins(ctx *context.Context, s *schema.Scenario) (*context.Context, setupFuncList) {
 	var setups setupFuncList
-	plugs := map[string]interface{}{}
+	plugs := map[string]any{}
 	for name, path := range s.Plugins {
 		if root := ctx.PluginDir(); root != "" {
 			path = filepath.Join(root, path)

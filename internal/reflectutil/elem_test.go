@@ -8,9 +8,9 @@ import (
 func TestElem(t *testing.T) {
 	s := "test"
 	p := &s
-	var i interface{}
+	var i any
 	tests := map[string]struct {
-		v      interface{}
+		v      any
 		expect reflect.Kind
 	}{
 		"string": {

@@ -10,7 +10,7 @@ import (
 func TestExpect_Build(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		tests := map[string]struct {
-			vars     interface{}
+			vars     any
 			expect   *Expect
 			response response
 		}{

@@ -45,12 +45,12 @@ type Request struct {
 	Target   string          `yaml:"target,omitempty"`
 	Service  string          `yaml:"service,omitempty"`
 	Method   string          `yaml:"method,omitempty"`
-	Metadata interface{}     `yaml:"metadata,omitempty"`
-	Message  interface{}     `yaml:"message,omitempty"`
+	Metadata any             `yaml:"metadata,omitempty"`
+	Message  any             `yaml:"message,omitempty"`
 	Options  *RequestOptions `yaml:"options,omitempty"`
 
 	// for backward compatibility
-	Body interface{} `yaml:"body,omitempty"`
+	Body any `yaml:"body,omitempty"`
 }
 
 // RequestOptions represents request options.
@@ -147,7 +147,7 @@ type TLSOption struct {
 type RequestExtractor request
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (r RequestExtractor) ExtractByKey(key string) (interface{}, bool) {
+func (r RequestExtractor) ExtractByKey(key string) (any, bool) {
 	q := queryutil.New().Key(key)
 	if v, err := q.Extract(request(r)); err == nil {
 		return v, true
@@ -248,7 +248,7 @@ func (s *responseStatus) MarshalYAML(ctx gocontext.Context) ([]byte, error) {
 }
 
 // ExtractByKey implements query.KeyExtractorContext interface.
-func (s *responseStatus) ExtractByKey(ctx gocontext.Context, key string) (interface{}, bool) {
+func (s *responseStatus) ExtractByKey(ctx gocontext.Context, key string) (any, bool) {
 	var opts []query.Option
 	if query.IsCaseInsensitive(ctx) {
 		opts = append(opts, query.CaseInsensitive())
@@ -264,7 +264,7 @@ func (s *responseStatus) ExtractByKey(ctx gocontext.Context, key string) (interf
 type ResponseExtractor response
 
 // ExtractByKey implements query.KeyExtractorContext interface.
-func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (interface{}, bool) {
+func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, bool) {
 	var opts []query.Option
 	if query.IsCaseInsensitive(ctx) {
 		opts = append(opts, query.CaseInsensitive())
@@ -298,7 +298,7 @@ func (r *Request) addIndent(s string, indentNum int) string {
 }
 
 // Invoke implements protocol.Invoker interface.
-func (r *Request) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
+func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	opts := &RequestOptions{}
 	if r.Options != nil {
 		if err := mergo.Merge(opts, r.Options); err != nil {

@@ -13,7 +13,7 @@ const (
 )
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (c *Context) ExtractByKey(key string) (interface{}, bool) {
+func (c *Context) ExtractByKey(key string) (any, bool) {
 	switch key {
 	case nameContext:
 		return c, true

@@ -12,10 +12,10 @@ func TestEqual(t *testing.T) {
 	s := "string"
 	type myString string
 	tests := map[string]struct {
-		expected  interface{}
+		expected  any
 		customEqs []Equaler
-		ok        interface{}
-		ng        interface{}
+		ok        any
+		ng        any
 	}{
 		"nil": {
 			expected: nil,
@@ -99,7 +99,7 @@ func TestEqual(t *testing.T) {
 }
 
 func TestCustomEqualer(t *testing.T) {
-	RegisterCustomEqualer(EqualerFunc(func(a, b interface{}) (bool, error) {
+	RegisterCustomEqualer(EqualerFunc(func(a, b any) (bool, error) {
 		v, ok := a.(int)
 		if !ok {
 			return false, nil
@@ -110,7 +110,7 @@ func TestCustomEqualer(t *testing.T) {
 		}
 		return true, errors.New("custom equaler 1")
 	}))
-	RegisterCustomEqualer(EqualerFunc(func(a, b interface{}) (bool, error) {
+	RegisterCustomEqualer(EqualerFunc(func(a, b any) (bool, error) {
 		v, ok := a.(bool)
 		if !ok {
 			return false, nil
@@ -128,8 +128,8 @@ func TestCustomEqualer(t *testing.T) {
 	}()
 
 	tests := map[string]struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		error    error
 	}{
 		"equal": {
@@ -178,8 +178,8 @@ func TestCustomEqualer(t *testing.T) {
 
 func TestConvert(t *testing.T) {
 	tests := []struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		ok       bool
 	}{
 		{
@@ -234,7 +234,7 @@ func TestConvert(t *testing.T) {
 func TestIsNil(t *testing.T) {
 	s := "string"
 	tests := map[string]struct {
-		v      interface{}
+		v      any
 		expect bool
 	}{
 		"nil": {

@@ -17,7 +17,7 @@ func init() {
 
 var protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
 
-func equalEnum(expected interface{}, got interface{}) (bool, error) {
+func equalEnum(expected any, got any) (bool, error) {
 	s, ok := expected.(string)
 	if !ok {
 		return false, nil
@@ -37,7 +37,7 @@ func equalEnum(expected interface{}, got interface{}) (bool, error) {
 	return false, nil
 }
 
-func equalMessage(expected interface{}, got interface{}) (bool, error) {
+func equalMessage(expected any, got any) (bool, error) {
 	// use the pointer to the value if the pointer type implements proto.Message
 	e, ok, _ := reflectutil.ConvertInterface(protoMessage, expected)
 	if ok {

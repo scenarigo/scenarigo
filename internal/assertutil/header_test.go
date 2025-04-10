@@ -147,8 +147,8 @@ func Test_BuildHeaderAssertion_Error(t *testing.T) {
 
 func Test_Stringify(t *testing.T) {
 	tests := map[string]struct {
-		in     interface{}
-		expect interface{}
+		in     any
+		expect any
 	}{
 		"bool": {
 			in:     true,
@@ -213,8 +213,8 @@ func Test_Stringify(t *testing.T) {
 			},
 		},
 		"[]interface{}": {
-			in:     []interface{}{123},
-			expect: []interface{}{"123"},
+			in:     []any{123},
+			expect: []any{"123"},
 		},
 	}
 	for name, test := range tests {

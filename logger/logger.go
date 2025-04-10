@@ -15,8 +15,8 @@ var (
 
 // Logger represents a logger.
 type Logger interface {
-	Info(msg string, kvs ...interface{})
-	Error(err error, msg string, kvs ...interface{})
+	Info(msg string, kvs ...any)
+	Error(err error, msg string, kvs ...any)
 }
 
 type logger struct {
@@ -51,7 +51,7 @@ const (
 )
 
 // Info logs a non-error message with the given key/value pairs.
-func (l *logger) Info(msg string, kvs ...interface{}) {
+func (l *logger) Info(msg string, kvs ...any) {
 	if l.level > LogLevelInfo {
 		return
 	}
@@ -59,14 +59,14 @@ func (l *logger) Info(msg string, kvs ...interface{}) {
 }
 
 // Error logs an error, with the given message and key/value pairs.
-func (l *logger) Error(err error, msg string, kvs ...interface{}) {
+func (l *logger) Error(err error, msg string, kvs ...any) {
 	if l.level > LogLevelError {
 		return
 	}
 	l.logger.Print(red.Sprintf(`[ERROR] %q "error"=%q%s`, msg, err, flatten(kvs...)))
 }
 
-func flatten(kvs ...interface{}) string {
+func flatten(kvs ...any) string {
 	if len(kvs)%2 != 0 {
 		kvs = append(kvs, "<no-value>")
 	}
