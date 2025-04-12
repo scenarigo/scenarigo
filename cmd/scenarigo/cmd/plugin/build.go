@@ -11,13 +11,13 @@ import (
 	"go/parser"
 	"go/token"
 	goversion "go/version"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,7 +33,6 @@ import (
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
 	"github.com/scenarigo/scenarigo/schema"
 	"github.com/scenarigo/scenarigo/version"
-	"slices"
 )
 
 const (
@@ -146,9 +145,9 @@ func buildRun(cmd *cobra.Command, args []string) error {
 
 func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error {
 	runtimeVersion := runtime.Version()
-	debugLog(cmd.OutOrStderr(), "scenarigo was built with %s", runtimeVersion)
+	debugLog(cmd, "scenarigo was built with %s", runtimeVersion)
 	if !goversion.IsValid(goVer) {
-		warnLog(cmd.OutOrStderr(), "failed to parse the Go version that built scenarigo: %s", runtimeVersion)
+		warnLog(cmd, "failed to parse the Go version that built scenarigo: %s", runtimeVersion)
 	}
 
 	cfg, err := config.Load()
@@ -163,8 +162,8 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 	if err != nil {
 		return err
 	}
-	debugLog(cmd.OutOrStderr(), "found go command: %s", goCmd)
-	debugLog(cmd.OutOrStderr(), "set GOTOOLCHAIN=%s", toolchain)
+	debugLog(cmd, "found go command: %s", goCmd)
+	debugLog(cmd, "set GOTOOLCHAIN=%s", toolchain)
 
 	pbs := make([]*pluginBuilder, 0, cfg.Plugins.Len())
 	pluginModules := map[string]*overrideModule{}
@@ -277,11 +276,19 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 	var src string
 	clean := func() {}
 	if _, err := os.Stat(mod); err != nil {
-		m, s, r, f, err := downloadModule(ctx(cmd), goCmd, item.Value.Src)
+		m, s, r, err := downloadModule(ctx(cmd), goCmd, item.Value.Src)
+		if err != nil {
+			return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
+		}
+		debugLog(cmd, "download %s into %s", item.Value.Src, m)
+
+		m, f, err := copyModule(cmd, m)
 		clean = f
 		if err != nil {
 			return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
 		}
+		debugLog(cmd, "copy %s into %s", item.Value.Src, m)
+
 		mod = m
 		src = s
 		pluginModules[r.Mod.Path] = &overrideModule{
@@ -291,7 +298,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 	}
 	// NOTE: All module names must be unique and different from the standard modules.
 	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, ".so"))
-	pb, err := newPluginBuilder(ctx(cmd), goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
+	pb, err := newPluginBuilder(cmd, goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
 	if err != nil {
 		return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
 	}
@@ -299,6 +306,8 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 	if !opts.skipMigration {
 		// replace zoncoen/scenarigo to scenarigo/scenarigo
 		if _, ok := pb.initialRequires[oldScenarigoModPath]; ok {
+			debugLog(cmd, "replace %s => %s in %s", oldScenarigoModPath, newScenarigoModPath, item.Value.Src)
+
 			fset := token.NewFileSet()
 			if err := filepath.Walk(pb.dir, func(path string, info fs.FileInfo, err error) error {
 				if err != nil {
@@ -315,7 +324,10 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 				if err != nil {
 					return fmt.Errorf("failed to parse file: %w", err)
 				}
-				var inspErr error
+				var (
+					inspErr error
+					found   bool
+				)
 				ast.Inspect(f, func(n ast.Node) bool {
 					if x, ok := n.(*ast.ImportSpec); ok {
 						p, err := strconv.Unquote(x.Path.Value)
@@ -324,6 +336,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 							return false
 						}
 						if strings.HasPrefix(p, oldScenarigoModPath) {
+							found = true
 							x.Path.Value = strconv.Quote(strings.Replace(p, oldScenarigoModPath, newScenarigoModPath, 1))
 						}
 					}
@@ -331,6 +344,9 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 				})
 				if inspErr != nil {
 					return fmt.Errorf("failed to modify import path: %w", err)
+				}
+				if !found {
+					return nil
 				}
 				fd, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, info.Mode())
 				if err != nil {
@@ -342,6 +358,22 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 				return nil
 			}); err != nil {
 				return nil, clean, err
+			}
+
+			if err := pb.editGoMod(cmd, goCmd, func(gomod *modfile.File) error {
+				if err := gomod.DropRequire(oldScenarigoModPath); err != nil {
+					return fmt.Errorf("%s: %w", pb.gomodPath, err)
+				}
+				v := version.String()
+				if strings.HasSuffix(v, "-dev") {
+					v = "latest"
+				}
+				if err := gomod.AddRequire(newScenarigoModPath, v); err != nil {
+					return fmt.Errorf("%s: %w", pb.gomodPath, err)
+				}
+				return nil
+			}); err != nil {
+				return nil, clean, fmt.Errorf("failed to edit require directive: %w", err)
 			}
 		}
 	}
@@ -485,55 +517,27 @@ func checkGoVersion(ctx context.Context, goCmd, minVer string) error {
 	return nil
 }
 
-func downloadModule(ctx context.Context, goCmd, p string) (string, string, *modfile.Require, func(), error) {
-	tempDir, err := os.MkdirTemp("", "scenarigo-plugin-")
+func downloadModule(ctx context.Context, goCmd, p string) (string, string, *modfile.Require, error) {
+	tempDir, err := os.MkdirTemp("", "scenarigo-plugin-gomod-")
 	if err != nil {
-		return "", "", nil, func() {}, fmt.Errorf("failed to create a temporary directory: %w", err)
+		return "", "", nil, fmt.Errorf("failed to create a temporary directory: %w", err)
 	}
-
-	clean := func() {
-		os.RemoveAll(tempDir)
-	}
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
 
 	if _, err := execute(ctx, tempDir, goCmd, "mod", "init", "download_module"); err != nil {
-		return "", "", nil, clean, fmt.Errorf("failed to initialize go.mod: %w", err)
+		return "", "", nil, fmt.Errorf("failed to initialize go.mod: %w", err)
 	}
 	if _, err := execute(ctx, tempDir, goCmd, downloadCmd(p)...); err != nil {
-		return "", "", nil, clean, fmt.Errorf("failed to download %s: %w", p, err)
+		return "", "", nil, fmt.Errorf("failed to download %s: %w", p, err)
 	}
 	mod, src, req, err := modSrcPath(tempDir, p)
 	if err != nil {
-		return "", "", nil, clean, fmt.Errorf("failed to get module path: %w", err)
+		return "", "", nil, fmt.Errorf("failed to get module path: %w", err)
 	}
 
-	clean = func() {
-		os.RemoveAll(tempDir)
-		// The downloaded plugin module should be removed because its go.mod may have been modified.
-		if err := filepath.Walk(mod, func(path string, info fs.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			return os.Chmod(path, 0o777)
-		}); err == nil {
-			os.RemoveAll(mod)
-		}
-	}
-
-	if err := os.Chmod(mod, 0o755); err != nil {
-		return "", "", nil, clean, err
-	}
-	if err := os.Chmod(filepath.Join(mod, "go.mod"), 0o644); err != nil {
-		if !os.IsNotExist(err) {
-			return "", "", nil, clean, err
-		}
-	}
-	if err := os.Chmod(filepath.Join(mod, "go.sum"), 0o644); err != nil {
-		if !os.IsNotExist(err) {
-			return "", "", nil, clean, err
-		}
-	}
-
-	return mod, src, req, clean, nil
+	return mod, src, req, nil
 }
 
 func modSrcPath(tempDir, mod string) (string, string, *modfile.Require, error) {
@@ -567,6 +571,22 @@ func modSrcPath(tempDir, mod string) (string, string, *modfile.Require, error) {
 	return "", "", nil, errors.New("module not found on go.mod")
 }
 
+func copyModule(cmd *cobra.Command, mod string) (string, func(), error) {
+	tempDir, err := os.MkdirTemp("", "scenarigo-plugin-")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("failed to create a temporary directory: %w", err)
+	}
+	clean := func() {
+		os.RemoveAll(tempDir)
+	}
+
+	if err := os.CopyFS(tempDir, os.DirFS(mod)); err != nil {
+		return "", clean, fmt.Errorf("failed to create a temporary directory: %w", err)
+	}
+
+	return tempDir, clean, nil
+}
+
 type pluginBuilder struct {
 	name            string
 	dir             string
@@ -578,7 +598,8 @@ type pluginBuilder struct {
 	out             string
 }
 
-func newPluginBuilder(ctx context.Context, goCmd, name, mod, src, out, defaultModName string) (*pluginBuilder, error) {
+func newPluginBuilder(cmd *cobra.Command, goCmd, name, mod, src, out, defaultModName string) (*pluginBuilder, error) {
+	ctx := ctx(cmd)
 	dir := mod
 	info, err := os.Stat(mod)
 	if err != nil {
@@ -603,7 +624,7 @@ func newPluginBuilder(ctx context.Context, goCmd, name, mod, src, out, defaultMo
 		}
 	}
 
-	if err := modTidy(ctx, dir, goCmd); err != nil {
+	if err := modTidy(cmd, dir, goCmd); err != nil {
 		if ok, verr := asVersionTooHighError(err); ok {
 			err = fmt.Errorf("re-install scenarigo command with go%s: %w", verr.requiredVersion, err)
 		}
@@ -633,9 +654,11 @@ func newPluginBuilder(ctx context.Context, goCmd, name, mod, src, out, defaultMo
 	}, nil
 }
 
-func modTidy(ctx context.Context, dir, goCmd string) error {
-	if cmd := os.Getenv("GO_MOD_TIDY"); cmd != "" {
-		if _, err := execute(ctx, dir, goCmd, strings.Split(cmd, " ")...); err != nil {
+func modTidy(cmd *cobra.Command, dir, goCmd string) error {
+	ctx := ctx(cmd)
+
+	if tidyCmd := os.Getenv("GO_MOD_TIDY"); tidyCmd != "" {
+		if _, err := execute(ctx, dir, goCmd, strings.Split(tidyCmd, " ")...); err != nil {
 			return err
 		}
 		return nil
@@ -657,7 +680,7 @@ func modTidy(ctx context.Context, dir, goCmd string) error {
 			return nil
 		}
 		if i != retry {
-			warnLog(os.Stdout, `"go mod tidy" failed, retry...`)
+			warnLog(cmd, `"go mod tidy" failed, retry...`)
 		}
 		if i > 0 && err.Error() == "" {
 			// attempted retries and got no output
@@ -736,7 +759,7 @@ func (pb *pluginBuilder) updateGoMod(cmd *cobra.Command, goCmd string, overrideK
 	if err := pb.editGoMod(cmd, goCmd, func(gomod *modfile.File) error {
 		if toolchain == toolchainLocal {
 			if gomod.Toolchain != nil {
-				warnLog(cmd.OutOrStdout(), "%s: remove toolchain by scenarigo", pb.name)
+				warnLog(cmd, "%s: remove toolchain by scenarigo", pb.name)
 				gomod.DropToolchainStmt()
 			}
 			return nil
@@ -745,9 +768,9 @@ func (pb *pluginBuilder) updateGoMod(cmd *cobra.Command, goCmd string, overrideK
 		switch compareVers(gomod.Go.Version, toolchain) {
 		case -1: // go.mod < scenarigo go version
 			if gomod.Toolchain == nil {
-				warnLog(cmd.OutOrStdout(), "%s: add toolchain %s by scenarigo", pb.name, toolchain)
+				warnLog(cmd, "%s: add toolchain %s by scenarigo", pb.name, toolchain)
 			} else if gomod.Toolchain.Name != toolchain {
-				warnLog(cmd.OutOrStdout(), "%s: change toolchain %s ==> %s by scenarigo", pb.name, gomod.Toolchain.Name, toolchain)
+				warnLog(cmd, "%s: change toolchain %s ==> %s by scenarigo", pb.name, gomod.Toolchain.Name, toolchain)
 			}
 			if err := gomod.AddToolchainStmt(toolchain); err != nil {
 				return fmt.Errorf("%s: %w", pb.gomodPath, err)
@@ -908,22 +931,22 @@ func printUpdatedRequires(cmd *cobra.Command, name string, overrides map[string]
 			if !diff.new.Indirect {
 				if o := overrides[k]; o != nil {
 					_, requiredBy, _, _ := o.requireReplace()
-					warnLog(cmd.OutOrStdout(), "%s: add require %s %s by %s", name, k, diff.new.Mod.Version, requiredBy)
+					warnLog(cmd, "%s: add require %s %s by %s", name, k, diff.new.Mod.Version, requiredBy)
 				} else {
-					warnLog(cmd.OutOrStdout(), "%s: add require %s %s", name, k, diff.new.Mod.Version)
+					warnLog(cmd, "%s: add require %s %s", name, k, diff.new.Mod.Version)
 				}
 			}
 		case diff.new.Mod.Path == "":
 			if !diff.old.Indirect {
-				warnLog(cmd.OutOrStdout(), "%s: remove require %s %s", name, k, diff.old.Mod.Version)
+				warnLog(cmd, "%s: remove require %s %s", name, k, diff.old.Mod.Version)
 			}
 		case diff.old.Mod.Version != diff.new.Mod.Version:
 			if !diff.old.Indirect || !diff.new.Indirect {
 				if o := overrides[k]; o != nil {
 					_, requiredBy, _, _ := o.requireReplace()
-					warnLog(cmd.OutOrStdout(), "%s: change require %s %s ==> %s by %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version, requiredBy)
+					warnLog(cmd, "%s: change require %s %s ==> %s by %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version, requiredBy)
 				} else {
-					warnLog(cmd.OutOrStdout(), "%s: change require %s %s ==> %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version)
+					warnLog(cmd, "%s: change require %s %s ==> %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version)
 				}
 			}
 		}
@@ -961,21 +984,21 @@ func printUpdatedReplaces(cmd *cobra.Command, name string, overrides map[string]
 				if replace != nil {
 					by = replaceBy
 				}
-				warnLog(cmd.OutOrStdout(), "%s: add replace %s => %s by %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
+				warnLog(cmd, "%s: add replace %s => %s by %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
 			} else {
-				warnLog(cmd.OutOrStdout(), "%s: add replace %s => %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
+				warnLog(cmd, "%s: add replace %s => %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
 			}
 		case diff.new.Old.Path == "":
-			warnLog(cmd.OutOrStdout(), "%s: remove replace %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version))
+			warnLog(cmd, "%s: remove replace %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version))
 		case diff.old.New.Path != diff.new.New.Path || diff.old.New.Version != diff.new.New.Version:
 			if o := overrides[k]; o != nil {
 				_, by, replace, replaceBy := o.requireReplace()
 				if replace != nil {
 					by = replaceBy
 				}
-				warnLog(cmd.OutOrStdout(), "%s: change replace %s => %s ==> %s => %s by %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
+				warnLog(cmd, "%s: change replace %s => %s ==> %s => %s by %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
 			} else {
-				warnLog(cmd.OutOrStdout(), "%s: change replace %s => %s ==> %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
+				warnLog(cmd, "%s: change replace %s => %s ==> %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
 			}
 		}
 	}
@@ -1012,7 +1035,7 @@ func (pb *pluginBuilder) editGoMod(cmd *cobra.Command, goCmd string, edit func(*
 	if _, err := f.Write(edited); err != nil {
 		return fmt.Errorf("failed to edit %s: %w", pb.gomodPath, err)
 	}
-	if err := modTidy(ctx(cmd), filepath.Dir(pb.gomodPath), goCmd); err != nil {
+	if err := modTidy(cmd, filepath.Dir(pb.gomodPath), goCmd); err != nil {
 		return err
 	}
 
@@ -1044,7 +1067,7 @@ func requiredModulesByScenarigo() ([]*modfile.Require, error) {
 	if v := version.String(); !strings.HasSuffix(v, "-dev") {
 		return append([]*modfile.Require{{
 			Mod: module.Version{
-				Path:    "github.com/scenarigo/scenarigo",
+				Path:    newScenarigoModPath,
 				Version: v,
 			},
 		}}, gomod.Require...), nil
@@ -1106,13 +1129,13 @@ func asVersionTooHighError(err error) (bool, *versionTooHighError) {
 	return false, nil
 }
 
-func warnLog(w io.Writer, format string, a ...any) {
-	fmt.Fprintf(w, fmt.Sprintf("%s: %s\n", warnColor.Sprint("WARN"), format), a...)
+func warnLog(cmd *cobra.Command, format string, a ...any) {
+	fmt.Fprintf(cmd.ErrOrStderr(), fmt.Sprintf("%s: %s\n", warnColor.Sprint("WARN"), format), a...)
 }
 
-func debugLog(w io.Writer, format string, a ...any) {
+func debugLog(cmd *cobra.Command, format string, a ...any) {
 	if !verbose {
 		return
 	}
-	fmt.Fprintf(w, fmt.Sprintf("%s: %s\n", debugColor.Sprint("DEBUG"), format), a...)
+	fmt.Fprintf(cmd.ErrOrStderr(), fmt.Sprintf("%s: %s\n", debugColor.Sprint("DEBUG"), format), a...)
 }
