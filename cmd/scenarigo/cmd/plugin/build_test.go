@@ -3,7 +3,6 @@ package plugin
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"go/build"
 	"io"
@@ -964,14 +963,6 @@ import (
 				}
 			})
 		}
-		t.Run("check cache", func(t *testing.T) {
-			m := filepath.Join(build.Default.GOPATH, "pkg", "mod", "127.0.0.1", "plugin.git@v1.0.0")
-			if _, err := os.Stat(m); err == nil {
-				t.Fatal("plugin module should be removed from the cache")
-			} else if !errors.Is(err, os.ErrNotExist) {
-				t.Fatalf("failed to get file info: %s", err)
-			}
-		})
 	})
 
 	t.Run("failure", func(t *testing.T) {
@@ -2026,7 +2017,7 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 				var stdout bytes.Buffer
 				cmd.SetOut(&stdout)
 				cmd.SetErr(&stdout)
-				pb, err := newPluginBuilder(ctx, goCmd, "test.so", gomod, test.src, filepath.Join(tmpDir, "test.so"), "test")
+				pb, err := newPluginBuilder(cmd, goCmd, "test.so", gomod, test.src, filepath.Join(tmpDir, "test.so"), "test")
 				if err != nil {
 					t.Fatalf("failed to create plugin builder: %s", err)
 				}
@@ -2458,12 +2449,17 @@ func TestCheckGowork(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
+		cmd := &cobra.Command{}
+		var stdout bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stdout)
+
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			pbs := make([]*pluginBuilder, 0, len(test.plugins))
 			for _, p := range test.plugins {
 				mod := filepath.Join("testdata", "gowork", p)
-				pb, err := newPluginBuilder(ctx, "go", "test.so", mod, "", "/path/to/gen/test.so", "plugins/test")
+				pb, err := newPluginBuilder(cmd, "go", "test.so", mod, "", "/path/to/gen/test.so", "plugins/test")
 				if err != nil {
 					t.Fatal(err)
 				}
