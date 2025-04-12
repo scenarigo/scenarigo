@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v0.21.2](https://github.com/scenarigo/scenarigo/compare/v0.21.1...v0.21.2) - 2025-04-12
+### Bug Fixes
+- fix auto migration from zoncoen/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/551
+### Code Refactoring
+- simplify code by using modernize command by @zoncoen in https://github.com/scenarigo/scenarigo/pull/550
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/text from 0.23.0 to 0.24.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/546
+- chore(deps): bump google.golang.org/grpc from 1.71.0 to 1.71.1 by @dependabot in https://github.com/scenarigo/scenarigo/pull/544
+- chore(deps): bump indirect modules by @scenarigo-bot in https://github.com/scenarigo/scenarigo/pull/553
+
 ## [v0.21.1](https://github.com/scenarigo/scenarigo/compare/v0.21.0...v0.21.1) - 2025-03-31
 ### Dependency Upgrades
 - Update goccy/go-yaml to v1.17.1 by @goccy in https://github.com/scenarigo/scenarigo/pull/542
