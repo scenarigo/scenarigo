@@ -1,0 +1,49 @@
+name: bump indirect modules
+on:
+  schedule:
+    - cron: "0 0 3 * * *"
+  workflow_dispatch:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Install Go
+      id: setup-go
+      uses: actions/setup-go@v5
+      with:
+        go-version: stable
+        check-latest: true
+        cache: false
+    - uses: actions/cache/restore@v4.2.3
+      id: go-cache
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-ubuntu-latest-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          go-${{ steps.setup-go.outputs.go-version }}-
+    - name: Bump indirect modules
+      run: ./scripts/bump-indirect-modules.sh || true && go mod tidy
+    - name: Show diff
+      run: git add -N . && git diff
+    - name: Generate token
+      id: generate_token
+      uses: tibdex/github-app-token@v2.1.0
+      with:
+        app_id: ${{ secrets.WRITE_APP_ID }}
+        private_key: ${{ secrets.WRITE_PRIVATE_KEY }}
+    - name: Create pull request
+      uses: peter-evans/create-pull-request@v7
+      with:
+        token: ${{ steps.generate_token.outputs.token }}
+        commit-message: 'chore(deps): bump indirect modules'
+        branch: bump-indirect-modules
+        base: main
+        sign-commits: true
+        title: 'chore(deps): bump indirect modules'
+        body: ''
+        labels: dependencies
+        reviewers: zoncoen
