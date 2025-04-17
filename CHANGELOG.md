@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [v0.21.3](https://github.com/scenarigo/scenarigo/compare/v0.21.2...v0.21.3) - 2025-04-17
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/net from 0.36.0 to 0.38.0 in /examples/grpc/plugin/src by @dependabot in https://github.com/scenarigo/scenarigo/pull/556
+
 ## [v0.21.2](https://github.com/scenarigo/scenarigo/compare/v0.21.1...v0.21.2) - 2025-04-12
 ### Bug Fixes
 - fix auto migration from zoncoen/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/551
