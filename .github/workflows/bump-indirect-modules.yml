@@ -4,7 +4,7 @@ on:
   - cron: '0 3 * * *'
   workflow_dispatch:
 jobs:
-  lint:
+  bump-indirect-modules:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
