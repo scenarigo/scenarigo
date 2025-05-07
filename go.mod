@@ -26,8 +26,8 @@ require (
 	golang.org/x/mod v0.24.0
 	golang.org/x/sync v0.13.0
 	golang.org/x/text v0.24.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f
-	google.golang.org/grpc v1.71.1
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a
+	google.golang.org/grpc v1.72.0
 	google.golang.org/protobuf v1.36.6
 )
 

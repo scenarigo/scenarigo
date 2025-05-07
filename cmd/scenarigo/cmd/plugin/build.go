@@ -58,8 +58,9 @@ func init() {
 func parseGoVersion(ver string) (string, string) {
 	tc := ver
 	// gotip
-	if strings.HasPrefix(ver, "devel ") {
-		ver = strings.Split(strings.TrimPrefix(ver, "devel "), "-")[0]
+	// e.g., go1.25-devel_dad4f399 Tue May 6 13:41:19 2025 -0700
+	if v, ok := isGotip(ver); ok {
+		ver = v
 		tc = toolchainLocal
 	}
 	// workaround for weird environments (e.g., go1.23.2 X:rangefunc)
@@ -72,6 +73,13 @@ func parseGoVersion(ver string) (string, string) {
 		}
 	}
 	return ver, tc
+}
+
+func isGotip(v string) (string, bool) {
+	if strings.Contains(v, "devel") {
+		return strings.Split(v, "-")[0], true
+	}
+	return "", false
 }
 
 var (
@@ -503,11 +511,16 @@ func checkGoVersion(ctx context.Context, goCmd, minVer string) error {
 	}
 	items := strings.Split(stdout.String(), " ")
 	if len(items) != 4 {
-		if len(items) > 4 && items[2] == "devel" {
+		if len(items) > 4 {
 			// gotip
-			items[2] = strings.Split(items[3], "-")[0]
+			// e.g., go version go1.25-devel_30b2b76 Tue May 6 09:59:00 2025 -0700 darwin/arm64
+			if v, ok := isGotip(items[2]); ok {
+				items[2] = v
+			} else {
+				return fmt.Errorf("invalid version output or scenarigo bug: %s", stdout.String())
+			}
 		} else {
-			return errors.New("invalid version output or scenarigo bug")
+			return fmt.Errorf("invalid version output or scenarigo bug: %s", stdout.String())
 		}
 	}
 	ver := strings.TrimPrefix(items[2], "go")

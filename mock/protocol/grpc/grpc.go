@@ -11,6 +11,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/scenarigo/scenarigo/logger"
@@ -107,7 +108,9 @@ func (s *server) setup() (func() error, error) {
 	}
 	s.addr = ln.Addr().String()
 	s.srv = grpc.NewServer()
-	healthpb.RegisterHealthServer(s.srv, &healthServer{})
+	healthSrv := health.NewServer()
+	healthSrv.SetServingStatus(healthpb.Health_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_NOT_SERVING)
+	healthpb.RegisterHealthServer(s.srv, healthSrv)
 	names, err := s.resolver.ListServices()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get service descriptor: %w", err)
@@ -120,6 +123,9 @@ func (s *server) setup() (func() error, error) {
 		s.srv.RegisterService(s.convertToServicDesc(sd), nil)
 	}
 	return func() error {
+		healthSrv.Resume()
+		defer healthSrv.Shutdown()
+
 		if err := s.srv.Serve(ln); err != nil {
 			if !errors.Is(err, grpc.ErrServerStopped) {
 				return err
@@ -167,7 +173,7 @@ func (s *server) wait(ctx context.Context) error {
 				return err
 			}
 			resp, err := client.Check(ctx, &healthpb.HealthCheckRequest{
-				Service: "grpc.health.v1",
+				Service: healthpb.Health_ServiceDesc.ServiceName,
 			})
 			if err == nil {
 				if resp.GetStatus() == healthpb.HealthCheckResponse_SERVING {

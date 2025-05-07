@@ -57,9 +57,9 @@ func TestParseGoVersion(t *testing.T) {
 			expect:          "go1.2.3",
 			expectToolchain: "go1.2.3",
 		},
-		"devel go1.24-76f320836": {
-			version:         "devel go1.24-76f320836",
-			expect:          "go1.24",
+		"go1.25-devel_30b2b76": {
+			version:         "go1.25-devel_30b2b76",
+			expect:          "go1.25",
 			expectToolchain: "local",
 		},
 		"go1.23.2 X:rangefunc": {
