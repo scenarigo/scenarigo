@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	carvel.dev/ytt v0.50.0
-	dario.cat/mergo v1.0.1
+	dario.cat/mergo v1.0.2
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fatih/color v1.18.0
