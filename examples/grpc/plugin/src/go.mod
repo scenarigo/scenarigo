@@ -6,7 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/scenarigo/scenarigo v0.21.2
-	google.golang.org/grpc v1.72.1
+	google.golang.org/grpc v1.72.2
 	google.golang.org/protobuf v1.36.6
 )
 
