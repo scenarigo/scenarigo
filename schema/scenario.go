@@ -4,9 +4,11 @@ package schema
 import (
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/goccy/go-yaml/ast"
 
+	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/protocol"
 )
@@ -174,6 +176,29 @@ func (s *Step) UnmarshalYAML(unmarshal func(any) error) error {
 	s.Expect = builder
 
 	return nil
+}
+
+func (s *Step) ToCurrentStep(idx int) *context.CurrentStep {
+	return &context.CurrentStep{
+		Index:                   idx,
+		ID:                      s.ID,
+		Title:                   s.Title,
+		Description:             s.Description,
+		If:                      s.If,
+		ContinueOnError:         s.ContinueOnError,
+		Vars:                    s.Vars,
+		Secrets:                 s.Secrets,
+		Protocol:                s.Protocol,
+		Request:                 s.Request,
+		Expect:                  s.Expect,
+		Include:                 s.Include,
+		Ref:                     s.Ref,
+		BindVars:                s.Bind.Vars,
+		BindSecrets:             s.Bind.Secrets,
+		Timeout:                 (*time.Duration)(s.Timeout),
+		PostTimeoutWaitingLimit: (*time.Duration)(s.PostTimeoutWaitingLimit),
+		Retry:                   s.Retry,
+	}
 }
 
 // Bind represents bindings of variables.

@@ -21,6 +21,7 @@ type (
 	keyResponse         struct{}
 	keyYAMLNode         struct{}
 	keyEnabledColor     struct{}
+	keyCurrentStep      struct{}
 )
 
 // Context represents a scenarigo context.
@@ -278,6 +279,24 @@ func (c *Context) EnabledColor() bool {
 		return enabledColor
 	}
 	return false
+}
+
+// CurrentStep returns the current running step.
+func (c *Context) CurrentStep() *CurrentStep {
+	currentStep, ok := c.ctx.Value(keyCurrentStep{}).(*CurrentStep)
+	if ok {
+		return currentStep
+	}
+	return nil
+}
+
+// With CurrentStep returns a copy of c with current step.
+func (c *Context) WithCurrentStep(currentStep *CurrentStep) *Context {
+	return newContext(
+		context.WithValue(c.ctx, keyCurrentStep{}, currentStep),
+		c.reqCtx,
+		c.reporter,
+	)
 }
 
 // Run runs f as a subtest of c called name.
