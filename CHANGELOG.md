@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v0.21.3](https://github.com/scenarigo/scenarigo/compare/v0.21.2...v0.21.3) - 2025-06-02
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/net from 0.36.0 to 0.38.0 in /examples/grpc/plugin/src by @dependabot in https://github.com/scenarigo/scenarigo/pull/556
+- chore(deps): bump google.golang.org/grpc from 1.71.1 to 1.72.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/557
+- chore(deps): bump golang.org/x/sync from 0.13.0 to 0.14.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/559
+- chore(deps): bump golang.org/x/text from 0.24.0 to 0.25.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/560
+- chore(deps): bump dario.cat/mergo from 1.0.1 to 1.0.2 by @dependabot in https://github.com/scenarigo/scenarigo/pull/561
+- chore(deps): bump indirect modules by @scenarigo-bot in https://github.com/scenarigo/scenarigo/pull/558
+- chore(deps): bump google.golang.org/grpc from 1.72.0 to 1.72.1 by @dependabot in https://github.com/scenarigo/scenarigo/pull/562
+- chore(deps): bump github.com/goccy/go-yaml from 1.17.1 to 1.18.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/564
+- chore(deps): bump google.golang.org/grpc from 1.72.1 to 1.72.2 by @dependabot in https://github.com/scenarigo/scenarigo/pull/563
+
 ## [v0.21.2](https://github.com/scenarigo/scenarigo/compare/v0.21.1...v0.21.2) - 2025-04-12
 ### Bug Fixes
 - fix auto migration from zoncoen/scenarigo by @zoncoen in https://github.com/scenarigo/scenarigo/pull/551
