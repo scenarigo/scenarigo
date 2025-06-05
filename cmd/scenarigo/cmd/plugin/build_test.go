@@ -119,7 +119,16 @@ go %s
 	if err != nil {
 		t.Fatalf("failed to find go command: %s", err)
 	}
-	setupGitServer(t, goCmd)
+
+	// Get Go version for WASM test
+	var stdout bytes.Buffer
+	cmd := exec.Command(goCmd, "version")
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to get Go version: %s", err)
+	}
+	ver := strings.TrimPrefix(strings.Split(stdout.String(), " ")[2], "go")
+	isGo124OrHigher := compareVers(ver, "1.24") >= 0
 
 	t.Cleanup(func() {
 		cache := filepath.Join(build.Default.GOPATH, "pkg", "mod", "127.0.0.1")
@@ -146,6 +155,7 @@ go %s
 			expectGoMod       map[string]string
 			fileValidator     map[string]func(s string) error
 			skipOpen          bool
+			skipIf            func() bool
 		}{
 			"no plugins": {
 				config: `
@@ -914,11 +924,51 @@ import (
 				},
 				skipOpen: true,
 			},
+			"build as wasm": {
+				config: `
+schemaVersion: config/v1
+plugins:
+  plugin.wasm:
+    src: src/main.go
+`,
+				files: map[string]string{
+					"src/main.go": pluginCode,
+				},
+				opts: buildOpts{
+					skipMigration: true,
+					wasm:          true,
+				},
+				expectPluginPaths: []string{"plugin.wasm"},
+				expectGoMod: map[string]string{
+					"src/go.mod": gomod("plugins/plugin"),
+				},
+				fileValidator: map[string]func(s string) error{
+					"plugin.wasm": func(s string) error {
+						// Check if the file is a valid WASM file
+						if len(s) < 8 {
+							return fmt.Errorf("file too small to be a valid WASM file")
+						}
+						// WASM files start with \0asm
+						if s[0] != 0 || s[1] != 'a' || s[2] != 's' || s[3] != 'm' {
+							return fmt.Errorf("not a valid WASM file")
+						}
+						return nil
+					},
+				},
+				skipOpen: true,
+				skipIf: func() bool {
+					return !isGo124OrHigher
+				},
+			},
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {
+				if test.skipIf != nil && test.skipIf() {
+					t.Skip("skipping test due to condition")
+				}
 				tmpDir := t.TempDir()
 				configPath := filepath.Join(tmpDir, config.DefaultConfigFileName)
+
 				create(t, configPath, test.config)
 				for p, content := range test.files {
 					create(t, filepath.Join(tmpDir, p), content)
@@ -971,6 +1021,8 @@ import (
 			files     map[string]string
 			envGowork string
 			expect    string
+			opts      buildOpts
+			skipIf    func() bool
 		}{
 			"no config": {
 				config: "",
@@ -1291,9 +1343,30 @@ plugins:
 				envGowork: "go.work",
 				expect:    "no such file or directory",
 			},
+			"wasm build with go < 1.24": {
+				config: `
+schemaVersion: config/v1
+plugins:
+  plugin.wasm:
+    src: src/main.go
+`,
+				files: map[string]string{
+					"src/main.go": pluginCode,
+				},
+				opts: buildOpts{
+					wasm: true,
+				},
+				expect: "WASM build requires Go 1.24 or higher",
+				skipIf: func() bool {
+					return isGo124OrHigher
+				},
+			},
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {
+				if test.skipIf != nil && test.skipIf() {
+					t.Skip("skipping test due to condition")
+				}
 				tmpDir := t.TempDir()
 				var configPath string
 				if test.config != "" {
@@ -1308,7 +1381,7 @@ plugins:
 				}
 				cmd := &cobra.Command{}
 				config.ConfigPath = configPath
-				err := buildRun(cmd, []string{})
+				err := buildRunWithOpts(cmd, []string{}, &test.opts)
 				if err == nil {
 					t.Fatal("no error")
 				}
@@ -2487,6 +2560,130 @@ func TestCheckGowork(t *testing.T) {
 			}
 			if got != expect {
 				t.Errorf("expect %q but got %q", expect, got)
+			}
+		})
+	}
+}
+
+func TestWasmBuild(t *testing.T) {
+	pluginCode := `package main
+
+func Greet() string {
+	return "Hello, world!"
+}
+`
+
+	// Get Go version
+	goCmd, err := findGoCmd(context.Background())
+	if err != nil {
+		t.Fatalf("failed to find go command: %s", err)
+	}
+
+	var stdout bytes.Buffer
+	cmd := exec.Command(goCmd, "version")
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to get Go version: %s", err)
+	}
+	ver := strings.TrimPrefix(strings.Split(stdout.String(), " ")[2], "go")
+	isGo124OrHigher := compareVers(ver, "1.24") >= 0
+
+	tests := map[string]struct {
+		config    string
+		files     map[string]string
+		opts      buildOpts
+		expectErr string
+		skipIf    func() bool
+	}{
+		"success with go 1.24+": {
+			config: `
+schemaVersion: config/v1
+plugins:
+  plugin.wasm:
+    src: src/main.go
+`,
+			files: map[string]string{
+				"src/main.go": pluginCode,
+			},
+			opts: buildOpts{
+				wasm:          true,
+				skipMigration: true,
+			},
+			skipIf: func() bool {
+				return !isGo124OrHigher
+			},
+		},
+		"error with go < 1.24": {
+			config: `
+schemaVersion: config/v1
+plugins:
+  plugin.wasm:
+    src: src/main.go
+`,
+			files: map[string]string{
+				"src/main.go": pluginCode,
+			},
+			opts: buildOpts{
+				wasm:          true,
+				skipMigration: true,
+			},
+			expectErr: "WASM build requires Go 1.24 or higher",
+			skipIf: func() bool {
+				return isGo124OrHigher
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if test.skipIf != nil && test.skipIf() {
+				t.Skip("skipping test due to condition")
+			}
+
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, config.DefaultConfigFileName)
+			create(t, configPath, test.config)
+			for p, content := range test.files {
+				create(t, filepath.Join(tmpDir, p), content)
+			}
+
+			cmd := &cobra.Command{}
+			config.ConfigPath = configPath
+			err := buildRunWithOpts(cmd, []string{}, &test.opts)
+
+			if test.expectErr != "" {
+				if err == nil {
+					t.Fatal("expected error but got nil")
+				}
+				if !strings.Contains(err.Error(), test.expectErr) {
+					t.Fatalf("expected error %q but got %q", test.expectErr, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// Verify WASM file
+			wasmPath := filepath.Join(tmpDir, "plugin.wasm")
+			if _, err := os.Stat(wasmPath); err != nil {
+				t.Fatalf("WASM file not found: %v", err)
+			}
+
+			// Check if the file is a valid WASM file
+			content, err := os.ReadFile(wasmPath)
+			if err != nil {
+				t.Fatalf("failed to read WASM file: %v", err)
+			}
+			if len(content) < 8 {
+				t.Fatal("WASM file too small")
+			}
+			// Debug output
+			t.Logf("WASM file first 8 bytes: %v", content[:8])
+			// WASM files start with \0asm
+			if content[0] != 0 || content[1] != 'a' || content[2] != 's' || content[3] != 'm' {
+				t.Fatal("not a valid WASM file")
 			}
 		})
 	}

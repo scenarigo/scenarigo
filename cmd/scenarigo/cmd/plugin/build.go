@@ -85,6 +85,7 @@ func isGotip(v string) (string, bool) {
 var (
 	verbose       bool
 	skipMigration bool
+	wasm          bool
 )
 
 func newBuildCmd() *cobra.Command {
@@ -103,6 +104,7 @@ This command requires go command in $PATH.
 	}
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
 	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "skip migration")
+	cmd.Flags().BoolVarP(&wasm, "wasm", "", false, "build as WebAssembly")
 	return cmd
 }
 
@@ -143,11 +145,13 @@ func (o *overrideModule) requireReplace() (*modfile.Require, string, *modfile.Re
 
 type buildOpts struct {
 	skipMigration bool
+	wasm          bool
 }
 
 func buildRun(cmd *cobra.Command, args []string) error {
 	return buildRunWithOpts(cmd, args, &buildOpts{
 		skipMigration: skipMigration,
+		wasm:          wasm,
 	})
 }
 
@@ -235,7 +239,7 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 
 		var retry bool
 		for _, pb := range pbs {
-			if err := pb.build(cmd, goCmd, overrideKeys, overrides, goworkPath, gowork); err != nil {
+			if err := pb.build(cmd, goCmd, overrideKeys, overrides, goworkPath, gowork, opts); err != nil {
 				var re *retriableError
 				if errors.As(err, &re) {
 					msg := fmt.Sprintf("%s: %s", pb.name, err)
@@ -716,7 +720,7 @@ func getInitialState(gomod *modfile.File) (map[string]modfile.Require, map[strin
 	return initialRequires, initialReplaces
 }
 
-func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule, goworkPath string, gowork []byte) error {
+func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule, goworkPath string, gowork []byte, opts *buildOpts) error {
 	ctx := ctx(cmd)
 	if err := pb.updateGoMod(cmd, goCmd, overrideKeys, overrides); err != nil {
 		return err
@@ -741,8 +745,28 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 			return fmt.Errorf(`"go work use ." failed: %w`, err)
 		}
 	}
-	if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
-		return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
+
+	if opts != nil && opts.wasm {
+		// Check if Go version is 1.24 or higher
+		var stdout bytes.Buffer
+		cmd := exec.CommandContext(ctx, goCmd, "version")
+		cmd.Stdout = &stdout
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to get Go version: %w", err)
+		}
+		ver := strings.TrimPrefix(strings.Split(stdout.String(), " ")[2], "go")
+		if compareVers(ver, "1.24") < 0 {
+			return fmt.Errorf("WASM build requires Go 1.24 or higher, but using %s", ver)
+		}
+		envs = append(envs, "GOOS=wasip1", "GOARCH=wasm")
+		// For WASM build, we don't use -buildmode=plugin
+		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-o", pb.out, pb.src); err != nil {
+			return fmt.Errorf(`"go build -o %s %s" failed: %w`, pb.out, pb.src, err)
+		}
+	} else {
+		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
+			return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
+		}
 	}
 	return nil
 }
