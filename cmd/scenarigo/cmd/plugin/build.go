@@ -28,6 +28,8 @@ import (
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
 
+	"io"
+
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
@@ -747,7 +749,7 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 	}
 
 	if opts != nil && opts.wasm {
-		// Check if Go version is 1.24 or higher
+		// Check Go version
 		var stdout bytes.Buffer
 		cmd := exec.CommandContext(ctx, goCmd, "version")
 		cmd.Stdout = &stdout
@@ -758,15 +760,63 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 		if compareVers(ver, "1.24") < 0 {
 			return fmt.Errorf("WASM build requires Go 1.24 or higher, but using %s", ver)
 		}
+
+		// Create temp dir
+		tempDir, err := os.MkdirTemp("", "scenarigo-wasm-")
+		if err != nil {
+			return fmt.Errorf("failed to create temp dir: %w", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		// Copy plugin source
+		err = filepath.Walk(pb.dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(pb.dir, path)
+			dst := filepath.Join(tempDir, rel)
+			if info.IsDir() {
+				return os.MkdirAll(dst, info.Mode())
+			}
+			if strings.HasSuffix(path, ".go") {
+				return copyFile(path, dst, info.Mode())
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to copy plugin source: %w", err)
+		}
+
+		// Extract symbols & generate main.go
+		symbols, err := extractExportedSymbols(tempDir)
+		if err != nil {
+			return fmt.Errorf("failed to extract exported symbols: %w", err)
+		}
+		if err := createWasmMainFile(tempDir, symbols); err != nil {
+			return fmt.Errorf("failed to create main.go: %w", err)
+		}
+
+		// Copy go.mod and go.sum if they exist
+		gomodDst := filepath.Join(tempDir, "go.mod")
+		if err := copyFile(pb.gomodPath, gomodDst, 0644); err != nil {
+			return fmt.Errorf("failed to copy go.mod: %w", err)
+		}
+		sumPath := filepath.Join(filepath.Dir(pb.gomodPath), "go.sum")
+		if _, err := os.Stat(sumPath); err == nil {
+			if err := copyFile(sumPath, filepath.Join(tempDir, "go.sum"), 0644); err != nil {
+				return fmt.Errorf("failed to copy go.sum: %w", err)
+			}
+		}
+
 		envs = append(envs, "GOOS=wasip1", "GOARCH=wasm")
-		// For WASM build, we don't use -buildmode=plugin
-		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-o", pb.out, pb.src); err != nil {
-			return fmt.Errorf(`"go build -o %s %s" failed: %w`, pb.out, pb.src, err)
+		if _, err := executeWithEnvs(ctx, envs, tempDir, goCmd, "build", "-o", pb.out); err != nil {
+			return fmt.Errorf(`"go build -o %s" failed: %w`, pb.out, err)
 		}
-	} else {
-		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
-			return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
-		}
+		return nil
+	}
+
+	if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
+		return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
 	}
 	return nil
 }
@@ -1175,4 +1225,65 @@ func debugLog(cmd *cobra.Command, format string, a ...any) {
 		return
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), fmt.Sprintf("%s: %s\n", debugColor.Sprint("DEBUG"), format), a...)
+}
+
+// copyFile copies a file from src to dst with the given mode.
+func copyFile(src, dst string, mode fs.FileMode) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+	_, err = io.Copy(dstFile, srcFile)
+	return err
+}
+
+// extractExportedSymbols extracts exported function and variable names from Go files in dir.
+func extractExportedSymbols(dir string) ([]string, error) {
+	var symbols []string
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				switch d := decl.(type) {
+				case *ast.FuncDecl:
+					if d.Recv == nil && d.Name.IsExported() {
+						symbols = append(symbols, d.Name.Name)
+					}
+				case *ast.GenDecl:
+					if d.Tok == token.VAR {
+						for _, spec := range d.Specs {
+							if vs, ok := spec.(*ast.ValueSpec); ok {
+								for _, name := range vs.Names {
+									if name.IsExported() {
+										symbols = append(symbols, name.Name)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return symbols, nil
+}
+
+// createWasmMainFile generates a main.go that prints all exported symbols.
+func createWasmMainFile(dir string, symbols []string) error {
+	mainContent := "package main\nimport \"fmt\"\nfunc main() {\n"
+	for _, s := range symbols {
+		mainContent += fmt.Sprintf("\tfmt.Println(\"%s\")\n", s)
+	}
+	mainContent += "}\n"
+	return os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainContent), 0644)
 }
