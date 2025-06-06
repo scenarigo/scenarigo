@@ -67,8 +67,8 @@ github.com/zoncoen/query-go v1.3.2 h1:7gE0EYEmbHPlZC4becyLQZSE6iIQuUyfomvCEvtGB+
 github.com/zoncoen/query-go v1.3.2/go.mod h1:Al1T6+Jinwu1bzZ7puVTlCr+r6qVAZ7YLer3cIqG7+I=
 github.com/zoncoen/query-go/extractor/yaml v0.2.2 h1:+A85j5FtJh7I22yGx9GbHGN+S3z6b9T2leS7cPAROAM=
 github.com/zoncoen/query-go/extractor/yaml v0.2.2/go.mod h1:UwIFSsTCSpoVMzAR2Egif/7u0tUimmhBpnC2WGDRn44=
-golang.org/x/mod v0.24.0 h1:ZfthKaKaT4NrhGVZHO1/WDTwGES4De8KtWO0SIbNJMU=
-golang.org/x/mod v0.24.0/go.mod h1:IXM97Txy2VM4PJ3gI61r1YEk/gAj6zAHN3AdZt6S9Ww=
+golang.org/x/mod v0.25.0 h1:n7a+ZbQKQA/Ysbyb0/6IbB1H/X41mKgbhfv7AfG/44w=
+golang.org/x/mod v0.25.0/go.mod h1:IXM97Txy2VM4PJ3gI61r1YEk/gAj6zAHN3AdZt6S9Ww=
 golang.org/x/net v0.40.0 h1:79Xs7wF06Gbdcg4kdCCIQArK11Z1hr5POQ6+fIYHNuY=
 golang.org/x/net v0.40.0/go.mod h1:y0hY0exeL2Pku80/zKK7tpntoX23cqL3Oa6njdgRtds=
 golang.org/x/sync v0.15.0 h1:KWH3jNZsfyT6xfAfKiz6MRNmd46ByHDYaZ7KSkCtdW8=
