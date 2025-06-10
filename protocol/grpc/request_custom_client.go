@@ -40,7 +40,6 @@ func newCustomServiceClient(r *Request, v reflect.Value) (*customServiceClient, 
 			return nil, errors.ErrorPathf("method", `method "%s.%s" not found`, r.Client, r.Method)
 		}
 	}
-
 	if err := validateMethod(method); err != nil {
 		return nil, errors.ErrorPathf("method", `"%s.%s" must be "func(context.Context, proto.Message, ...grpc.CallOption) (proto.Message, error): %s"`, r.Client, r.Method, err)
 	}
@@ -71,7 +70,6 @@ func (client *customServiceClient) invoke(ctx gocontext.Context, reqMsg proto.Me
 	for _, o := range opts {
 		in = append(in, reflect.ValueOf(o))
 	}
-
 	rvalues := client.method.Call(in)
 	if len(rvalues) != 2 {
 		return nil, nil, errors.Errorf("expected return value length of method call is 2 but %d", len(rvalues))

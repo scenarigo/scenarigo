@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 
@@ -111,6 +112,7 @@ var (
 )
 
 func createClients(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+	fmt.Println("called createClients")
 	cc, err := grpc.NewClient(ServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		ctx.Reporter().Fatalf("failed to create Ping client: %s", err)

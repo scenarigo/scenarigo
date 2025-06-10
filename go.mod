@@ -11,6 +11,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fatih/color v1.18.0
 	github.com/goccy/go-yaml v1.18.0
+	github.com/goccy/wasi-go v0.2.0
 	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/go-multierror v1.1.1
@@ -20,6 +21,7 @@ require (
 	github.com/sergi/go-diff v1.3.1
 	github.com/sosedoff/gitkit v0.4.0
 	github.com/spf13/cobra v1.9.1
+	github.com/tetratelabs/wazero v1.9.0
 	github.com/zoncoen/query-go v1.3.2
 	github.com/zoncoen/query-go/extractor/protobuf v0.1.4
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2
@@ -41,6 +43,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
+	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect

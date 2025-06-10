@@ -761,55 +761,18 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 			return fmt.Errorf("WASM build requires Go 1.24 or higher, but using %s", ver)
 		}
 
-		// Create temp dir
-		tempDir, err := os.MkdirTemp("", "scenarigo-wasm-")
-		if err != nil {
-			return fmt.Errorf("failed to create temp dir: %w", err)
-		}
-		defer os.RemoveAll(tempDir)
-
-		// Copy plugin source
-		err = filepath.Walk(pb.dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			rel, _ := filepath.Rel(pb.dir, path)
-			dst := filepath.Join(tempDir, rel)
-			if info.IsDir() {
-				return os.MkdirAll(dst, info.Mode())
-			}
-			if strings.HasSuffix(path, ".go") {
-				return copyFile(path, dst, info.Mode())
-			}
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("failed to copy plugin source: %w", err)
-		}
-
 		// Extract symbols & generate main.go
-		symbols, err := extractExportedSymbols(tempDir)
+		symbols, err := extractExportedSymbols(pb.dir)
 		if err != nil {
 			return fmt.Errorf("failed to extract exported symbols: %w", err)
 		}
-		if err := createWasmMainFile(tempDir, symbols); err != nil {
-			return fmt.Errorf("failed to create main.go: %w", err)
-		}
-
-		// Copy go.mod and go.sum if they exist
-		gomodDst := filepath.Join(tempDir, "go.mod")
-		if err := copyFile(pb.gomodPath, gomodDst, 0644); err != nil {
-			return fmt.Errorf("failed to copy go.mod: %w", err)
-		}
-		sumPath := filepath.Join(filepath.Dir(pb.gomodPath), "go.sum")
-		if _, err := os.Stat(sumPath); err == nil {
-			if err := copyFile(sumPath, filepath.Join(tempDir, "go.sum"), 0644); err != nil {
-				return fmt.Errorf("failed to copy go.sum: %w", err)
-			}
-		}
+		//		if err := createWasmMainFile(tempDir, symbols); err != nil {
+		//			return fmt.Errorf("failed to create main.go: %w", err)
+		//		}
+		_ = symbols
 
 		envs = append(envs, "GOOS=wasip1", "GOARCH=wasm")
-		if _, err := executeWithEnvs(ctx, envs, tempDir, goCmd, "build", "-o", pb.out); err != nil {
+		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=c-shared", "-o", pb.out); err != nil {
 			return fmt.Errorf(`"go build -o %s" failed: %w`, pb.out, err)
 		}
 		return nil
