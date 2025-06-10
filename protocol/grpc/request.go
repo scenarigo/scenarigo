@@ -382,7 +382,7 @@ type serviceClient interface {
 
 type WasmPluginGRPCClient interface {
 	ExistsMethod(method string) bool
-	BuildRequestMessage(method string, params any) (proto.Message, error)
+	BuildRequestMessage(method string, params []byte) (proto.Message, error)
 	Invoke(method string, req proto.Message) (proto.Message, *status.Status, error)
 }
 

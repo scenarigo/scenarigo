@@ -6,18 +6,29 @@ import (
 
 // SerializableReporter represents a serializable version of reporter struct
 type SerializableReporter struct {
-	Name                 string                  `json:"name"`
-	GoTestName           string                  `json:"goTestName"`
-	Depth                int                     `json:"depth"`
-	Failed               bool                    `json:"failed"`
-	Skipped              bool                    `json:"skipped"`
-	IsParallel           bool                    `json:"isParallel"`
-	Logs                 []string                `json:"logs,omitempty"`
-	Duration             time.Duration           `json:"duration"`
-	Children             []*SerializableReporter `json:"children,omitempty"`
-	Testing              bool                    `json:"testing"`
-	Retryable            bool                    `json:"retryable"`
-	NoFailurePropagation bool                    `json:"noFailurePropagation"`
+	Name                 string                   `json:"name"`
+	GoTestName           string                   `json:"goTestName"`
+	Depth                int                      `json:"depth"`
+	Failed               bool                     `json:"failed"`
+	Skipped              bool                     `json:"skipped"`
+	IsParallel           bool                     `json:"isParallel"`
+	Logs                 []string                 `json:"logs,omitempty"`
+	Duration             time.Duration            `json:"duration"`
+	Children             []*SerializableReporter  `json:"children,omitempty"`
+	Testing              bool                     `json:"testing"`
+	Retryable            bool                     `json:"retryable"`
+	NoFailurePropagation bool                     `json:"noFailurePropagation"`
+	Context              *SerializableTestContext `json:"context,omitempty"`
+}
+
+// SerializableTestContext represents a serializable version of testContext struct
+type SerializableTestContext struct {
+	MaxParallel        int   `json:"maxParallel"`
+	Verbose            bool  `json:"verbose"`
+	NoColor            bool  `json:"noColor"`
+	EnabledTestSummary bool  `json:"enabledTestSummary"`
+	Running            int   `json:"running"`
+	NumWaiting         int64 `json:"numWaiting"`
 }
 
 // ToSerializable converts reporter struct to SerializableReporter
@@ -48,6 +59,11 @@ func (r *reporter) ToSerializable() *SerializableReporter {
 		for _, child := range r.children {
 			sr.Children = append(sr.Children, child.ToSerializable())
 		}
+	}
+
+	// Convert context
+	if r.context != nil {
+		sr.Context = r.context.ToSerializable()
 	}
 
 	return sr
@@ -89,5 +105,43 @@ func FromSerializable(sr *SerializableReporter) *reporter {
 		}
 	}
 
+	// Set context
+	if sr.Context != nil {
+		r.context = FromSerializableTestContext(sr.Context)
+	}
+
 	return r
+}
+
+// ToSerializable converts testContext struct to SerializableTestContext
+func (ctx *testContext) ToSerializable() *SerializableTestContext {
+	ctx.m.Lock()
+	defer ctx.m.Unlock()
+
+	return &SerializableTestContext{
+		MaxParallel:        ctx.maxParallel,
+		Verbose:            ctx.verbose,
+		NoColor:            ctx.noColor,
+		EnabledTestSummary: ctx.enabledTestSummary,
+		Running:            ctx.running,
+		NumWaiting:         ctx.numWaiting,
+	}
+}
+
+// FromSerializable creates a new testContext struct from SerializableTestContext
+func FromSerializableTestContext(sc *SerializableTestContext) *testContext {
+	ctx := &testContext{
+		w:                  &nopWriter{},
+		startParallel:      make(chan bool),
+		maxParallel:        sc.MaxParallel,
+		running:            sc.Running,
+		numWaiting:         sc.NumWaiting,
+		verbose:            sc.Verbose,
+		noColor:            sc.NoColor,
+		enabledTestSummary: sc.EnabledTestSummary,
+	}
+	if sc.EnabledTestSummary {
+		ctx.testSummary = newTestSummary()
+	}
+	return ctx
 }

@@ -8,8 +8,6 @@ import (
 	"plugin"
 	"strconv"
 
-	"github.com/k0kubun/pp"
-
 	"github.com/scenarigo/scenarigo/context"
 )
 
@@ -52,9 +50,7 @@ func RunSetup(arg string) {
 		fmt.Println("failed to decode", err)
 		return
 	}
-	pp.Println(sc)
 	ctx := context.FromSerializable(&sc)
-	pp.Println(ctx)
 	for i, setup := range setups {
 		newCtx := ctx
 		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
@@ -70,8 +66,13 @@ func RunSetup(arg string) {
 	}
 }
 
-func RunTeardown() {
-	ctx := &Context{}
+func RunTeardown(arg string) {
+	var sc context.SerializableContext
+	if err := json.Unmarshal([]byte(arg), &sc); err != nil {
+		fmt.Println("failed to decode", err)
+		return
+	}
+	ctx := context.FromSerializable(&sc)
 	for i, teardown := range teardowns {
 		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
 			teardown(ctx)

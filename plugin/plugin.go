@@ -35,7 +35,12 @@ func Open(path string) (Plugin, error) {
 		return p, nil
 	}
 	if filepath.Ext(path) == ".wasm" {
-		return openWasmPlugin(path)
+		plg, err := openWasmPlugin(path)
+		if err != nil {
+			return nil, err
+		}
+		cache[path] = plg
+		return plg, nil
 	}
 	newPlugin = &openedPlugin{} //nolint:exhaustruct
 	defer func() { newPlugin = nil }()

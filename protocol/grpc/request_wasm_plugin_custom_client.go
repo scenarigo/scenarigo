@@ -1,8 +1,11 @@
 package grpc
 
 import (
+	"bytes"
 	gocontext "context"
+	"fmt"
 
+	"github.com/goccy/go-yaml"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -27,11 +30,16 @@ func newWasmPluginCustomServiceClient(r *Request, v WasmPluginGRPCClient) (*wasm
 }
 
 func (client *wasmPluginCustomServiceClient) buildRequestMessage(ctx *context.Context) (proto.Message, error) {
-	req, err := ctx.ExecuteTemplate(client.r.Message)
+	msg, err := ctx.ExecuteTemplate(client.r.Message)
 	if err != nil {
 		return nil, err
 	}
-	return client.wasm.BuildRequestMessage(client.r.Method, req)
+	var buf bytes.Buffer
+	if err := yaml.NewEncoder(&buf, yaml.JSON()).Encode(msg); err != nil {
+		return nil, err
+	}
+	fmt.Println("msg", buf.String())
+	return client.wasm.BuildRequestMessage(client.r.Method, buf.Bytes())
 }
 
 func (client *wasmPluginCustomServiceClient) invoke(ctx gocontext.Context, reqMsg proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
