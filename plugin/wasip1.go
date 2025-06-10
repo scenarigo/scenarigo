@@ -3,8 +3,12 @@
 package plugin
 
 import (
+	"encoding/json"
+	"fmt"
 	"plugin"
 	"strconv"
+
+	"github.com/k0kubun/pp"
 
 	"github.com/scenarigo/scenarigo/context"
 )
@@ -42,8 +46,15 @@ func RegisterSetupEachScenario(setup SetupFunc) {
 	setupsEachScenario = append(setupsEachScenario, setup)
 }
 
-func RunSetup() {
-	ctx := context.New(nil)
+func RunSetup(arg string) {
+	var sc context.SerializableContext
+	if err := json.Unmarshal([]byte(arg), &sc); err != nil {
+		fmt.Println("failed to decode", err)
+		return
+	}
+	pp.Println(sc)
+	ctx := context.FromSerializable(&sc)
+	pp.Println(ctx)
 	for i, setup := range setups {
 		newCtx := ctx
 		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {

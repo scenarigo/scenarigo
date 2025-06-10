@@ -103,17 +103,33 @@ func (p *wasmPlugin) Lookup(name string) (Symbol, error) {
 }
 
 func (p *wasmPlugin) GetSetup() SetupFunc {
-	return func(ctx *Context) (*Context, func(*Context)) {
+	return func(sctx *Context) (*Context, func(*Context)) {
 		fmt.Println("called setup by host")
+		encoded := sctx.ToSerializable()
+		b, err := json.Marshal(encoded)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(string(b))
+		addr, err := p.mod.ExportedFunction("__alloc").Call(p.ctx, uint64(len(b)))
+		if err != nil {
+			fmt.Println(err)
+		}
+		if ok := p.mod.Memory().Write(uint32(addr[0]), b); !ok {
+			fmt.Println("not ok")
+		}
 		if _, err := callExportedFunction(
 			p.ctx,
 			p.mod,
 			"__scenarigo_plugin_setup",
-			nil,
+			[]uint64{
+				addr[0],
+				uint64(len(b)),
+			},
 		); err != nil {
 			fmt.Println("err", err)
 		}
-		return ctx, func(ctx *Context) {
+		return sctx, func(ctx *Context) {
 			_, _ = callExportedFunction(
 				p.ctx,
 				p.mod,

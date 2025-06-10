@@ -32,9 +32,10 @@ func __scenarigo_plugin_init(retAddr int32, retLen int32) {
 }
 
 //go:wasmexport __scenarigo_plugin_setup
-func __scenarigo_plugin_setup(retAddr, retLen int32) {
+func __scenarigo_plugin_setup(reqAddr, reqLen, retAddr, retLen int32) {
 	fmt.Println("run setup")
-	plugin.RunSetup()
+	reqStr := unsafe.String((*byte)(unsafe.Pointer(uintptr(uint64(reqAddr)))), reqLen)
+	plugin.RunSetup(reqStr)
 }
 
 //go:wasmexport __scenarigo_plugin_teardown
