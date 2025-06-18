@@ -62,6 +62,8 @@ type testContext struct {
 	// numWaiting is the number tests waiting to be run in parallel.
 	numWaiting int64
 
+	wg sync.WaitGroup
+
 	// maxParallel is a copy of the parallel flag.
 	maxParallel int
 
@@ -84,6 +86,7 @@ func newTestContext(opts ...Option) *testContext {
 		maxParallel:   1,
 		running:       1, // Set the count to 1 for the main (sequential) test.
 	}
+	ctx.wg.Add(1)
 	for _, opt := range opts {
 		opt(ctx)
 	}
@@ -93,6 +96,7 @@ func newTestContext(opts ...Option) *testContext {
 func (c *testContext) waitParallel() {
 	c.m.Lock()
 	if c.running < c.maxParallel {
+		c.wg.Add(1)
 		c.running++
 		c.m.Unlock()
 		return
@@ -110,12 +114,17 @@ func (c *testContext) release() {
 	c.m.Lock()
 	if c.waitings() == 0 {
 		c.running--
+		c.wg.Done()
 		c.m.Unlock()
 		return
 	}
 	atomic.AddInt64(&c.numWaiting, -1)
 	c.m.Unlock()
 	c.startParallel <- true // Pick a waiting test to be run.
+}
+
+func (c *testContext) waitAll() {
+	c.wg.Wait()
 }
 
 func (c *testContext) print(a ...any) (int, error) {

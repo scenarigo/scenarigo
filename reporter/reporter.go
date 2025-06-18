@@ -57,6 +57,7 @@ type Reporter interface {
 // It reports whether f succeeded.
 func Run(f func(r Reporter), opts ...Option) bool {
 	r := run(f, opts...)
+	r.context.waitAll()
 
 	// print global errors (e.g., invalid config)
 	if (r.Failed() && !r.noFailurePropagation) || r.context.verbose {
