@@ -380,11 +380,24 @@ type serviceClient interface {
 	invoke(gocontext.Context, proto.Message, ...grpc.CallOption) (proto.Message, *status.Status, error)
 }
 
+type WasmPluginGRPCClient interface {
+	ExistsMethod(method string) bool
+	BuildRequestMessage(method string, params []byte) (proto.Message, error)
+	Invoke(method string, req proto.Message) (proto.Message, *status.Status, error)
+}
+
 func (r *Request) buildClient(ctx *context.Context, opts *RequestOptions) (serviceClient, error) {
 	if r.Client != "" {
 		x, err := ctx.ExecuteTemplate(r.Client)
 		if err != nil {
 			return nil, errors.WrapPath(err, "client", "failed to get client")
+		}
+		if cli, ok := x.(WasmPluginGRPCClient); ok {
+			client, err := newWasmPluginCustomServiceClient(r, cli)
+			if err != nil {
+				return nil, err
+			}
+			return client, nil
 		}
 		client, err := newCustomServiceClient(r, reflect.ValueOf(x))
 		if err != nil {

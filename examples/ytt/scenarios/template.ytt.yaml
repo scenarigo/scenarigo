@@ -3,7 +3,7 @@
 ---
 schemaVersion: scenario/v1
 plugins:
-  plugin: plugin.so
+  plugin: plugin.wasm
 title: #@ params.title
 vars: #@ params.vars
 steps:

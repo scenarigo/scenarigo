@@ -47,7 +47,6 @@ func startServer(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
 			ctx.Reporter().Errorf("failed to start server: %s", err)
 		}
 	}()
-
 	return ctx, func(ctx *plugin.Context) {
 		s.GracefulStop()
 	}
@@ -111,7 +110,10 @@ var (
 )
 
 func createClients(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-	cc, err := grpc.NewClient(ServerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(
+		ServerAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		ctx.Reporter().Fatalf("failed to create Ping client: %s", err)
 	}
@@ -120,4 +122,15 @@ func createClients(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context))
 	return ctx, func(ctx *plugin.Context) {
 		cc.Close()
 	}
+}
+
+func PingClientFunc(v int) servicepb.PingClient {
+	cc, err := grpc.NewClient(
+		ServerAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil
+	}
+	return servicepb.NewPingClient(cc)
 }

@@ -3,6 +3,8 @@ package plugin
 import (
 	"bytes"
 	"context"
+	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -21,12 +23,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
+
+	"io"
 
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
@@ -85,6 +91,7 @@ func isGotip(v string) (string, bool) {
 var (
 	verbose       bool
 	skipMigration bool
+	wasm          bool
 )
 
 func newBuildCmd() *cobra.Command {
@@ -103,6 +110,7 @@ This command requires go command in $PATH.
 	}
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
 	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "skip migration")
+	cmd.Flags().BoolVarP(&wasm, "wasm", "", false, "build as WebAssembly")
 	return cmd
 }
 
@@ -143,11 +151,13 @@ func (o *overrideModule) requireReplace() (*modfile.Require, string, *modfile.Re
 
 type buildOpts struct {
 	skipMigration bool
+	wasm          bool
 }
 
 func buildRun(cmd *cobra.Command, args []string) error {
 	return buildRunWithOpts(cmd, args, &buildOpts{
 		skipMigration: skipMigration,
+		wasm:          wasm,
 	})
 }
 
@@ -235,7 +245,7 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 
 		var retry bool
 		for _, pb := range pbs {
-			if err := pb.build(cmd, goCmd, overrideKeys, overrides, goworkPath, gowork); err != nil {
+			if err := pb.build(cmd, goCmd, overrideKeys, overrides, goworkPath, gowork, opts); err != nil {
 				var re *retriableError
 				if errors.As(err, &re) {
 					msg := fmt.Sprintf("%s: %s", pb.name, err)
@@ -280,6 +290,13 @@ func findGoCmd(ctx context.Context) (string, error) {
 // 2nd return value should always be called.
 func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig], opts *buildOpts) (*pluginBuilder, func(), error) {
 	out := item.Key
+
+	// Check if plugin name has .wasm suffix and enable WASM build automatically
+	if strings.HasSuffix(out, ".wasm") && !opts.wasm {
+		debugLog(cmd, "detected .wasm suffix in plugin name %s, enabling WASM build", out)
+		opts.wasm = true
+	}
+
 	mod := filepathutil.From(root, item.Value.Src)
 	var src string
 	clean := func() {}
@@ -305,7 +322,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 		}
 	}
 	// NOTE: All module names must be unique and different from the standard modules.
-	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, ".so"))
+	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, filepath.Ext(out)))
 	pb, err := newPluginBuilder(cmd, goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
 	if err != nil {
 		return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
@@ -716,8 +733,9 @@ func getInitialState(gomod *modfile.File) (map[string]modfile.Require, map[strin
 	return initialRequires, initialReplaces
 }
 
-func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule, goworkPath string, gowork []byte) error {
+func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule, goworkPath string, gowork []byte, opts *buildOpts) error {
 	ctx := ctx(cmd)
+
 	if err := pb.updateGoMod(cmd, goCmd, overrideKeys, overrides); err != nil {
 		return err
 	}
@@ -741,6 +759,46 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 			return fmt.Errorf(`"go work use ." failed: %w`, err)
 		}
 	}
+
+	if opts != nil && opts.wasm {
+		// Extract symbols & generate main.go
+		symbols, err := extractExportedSymbols(pb.dir)
+		if err != nil {
+			return fmt.Errorf("failed to extract exported symbols: %w", err)
+		}
+		mainPath, err := createWasmMainFile(pb.dir, symbols)
+		if err != nil {
+			return fmt.Errorf("failed to create wasm.go: %w", err)
+		}
+		defer func() {
+			os.Remove(mainPath)
+		}()
+
+		// Create overlay files for net package replacement
+		overlayFiles, err := createNetPackageOverlay(ctx, goCmd)
+		if err != nil {
+			return fmt.Errorf("failed to create net package overlay: %w", err)
+		}
+		defer func() {
+			for _, file := range overlayFiles {
+				os.Remove(file)
+			}
+		}()
+
+		// Create overlay JSON
+		overlayJSON, err := createOverlayJSON(overlayFiles)
+		if err != nil {
+			return fmt.Errorf("failed to create overlay JSON: %w", err)
+		}
+		defer os.Remove(overlayJSON)
+
+		envs = append(envs, "GOOS=wasip1", "GOARCH=wasm")
+		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-overlay", overlayJSON, "-o", pb.out); err != nil {
+			return fmt.Errorf(`"go build -overlay %s -o %s" failed: %w`, overlayJSON, pb.out, err)
+		}
+		return nil
+	}
+
 	if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
 		return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
 	}
@@ -1151,4 +1209,417 @@ func debugLog(cmd *cobra.Command, format string, a ...any) {
 		return
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), fmt.Sprintf("%s: %s\n", debugColor.Sprint("DEBUG"), format), a...)
+}
+
+// copyFile copies a file from src to dst with the given mode.
+func copyFile(src, dst string, mode fs.FileMode) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+	_, err = io.Copy(dstFile, srcFile)
+	return err
+}
+
+type exportedSymbols struct {
+	Funcs  []string
+	Values []string
+}
+
+// extractExportedSymbols extracts exported function and variable names from Go files in dir.
+func extractExportedSymbols(dir string) (*exportedSymbols, error) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	var syms exportedSymbols
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				switch d := decl.(type) {
+				case *ast.FuncDecl:
+					if d.Recv == nil && d.Name.IsExported() {
+						syms.Funcs = append(syms.Funcs, d.Name.Name)
+					}
+				case *ast.GenDecl:
+					if d.Tok == token.VAR {
+						for _, spec := range d.Specs {
+							if vs, ok := spec.(*ast.ValueSpec); ok {
+								for _, name := range vs.Names {
+									if name.IsExported() {
+										syms.Values = append(syms.Values, name.Name)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return &syms, nil
+}
+
+//go:embed wasm_main.go.tmpl
+var wasmMainTmpl []byte
+
+// createWasmMainFile generates a wasm.go that prints all exported symbols.
+func createWasmMainFile(dir string, symbols *exportedSymbols) (string, error) {
+	tmpl, err := template.New("").Parse(string(wasmMainTmpl))
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, symbols); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("main_%d.go", time.Now().Unix()))
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// netFunctionInfo holds information about net package functions
+type netFunctionInfo struct {
+	FunctionName string
+	FileName     string
+	FilePath     string
+}
+
+// createNetPackageOverlay creates modified net package files for WASM overlay
+func createNetPackageOverlay(ctx context.Context, goCmd string) (map[string]string, error) {
+	// Get GOROOT
+	goroot, err := execute(ctx, "", goCmd, "env", "GOROOT")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get GOROOT: %w", err)
+	}
+	goroot = strings.TrimSpace(goroot)
+	netPkgDir := filepath.Join(goroot, "src", "net")
+
+	filePathMap := make(map[string]struct{})
+	if p := findNetFunction(netPkgDir, "DialContext"); p == "" {
+		return nil, errors.New("failed to find DialContext method from net package")
+	} else {
+		filePathMap[p] = struct{}{}
+	}
+
+	if p := findNetFunction(netPkgDir, "Listen"); p == "" {
+		return nil, errors.New("failed to find Listen from net package")
+	} else {
+		filePathMap[p] = struct{}{}
+	}
+
+	overlayFiles := make(map[string]string)
+
+	for p := range filePathMap {
+		modifiedFile, err := createModifiedNetFile(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create modified file: %w", err)
+		}
+		overlayFiles[p] = modifiedFile
+	}
+	return overlayFiles, nil
+}
+
+// findNetFunction finds a specific function or method in the net package
+func findNetFunction(netPkgDir, functionName string) string {
+	fset := token.NewFileSet()
+
+	var ret string
+	_ = filepath.Walk(netPkgDir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || filepath.Ext(info.Name()) != ".go" {
+			return nil
+		}
+
+		// Skip test files
+		if strings.HasSuffix(info.Name(), "_test.go") {
+			return nil
+		}
+
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		file, err := parser.ParseFile(fset, info.Name(), src, parser.ParseComments)
+		if err != nil {
+			return nil // Skip files that can't be parsed
+		}
+
+		for _, decl := range file.Decls {
+			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+				// Check for both function and method
+				if funcDecl.Name.Name == functionName {
+					ret = path
+					return errors.New("found")
+				}
+			}
+		}
+		return nil
+	})
+	return ret
+}
+
+// createModifiedNetFile creates a modified version of a net package file using AST manipulation
+func createModifiedNetFile(path string) (string, error) {
+	// Read the original file
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", path, err)
+	}
+
+	// Parse the file to AST
+	fset := token.NewFileSet()
+	astFile, err := parser.ParseFile(fset, filepath.Base(path), src, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse file %s: %w", path, err)
+	}
+
+	// Add unsafe import if not present
+	hasUnsafeImport := false
+	for _, imp := range astFile.Imports {
+		if imp.Path.Value == `"unsafe"` {
+			hasUnsafeImport = true
+			break
+		}
+	}
+
+	if !hasUnsafeImport {
+		unsafeImport := &ast.ImportSpec{
+			Name: &ast.Ident{Name: "_"},
+			Path: &ast.BasicLit{Kind: token.STRING, Value: `"unsafe"`},
+		}
+		astFile.Imports = append(astFile.Imports, unsafeImport)
+
+		// Find the last import in the file to determine where to insert
+		var lastImportDecl *ast.GenDecl
+		for _, decl := range astFile.Decls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.IMPORT {
+				lastImportDecl = genDecl
+			}
+		}
+
+		if lastImportDecl != nil {
+			lastImportDecl.Specs = append(lastImportDecl.Specs, unsafeImport)
+		} else {
+			// Create new import declaration
+			importDecl := &ast.GenDecl{
+				Tok:   token.IMPORT,
+				Specs: []ast.Spec{unsafeImport},
+			}
+			astFile.Decls = append([]ast.Decl{importDecl}, astFile.Decls...)
+		}
+	}
+
+	// Track which target functions we found and modified
+	foundDialContext := false
+	foundListen := false
+
+	// Find the target functions and modify them
+	for _, decl := range astFile.Decls {
+		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+			funcName := funcDecl.Name.Name
+			switch {
+			case funcName == "DialContext" && funcDecl.Recv != nil: // Method, not function
+				foundDialContext = true
+				funcDecl.Body = &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.ReturnStmt{
+							Results: []ast.Expr{
+								&ast.CallExpr{
+									Fun: &ast.Ident{Name: "_dialContext"},
+									Args: []ast.Expr{
+										&ast.Ident{Name: "ctx"},
+										&ast.Ident{Name: "network"},
+										&ast.Ident{Name: "address"},
+									},
+								},
+							},
+						},
+					},
+				}
+			case funcName == "Listen" && funcDecl.Recv == nil:
+				foundListen = true
+				funcDecl.Body = &ast.BlockStmt{
+					List: []ast.Stmt{
+						&ast.ReturnStmt{
+							Results: []ast.Expr{
+								&ast.CallExpr{
+									Fun: &ast.Ident{Name: "_listen"},
+									Args: []ast.Expr{
+										&ast.Ident{Name: "network"},
+										&ast.Ident{Name: "address"},
+									},
+								},
+							},
+						},
+					},
+				}
+			}
+		}
+	}
+
+	// Check if at least one target function was found
+	if !foundDialContext && !foundListen {
+		return "", fmt.Errorf("no target functions (DialContext or Listen) found in %s", path)
+	}
+
+	// Phase 1: Create functions without comments first
+	// This will be simpler and avoid position conflicts
+
+	// Create linkname functions without comments initially
+	dialContextFuncDecl := &ast.FuncDecl{
+		Name: &ast.Ident{Name: "_dialContext"},
+		Type: &ast.FuncType{
+			Params: &ast.FieldList{
+				List: []*ast.Field{
+					{
+						Names: []*ast.Ident{{Name: "ctx"}},
+						Type:  &ast.SelectorExpr{X: &ast.Ident{Name: "context"}, Sel: &ast.Ident{Name: "Context"}},
+					},
+					{
+						Names: []*ast.Ident{{Name: "network"}},
+						Type:  &ast.Ident{Name: "string"},
+					},
+					{
+						Names: []*ast.Ident{{Name: "address"}},
+						Type:  &ast.Ident{Name: "string"},
+					},
+				},
+			},
+			Results: &ast.FieldList{
+				List: []*ast.Field{
+					{Type: &ast.Ident{Name: "Conn"}},
+					{Type: &ast.Ident{Name: "error"}},
+				},
+			},
+		},
+		Body: nil, // No body for external linkage
+	}
+
+	listenFuncDecl := &ast.FuncDecl{
+		Name: &ast.Ident{Name: "_listen"},
+		Type: &ast.FuncType{
+			Params: &ast.FieldList{
+				List: []*ast.Field{
+					{
+						Names: []*ast.Ident{{Name: "network"}},
+						Type:  &ast.Ident{Name: "string"},
+					},
+					{
+						Names: []*ast.Ident{{Name: "address"}},
+						Type:  &ast.Ident{Name: "string"},
+					},
+				},
+			},
+			Results: &ast.FieldList{
+				List: []*ast.Field{
+					{Type: &ast.Ident{Name: "Listener"}},
+					{Type: &ast.Ident{Name: "error"}},
+				},
+			},
+		},
+		Body: nil, // No body for external linkage
+	}
+
+	// Add linkname comments to the file's comment map
+	if astFile.Comments == nil {
+		astFile.Comments = []*ast.CommentGroup{}
+	}
+
+	// No comments in phase 1 - we'll add them after re-parsing
+
+	// Set positions for the function declarations to match comment positions
+	// Note: We can't directly set Pos() as it's a method, but the position is managed by the AST
+
+	// Add the function declarations without comments
+	astFile.Decls = append(astFile.Decls, dialContextFuncDecl, listenFuncDecl)
+
+	// Phase 1: Format the AST with functions (no comments yet) to source code
+	var phase1Buf bytes.Buffer
+	if err := format.Node(&phase1Buf, fset, astFile); err != nil {
+		return "", fmt.Errorf("failed to format phase 1 AST: %w", err)
+	}
+
+	// Phase 2: Re-parse the generated code and add comments
+	newFset := token.NewFileSet()
+	newAstFile, err := parser.ParseFile(newFset, filepath.Base(path), phase1Buf.String(), parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("failed to re-parse generated code: %w", err)
+	}
+
+	// Find and add Doc comments to the linkname functions
+	for _, decl := range newAstFile.Decls {
+		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+			switch funcDecl.Name.Name {
+			case "_dialContext":
+				dialContextComment := &ast.CommentGroup{
+					List: []*ast.Comment{
+						{Text: "//go:linkname _dialContext github.com/goccy/wasi-go-net/wasip1.DialContext"},
+					},
+				}
+				funcDecl.Doc = dialContextComment
+				newAstFile.Comments = append(newAstFile.Comments, dialContextComment)
+			case "_listen":
+				listenComment := &ast.CommentGroup{
+					List: []*ast.Comment{
+						{Text: "//go:linkname _listen github.com/goccy/wasi-go-net/wasip1.Listen"},
+					},
+				}
+				funcDecl.Doc = listenComment
+				newAstFile.Comments = append(newAstFile.Comments, listenComment)
+			}
+		}
+	}
+
+	// Format the final AST with comments
+	var finalBuf bytes.Buffer
+	if err := format.Node(&finalBuf, newFset, newAstFile); err != nil {
+		return "", fmt.Errorf("failed to format final AST: %w", err)
+	}
+	// Write modified file to temp location
+	tempFile, err := os.CreateTemp("", fmt.Sprintf("net_%s.go", filepath.Base(path)))
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer tempFile.Close()
+
+	if _, err := tempFile.Write(finalBuf.Bytes()); err != nil {
+		return "", fmt.Errorf("failed to write modified file: %w", err)
+	}
+
+	return tempFile.Name(), nil
+}
+
+// createOverlayJSON creates the JSON file for go build -overlay
+func createOverlayJSON(overlayFiles map[string]string) (string, error) {
+	overlayData, err := json.Marshal(map[string]interface{}{
+		"Replace": overlayFiles,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal overlay JSON: %w", err)
+	}
+
+	tempFile, err := os.CreateTemp("", "scenarigo_overlay.json")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp overlay file: %w", err)
+	}
+	defer tempFile.Close()
+
+	if _, err := tempFile.Write(overlayData); err != nil {
+		return "", fmt.Errorf("failed to write overlay JSON: %w", err)
+	}
+
+	return tempFile.Name(), nil
 }

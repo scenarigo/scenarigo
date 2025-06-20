@@ -1,6 +1,6 @@
 schemaVersion: scenario/v1
 plugins:
-  plugin: plugin.so
+  plugin: plugin.wasm
 vars:
   target: '{{plugins.plugin.ServerAddr}}'
 title: load Protocol Buffers schemas from files
