@@ -1,12 +1,12 @@
 schemaVersion: scenario/v1
 plugins:
-  plugin: plugin.so
+  plugin: plugin.wasm
 title: use plugin custom clients
 steps:
 - title: Ping
   protocol: grpc
   request:
-    client: '{{plugins.plugin.PingClient}}'
+    client: '{{plugins.plugin.PingClientFunc(1)}}'
     method: Ping
     options:
       reflection:

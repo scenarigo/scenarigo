@@ -5,6 +5,6 @@ scenarios:
 
 pluginDirectory: ./plugin/gen
 plugins:
-  plugin.so:
+  plugin.wasm:
     src: ./plugin/src
 

@@ -1,3 +1,5 @@
+//go:build !wasip1
+
 package plugin
 
 import (
@@ -31,6 +33,14 @@ func Open(path string) (Plugin, error) {
 	defer m.Unlock()
 	if p, ok := cache[path]; ok {
 		return p, nil
+	}
+	if filepath.Ext(path) == ".wasm" {
+		plg, err := openWasmPlugin(path)
+		if err != nil {
+			return nil, err
+		}
+		cache[path] = plg
+		return plg, nil
 	}
 	newPlugin = &openedPlugin{} //nolint:exhaustruct
 	defer func() { newPlugin = nil }()

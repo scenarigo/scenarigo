@@ -128,7 +128,6 @@ func newProtoClient(ctx *context.Context, r *Request, opts *RequestOptions) (*pr
 	if resolver == nil {
 		resolver = grpcproto.NewReflectionClient(ctx.RequestContext(), conn)
 	}
-
 	sd, err := resolver.ResolveService(protoreflect.FullName(r.Service))
 	if err != nil {
 		if grpcproto.IsUnimplementedReflectionServiceError(err) {
@@ -140,7 +139,6 @@ func newProtoClient(ctx *context.Context, r *Request, opts *RequestOptions) (*pr
 	if md == nil {
 		return nil, errors.ErrorPathf("method", "method %q not found", r.Method)
 	}
-
 	return &protoClient{
 		r:              r,
 		conn:           conn,

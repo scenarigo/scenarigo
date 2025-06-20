@@ -1,6 +1,6 @@
 schemaVersion: scenario/v1
 plugins:
-  plugin: plugin.so
+  plugin: plugin.wasm
 title: create item if not found
 vars:
   itemName: foo

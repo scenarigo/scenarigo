@@ -1,6 +1,6 @@
 schemaVersion: scenario/v1
 plugins:
-  plugin: plugin.so
+  plugin: plugin.wasm
 title: create users
 steps:
 - title: create user of any age
