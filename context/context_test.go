@@ -34,6 +34,62 @@ func TestContext(t *testing.T) {
 			t.Fatal("failed to get enabledColor")
 		}
 	})
+	t.Run("currentStep", func(t *testing.T) {
+		ctx := context.FromT(t)
+
+		// Test that CurrentStep returns nil initially
+		if ctx.CurrentStep() != nil {
+			t.Fatal("expected CurrentStep to be nil initially")
+		}
+
+		// Create a test CurrentStep
+		currentStep := &context.CurrentStep{
+			Index:       1,
+			ID:          "test-step",
+			Title:       "Test Step",
+			Description: "This is a test step",
+			Protocol:    "http",
+			Request: map[string]interface{}{
+				"method": "GET",
+				"url":    "https://example.com",
+			},
+		}
+
+		// Test WithCurrentStep
+		ctx = ctx.WithCurrentStep(currentStep)
+
+		// Test that CurrentStep returns the correct value
+		got := ctx.CurrentStep()
+		if got == nil {
+			t.Fatal("expected CurrentStep to return non-nil value")
+		}
+		if got.Index != currentStep.Index {
+			t.Errorf("expected Index %d but got %d", currentStep.Index, got.Index)
+		}
+		if got.ID != currentStep.ID {
+			t.Errorf("expected ID %q but got %q", currentStep.ID, got.ID)
+		}
+		if got.Title != currentStep.Title {
+			t.Errorf("expected Title %q but got %q", currentStep.Title, got.Title)
+		}
+		if got.Description != currentStep.Description {
+			t.Errorf("expected Description %q but got %q", currentStep.Description, got.Description)
+		}
+		if got.Protocol != currentStep.Protocol {
+			t.Errorf("expected Protocol %q but got %q", currentStep.Protocol, got.Protocol)
+		}
+
+		// Test that WithCurrentStep with nil sets CurrentStep to nil
+		ctx2 := ctx.WithCurrentStep(nil)
+		if ctx2.CurrentStep() != nil {
+			t.Fatal("expected WithCurrentStep(nil) to set CurrentStep to nil")
+		}
+
+		// Test that the original context is not modified
+		if ctx.CurrentStep() != currentStep {
+			t.Fatal("expected original context to remain unchanged")
+		}
+	})
 }
 
 func TestRunWithRetry(t *testing.T) {
