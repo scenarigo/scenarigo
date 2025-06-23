@@ -36,6 +36,7 @@ type Reporter interface {
 	SkipNow()
 	Skipped() bool
 	Parallel()
+	Cleanup(f func())
 	Run(name string, f func(r Reporter)) bool
 
 	runWithRetry(string, func(t Reporter), RetryPolicy) bool
@@ -108,6 +109,8 @@ type reporter struct {
 	logs             *logRecorder
 	durationMeasurer testDurationMeasurer
 	children         []*reporter
+	cleanups         []func()
+	isCleanup        bool
 
 	barrier chan bool // To signal parallel subtests they may start.
 	done    chan bool // To signal a test is done.
@@ -226,6 +229,9 @@ func (r *reporter) Parallel() {
 		}
 		panic("reporter: Reporter.Parallel called multiple times")
 	}
+	if r.isCleanup {
+		panic("reporter: Reporter.Parallel called during Reporter.Cleanup")
+	}
 	r.isParallel = true
 	r.durationMeasurer.stop()
 	defer r.durationMeasurer.start()
@@ -246,6 +252,47 @@ func (r *reporter) Parallel() {
 
 	if r.context.verbose {
 		r.context.printf("=== CONT  %s\n", r.goTestName)
+	}
+}
+
+// Cleanup registers a function to be called when the test (or subtest) and all its subtests complete. Cleanup functions will be called in last added, first called order.
+func (r *reporter) Cleanup(f func()) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.cleanups = append(r.cleanups, f)
+}
+
+func (r *reporter) runCleanups() {
+	r.durationMeasurer.start()
+	defer r.durationMeasurer.stop()
+	r.isCleanup = true
+	for {
+		var cleanup func()
+		r.m.Lock()
+		if len(r.cleanups) > 0 {
+			last := len(r.cleanups) - 1
+			cleanup = r.cleanups[last]
+			r.cleanups = r.cleanups[:last]
+		}
+		r.m.Unlock()
+		if cleanup == nil {
+			break
+		}
+		func() {
+			defer func() {
+				err := recover()
+				if err != nil {
+					err = errors.New("cleanup executed panic(nil) or runtime.Goexit")
+				}
+				if err != nil {
+					if !r.Failed() && !r.Skipped() {
+						r.Error(err)
+						r.Error(string(debug.Stack()))
+					}
+				}
+			}()
+			cleanup()
+		}()
 	}
 }
 
@@ -305,10 +352,10 @@ func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPol
 	go child.run(f)
 	<-child.done
 	r.appendChildren(child)
-	if r.isRoot() {
-		printReport(child)
-		child.context.testSummary.append(name, child)
-	}
+	// if r.isRoot() {
+	// 	printReport(child)
+	// 	child.context.testSummary.append(name, child)
+	// }
 	return !child.Failed()
 }
 
@@ -325,6 +372,7 @@ func (r *reporter) spawn(name string) *reporter {
 	child.depth = r.depth + 1
 	child.logs = r.logs.spawn()
 	child.durationMeasurer = r.durationMeasurer.spawn()
+	child.isCleanup = r.isCleanup
 	child.testing = r.testing
 	return child
 }
@@ -436,6 +484,18 @@ func (r *reporter) start() func() {
 		} else if r.isParallel {
 			// Only release the count for this test if it was run as a parallel test.
 			r.context.release()
+		}
+
+		r.runCleanups()
+
+		// TODO: doneした順に全部出力すべき
+		// そしたらteardownもRUNが先に出るのを防げる？
+		// だめっぽい…
+		if r.isRoot() {
+			for _, child := range r.children {
+				printReport(child)
+				child.context.testSummary.append(child.name, child)
+			}
 		}
 
 		r.done <- true

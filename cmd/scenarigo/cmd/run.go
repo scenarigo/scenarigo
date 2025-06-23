@@ -74,7 +74,9 @@ func run(cmd *cobra.Command, args []string) error {
 	success := reporter.Run(
 		func(rptr reporter.Reporter) {
 			r.Run(context.New(rptr))
-			reportErr = r.CreateTestReport(rptr)
+			rptr.Cleanup(func() {
+				reportErr = r.CreateTestReport(rptr)
+			})
 		},
 		reporterOpts...,
 	)
