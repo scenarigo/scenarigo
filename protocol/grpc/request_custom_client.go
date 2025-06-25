@@ -14,15 +14,28 @@ import (
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
-	"github.com/scenarigo/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/internal/plugin"
 )
 
 type customServiceClient struct {
-	r      *Request
-	method reflect.Value
+	r            *Request
+	method       reflect.Value
+	customClient plugin.CustomGRPCClient
 }
 
-func newCustomServiceClient(r *Request, v reflect.Value) (*customServiceClient, error) {
+func newCustomServiceClient(r *Request, x any) (*customServiceClient, error) {
+	if cli, ok := x.(plugin.CustomGRPCClient); ok {
+		if !cli.ExistsMethod(r.Method) {
+			return nil, errors.ErrorPathf("method", `method "%s.%s" not found`, r.Client, r.Method)
+		}
+		return &customServiceClient{
+			r:            r,
+			customClient: cli,
+		}, nil
+	}
+
+	v := reflect.ValueOf(x)
+
 	var method reflect.Value
 	for {
 		if !v.IsValid() {
@@ -41,7 +54,7 @@ func newCustomServiceClient(r *Request, v reflect.Value) (*customServiceClient, 
 		}
 	}
 
-	if err := validateMethod(method); err != nil {
+	if err := plugin.ValidateGRPCMethod(method); err != nil {
 		return nil, errors.ErrorPathf("method", `"%s.%s" must be "func(context.Context, proto.Message, ...grpc.CallOption) (proto.Message, error): %s"`, r.Client, r.Method, err)
 	}
 
@@ -52,6 +65,18 @@ func newCustomServiceClient(r *Request, v reflect.Value) (*customServiceClient, 
 }
 
 func (client *customServiceClient) buildRequestMessage(ctx *context.Context) (proto.Message, error) {
+	if client.customClient != nil {
+		msg, err := ctx.ExecuteTemplate(client.r.Message)
+		if err != nil {
+			return nil, err
+		}
+		var buf bytes.Buffer
+		if err := yaml.NewEncoder(&buf, yaml.JSON()).Encode(msg); err != nil {
+			return nil, err
+		}
+		return client.customClient.BuildRequestMessage(client.r.Method, bytes.TrimSuffix(buf.Bytes(), []byte("\n")))
+	}
+
 	req := reflect.New(client.method.Type().In(1).Elem()).Interface()
 	if err := buildRequestMsg(ctx, req, client.r.Message); err != nil {
 		return nil, errors.WrapPathf(err, "message", "failed to build request message")
@@ -64,82 +89,10 @@ func (client *customServiceClient) buildRequestMessage(ctx *context.Context) (pr
 }
 
 func (client *customServiceClient) invoke(ctx gocontext.Context, reqMsg proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
-	in := []reflect.Value{
-		reflect.ValueOf(ctx),
-		reflect.ValueOf(reqMsg),
+	if client.customClient != nil {
+		return client.customClient.Invoke(client.r.Method, reqMsg)
 	}
-	for _, o := range opts {
-		in = append(in, reflect.ValueOf(o))
-	}
-
-	rvalues := client.method.Call(in)
-	if len(rvalues) != 2 {
-		return nil, nil, errors.Errorf("expected return value length of method call is 2 but %d", len(rvalues))
-	}
-	if !rvalues[0].IsValid() {
-		return nil, nil, errors.New("first return value is invalid")
-	}
-	respMsg, ok := rvalues[0].Interface().(proto.Message)
-	if !ok {
-		if !rvalues[0].IsNil() {
-			return nil, nil, errors.Errorf("expected first return value is proto.Message but %T", rvalues[0].Interface())
-		}
-	}
-	if !rvalues[1].IsValid() {
-		return nil, nil, errors.New("second return value is invalid")
-	}
-	callErr, ok := rvalues[1].Interface().(error)
-	if !ok {
-		if !rvalues[1].IsNil() {
-			return nil, nil, errors.Errorf("expected second return value is error but %T", rvalues[1].Interface())
-		}
-	}
-	var sts *status.Status
-	if ok {
-		sts, ok = status.FromError(callErr)
-		if !ok {
-			return nil, nil, errors.Errorf(`expected gRPC status error but got %T: "%s"`, callErr, callErr.Error())
-		}
-	}
-
-	return respMsg, sts, nil
-}
-
-func validateMethod(method reflect.Value) error {
-	if !method.IsValid() {
-		return errors.New("invalid")
-	}
-	if method.Kind() != reflect.Func {
-		return errors.New("not function")
-	}
-	if method.IsNil() {
-		return errors.New("method is nil")
-	}
-
-	mt := method.Type()
-	if n := mt.NumIn(); n != 3 {
-		return errors.Errorf("number of arguments must be 3 but got %d", n)
-	}
-	if t := mt.In(0); !t.Implements(typeContext) {
-		return errors.Errorf("first argument must be context.Context but got %s", t.String())
-	}
-	if t := mt.In(1); !t.Implements(typeMessage) {
-		return errors.Errorf("second argument must be proto.Message but got %s", t.String())
-	}
-	if t := mt.In(2); t != typeCallOpts {
-		return errors.Errorf("third argument must be []grpc.CallOption but got %s", t.String())
-	}
-	if n := mt.NumOut(); n != 2 {
-		return errors.Errorf("number of return values must be 2 but got %d", n)
-	}
-	if t := mt.Out(0); !t.Implements(typeMessage) {
-		return errors.Errorf("first return value must be proto.Message but got %s", t.String())
-	}
-	if t := mt.Out(1); !t.Implements(reflectutil.TypeError) {
-		return errors.Errorf("second return value must be error but got %s", t.String())
-	}
-
-	return nil
+	return plugin.GRPCInvoke(ctx, client.method, reqMsg, opts...)
 }
 
 func buildRequestMsg(ctx *context.Context, req any, src any) error {

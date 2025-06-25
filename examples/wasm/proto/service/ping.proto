@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package scenarigo.examples.wasm.service;
+
+option go_package = "github.com/scenarigo/scenarigo/examples/wasm/plugin/src/pb/service;service";
+
+import "empty/empty.proto";
+
+service Ping {
+    rpc Ping(empty.Empty) returns (empty.Empty) {};
+}
