@@ -1,0 +1,58 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.wasm
+vars:
+  target: '{{plugins.plugin.ServerAddr}}'
+title: load Protocol Buffers schemas from files
+steps:
+- title: Ping
+  protocol: grpc
+  request:
+    target: '{{vars.target}}'
+    service: scenarigo.examples.wasm.service.Ping
+    method: Ping
+    # use the default option defined in scenarigo.yaml
+    # options: {}
+  expect:
+    status:
+      code: OK
+    message: {}
+- title: Ping
+  protocol: grpc
+  request:
+    target: '{{vars.target}}'
+    service: scenarigo.examples.wasm.service.Ping
+    method: Ping
+    options:
+      proto:
+        imports:
+        - ../proto
+        files:
+        - service/ping.proto
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message: {}
+- title: Echo
+  protocol: grpc
+  request:
+    target: '{{vars.target}}'
+    service: scenarigo.examples.wasm.service.Echo
+    method: Echo
+    message:
+      messageId: aaa
+      messageBody: hello
+    options:
+      proto:
+        files:
+        - ../proto/service/echo.proto
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message:
+      messageId: '{{request.message.messageId}}'
+      messageBody: '{{request.message.messageBody}}'

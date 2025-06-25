@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package test;
+
+option go_package = "test/pb/service;service";
+
+service Echo {
+    rpc Echo(EchoRequest) returns (EchoResponse) {};
+}
+
+message EchoRequest {
+    string message_id = 1;
+    string message_body = 2;
+}
+
+message EchoResponse {
+    string message_id = 1;
+    string message_body = 2;
+}

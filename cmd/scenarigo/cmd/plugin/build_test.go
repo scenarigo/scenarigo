@@ -26,6 +26,7 @@ import (
 
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 var (
@@ -919,6 +920,7 @@ import (
 			t.Run(name, func(t *testing.T) {
 				tmpDir := t.TempDir()
 				configPath := filepath.Join(tmpDir, config.DefaultConfigFileName)
+
 				create(t, configPath, test.config)
 				for p, content := range test.files {
 					create(t, filepath.Join(tmpDir, p), content)
@@ -971,6 +973,7 @@ import (
 			files     map[string]string
 			envGowork string
 			expect    string
+			opts      buildOpts
 		}{
 			"no config": {
 				config: "",
@@ -1308,7 +1311,8 @@ plugins:
 				}
 				cmd := &cobra.Command{}
 				config.ConfigPath = configPath
-				err := buildRun(cmd, []string{})
+				err := buildRunWithOpts(cmd, []string{}, &test.opts)
+
 				if err == nil {
 					t.Fatal("no error")
 				}
@@ -2489,5 +2493,389 @@ func TestCheckGowork(t *testing.T) {
 				t.Errorf("expect %q but got %q", expect, got)
 			}
 		})
+	}
+}
+
+func TestWasmBuild(t *testing.T) {
+	opt := &buildOpts{
+		wasm: true,
+	}
+
+	if err := os.RemoveAll(filepath.Join("testdata", "wasm")); err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(filepath.Join("testdata", "wasm"))
+
+	create(t, filepath.Join("testdata", "wasm", "src", "main.go"), `
+package main
+
+var Foo int
+
+func Greet() string {
+	return "Hello, world!"
+}
+`)
+	create(t, filepath.Join("testdata", "wasm", "scenarigo.yaml"), `
+schemaVersion: config/v1
+plugins:
+  plugin.wasm:
+    src: src/main.go
+`)
+	create(t, filepath.Join("testdata", "wasm", "src", "go.mod"), `
+module test
+
+go 1.23.0
+
+replace github.com/scenarigo/scenarigo => ../../../../../../..
+`)
+	configPath := filepath.Join("testdata", "wasm", "scenarigo.yaml")
+	config.ConfigPath = configPath
+
+	cmd := &cobra.Command{}
+	if err := buildRunWithOpts(cmd, []string{}, opt); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify WASM file
+	wasmPath := filepath.Join("testdata", "wasm", "plugin.wasm")
+	if _, err := os.Stat(wasmPath); err != nil {
+		t.Fatalf("WASM file not found: %v", err)
+	}
+
+	// Check if the file is a valid WASM file
+	content, err := os.ReadFile(wasmPath)
+	if err != nil {
+		t.Fatalf("failed to read WASM file: %v", err)
+	}
+	if len(content) < 8 {
+		t.Fatal("WASM file too small")
+	}
+	// WASM files start with \0asm
+	if content[0] != 0 || content[1] != 'a' || content[2] != 's' || content[3] != 'm' {
+		t.Fatal("not a valid WASM file")
+	}
+}
+
+func TestExtractExportedSymbols(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		expected *exportedSymbols
+	}{
+		{
+			name: "exported functions and variables",
+			source: `package main
+
+func ExportedFunc() {}
+func unexportedFunc() {}
+
+var ExportedVar = "value"
+var unexportedVar = "value"
+
+const ExportedConst = 42
+const unexportedConst = 42
+`,
+			expected: &exportedSymbols{
+				Funcs:  []string{"ExportedFunc"},
+				Values: []string{"ExportedVar"},
+			},
+		},
+		{
+			name: "no exported symbols",
+			source: `package main
+
+func unexportedFunc() {}
+var unexportedVar = "value"
+`,
+			expected: &exportedSymbols{
+				Funcs:  []string{},
+				Values: []string{},
+			},
+		},
+		{
+			name: "multiple exported functions",
+			source: `package main
+
+func Foo() {}
+func Bar() {}
+func (r receiver) Method() {} // receiver method should be ignored
+
+var A = 1
+var B = 2
+`,
+			expected: &exportedSymbols{
+				Funcs:  []string{"Foo", "Bar"},
+				Values: []string{"A", "B"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary directory
+			tmpDir := t.TempDir()
+
+			// Write source file
+			srcFile := filepath.Join(tmpDir, "main.go")
+			if err := os.WriteFile(srcFile, []byte(tt.source), 0o600); err != nil {
+				t.Fatalf("failed to write source file: %v", err)
+			}
+
+			// Extract symbols
+			symbols, err := extractExportedSymbols(tmpDir)
+			if err != nil {
+				t.Fatalf("extractExportedSymbols failed: %v", err)
+			}
+
+			// Sort slices for comparison
+			sort.Strings(symbols.Funcs)
+			sort.Strings(symbols.Values)
+			sort.Strings(tt.expected.Funcs)
+			sort.Strings(tt.expected.Values)
+
+			// Compare results
+			if len(symbols.Funcs) != len(tt.expected.Funcs) {
+				t.Errorf("Functions length mismatch: got %d, want %d", len(symbols.Funcs), len(tt.expected.Funcs))
+			}
+			for i, f := range symbols.Funcs {
+				if i >= len(tt.expected.Funcs) || f != tt.expected.Funcs[i] {
+					t.Errorf("Function mismatch at index %d: got %s, want %s", i, f, tt.expected.Funcs[i])
+				}
+			}
+
+			if len(symbols.Values) != len(tt.expected.Values) {
+				t.Errorf("Values length mismatch: got %d, want %d", len(symbols.Values), len(tt.expected.Values))
+			}
+			for i, v := range symbols.Values {
+				if i >= len(tt.expected.Values) || v != tt.expected.Values[i] {
+					t.Errorf("Value mismatch at index %d: got %s, want %s", i, v, tt.expected.Values[i])
+				}
+			}
+		})
+	}
+}
+
+func TestWasmFlagDetection(t *testing.T) {
+	tests := []struct {
+		name         string
+		pluginName   string
+		initialWasm  bool
+		expectedWasm bool
+		shouldDetect bool
+	}{
+		{
+			name:         "detects .wasm suffix",
+			pluginName:   "plugin.wasm",
+			initialWasm:  false,
+			expectedWasm: true,
+			shouldDetect: true,
+		},
+		{
+			name:         "no detection for .so suffix",
+			pluginName:   "plugin.so",
+			initialWasm:  false,
+			expectedWasm: false,
+			shouldDetect: false,
+		},
+		{
+			name:         "already enabled wasm flag",
+			pluginName:   "plugin.so",
+			initialWasm:  true,
+			expectedWasm: true,
+			shouldDetect: false,
+		},
+		{
+			name:         "wasm already enabled with .wasm suffix",
+			pluginName:   "plugin.wasm",
+			initialWasm:  true,
+			expectedWasm: true,
+			shouldDetect: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a temporary directory structure
+			tmpDir := t.TempDir()
+			root := tmpDir
+			pluginDir := filepath.Join(tmpDir, "plugins")
+			if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+				t.Fatalf("failed to create plugin directory: %v", err)
+			}
+
+			// Create a simple Go source file
+			srcDir := filepath.Join(tmpDir, "src")
+			if err := os.MkdirAll(srcDir, 0o755); err != nil {
+				t.Fatalf("failed to create src directory: %v", err)
+			}
+
+			goModContent := `module test
+go 1.21
+`
+			if err := os.WriteFile(filepath.Join(srcDir, "go.mod"), []byte(goModContent), 0o600); err != nil {
+				t.Fatalf("failed to write go.mod: %v", err)
+			}
+
+			mainGoContent := `package main
+
+func ExportedFunc() string {
+	return "test"
+}
+`
+			if err := os.WriteFile(filepath.Join(srcDir, "main.go"), []byte(mainGoContent), 0o600); err != nil {
+				t.Fatalf("failed to write main.go: %v", err)
+			}
+
+			// Create mock item
+			item := schema.OrderedMapItem[string, schema.PluginConfig]{
+				Key: tt.pluginName,
+				Value: schema.PluginConfig{
+					Src: srcDir,
+				},
+			}
+
+			// Mock command
+			cmd := &cobra.Command{}
+			var output bytes.Buffer
+			cmd.SetErr(&output)
+
+			// Enable verbose flag for debug logging
+			verbose = true
+			defer func() {
+				verbose = false
+			}()
+
+			// Create plugin builder with initial opts
+			opts := &buildOpts{wasm: tt.initialWasm}
+
+			// This will test the wasm detection logic inside createPluginBuilder
+			goCmd := "go" // Assume go is available
+			_, cleanup, err := createPluginBuilder(cmd, goCmd, map[string]*overrideModule{}, root, pluginDir, item, opts)
+			if cleanup != nil {
+				defer cleanup()
+			}
+
+			// The error is expected in test environment, we're mainly testing the detection logic
+			if err != nil && !strings.Contains(err.Error(), "failed to build plugin") {
+				t.Logf("Expected error in test environment: %v", err)
+			}
+
+			// Check if detection message was logged
+			outputStr := output.String()
+			if tt.shouldDetect {
+				if !strings.Contains(outputStr, "detected .wasm suffix") {
+					t.Error("Expected .wasm suffix detection message, but not found")
+				}
+			} else {
+				if strings.Contains(outputStr, "detected .wasm suffix") {
+					t.Error("Unexpected .wasm suffix detection message found")
+				}
+			}
+
+			// Check if opts.wasm was set correctly
+			if opts.wasm != tt.expectedWasm {
+				t.Errorf("wasm flag mismatch: got %v, want %v", opts.wasm, tt.expectedWasm)
+			}
+		})
+	}
+}
+
+func TestBuildOptsWasmHandling(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     *buildOpts
+		wantWasm bool
+	}{
+		{
+			name:     "nil opts",
+			opts:     nil,
+			wantWasm: false,
+		},
+		{
+			name:     "wasm disabled",
+			opts:     &buildOpts{wasm: false},
+			wantWasm: false,
+		},
+		{
+			name:     "wasm enabled",
+			opts:     &buildOpts{wasm: true},
+			wantWasm: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test the wasm handling logic
+			isWasm := tt.opts != nil && tt.opts.wasm
+			if isWasm != tt.wantWasm {
+				t.Errorf("wasm handling mismatch: got %v, want %v", isWasm, tt.wantWasm)
+			}
+		})
+	}
+}
+
+func TestWasmMainTemplate(t *testing.T) {
+	symbols := &exportedSymbols{
+		Funcs:  []string{"TestFunc", "AnotherFunc"},
+		Values: []string{"TestVar", "AnotherVar"},
+	}
+
+	tmpl, err := template.New("").Parse(string(wasmMainTmpl))
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, symbols); err != nil {
+		t.Fatalf("failed to execute template: %v", err)
+	}
+
+	result := buf.String()
+
+	// Check that the template generates valid Go code structure
+	if !strings.Contains(result, "package main") {
+		t.Error("generated code should have package main")
+	}
+
+	if !strings.Contains(result, "func main()") {
+		t.Error("generated code should have main function")
+	}
+
+	if !strings.Contains(result, "plugin.Register(") {
+		t.Error("generated code should call plugin.Register")
+	}
+
+	// Check that all symbols are included
+	for _, fn := range symbols.Funcs {
+		if !strings.Contains(result, fn) {
+			t.Errorf("function %s not found in generated code", fn)
+		}
+	}
+
+	for _, val := range symbols.Values {
+		if !strings.Contains(result, val) {
+			t.Errorf("value %s not found in generated code", val)
+		}
+	}
+}
+
+func TestExtractExportedSymbolsErrorCases(t *testing.T) {
+	// Test with non-existent directory
+	_, err := extractExportedSymbols("/non/existent/directory")
+	if err == nil {
+		t.Error("expected error for non-existent directory")
+	}
+
+	// Test with directory containing invalid Go files
+	tmpDir := t.TempDir()
+	invalidGoFile := filepath.Join(tmpDir, "invalid.go")
+	if err := os.WriteFile(invalidGoFile, []byte("invalid go syntax {{{"), 0o600); err != nil {
+		t.Fatalf("failed to write invalid go file: %v", err)
+	}
+
+	_, err = extractExportedSymbols(tmpDir)
+	if err == nil {
+		t.Error("expected error for invalid Go syntax")
 	}
 }

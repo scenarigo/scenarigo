@@ -386,7 +386,7 @@ func (r *Request) buildClient(ctx *context.Context, opts *RequestOptions) (servi
 		if err != nil {
 			return nil, errors.WrapPath(err, "client", "failed to get client")
 		}
-		client, err := newCustomServiceClient(r, reflect.ValueOf(x))
+		client, err := newCustomServiceClient(r, x)
 		if err != nil {
 			return nil, err
 		}

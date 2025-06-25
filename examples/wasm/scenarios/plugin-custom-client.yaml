@@ -1,0 +1,38 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.wasm
+title: use plugin custom clients
+steps:
+- title: Ping
+  protocol: grpc
+  request:
+    client: '{{plugins.plugin.PingClient}}'
+    method: Ping
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message: {}
+- title: Echo
+  protocol: grpc
+  request:
+    client: '{{plugins.plugin.EchoClient}}'
+    method: Echo
+    message:
+      messageId: aaa
+      messageBody: hello
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message:
+      messageId: '{{request.message.messageId}}'
+      messageBody: '{{request.message.messageBody}}'

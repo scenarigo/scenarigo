@@ -1,0 +1,29 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.wasm
+vars:
+  target: '{{plugins.plugin.TLSServerAddr}}'
+title: use self-signed TLS certificate
+steps:
+- title: Ping
+  protocol: grpc
+  request:
+    target: '{{vars.target}}'
+    service: scenarigo.examples.wasm.service.Ping
+    method: Ping
+    options:
+      proto:
+        imports:
+        - ../proto
+        files:
+        - service/ping.proto
+      auth:
+        insecure: false
+        tls:
+          minVersion: TLS 1.2
+          maxVersion: TLS 1.3
+          certificate: '{{plugins.plugin.TLSCertificate}}'
+  expect:
+    status:
+      code: OK
+    message: {}
