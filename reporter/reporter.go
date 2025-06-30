@@ -327,8 +327,8 @@ func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPol
 		// Parallel tests will be printed when the parent test completes
 		if !child.isParallel {
 			printReport(child)
+			child.context.testSummary.append(name, child)
 		}
-		child.context.testSummary.append(name, child)
 	}
 	return !child.Failed()
 }
@@ -456,6 +456,7 @@ func (r *reporter) start() func() {
 				for _, child := range r.children {
 					if child.isParallel {
 						printReport(child)
+						child.context.testSummary.append(child.name, child)
 					}
 				}
 			}

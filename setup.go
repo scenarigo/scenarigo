@@ -50,10 +50,10 @@ func (sl setupFuncList) setup(ctx *plugin.Context) (*plugin.Context, func(*plugi
 		return ctx, func(_ *plugin.Context) {}
 	}
 	return ctx, func(ctx *plugin.Context) {
-		ctx.Run("teardown", func(ctx *plugin.Context) {
-			for i := len(teardowns) - 1; i >= 0; i-- {
-				ctx.Run(teardowns[i].name, func(ctx *context.Context) {
-					teardowns[i].f(ctx)
+		ctx.Teardown("teardown", func(ctx *plugin.Context) {
+			for _, teardown := range teardowns {
+				ctx.Teardown(teardown.name, func(ctx *context.Context) {
+					teardown.f(ctx)
 				})
 			}
 		})

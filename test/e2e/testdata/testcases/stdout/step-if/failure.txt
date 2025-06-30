@@ -1,4 +1,6 @@
 === RUN   testdata/testcases/scenarios/step-if/failure.yaml
+=== PAUSE testdata/testcases/scenarios/step-if/failure.yaml
+=== CONT  testdata/testcases/scenarios/step-if/failure.yaml
 === RUN   testdata/testcases/scenarios/step-if/failure.yaml/step_if
 === PAUSE testdata/testcases/scenarios/step-if/failure.yaml/step_if
 === CONT  testdata/testcases/scenarios/step-if/failure.yaml/step_if

@@ -303,14 +303,14 @@ ok  	setup	0.000s
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
-			reporter.Run(func(r reporter.Reporter) {
+			failed := !reporter.Run(func(r reporter.Reporter) {
 				ctx := context.New(r)
 				ctx, teardown := test.setups.setup(ctx)
 				teardown(ctx)
-				if failed := ctx.Reporter().Failed(); failed != test.failed {
-					t.Fatalf("expect failed %t but got %t", test.failed, failed)
-				}
 			}, reporter.WithWriter(&b), reporter.WithVerboseLog())
+			if failed != test.failed {
+				t.Fatalf("expect failed %t but got %t", test.failed, failed)
+			}
 			if test.expect != "" {
 				if got, expect := testutil.ReplaceOutput(b.String()), strings.TrimPrefix(test.expect, "\n"); got != expect {
 					dmp := diffmatchpatch.New()
