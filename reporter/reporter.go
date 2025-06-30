@@ -19,11 +19,14 @@ import (
 	"github.com/fatih/color"
 )
 
-// teardownFunc represents a named teardown function
+// teardownFunc represents a named teardown function.
 type teardownFunc struct {
 	name string
 	f    func(r Reporter)
 }
+
+// cleanupFunc represents an unnamed cleanup function.
+type cleanupFunc func()
 
 // A Reporter is something that can be used to report test results.
 type Reporter interface {
@@ -44,6 +47,7 @@ type Reporter interface {
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
 	Teardown(name string, f func(r Reporter))
+	Cleanup(f func())
 
 	runWithRetry(string, func(t Reporter), RetryPolicy) bool
 	setNoFailurePropagation()
@@ -116,6 +120,8 @@ type reporter struct {
 	durationMeasurer testDurationMeasurer
 	children         []*reporter
 	teardowns        []teardownFunc
+	cleanups         []cleanupFunc
+	inCleanup        bool // Flag to indicate if cleanup is running
 
 	barrier chan bool // To signal parallel subtests they may start.
 	done    chan bool // To signal a test is done.
@@ -298,6 +304,9 @@ func (r *reporter) isRoot() bool {
 // Run may be called simultaneously from multiple goroutines,
 // but all such calls must return before the outer test function for r returns.
 func (r *reporter) Run(name string, f func(t Reporter)) bool {
+	if r.inCleanup {
+		panic("reporter: Run called during cleanup")
+	}
 	return r.runWithRetry(name, f, nil)
 }
 
@@ -475,6 +484,23 @@ func (r *reporter) start() func() {
 			}()
 		}
 
+		// Run cleanup functions in reverse order (LIFO) directly without subtests.
+		if len(r.cleanups) > 0 {
+			r.inCleanup = true
+			for i := len(r.cleanups) - 1; i >= 0; i-- {
+				cleanup := r.cleanups[i]
+				func() {
+					defer func() {
+						if cleanupErr := recover(); cleanupErr != nil {
+							r.Errorf("panic in cleanup: %v\n%s", cleanupErr, debug.Stack())
+						}
+					}()
+					cleanup()
+				}()
+			}
+			r.inCleanup = false
+		}
+
 		r.done <- true
 	}
 }
@@ -602,4 +628,13 @@ func (r *reporter) Teardown(name string, f func(r Reporter)) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	r.teardowns = append(r.teardowns, teardownFunc{name: name, f: f})
+}
+
+// Cleanup registers a function to be called when the test completes.
+// This is similar to testing.T.Cleanup() in Go's standard testing package.
+// The cleanup functions are called in reverse order of registration (LIFO).
+func (r *reporter) Cleanup(f func()) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.cleanups = append(r.cleanups, cleanupFunc(f))
 }

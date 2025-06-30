@@ -378,3 +378,154 @@ ok  	teardown1	0.000s
 		})
 	}
 }
+
+func TestReporter_Cleanup(t *testing.T) {
+	pr := func(t *testing.T, r Reporter) *reporter {
+		t.Helper()
+		rptr, ok := r.(*reporter)
+		if !ok {
+			t.Fatalf("expected *reporter but got %T", r)
+		}
+		return rptr
+	}
+
+	tests := map[string]struct {
+		f          func(*testing.T, *reporter)
+		expect     string
+		checkPanic bool
+	}{
+		"cleanup is called after test completion": {
+			f: func(t *testing.T, r *reporter) {
+				t.Helper()
+
+				// Register cleanup functions
+				r.Cleanup(func() {
+					r.Log("cleanup1")
+				})
+				r.Cleanup(func() {
+					r.Log("cleanup2")
+				})
+
+				// Run a simple test
+				r.Run("test1", func(r Reporter) {
+					r.Log("test1")
+				})
+			},
+			expect: `=== RUN   test1
+--- PASS: test1 (0.00s)
+        test1
+PASS
+ok  	test1	0.000s
+cleanup2
+cleanup1
+`,
+		},
+
+		"cleanup order is LIFO": {
+			f: func(t *testing.T, r *reporter) {
+				t.Helper()
+
+				// Register multiple cleanup functions
+				r.Cleanup(func() {
+					r.Log("cleanup first")
+				})
+				r.Cleanup(func() {
+					r.Log("cleanup second")
+				})
+				r.Cleanup(func() {
+					r.Log("cleanup third")
+				})
+			},
+			expect: `cleanup third
+cleanup second
+cleanup first
+`,
+		},
+
+		"cleanup runs after teardown": {
+			f: func(t *testing.T, r *reporter) {
+				t.Helper()
+
+				// Register both cleanup and teardown
+				r.Cleanup(func() {
+					r.Log("cleanup executed")
+				})
+				r.Teardown("teardown", func(r Reporter) {
+					r.Log("teardown executed")
+				})
+			},
+			expect: `=== RUN   teardown
+--- PASS: teardown (0.00s)
+        teardown executed
+PASS
+ok  	teardown	0.000s
+cleanup executed
+`,
+		},
+
+		"cleanup handles panics gracefully": {
+			f: func(t *testing.T, r *reporter) {
+				t.Helper()
+
+				// Register cleanup that panics
+				r.Cleanup(func() {
+					panic("cleanup panic")
+				})
+				r.Cleanup(func() {
+					r.Log("cleanup after panic")
+				})
+			},
+			checkPanic: true, // We expect panic to be caught and reported
+		},
+
+		"run called during cleanup causes panic": {
+			f: func(t *testing.T, r *reporter) {
+				t.Helper()
+
+				// Register cleanup that tries to call Run
+				r.Cleanup(func() {
+					r.Log("cleanup before run")
+					r.Run("invalid", func(r Reporter) {
+						r.Log("this should not execute")
+					})
+					r.Log("cleanup after run")
+				})
+			},
+			checkPanic: true, // We expect Run to panic when called during cleanup
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			opts := []Option{
+				WithWriter(&out),
+				WithVerboseLog(),
+			}
+
+			Run(func(r Reporter) {
+				rptr := pr(t, r)
+				rptr.durationMeasurer = &fixedDurationMeasurer{}
+				test.f(t, rptr)
+			}, opts...)
+
+			actual := out.String()
+
+			if test.checkPanic {
+				// For panic tests, just check that the panic was caught and reported
+				if !strings.Contains(actual, "panic") {
+					t.Errorf("expected panic to be caught and reported, but got: %s", actual)
+				}
+			} else {
+				normalizedActual := normalizeParallelOutput(actual)
+				normalizedExpected := normalizeParallelOutput(test.expect)
+
+				if normalizedActual != normalizedExpected {
+					dmp := diffmatchpatch.New()
+					diffs := dmp.DiffMain(normalizedExpected, normalizedActual, false)
+					t.Errorf("result mismatch:\n%s", dmp.DiffPrettyText(diffs))
+				}
+			}
+		})
+	}
+}
