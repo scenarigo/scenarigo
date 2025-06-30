@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/fatih/color"
 	"github.com/pkg/errors"
@@ -15,10 +16,14 @@ import (
 // ErrTestFailed is the error returned when the test failed.
 var ErrTestFailed = errors.New("test failed")
 
-var verbose bool
+var (
+	verbose  bool
+	parallel int
+)
 
 func init() {
-	runCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
+	runCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	runCmd.Flags().BoolVarP(&verbose, "parallel", "", false, "specify the number of workers to run tests in parallel (the default value is the number of logical CPUs usable by the current process)")
 	rootCmd.AddCommand(runCmd)
 }
 
@@ -54,6 +59,7 @@ func run(cmd *cobra.Command, args []string) error {
 	reporterOpts := []reporter.Option{
 		reporter.WithWriter(cmd.OutOrStdout()),
 	}
+
 	if (cfg != nil && cfg.Output.Verbose) || verbose {
 		reporterOpts = append(reporterOpts, reporter.WithVerboseLog())
 	}
@@ -68,6 +74,18 @@ func run(cmd *cobra.Command, args []string) error {
 
 	if cfg != nil && cfg.Output.Summary {
 		reporterOpts = append(reporterOpts, reporter.WithTestSummary())
+	}
+
+	// flag優先
+	parallelNum := runtime.NumCPU()
+	if cfg != nil && cfg.Execution.Parallel > 0 {
+		parallelNum = cfg.Execution.Parallel
+	}
+	if parallel > 0 {
+		parallelNum = parallel
+	}
+	if parallelNum > 0 {
+		reporterOpts = append(reporterOpts, reporter.WithMaxParallel(parallelNum))
 	}
 
 	var reportErr error
