@@ -100,16 +100,16 @@ PASS
 ok  	test3	0.000s
 === CONT  test1
 === CONT  test2
---- PASS: test1 (0.00s)
-        test1 start
-        test1 end
-PASS
-ok  	test1	0.000s
 --- PASS: test2 (0.00s)
         test2 start
         test2 end
 PASS
 ok  	test2	0.000s
+--- PASS: test1 (0.00s)
+        test1 start
+        test1 end
+PASS
+ok  	test1	0.000s
 === RUN   teardown2
 --- PASS: teardown2 (0.00s)
         teardown2
@@ -305,14 +305,14 @@ ok  	parallel_teardown	0.000s
 === PAUSE main2
 === CONT  main1
 === CONT  main2
---- PASS: main1 (0.00s)
-        main1 parallel
-PASS
-ok  	main1	0.000s
 --- PASS: main2 (0.00s)
         main2 parallel
 PASS
 ok  	main2	0.000s
+--- PASS: main1 (0.00s)
+        main1 parallel
+PASS
+ok  	main1	0.000s
 === RUN   teardown2
 === RUN   teardown2/teardown2_parallel
 === PAUSE teardown2/teardown2_parallel
@@ -340,7 +340,7 @@ ok  	teardown1	0.000s
 				rptr := pr(t, r)
 				rptr.durationMeasurer = &fixedDurationMeasurer{}
 				test.f(t, rptr)
-			}, WithWriter(&b), WithVerboseLog())
+			}, WithWriter(&b), WithVerboseLog(), WithMaxParallel(10))
 
 			actual := "\n" + b.String()
 			if test.checkPanic {
@@ -501,6 +501,7 @@ cleanup executed
 			opts := []Option{
 				WithWriter(&out),
 				WithVerboseLog(),
+				WithMaxParallel(10),
 			}
 
 			Run(func(r Reporter) {

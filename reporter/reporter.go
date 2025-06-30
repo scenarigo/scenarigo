@@ -435,7 +435,19 @@ func (r *reporter) start() func() {
 		if r.retryPolicy == nil {
 			for _, child := range r.children {
 				if child.isParallel {
-					subtests = append(subtests, child.done)
+					done := make(chan bool)
+					go func() {
+						<-child.done
+						// Print reports for parallel subtests after they complete
+						if r.isRoot() {
+							if child.isParallel {
+								printReport(child)
+								child.context.testSummary.append(child.name, child)
+							}
+						}
+						close(done)
+					}()
+					subtests = append(subtests, done)
 				}
 			}
 		}
@@ -450,17 +462,6 @@ func (r *reporter) start() func() {
 			for _, done := range subtests {
 				<-done
 			}
-
-			// Print reports for parallel subtests after they complete
-			if r.isRoot() {
-				for _, child := range r.children {
-					if child.isParallel {
-						printReport(child)
-						child.context.testSummary.append(child.name, child)
-					}
-				}
-			}
-
 			if !r.isParallel {
 				// Reacquire the count for sequential tests. See comment in Run.
 				r.context.waitParallel()
