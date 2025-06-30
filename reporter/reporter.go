@@ -19,6 +19,12 @@ import (
 	"github.com/fatih/color"
 )
 
+// teardownFunc represents a named teardown function
+type teardownFunc struct {
+	name string
+	f    func(r Reporter)
+}
+
 // A Reporter is something that can be used to report test results.
 type Reporter interface {
 	Name() string
@@ -37,6 +43,7 @@ type Reporter interface {
 	Skipped() bool
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
+	Teardown(name string, f func(r Reporter))
 
 	runWithRetry(string, func(t Reporter), RetryPolicy) bool
 	setNoFailurePropagation()
@@ -108,6 +115,7 @@ type reporter struct {
 	logs             *logRecorder
 	durationMeasurer testDurationMeasurer
 	children         []*reporter
+	teardowns        []teardownFunc
 
 	barrier chan bool // To signal parallel subtests they may start.
 	done    chan bool // To signal a test is done.
@@ -306,7 +314,11 @@ func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPol
 	<-child.done
 	r.appendChildren(child)
 	if r.isRoot() {
-		printReport(child)
+		// Only print report immediately for non-parallel tests
+		// Parallel tests will be printed when the parent test completes
+		if !child.isParallel {
+			printReport(child)
+		}
 		child.context.testSummary.append(name, child)
 	}
 	return !child.Failed()
@@ -407,7 +419,7 @@ func (r *reporter) start() func() {
 			}
 		}
 
-		// Collect subtests which are running parallel.
+		// Collect subtests which are running parallel (only original subtests, not teardowns).
 		subtests := make([]<-chan bool, 0, len(r.children))
 		// No need to wait for retry attempts.
 		// They never run in parallel.
@@ -429,6 +441,16 @@ func (r *reporter) start() func() {
 			for _, done := range subtests {
 				<-done
 			}
+
+			// Print reports for parallel subtests after they complete
+			if r.isRoot() {
+				for _, child := range r.children {
+					if child.isParallel {
+						printReport(child)
+					}
+				}
+			}
+
 			if !r.isParallel {
 				// Reacquire the count for sequential tests. See comment in Run.
 				r.context.waitParallel()
@@ -436,6 +458,21 @@ func (r *reporter) start() func() {
 		} else if r.isParallel {
 			// Only release the count for this test if it was run as a parallel test.
 			r.context.release()
+		}
+
+		// Run teardown functions in reverse order (LIFO) as subtests.
+		// Each teardown runs as a normal subtest and can contain parallel subtests.
+		for i := len(r.teardowns) - 1; i >= 0; i-- {
+			teardown := r.teardowns[i]
+			func() {
+				defer func() {
+					if teardownErr := recover(); teardownErr != nil {
+						r.Errorf("panic in teardown: %v\n%s", teardownErr, debug.Stack())
+					}
+				}()
+				// Run teardown as a subtest using the existing Run method
+				r.Run(teardown.name, teardown.f)
+			}()
 		}
 
 		r.done <- true
@@ -452,7 +489,9 @@ func printReport(r *reporter) {
 
 func collectOutput(r *reporter) []string {
 	var results []string
-	if (r.Failed() && !r.noFailurePropagation) || r.context.verbose {
+	// For parallel tests, always show logs in verbose mode, regardless of failure status
+	shouldShowLogs := (r.Failed() && !r.noFailurePropagation) || r.context.verbose
+	if shouldShowLogs {
 		prefix := strings.Repeat("    ", r.depth-1)
 		status := "PASS"
 		c := r.passColor()
@@ -555,4 +594,12 @@ func (r *reporter) skipColor() *color.Color {
 		return color.New()
 	}
 	return color.New(color.FgYellow)
+}
+
+// Teardown registers a named function to be called when all parallel subtests complete.
+// The teardown functions are called in reverse order of registration (LIFO) as subtests.
+func (r *reporter) Teardown(name string, f func(r Reporter)) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.teardowns = append(r.teardowns, teardownFunc{name: name, f: f})
 }
