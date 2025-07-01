@@ -19,6 +19,15 @@ import (
 	"github.com/fatih/color"
 )
 
+// teardownFunc represents a named teardown function.
+type teardownFunc struct {
+	name string
+	f    func(r Reporter)
+}
+
+// cleanupFunc represents an unnamed cleanup function.
+type cleanupFunc func()
+
 // A Reporter is something that can be used to report test results.
 type Reporter interface {
 	Name() string
@@ -37,6 +46,8 @@ type Reporter interface {
 	Skipped() bool
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
+	Teardown(name string, f func(r Reporter))
+	Cleanup(f func())
 
 	runWithRetry(string, func(t Reporter), RetryPolicy) bool
 	setNoFailurePropagation()
@@ -108,6 +119,9 @@ type reporter struct {
 	logs             *logRecorder
 	durationMeasurer testDurationMeasurer
 	children         []*reporter
+	teardowns        []teardownFunc
+	cleanups         []cleanupFunc
+	inCleanup        bool // Flag to indicate if cleanup is running
 
 	barrier chan bool // To signal parallel subtests they may start.
 	done    chan bool // To signal a test is done.
@@ -290,6 +304,9 @@ func (r *reporter) isRoot() bool {
 // Run may be called simultaneously from multiple goroutines,
 // but all such calls must return before the outer test function for r returns.
 func (r *reporter) Run(name string, f func(t Reporter)) bool {
+	if r.inCleanup {
+		panic("reporter: Run called during cleanup")
+	}
 	return r.runWithRetry(name, f, nil)
 }
 
@@ -306,8 +323,12 @@ func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPol
 	<-child.done
 	r.appendChildren(child)
 	if r.isRoot() {
-		printReport(child)
-		child.context.testSummary.append(name, child)
+		// Only print report immediately for non-parallel tests
+		// Parallel tests will be printed when the parent test completes
+		if !child.isParallel {
+			printReport(child)
+			child.context.testSummary.append(name, child)
+		}
 	}
 	return !child.Failed()
 }
@@ -407,14 +428,26 @@ func (r *reporter) start() func() {
 			}
 		}
 
-		// Collect subtests which are running parallel.
+		// Collect subtests which are running parallel (only original subtests, not teardowns).
 		subtests := make([]<-chan bool, 0, len(r.children))
 		// No need to wait for retry attempts.
 		// They never run in parallel.
 		if r.retryPolicy == nil {
 			for _, child := range r.children {
 				if child.isParallel {
-					subtests = append(subtests, child.done)
+					done := make(chan bool)
+					go func() {
+						<-child.done
+						// Print reports for parallel subtests after they complete
+						if r.isRoot() {
+							if child.isParallel {
+								printReport(child)
+								child.context.testSummary.append(child.name, child)
+							}
+						}
+						close(done)
+					}()
+					subtests = append(subtests, done)
 				}
 			}
 		}
@@ -438,6 +471,38 @@ func (r *reporter) start() func() {
 			r.context.release()
 		}
 
+		// Run teardown functions in reverse order (LIFO) as subtests.
+		// Each teardown runs as a normal subtest and can contain parallel subtests.
+		for i := len(r.teardowns) - 1; i >= 0; i-- {
+			teardown := r.teardowns[i]
+			func() {
+				defer func() {
+					if teardownErr := recover(); teardownErr != nil {
+						r.Errorf("panic in teardown: %v\n%s", teardownErr, debug.Stack())
+					}
+				}()
+				// Run teardown as a subtest using the existing Run method
+				r.Run(teardown.name, teardown.f)
+			}()
+		}
+
+		// Run cleanup functions in reverse order (LIFO) directly without subtests.
+		if len(r.cleanups) > 0 {
+			r.inCleanup = true
+			for i := len(r.cleanups) - 1; i >= 0; i-- {
+				cleanup := r.cleanups[i]
+				func() {
+					defer func() {
+						if cleanupErr := recover(); cleanupErr != nil {
+							r.Errorf("panic in cleanup: %v\n%s", cleanupErr, debug.Stack())
+						}
+					}()
+					cleanup()
+				}()
+			}
+			r.inCleanup = false
+		}
+
 		r.done <- true
 	}
 }
@@ -452,7 +517,9 @@ func printReport(r *reporter) {
 
 func collectOutput(r *reporter) []string {
 	var results []string
-	if (r.Failed() && !r.noFailurePropagation) || r.context.verbose {
+	// For parallel tests, always show logs in verbose mode, regardless of failure status
+	shouldShowLogs := (r.Failed() && !r.noFailurePropagation) || r.context.verbose
+	if shouldShowLogs {
 		prefix := strings.Repeat("    ", r.depth-1)
 		status := "PASS"
 		c := r.passColor()
@@ -555,4 +622,21 @@ func (r *reporter) skipColor() *color.Color {
 		return color.New()
 	}
 	return color.New(color.FgYellow)
+}
+
+// Teardown registers a named function to be called when all parallel subtests complete.
+// The teardown functions are called in reverse order of registration (LIFO) as subtests.
+func (r *reporter) Teardown(name string, f func(r Reporter)) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.teardowns = append(r.teardowns, teardownFunc{name: name, f: f})
+}
+
+// Cleanup registers a function to be called when the test completes.
+// This is similar to testing.T.Cleanup() in Go's standard testing package.
+// The cleanup functions are called in reverse order of registration (LIFO).
+func (r *reporter) Cleanup(f func()) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.cleanups = append(r.cleanups, cleanupFunc(f))
 }

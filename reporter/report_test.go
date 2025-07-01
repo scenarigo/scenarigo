@@ -122,14 +122,18 @@ func TestGenerateTestReport(t *testing.T) {
 						r.(*reporter).durationMeasurer = &fixedDurationMeasurer{}
 						test.f(r)
 					}, WithWriter(&nopWriter{}))
-					checkReport(t, r, test.expect)
+					r.Cleanup(func() {
+						checkReport(t, r, test.expect)
+					})
 				})
 				t.Run("FromT", func(t *testing.T) {
 					r := FromT(t, WithWriter(&nopWriter{}))
 					r.(*reporter).durationMeasurer = &fixedDurationMeasurer{}
 					test.f(r)
 					test.expect.Name = t.Name()
-					checkReport(t, r, test.expect)
+					r.Cleanup(func() {
+						checkReport(t, r, test.expect)
+					})
 				})
 			})
 		}

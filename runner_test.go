@@ -186,7 +186,9 @@ secrets:
 				if test.setup != nil {
 					teardown := test.setup(ctx)
 					if teardown != nil {
-						defer teardown(ctx)
+						rptr.Cleanup(func() {
+							teardown(ctx)
+						})
 					}
 				}
 				runner.Run(ctx)
@@ -314,7 +316,9 @@ FAIL
 				if test.setup != nil {
 					teardown := test.setup(ctx)
 					if teardown != nil {
-						defer teardown(ctx)
+						rptr.Cleanup(func() {
+							teardown(ctx)
+						})
 					}
 				}
 				runner.Run(ctx)
