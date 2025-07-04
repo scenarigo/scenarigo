@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	ytt "carvel.dev/ytt/pkg/cmd/template"
 	yttui "carvel.dev/ytt/pkg/cmd/ui"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
-	"slices"
 )
 
 // LoadScenarios loads test scenarios from path.

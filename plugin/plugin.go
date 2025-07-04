@@ -1,3 +1,5 @@
+//go:build !wasip1
+
 package plugin
 
 import (
@@ -32,6 +34,14 @@ func Open(path string) (Plugin, error) {
 	if p, ok := cache[path]; ok {
 		return p, nil
 	}
+	if filepath.Ext(path) == ".wasm" {
+		plg, err := openWasmPlugin(path)
+		if err != nil {
+			return nil, err
+		}
+		cache[path] = plg
+		return plg, nil
+	}
 	newPlugin = &openedPlugin{} //nolint:exhaustruct
 	defer func() { newPlugin = nil }()
 	p, err := plugin.Open(path)
@@ -43,19 +53,9 @@ func Open(path string) (Plugin, error) {
 	return newPlugin, nil
 }
 
-// Symbol is a pointer to a variable or function.
-type Symbol = plugin.Symbol
-
 // SetupFunc represents a setup function.
 // If it returns non-nil teardown, the function will be called later.
 type SetupFunc func(ctx *Context) (newCtx *Context, teardown func(*Context))
-
-// Plugin represents a scenarigo plugin.
-type Plugin interface {
-	Lookup(name string) (Symbol, error)
-	GetSetup() SetupFunc
-	GetSetupEachScenario() SetupFunc
-}
 
 // RegisterSetup registers a function to setup for plugin.
 // Plugins must call this function in their init function if it registers the setup process.

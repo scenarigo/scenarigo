@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package scenarigo.examples.wasm.service;
+
+option go_package = "github.com/scenarigo/scenarigo/examples/wasm/plugin/src/pb/service;service";
+
+service Echo {
+    rpc Echo(EchoRequest) returns (EchoResponse) {};
+}
+
+message EchoRequest {
+    string message_id = 1;
+    string message_body = 2;
+}
+
+message EchoResponse {
+    string message_id = 1;
+    string message_body = 2;
+}

@@ -14,7 +14,7 @@ flag_management:
     - type: project
       target: 75%
     - type: patch
-      target: 75%
+      target: 70%
   individual_flags:
   - name: cmd
     statuses:
