@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -775,7 +776,11 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 		}
 		defer os.Remove(mainPath)
 
-		if _, err := execute(ctx, pb.dir, goCmd, "get", "github.com/scenarigo/scenarigo@latest"); err != nil {
+		currentVersion := getCurrentScenarigoVersion()
+		pluginVersion := getPluginScenarigoVersion(pb.dir)
+		scenarigoVersion := selectWasmPluginScenarigoVersion(currentVersion, pluginVersion)
+
+		if _, err := execute(ctx, pb.dir, goCmd, "get", fmt.Sprintf("github.com/scenarigo/scenarigo@%s", scenarigoVersion)); err != nil {
 			return fmt.Errorf("failed to go get github.com/scenarigo/scenarigo: %w", err)
 		}
 		if err := modTidy(cmd, filepath.Dir(pb.gomodPath), goCmd); err != nil {
@@ -1207,6 +1212,72 @@ func debugLog(cmd *cobra.Command, format string, a ...any) {
 		return
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), fmt.Sprintf("%s: %s\n", debugColor.Sprint("DEBUG"), format), a...)
+}
+
+// getCurrentScenarigoVersion gets the version of scenarigo module used to build the current binary.
+func getCurrentScenarigoVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+
+	// Check main module first
+	if info.Main.Path == newScenarigoModPath && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+
+	// Check dependencies
+	for _, dep := range info.Deps {
+		if dep.Path == newScenarigoModPath && dep.Version != "" && dep.Version != "(devel)" {
+			return dep.Version
+		}
+	}
+
+	return ""
+}
+
+// getPluginScenarigoVersion gets the version of scenarigo module from plugin directory's go.mod.
+func getPluginScenarigoVersion(pluginDir string) string {
+	gomodPath := filepath.Join(pluginDir, "go.mod")
+	b, err := os.ReadFile(gomodPath)
+	if err != nil {
+		return ""
+	}
+
+	gomod, err := modfile.Parse(gomodPath, b, nil)
+	if err != nil {
+		return ""
+	}
+
+	for _, req := range gomod.Require {
+		if req.Mod.Path == newScenarigoModPath {
+			return req.Mod.Version
+		}
+	}
+
+	return ""
+}
+
+// selectWasmPluginScenarigoVersion selects the best version to use for go get.
+func selectWasmPluginScenarigoVersion(currentVersion, pluginVersion string) string {
+	if currentVersion == "" && pluginVersion == "" {
+		return "latest"
+	}
+
+	if currentVersion == "" {
+		return pluginVersion
+	}
+
+	if pluginVersion == "" {
+		return currentVersion
+	}
+
+	// Compare versions and return the higher one
+	if compareVers(currentVersion, pluginVersion) >= 0 {
+		return currentVersion
+	}
+
+	return pluginVersion
 }
 
 type exportedSymbols struct {

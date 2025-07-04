@@ -2879,3 +2879,213 @@ func TestExtractExportedSymbolsErrorCases(t *testing.T) {
 		t.Error("expected error for invalid Go syntax")
 	}
 }
+
+func TestSelectWasmPluginScenarigoVersion(t *testing.T) {
+	tests := []struct {
+		name           string
+		currentVersion string
+		pluginVersion  string
+		expected       string
+	}{
+		{
+			name:           "both empty should return latest",
+			currentVersion: "",
+			pluginVersion:  "",
+			expected:       "latest",
+		},
+		{
+			name:           "current empty should return plugin version",
+			currentVersion: "",
+			pluginVersion:  "v0.17.0",
+			expected:       "v0.17.0",
+		},
+		{
+			name:           "plugin empty should return current version",
+			currentVersion: "v0.18.0",
+			pluginVersion:  "",
+			expected:       "v0.18.0",
+		},
+		{
+			name:           "current version higher should return current",
+			currentVersion: "v0.18.0",
+			pluginVersion:  "v0.17.0",
+			expected:       "v0.18.0",
+		},
+		{
+			name:           "plugin version higher should return plugin",
+			currentVersion: "v0.17.0",
+			pluginVersion:  "v0.18.0",
+			expected:       "v0.18.0",
+		},
+		{
+			name:           "same version should return current",
+			currentVersion: "v0.17.0",
+			pluginVersion:  "v0.17.0",
+			expected:       "v0.17.0",
+		},
+		{
+			name:           "patch version comparison",
+			currentVersion: "v0.17.1",
+			pluginVersion:  "v0.17.0",
+			expected:       "v0.17.1",
+		},
+		{
+			name:           "major version comparison",
+			currentVersion: "v1.0.0",
+			pluginVersion:  "v0.18.0",
+			expected:       "v1.0.0",
+		},
+		{
+			name:           "version without v prefix",
+			currentVersion: "0.18.0",
+			pluginVersion:  "0.17.0",
+			expected:       "0.18.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := selectWasmPluginScenarigoVersion(tt.currentVersion, tt.pluginVersion)
+			if result != tt.expected {
+				t.Errorf("selectWasmPluginScenarigoVersion(%q, %q) = %q, expected %q",
+					tt.currentVersion, tt.pluginVersion, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetPluginScenarigoVersion(t *testing.T) {
+	tests := []struct {
+		name         string
+		gomodContent string
+		expected     string
+	}{
+		{
+			name: "valid scenarigo dependency",
+			gomodContent: `module example
+
+go 1.19
+
+require (
+	github.com/scenarigo/scenarigo v0.17.0
+	github.com/other/dep v1.0.0
+)
+`,
+			expected: "v0.17.0",
+		},
+		{
+			name: "no scenarigo dependency",
+			gomodContent: `module example
+
+go 1.19
+
+require (
+	github.com/other/dep v1.0.0
+)
+`,
+			expected: "",
+		},
+		{
+			name: "multiple dependencies with scenarigo",
+			gomodContent: `module example
+
+go 1.19
+
+require (
+	github.com/other/dep v1.0.0
+	github.com/scenarigo/scenarigo v0.18.1
+	github.com/another/dep v1.2.0
+)
+`,
+			expected: "v0.18.1",
+		},
+		{
+			name: "scenarigo in different require block",
+			gomodContent: `module example
+
+go 1.19
+
+require github.com/other/dep v1.0.0
+
+require github.com/scenarigo/scenarigo v0.19.0
+`,
+			expected: "v0.19.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary directory
+			tmpDir, err := os.MkdirTemp("", "scenarigo-test-")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tmpDir)
+
+			// Write go.mod file
+			gomodPath := filepath.Join(tmpDir, "go.mod")
+			if err := os.WriteFile(gomodPath, []byte(tt.gomodContent), 0644); err != nil {
+				t.Fatalf("Failed to write go.mod: %v", err)
+			}
+
+			result := getPluginScenarigoVersion(tmpDir)
+			if result != tt.expected {
+				t.Errorf("getPluginScenarigoVersion(%q) = %q, expected %q",
+					tmpDir, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetPluginScenarigoVersionNoGoMod(t *testing.T) {
+	// Create temporary directory without go.mod
+	tmpDir, err := os.MkdirTemp("", "scenarigo-test-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	result := getPluginScenarigoVersion(tmpDir)
+	if result != "" {
+		t.Errorf("getPluginScenarigoVersion(%q) = %q, expected empty string", tmpDir, result)
+	}
+}
+
+func TestGetPluginScenarigoVersionInvalidGoMod(t *testing.T) {
+	// Create temporary directory with invalid go.mod
+	tmpDir, err := os.MkdirTemp("", "scenarigo-test-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Write invalid go.mod file
+	gomodPath := filepath.Join(tmpDir, "go.mod")
+	if err := os.WriteFile(gomodPath, []byte("invalid go.mod content"), 0644); err != nil {
+		t.Fatalf("Failed to write go.mod: %v", err)
+	}
+
+	result := getPluginScenarigoVersion(tmpDir)
+	if result != "" {
+		t.Errorf("getPluginScenarigoVersion(%q) = %q, expected empty string", tmpDir, result)
+	}
+}
+
+func TestGetCurrentScenarigoVersion(t *testing.T) {
+	// This test is more complex because it depends on the actual build info
+	// We can only test that it returns a non-empty string when running in the correct context
+	// or an empty string when not
+	result := getCurrentScenarigoVersion()
+
+	// The result should be either:
+	// - A version string (starts with 'v' and contains dots)
+	// - An empty string (if not built with go modules or in development)
+	// - "(devel)" which should be treated as empty
+
+	if result != "" && result != "(devel)" {
+		// If we got a version, it should look like a version string
+		if len(result) == 0 || (result[0] != 'v' && result[0] != '(') {
+			t.Errorf("getCurrentScenarigoVersion() returned invalid version format: %q", result)
+		}
+	}
+}
