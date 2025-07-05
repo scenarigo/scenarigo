@@ -1,8 +1,9 @@
 package schema
 
 import (
-	"github.com/goccy/go-yaml"
 	"slices"
+
+	"github.com/goccy/go-yaml"
 )
 
 // NewOrderedMap creates a new order-preserving map.

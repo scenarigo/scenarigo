@@ -351,7 +351,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 					return true
 				})
 				if inspErr != nil {
-					return fmt.Errorf("failed to modify import path: %w", err)
+					return fmt.Errorf("failed to modify import path: %w", inspErr)
 				}
 				if !found {
 					return nil

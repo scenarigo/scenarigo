@@ -2,37 +2,41 @@ version: "2"
 linters:
   default: all
   disable:
-    - containedctx
-    - contextcheck
-    - depguard
-    - dupl
-    - err113
-    - exhaustive
-    - exhaustruct
-    - funlen
-    - gochecknoglobals
-    - gochecknoinits
-    - gocognit
-    - godox
-    - inamedparam
-    - interfacebloat
-    - ireturn
-    - lll
-    - maintidx
-    - mnd
-    - nestif
-    - nlreturn
-    - paralleltest
-    - perfsprint
-    - prealloc
-    - recvcheck
-    - revive
-    - testpackage
-    - tparallel
-    - unparam
-    - varnamelen
-    - wrapcheck
-    - wsl
+  - containedctx
+  - contextcheck
+  - depguard
+  - dupl
+  - err113
+  - exhaustive
+  - exhaustruct
+  - funlen
+  - gochecknoglobals
+  - gochecknoinits
+  - gocognit
+  - godox
+  - inamedparam
+  - interfacebloat
+  - ireturn
+  - lll
+  - maintidx
+  - mnd
+  - nestif
+  - nlreturn
+  - paralleltest
+  - perfsprint
+  - prealloc
+  - recvcheck
+  - revive
+  - testpackage
+  - tparallel
+  - unparam
+  - varnamelen
+  - wrapcheck
+  - wsl
+  - wsl_v5
+  - funcorder
+  - noinlineerr
+  - embeddedstructfieldcheck
   settings:
     cyclop:
       max-complexity: 25
@@ -40,50 +44,50 @@ linters:
       default-signifies-exhaustive: true
     gosec:
       excludes:
-        - G115
+      - G115
     maintidx:
       under: 30
     staticcheck:
       checks:
-        - all
+      - all
   exclusions:
     generated: lax
     presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
+    - comments
+    - common-false-positives
+    - legacy
+    - std-error-handling
     rules:
-      - linters:
-          - dupword
-          - forcetypeassert
-          - goconst
-          - maintidx
-          - noctx
-          - cyclop
-          - gocyclo
-        path: _test.go
-      - linters:
-          - staticcheck
-        text: "ST1005"
-      - linters:
-          - staticcheck
-        text: "ST1006"
-      - linters:
-          - staticcheck
-        text: 'SA1019: "github.com/golang/protobuf'
+    - linters:
+      - dupword
+      - forcetypeassert
+      - goconst
+      - maintidx
+      - noctx
+      - cyclop
+      - gocyclo
+      path: _test.go
+    - linters:
+      - staticcheck
+      text: "ST1005"
+    - linters:
+      - staticcheck
+      text: "ST1006"
+    - linters:
+      - staticcheck
+      text: 'SA1019: "github.com/golang/protobuf'
     paths:
-      - third_party$
-      - builtin$
-      - examples$
+    - third_party$
+    - builtin$
+    - examples$
 formatters:
   enable:
-    - gofmt
-    - gofumpt
-    - goimports
+  - gofmt
+  - gofumpt
+  - goimports
   exclusions:
     generated: lax
     paths:
-      - third_party$
-      - builtin$
-      - examples$
+    - third_party$
+    - builtin$
+    - examples$

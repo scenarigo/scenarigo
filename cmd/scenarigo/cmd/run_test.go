@@ -249,12 +249,14 @@ func sortTests(t *testing.T, s string) string {
 	lines := strings.Split(s, "\n")
 	var trailing string
 	var i int
+loop:
 	for i < len(lines) {
 		line := lines[i]
-		if strings.HasPrefix(line, "ok") {
+		switch {
+		case strings.HasPrefix(line, "ok"):
 			tests = append(tests, line)
 			i++
-		} else if strings.HasPrefix(line, "--- FAIL:") {
+		case strings.HasPrefix(line, "--- FAIL:"):
 			failLines := []string{line}
 			i++
 			var fails int
@@ -270,13 +272,13 @@ func sortTests(t *testing.T, s string) string {
 					}
 				}
 			}
-		} else if line == "" {
+		case line == "":
 			trailing = strings.Join(lines[i:], "\n")
-			break
-		} else {
+			break loop
+		default:
 			t.Fatalf("unknown output %q", line)
 		}
 	}
-	sort.Sort(sort.StringSlice(tests))
+	sort.Strings(tests)
 	return strings.Join(append(tests, trailing), "\n")
 }
