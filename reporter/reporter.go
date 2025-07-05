@@ -509,10 +509,15 @@ func (r *reporter) start() func() {
 
 func printReport(r *reporter) {
 	results := collectOutput(r)
-	r.context.printf("%s\n", strings.Join(results, "\n"))
-	if r.Failed() && !r.testing {
-		r.context.print(r.failColor().Sprintln("FAIL")) //nolint:forbidigo
+	var sb strings.Builder
+	for _, r := range results {
+		sb.WriteString(r)
+		sb.WriteString("\n")
 	}
+	if r.Failed() && !r.testing {
+		sb.WriteString(r.failColor().Sprintln("FAIL"))
+	}
+	r.context.print(sb.String()) //nolint:forbidigo
 }
 
 func collectOutput(r *reporter) []string {
