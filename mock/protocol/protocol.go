@@ -3,11 +3,11 @@ package protocol
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"sync"
 
 	"github.com/scenarigo/scenarigo/logger"
-	"maps"
 )
 
 var (

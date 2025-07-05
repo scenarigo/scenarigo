@@ -11,7 +11,7 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
-// normalizeParallelOutput sorts consecutive === CONT lines to make test output deterministic
+// normalizeParallelOutput sorts consecutive === CONT lines to make test output deterministic.
 func normalizeParallelOutput(output string) string {
 	lines := strings.Split(output, "\n")
 	result := make([]string, 0, len(lines))

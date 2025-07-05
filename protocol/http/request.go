@@ -273,7 +273,7 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, any, error)
 		reader = bytes.NewReader(b)
 	}
 
-	req, err := http.NewRequest(strings.ToUpper(method), urlStr, reader)
+	req, err := http.NewRequestWithContext(ctx.RequestContext(), strings.ToUpper(method), urlStr, reader)
 	if err != nil {
 		return nil, nil, errors.Errorf("failed to create request: %s", err)
 	}

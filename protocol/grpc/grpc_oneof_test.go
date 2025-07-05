@@ -1,4 +1,4 @@
-//nolint:stylecheck,tagliatelle,staticcheck
+//nolint:tagliatelle,staticcheck
 package grpc
 
 type OneofMessage struct {
