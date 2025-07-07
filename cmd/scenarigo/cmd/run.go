@@ -23,7 +23,7 @@ var (
 
 func init() {
 	runCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
-	runCmd.Flags().BoolVarP(&verbose, "parallel", "", false, "specify the number of workers to run tests in parallel (the default value is the number of logical CPUs usable by the current process)")
+	runCmd.Flags().IntVarP(&parallel, "parallel", "", 0, "specify the number of workers to run tests in parallel (the default value is the number of logical CPUs usable by the current process)")
 	rootCmd.AddCommand(runCmd)
 }
 
