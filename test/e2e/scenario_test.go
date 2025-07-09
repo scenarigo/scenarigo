@@ -376,60 +376,62 @@ func TestRunner_GenerateTestReport(t *testing.T) {
 	ok := reporter.Run(func(rptr reporter.Reporter) {
 		r.Run(context.New(rptr).WithPluginDir("testdata/gen/plugins"))
 
-		report, err := reporter.GenerateTestReport(rptr)
-		if err != nil {
-			t.Fatalf("failed to generate report: %s", err)
-		}
+		rptr.Cleanup(func() {
+			report, err := reporter.GenerateTestReport(rptr)
+			if err != nil {
+				t.Fatalf("failed to generate report: %s", err)
+			}
 
-		if diff := cmp.Diff(
-			&reporter.TestReport{
-				Result: reporter.TestResultPassed,
-				Files: []reporter.ScenarioFileReport{
-					{
-						Name:   "testdata/scenarios/report.yaml",
-						Result: reporter.TestResultPassed,
-						Scenarios: []reporter.ScenarioReport{
-							{
-								Name:   "/echo",
-								File:   "testdata/scenarios/report.yaml",
-								Result: reporter.TestResultPassed,
-								Steps: []reporter.StepReport{
-									{
-										Name:   "include",
-										Result: reporter.TestResultPassed,
-										SubSteps: []reporter.SubStepReport{
-											{
-												Name:   "included.yaml",
-												Result: reporter.TestResultPassed,
-												SubSteps: []reporter.SubStepReport{
-													{
-														Name:   "step plugin",
-														Result: reporter.TestResultPassed,
+			if diff := cmp.Diff(
+				&reporter.TestReport{
+					Result: reporter.TestResultPassed,
+					Files: []reporter.ScenarioFileReport{
+						{
+							Name:   "testdata/scenarios/report.yaml",
+							Result: reporter.TestResultPassed,
+							Scenarios: []reporter.ScenarioReport{
+								{
+									Name:   "/echo",
+									File:   "testdata/scenarios/report.yaml",
+									Result: reporter.TestResultPassed,
+									Steps: []reporter.StepReport{
+										{
+											Name:   "include",
+											Result: reporter.TestResultPassed,
+											SubSteps: []reporter.SubStepReport{
+												{
+													Name:   "included.yaml",
+													Result: reporter.TestResultPassed,
+													SubSteps: []reporter.SubStepReport{
+														{
+															Name:   "step plugin",
+															Result: reporter.TestResultPassed,
+														},
 													},
 												},
 											},
 										},
-									},
-									{
-										Name:   "POST /echo",
-										Result: reporter.TestResultPassed,
+										{
+											Name:   "POST /echo",
+											Result: reporter.TestResultPassed,
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-			report,
-			cmp.FilterValues(func(_, _ reporter.TestDuration) bool {
-				return true
-			}, cmp.Ignore()),
-			cmp.FilterValues(func(_, _ reporter.ReportLogs) bool {
-				return true
-			}, cmp.Ignore()),
-		); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+				report,
+				cmp.FilterValues(func(_, _ reporter.TestDuration) bool {
+					return true
+				}, cmp.Ignore()),
+				cmp.FilterValues(func(_, _ reporter.ReportLogs) bool {
+					return true
+				}, cmp.Ignore()),
+			); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}, reporter.WithWriter(&b))
 	if !ok {
 		t.Fatalf("scenario failed:\n%s", b.String())

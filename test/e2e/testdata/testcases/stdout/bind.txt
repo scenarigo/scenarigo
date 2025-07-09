@@ -1,4 +1,6 @@
 === RUN   testdata/testcases/scenarios/bind.yaml
+=== PAUSE testdata/testcases/scenarios/bind.yaml
+=== CONT  testdata/testcases/scenarios/bind.yaml
 === RUN   testdata/testcases/scenarios/bind.yaml/bind
 === PAUSE testdata/testcases/scenarios/bind.yaml/bind
 === CONT  testdata/testcases/scenarios/bind.yaml/bind

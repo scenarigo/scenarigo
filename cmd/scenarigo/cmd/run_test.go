@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 
@@ -228,7 +229,7 @@ ok  	scenarios/pass.yaml	0.000s
 			if test.expectError == "" && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
-			if got, expect := testutil.ReplaceOutput(buf.String()), test.expectOutput; got != expect {
+			if got, expect := sortTests(t, testutil.ReplaceOutput(buf.String())), test.expectOutput; got != expect {
 				dmp := diffmatchpatch.New()
 				diffs := dmp.DiffMain(expect, got, false)
 				t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
@@ -240,4 +241,44 @@ ok  	scenarios/pass.yaml	0.000s
 			}
 		})
 	}
+}
+
+func sortTests(t *testing.T, s string) string {
+	t.Helper()
+	tests := []string{}
+	lines := strings.Split(s, "\n")
+	var trailing string
+	var i int
+loop:
+	for i < len(lines) {
+		line := lines[i]
+		switch {
+		case strings.HasPrefix(line, "ok"):
+			tests = append(tests, line)
+			i++
+		case strings.HasPrefix(line, "--- FAIL:"):
+			failLines := []string{line}
+			i++
+			var fails int
+			for i < len(lines) {
+				line := lines[i]
+				failLines = append(failLines, line)
+				i++
+				if strings.HasPrefix(line, "FAIL") {
+					fails++
+					if fails == 3 {
+						tests = append(tests, strings.Join(failLines, "\n"))
+						break
+					}
+				}
+			}
+		case line == "":
+			trailing = strings.Join(lines[i:], "\n")
+			break loop
+		default:
+			t.Fatalf("unknown output %q", line)
+		}
+	}
+	sort.Strings(tests)
+	return strings.Join(append(tests, trailing), "\n")
 }

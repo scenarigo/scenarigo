@@ -28,6 +28,7 @@ type Config struct {
 	Protocols       ProtocolOptions                  `yaml:"protocols,omitempty"`
 	Input           InputConfig                      `yaml:"input,omitempty"`
 	Output          OutputConfig                     `yaml:"output,omitempty"`
+	Execution       ExecutionConfig                  `yaml:"execution,omitempty"`
 
 	// absolute path to the configuration file
 	Root     string          `yaml:"-"`
@@ -131,6 +132,11 @@ type JSONReportConfig struct {
 // JUnitReportConfig represents a JUnit report configuration.
 type JUnitReportConfig struct {
 	Filename string `yaml:"filename,omitempty"`
+}
+
+// ExecutionConfig represents a configuration to control the behavior of the test runner during execution.
+type ExecutionConfig struct {
+	Parallel int `yaml:"parallel,omitempty"`
 }
 
 // LoadConfig loads a configuration from path.

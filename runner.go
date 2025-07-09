@@ -291,6 +291,7 @@ FILE_LOOP:
 			}
 		}
 		ctx.Run(testName, func(ctx *context.Context) {
+			ctx.Reporter().Parallel()
 			scns, err := schema.LoadScenarios(f, opts...)
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
@@ -306,6 +307,7 @@ FILE_LOOP:
 	}
 	for i, reader := range r.scenarioReaders {
 		ctx.Run(fmt.Sprint(i), func(ctx *context.Context) {
+			ctx.Reporter().Parallel()
 			scns, err := schema.LoadScenariosFromReader(reader)
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)

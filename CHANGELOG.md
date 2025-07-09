@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## [v0.22.1](https://github.com/scenarigo/scenarigo/compare/v0.22.0...v0.22.1) - 2025-07-07
+### Bug Fixes
+- fix parallel flag by @zoncoen in https://github.com/scenarigo/scenarigo/pull/577
+
+## [v0.22.0](https://github.com/scenarigo/scenarigo/compare/v0.21.3...v0.22.0) - 2025-07-05
+### New Features
+- add --parallel option by @zoncoen in https://github.com/scenarigo/scenarigo/pull/573
+### Bug Fixes
+- batch output to prevent write conflicts by @zoncoen in https://github.com/scenarigo/scenarigo/pull/576
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/sync from 0.14.0 to 0.15.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/566
+- chore(deps): bump github.com/sergi/go-diff from 1.3.1 to 1.4.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/567
+- chore(deps): bump golang.org/x/mod from 0.24.0 to 0.25.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/569
+- chore(deps): bump golang.org/x/text from 0.25.0 to 0.26.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/570
+- chore(deps): bump indirect modules by @scenarigo-bot in https://github.com/scenarigo/scenarigo/pull/571
+- chore(deps): bump google.golang.org/grpc from 1.72.2 to 1.73.0 by @dependabot in https://github.com/scenarigo/scenarigo/pull/568
+
 ## [v0.21.3](https://github.com/scenarigo/scenarigo/compare/v0.21.2...v0.21.3) - 2025-06-02
 ### Dependency Upgrades
 - chore(deps): bump golang.org/x/net from 0.36.0 to 0.38.0 in /examples/grpc/plugin/src by @dependabot in https://github.com/scenarigo/scenarigo/pull/556
