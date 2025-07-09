@@ -1,0 +1,27 @@
+package main
+
+import (
+	"github.com/scenarigo/scenarigo/plugin"
+)
+
+func main() {
+	plugin.Register(
+		func() []*plugin.Definition {
+			return []*plugin.Definition{
+				{{- range .Values }}
+				plugin.ToDefinition("{{ . }}", {{ . }}),
+				{{- end }}
+				{{- range .Funcs }}
+				plugin.ToDefinition("{{ . }}", {{ . }}),
+				{{- end }}
+			}
+		},
+		func() []*plugin.Definition {
+			return []*plugin.Definition{
+				{{- range .Values }}
+				plugin.ToDefinition("{{ . }}", {{ . }}),
+				{{- end }}
+			}
+		},
+	)
+}

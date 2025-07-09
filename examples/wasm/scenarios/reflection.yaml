@@ -1,0 +1,42 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.wasm
+vars:
+  target: '{{plugins.plugin.ServerAddr}}'
+title: use gRPC reflection
+steps:
+- title: Ping
+  protocol: grpc
+  request:
+    target: '{{vars.target}}'
+    service: scenarigo.examples.wasm.service.Ping
+    method: Ping
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message: {}
+- title: Echo
+  protocol: grpc
+  request:
+    target: '{{vars.target}}'
+    service: scenarigo.examples.wasm.service.Echo
+    method: Echo
+    message:
+      messageId: aaa
+      messageBody: hello
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message:
+      messageId: '{{request.message.messageId}}'
+      messageBody: '{{request.message.messageBody}}'

@@ -3,6 +3,7 @@ package plugin
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -17,12 +18,16 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
+	"time"
 
 	"github.com/fatih/color"
+	net "github.com/goccy/wasi-go-net"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
@@ -40,6 +45,7 @@ const (
 	toolchainLocal             = "local"
 	oldScenarigoModPath        = "github.com/zoncoen/scenarigo"
 	newScenarigoModPath        = "github.com/scenarigo/scenarigo"
+	develVersion               = "(devel)"
 )
 
 var (
@@ -85,6 +91,7 @@ func isGotip(v string) (string, bool) {
 var (
 	verbose       bool
 	skipMigration bool
+	wasm          bool
 )
 
 func newBuildCmd() *cobra.Command {
@@ -103,6 +110,7 @@ This command requires go command in $PATH.
 	}
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
 	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "skip migration")
+	cmd.Flags().BoolVarP(&wasm, "wasm", "", false, "build as WebAssembly")
 	return cmd
 }
 
@@ -143,11 +151,13 @@ func (o *overrideModule) requireReplace() (*modfile.Require, string, *modfile.Re
 
 type buildOpts struct {
 	skipMigration bool
+	wasm          bool
 }
 
 func buildRun(cmd *cobra.Command, args []string) error {
 	return buildRunWithOpts(cmd, args, &buildOpts{
 		skipMigration: skipMigration,
+		wasm:          wasm,
 	})
 }
 
@@ -235,7 +245,7 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 
 		var retry bool
 		for _, pb := range pbs {
-			if err := pb.build(cmd, goCmd, overrideKeys, overrides, goworkPath, gowork); err != nil {
+			if err := pb.build(cmd, goCmd, overrideKeys, overrides, goworkPath, gowork, opts); err != nil {
 				var re *retriableError
 				if errors.As(err, &re) {
 					msg := fmt.Sprintf("%s: %s", pb.name, err)
@@ -278,8 +288,17 @@ func findGoCmd(ctx context.Context) (string, error) {
 }
 
 // 2nd return value should always be called.
+//
+//nolint:cyclop
 func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig], opts *buildOpts) (*pluginBuilder, func(), error) {
 	out := item.Key
+
+	// Check if plugin name has .wasm suffix and enable WASM build automatically
+	if strings.HasSuffix(out, ".wasm") && !opts.wasm {
+		debugLog(cmd, "detected .wasm suffix in plugin name %s, enabling WASM build", out)
+		opts.wasm = true
+	}
+
 	mod := filepathutil.From(root, item.Value.Src)
 	var src string
 	clean := func() {}
@@ -305,7 +324,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 		}
 	}
 	// NOTE: All module names must be unique and different from the standard modules.
-	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, ".so"))
+	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, filepath.Ext(out)))
 	pb, err := newPluginBuilder(cmd, goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
 	if err != nil {
 		return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
@@ -716,10 +735,13 @@ func getInitialState(gomod *modfile.File) (map[string]modfile.Require, map[strin
 	return initialRequires, initialReplaces
 }
 
-func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule, goworkPath string, gowork []byte) error {
+func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []string, overrides map[string]*overrideModule, goworkPath string, gowork []byte, opts *buildOpts) error {
 	ctx := ctx(cmd)
-	if err := pb.updateGoMod(cmd, goCmd, overrideKeys, overrides); err != nil {
-		return err
+
+	if opts == nil || !opts.wasm {
+		if err := pb.updateGoMod(cmd, goCmd, overrideKeys, overrides); err != nil {
+			return err
+		}
 	}
 	if err := os.RemoveAll(pb.out); err != nil {
 		return fmt.Errorf("failed to delete the old plugin %s: %w", pb.out, err)
@@ -741,6 +763,46 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 			return fmt.Errorf(`"go work use ." failed: %w`, err)
 		}
 	}
+
+	if opts != nil && opts.wasm {
+		// Analyze the code used for the plugin and extract a list of exported variables and functions.
+		// Then, create a main function that includes a Register() API in github.com/scenarigo/scenarigo/plugin/wasm_guest.go to inform the host of this list, and add it to the build.
+		symbols, err := extractExportedSymbols(pb.dir)
+		if err != nil {
+			return fmt.Errorf("failed to extract exported symbols: %w", err)
+		}
+		mainPath, err := createWasmMainFile(pb.dir, symbols)
+		if err != nil {
+			return fmt.Errorf("failed to create wasm.go: %w", err)
+		}
+		defer os.Remove(mainPath)
+
+		currentVersion := getCurrentScenarigoVersion()
+		pluginVersion := getPluginScenarigoVersion(pb.dir)
+		scenarigoVersion := selectWasmPluginScenarigoVersion(currentVersion, pluginVersion)
+
+		if _, err := execute(ctx, pb.dir, goCmd, "get", fmt.Sprintf("github.com/scenarigo/scenarigo@%s", scenarigoVersion)); err != nil {
+			return fmt.Errorf("failed to go get github.com/scenarigo/scenarigo: %w", err)
+		}
+		if err := modTidy(cmd, filepath.Dir(pb.gomodPath), goCmd); err != nil {
+			return err
+		}
+
+		// To replace net.Listen and net.Dialer.DialContext defined in the net package with Listen and DialContext defined in github.com/goccy/wasi-go-net/wasip1, use an overlay.
+		// Without doing this, it is not possible to access the network without rewriting the Go source code used for the wasm plugin.
+		overlayFile, err := net.CreateReplacedNetPkgOverlayFile(ctx, net.WithGoCommandPath(goCmd))
+		if err != nil {
+			return fmt.Errorf("failed to create overlay file: %w", err)
+		}
+		defer overlayFile.Close()
+
+		envs = append(envs, "GOOS=wasip1", "GOARCH=wasm")
+		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-overlay", overlayFile.Path(), "-o", pb.out); err != nil {
+			return fmt.Errorf(`"go build -overlay %s -o %s" failed: %w`, overlayFile.Path(), pb.out, err)
+		}
+		return nil
+	}
+
 	if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
 		return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
 	}
@@ -1151,4 +1213,132 @@ func debugLog(cmd *cobra.Command, format string, a ...any) {
 		return
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(), fmt.Sprintf("%s: %s\n", debugColor.Sprint("DEBUG"), format), a...)
+}
+
+// getCurrentScenarigoVersion gets the version of scenarigo module used to build the current binary.
+func getCurrentScenarigoVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+
+	// Check main module first
+	if info.Main.Path == newScenarigoModPath && info.Main.Version != "" && info.Main.Version != develVersion {
+		return info.Main.Version
+	}
+
+	// Check dependencies
+	for _, dep := range info.Deps {
+		if dep.Path == newScenarigoModPath && dep.Version != "" && dep.Version != develVersion {
+			return dep.Version
+		}
+	}
+
+	return ""
+}
+
+// getPluginScenarigoVersion gets the version of scenarigo module from plugin directory's go.mod.
+func getPluginScenarigoVersion(pluginDir string) string {
+	gomodPath := filepath.Join(pluginDir, "go.mod")
+	b, err := os.ReadFile(gomodPath)
+	if err != nil {
+		return ""
+	}
+
+	gomod, err := modfile.Parse(gomodPath, b, nil)
+	if err != nil {
+		return ""
+	}
+
+	for _, req := range gomod.Require {
+		if req.Mod.Path == newScenarigoModPath {
+			return req.Mod.Version
+		}
+	}
+
+	return ""
+}
+
+// selectWasmPluginScenarigoVersion selects the best version to use for go get.
+func selectWasmPluginScenarigoVersion(currentVersion, pluginVersion string) string {
+	if currentVersion == "" && pluginVersion == "" {
+		return "latest"
+	}
+
+	if currentVersion == "" {
+		return pluginVersion
+	}
+
+	if pluginVersion == "" {
+		return currentVersion
+	}
+
+	// Compare versions and return the higher one
+	if compareVers(currentVersion, pluginVersion) >= 0 {
+		return currentVersion
+	}
+
+	return pluginVersion
+}
+
+type exportedSymbols struct {
+	Funcs  []string
+	Values []string
+}
+
+// extractExportedSymbols extracts exported function and variable names from Go files in dir.
+func extractExportedSymbols(dir string) (*exportedSymbols, error) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	var syms exportedSymbols
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				switch d := decl.(type) {
+				case *ast.FuncDecl:
+					if d.Recv == nil && d.Name.IsExported() {
+						syms.Funcs = append(syms.Funcs, d.Name.Name)
+					}
+				case *ast.GenDecl:
+					if d.Tok != token.VAR {
+						continue
+					}
+					for _, spec := range d.Specs {
+						vs, ok := spec.(*ast.ValueSpec)
+						if !ok {
+							continue
+						}
+						for _, name := range vs.Names {
+							if name.IsExported() {
+								syms.Values = append(syms.Values, name.Name)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return &syms, nil
+}
+
+//go:embed wasm_main.go.tmpl
+var wasmMainTmpl []byte
+
+func createWasmMainFile(dir string, symbols *exportedSymbols) (string, error) {
+	tmpl, err := template.New("").Parse(string(wasmMainTmpl))
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, symbols); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("main_%d.go", time.Now().Unix()))
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
 }
