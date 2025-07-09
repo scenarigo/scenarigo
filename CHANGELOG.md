@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [v0.22.2](https://github.com/scenarigo/scenarigo/compare/v0.22.1...v0.22.2) - 2025-07-09
+### New Features
+- Support WebAssembly Plugin System ( PoC ) by @goccy in https://github.com/scenarigo/scenarigo/pull/574
+
 ## [v0.22.1](https://github.com/scenarigo/scenarigo/compare/v0.22.0...v0.22.1) - 2025-07-07
 ### Bug Fixes
 - fix parallel flag by @zoncoen in https://github.com/scenarigo/scenarigo/pull/577
