@@ -45,6 +45,7 @@ const (
 	toolchainLocal             = "local"
 	oldScenarigoModPath        = "github.com/zoncoen/scenarigo"
 	newScenarigoModPath        = "github.com/scenarigo/scenarigo"
+	develVersion               = "(devel)"
 )
 
 var (
@@ -1222,13 +1223,13 @@ func getCurrentScenarigoVersion() string {
 	}
 
 	// Check main module first
-	if info.Main.Path == newScenarigoModPath && info.Main.Version != "" && info.Main.Version != "(devel)" {
+	if info.Main.Path == newScenarigoModPath && info.Main.Version != "" && info.Main.Version != develVersion {
 		return info.Main.Version
 	}
 
 	// Check dependencies
 	for _, dep := range info.Deps {
-		if dep.Path == newScenarigoModPath && dep.Version != "" && dep.Version != "(devel)" {
+		if dep.Path == newScenarigoModPath && dep.Version != "" && dep.Version != develVersion {
 			return dep.Version
 		}
 	}

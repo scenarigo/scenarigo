@@ -3016,15 +3016,11 @@ require github.com/scenarigo/scenarigo v0.19.0
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary directory
-			tmpDir, err := os.MkdirTemp("", "scenarigo-test-")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer os.RemoveAll(tmpDir)
+			tmpDir := t.TempDir()
 
 			// Write go.mod file
 			gomodPath := filepath.Join(tmpDir, "go.mod")
-			if err := os.WriteFile(gomodPath, []byte(tt.gomodContent), 0644); err != nil {
+			if err := os.WriteFile(gomodPath, []byte(tt.gomodContent), 0o600); err != nil {
 				t.Fatalf("Failed to write go.mod: %v", err)
 			}
 
@@ -3039,11 +3035,7 @@ require github.com/scenarigo/scenarigo v0.19.0
 
 func TestGetPluginScenarigoVersionNoGoMod(t *testing.T) {
 	// Create temporary directory without go.mod
-	tmpDir, err := os.MkdirTemp("", "scenarigo-test-")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	result := getPluginScenarigoVersion(tmpDir)
 	if result != "" {
@@ -3053,15 +3045,11 @@ func TestGetPluginScenarigoVersionNoGoMod(t *testing.T) {
 
 func TestGetPluginScenarigoVersionInvalidGoMod(t *testing.T) {
 	// Create temporary directory with invalid go.mod
-	tmpDir, err := os.MkdirTemp("", "scenarigo-test-")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Write invalid go.mod file
 	gomodPath := filepath.Join(tmpDir, "go.mod")
-	if err := os.WriteFile(gomodPath, []byte("invalid go.mod content"), 0644); err != nil {
+	if err := os.WriteFile(gomodPath, []byte("invalid go.mod content"), 0o600); err != nil {
 		t.Fatalf("Failed to write go.mod: %v", err)
 	}
 
@@ -3082,7 +3070,7 @@ func TestGetCurrentScenarigoVersion(t *testing.T) {
 	// - An empty string (if not built with go modules or in development)
 	// - "(devel)" which should be treated as empty
 
-	if result != "" && result != "(devel)" {
+	if result != "" && result != develVersion {
 		// If we got a version, it should look like a version string
 		if len(result) == 0 || (result[0] != 'v' && result[0] != '(') {
 			t.Errorf("getCurrentScenarigoVersion() returned invalid version format: %q", result)
