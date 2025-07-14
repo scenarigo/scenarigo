@@ -250,7 +250,7 @@ func NewAnyType(t reflect.Type) (*Type, error) {
 }
 
 func (t *AnyType) ToReflect() (reflect.Type, error) {
-	return reflect.TypeOf(&Any{}), nil
+	return reflect.TypeOf((*any)(nil)).Elem(), nil
 }
 
 func (t *AnyType) String() string {

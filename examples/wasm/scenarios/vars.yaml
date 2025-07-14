@@ -2,6 +2,28 @@ schemaVersion: scenario/v1
 plugins:
   plugin: plugin.wasm
 vars:
+  target: '{{ plugins.plugin.ServerAddr }}'
   int: '{{ plugins.plugin.Int }}'
+  slice: '{{ plugins.plugin.Slice }}'
+  map: '{{ plugins.plugin.Map }}'
+  struct: '{{ plugins.plugin.Struct }}'
+  structptr: '{{ plugins.plugin.StructPtr }}'
 title: use global variables
 steps:
+  - title: Ping
+    protocol: grpc
+    request:
+      target: '{{ vars.target }}'
+      service: scenarigo.examples.wasm.service.Ping
+      method: Ping
+    expect:
+      status:
+        code: OK
+    bind:
+      vars:
+        print_int: '{{ plugins.plugin.Println(vars.int) }}'
+        print_map: '{{ plugins.plugin.Println(vars.map) }}'
+        print_map_a: '{{ plugins.plugin.Println(vars.map.a) }}'
+        print_map_b: '{{ plugins.plugin.Println(vars.map.b) }}'
+        print_struct_x: '{{ plugins.plugin.Println(vars.struct.X) }}'
+        print_structptr_x: '{{ plugins.plugin.Println(vars.structptr.X) }}'

@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/scenarigo/scenarigo/context"
-	"github.com/scenarigo/scenarigo/internal/plugin/wasm"
 	"github.com/scenarigo/scenarigo/reporter"
 )
 
@@ -199,13 +198,13 @@ func TestWasmHost(t *testing.T) {
 			if !ok {
 				t.Fatalf("failed to get value")
 			}
-			m, ok := v.(map[string]*wasm.Any)
+			m, ok := v.(map[string]any)
 			if !ok {
 				t.Fatalf("failed to get bytes value: %T", v)
 			}
-			if !reflect.DeepEqual(m, map[string]*wasm.Any{
-				"a": &wasm.Any{Elem: "x"},
-				"b": &wasm.Any{Elem: float64(1)},
+			if !reflect.DeepEqual(m, map[string]any{
+				"a": "x",
+				"b": float64(1),
 			}) {
 				t.Fatalf("failed to get value: %+v", m)
 			}
@@ -215,16 +214,16 @@ func TestWasmHost(t *testing.T) {
 			if !ok {
 				t.Fatalf("failed to get value")
 			}
-			slice, ok := v.([]*wasm.Any)
+			slice, ok := v.([]any)
 			if !ok {
 				t.Fatalf("failed to get bytes value: %T", v)
 			}
-			if !reflect.DeepEqual(slice, []*wasm.Any{
-				{Elem: float64(1)},
-				{Elem: float64(-2)},
-				{Elem: float64(3.14)},
-				{Elem: true},
-				{Elem: "hello"},
+			if !reflect.DeepEqual(slice, []any{
+				float64(1),
+				float64(-2),
+				float64(3.14),
+				true,
+				"hello",
 			}) {
 				t.Fatalf("failed to get value: %+v", m)
 			}

@@ -278,7 +278,9 @@ func (p *WasmPlugin) setup(sctx *Context) (*Context, func(*Context), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	p.nameToTypeMap = syncRes.ToTypeMap()
+	for k, v := range syncRes.ToTypeMap() {
+		p.nameToTypeMap[k] = v
+	}
 	return sctx, func(sctx *Context) {
 		if _, err := p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable())); err != nil {
 			panic(err)
@@ -312,7 +314,9 @@ func (p *WasmPlugin) setupEachScenario(sctx *Context) (*Context, func(*Context),
 	if err != nil {
 		return nil, nil, err
 	}
-	p.nameToTypeMap = syncRes.ToTypeMap()
+	for k, v := range syncRes.ToTypeMap() {
+		p.nameToTypeMap[k] = v
+	}
 	return sctx, func(sctx *Context) {
 		if _, err := p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable())); err != nil {
 			panic(err)

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 
@@ -120,4 +121,45 @@ func createClients(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context))
 	return ctx, func(ctx *plugin.Context) {
 		cc.Close()
 	}
+}
+
+var (
+	Int     int     = 1
+	Int8    int8    = 2
+	Int16   int16   = 3
+	Int32   int32   = 4
+	Int64   int64   = 5
+	Uint    uint    = 6
+	Uint8   uint8   = 7
+	Uint16  uint16  = 8
+	Uint32  uint32  = 9
+	Uint64  uint64  = 10
+	Float32 float32 = 11
+	Float64 float64 = 12
+	Uintptr uintptr = 13
+	Bool    bool    = true
+	String  string  = "hello"
+	Bytes   []byte  = []byte("world")
+	Map             = map[string]any{"a": "x", "b": 1}
+	Slice           = []any{1, -2, 3.14, true, "hello"}
+	Array           = [2]int64{1, 2}
+	Struct          = struct {
+		X int
+		Y string
+	}{
+		X: 1,
+		Y: "hello",
+	}
+	StructPtr = &struct {
+		X int
+		Y string
+	}{
+		X: 2,
+		Y: "hello",
+	}
+)
+
+func Println(v any) int {
+	fmt.Println(v)
+	return 0
 }

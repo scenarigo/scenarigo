@@ -122,11 +122,7 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 			})
 			continue
 		}
-		if def.Value.Type().Kind() == reflect.Func {
-			h.funcNameToValueMap[def.Name] = def.Value
-		} else {
-			h.nameToValueMap[def.Name] = def.Value
-		}
+		h.nameToValueMap[def.Name] = def.Value
 		typ, err := wasm.NewType(def.Value.Type())
 		if err != nil {
 			return nil, err
@@ -213,7 +209,7 @@ func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, e
 }
 
 func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, error) {
-	v, exists := h.funcNameToValueMap[r.Name]
+	v, exists := h.nameToValueMap[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("failed to find function: %s", r.Name)
 	}
