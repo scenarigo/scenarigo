@@ -99,7 +99,7 @@ type handler struct {
 	syncFn             DefinitionFunc
 	teardownMap        map[string][]func(*Context)
 	funcNameToValueMap map[string]reflect.Value
-	idToValueMap       map[string]reflect.Value
+	nameToValueMap     map[string]reflect.Value
 }
 
 func newHandler(initFn, syncFn DefinitionFunc) *handler {
@@ -108,7 +108,7 @@ func newHandler(initFn, syncFn DefinitionFunc) *handler {
 		syncFn:             syncFn,
 		teardownMap:        make(map[string][]func(*Context)),
 		funcNameToValueMap: make(map[string]reflect.Value),
-		idToValueMap:       make(map[string]reflect.Value),
+		nameToValueMap:     make(map[string]reflect.Value),
 	}
 }
 
@@ -118,18 +118,22 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 		if !def.Value.IsValid() {
 			types = append(types, &wasm.NameWithType{
 				Name: def.Name,
-				Type: &wasm.Type{Kind: reflect.Invalid},
+				Type: &wasm.Type{Kind: wasm.INVALID},
 			})
 			continue
 		}
 		if def.Value.Type().Kind() == reflect.Func {
 			h.funcNameToValueMap[def.Name] = def.Value
 		} else {
-			h.idToValueMap[def.Name] = def.Value
+			h.nameToValueMap[def.Name] = def.Value
+		}
+		typ, err := wasm.NewType(def.Value.Type())
+		if err != nil {
+			return nil, err
 		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
-			Type: wasm.NewType(def.Value.Type()),
+			Type: typ,
 		})
 	}
 	return &wasm.InitCommandResponse{Types: types}, nil
@@ -184,21 +188,25 @@ func (h *handler) Teardown(r *wasm.TeardownCommandRequest) (*wasm.TeardownComman
 func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, error) {
 	defs := h.syncFn()
 	for _, def := range defs {
-		h.idToValueMap[def.Name] = def.Value
+		h.nameToValueMap[def.Name] = def.Value
 	}
 	var types []*wasm.NameWithType
 	for _, def := range defs {
 		if !def.Value.IsValid() {
 			types = append(types, &wasm.NameWithType{
 				Name: def.Name,
-				Type: &wasm.Type{Kind: reflect.Invalid},
+				Type: &wasm.Type{Kind: wasm.INVALID},
 			})
 			continue
 		}
-		h.idToValueMap[def.Name] = def.Value
+		h.nameToValueMap[def.Name] = def.Value
+		typ, err := wasm.NewType(def.Value.Type())
+		if err != nil {
+			return nil, err
+		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
-			Type: wasm.NewType(def.Value.Type()),
+			Type: typ,
 		})
 	}
 	return &wasm.SyncCommandResponse{Types: types}, nil
@@ -244,7 +252,7 @@ func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, e
 			)
 		}
 		valueID := fmt.Sprintf("%p", &retValue)
-		h.idToValueMap[valueID] = retValue
+		h.nameToValueMap[valueID] = retValue
 		res.Return = append(res.Return, &wasm.ReturnValue{
 			ID:    valueID,
 			Value: string(b),
@@ -254,15 +262,34 @@ func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, e
 }
 
 func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, error) {
-	v, exists := h.idToValueMap[r.Name]
+	v, exists := h.nameToValueMap[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("failed to find value: %s", r.Name)
+	}
+	for _, sel := range r.Selectors {
+		var err error
+		v, err = getFieldValue(v, sel)
+		if err != nil {
+			return nil, err
+		}
 	}
 	b, err := json.Marshal(v.Interface())
 	if err != nil {
 		return nil, err
 	}
-	return &wasm.GetCommandResponse{Value: string(b)}, nil
+	return &wasm.GetCommandResponse{
+		Value: string(b),
+	}, nil
+}
+
+func getFieldValue(v reflect.Value, sel string) (reflect.Value, error) {
+	switch v.Type().Kind() {
+	case reflect.Pointer, reflect.Interface:
+		return getFieldValue(v.Elem(), sel)
+	case reflect.Struct:
+		return v.FieldByName(sel), nil
+	}
+	return reflect.Value{}, fmt.Errorf("failed to get field %s value from %v", sel, v)
 }
 
 func (h *handler) GRPCExistsMethod(r *wasm.GRPCExistsMethodCommandRequest) (*wasm.GRPCExistsMethodCommandResponse, error) {
@@ -357,7 +384,7 @@ func (h *handler) currentFileDescriptorSetBytes() ([]byte, error) {
 }
 
 func (h *handler) getMethod(clientName, methodName string) (reflect.Value, error) {
-	client, exists := h.idToValueMap[clientName]
+	client, exists := h.nameToValueMap[clientName]
 	if !exists {
 		return reflect.Value{}, fmt.Errorf("unknown clientName: %q", clientName)
 	}

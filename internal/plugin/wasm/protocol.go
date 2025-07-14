@@ -3,7 +3,6 @@ package wasm
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 
 	"github.com/scenarigo/scenarigo/context"
 )
@@ -134,11 +133,12 @@ func NewCallRequest(name string, args []string) *Request {
 }
 
 // NewGetRequest creates a new value get request.
-func NewGetRequest(name string) *Request {
+func NewGetRequest(name string, selectors []string) *Request {
 	return &Request{
 		CommandType: GetCommand,
 		Command: &GetCommandRequest{
-			Name: name,
+			Name:      name,
+			Selectors: selectors,
 		},
 	}
 }
@@ -277,7 +277,8 @@ type CallCommandResponse struct {
 func (r *CallCommandResponse) isCommandResponse() bool { return true }
 
 type GetCommandRequest struct {
-	Name string `json:"name"`
+	Name      string   `json:"name"`
+	Selectors []string `json:"selectors"`
 }
 
 func (r *GetCommandRequest) isCommandRequest() bool { return true }
@@ -332,24 +333,6 @@ type GRPCInvokeCommandResponse struct {
 }
 
 func (r *GRPCInvokeCommandResponse) isCommandResponse() bool { return true }
-
-// NameWithType represents a named type from a WASM plugin.
-type NameWithType struct {
-	Name string `json:"name"`
-	Type *Type  `json:"type"`
-}
-
-// Type represents a type information from a WASM plugin.
-type Type struct {
-	Kind reflect.Kind `json:"kind"`
-	Func *FuncType    `json:"func"`
-}
-
-// FuncType represents function type information from a WASM plugin.
-type FuncType struct {
-	Args   []*Type `json:"args"`
-	Return []*Type `json:"return"`
-}
 
 // ReturnValue represents a return value from a WASM plugin function call.
 type ReturnValue struct {
@@ -653,24 +636,4 @@ func DecodeResponse(b []byte) (*Response, error) {
 		return nil, err
 	}
 	return &res, nil
-}
-
-// NewType creates a Type from a reflect.Type.
-func NewType(t reflect.Type) *Type {
-	if t.Kind() == reflect.Func {
-		return NewFuncType(t)
-	}
-	return &Type{Kind: t.Kind()}
-}
-
-// NewFuncType creates a function Type from a reflect.Type.
-func NewFuncType(t reflect.Type) *Type {
-	fn := &FuncType{}
-	for i := range t.NumIn() {
-		fn.Args = append(fn.Args, NewType(t.In(i)))
-	}
-	for i := range t.NumOut() {
-		fn.Return = append(fn.Return, NewType(t.Out(i)))
-	}
-	return &Type{Kind: t.Kind(), Func: fn}
 }

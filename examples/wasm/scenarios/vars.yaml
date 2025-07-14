@@ -1,0 +1,7 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.wasm
+vars:
+  int: '{{ plugins.plugin.Int }}'
+title: use global variables
+steps:

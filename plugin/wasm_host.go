@@ -326,22 +326,7 @@ func (p *WasmPlugin) ExtractByKey(name string) (any, bool) {
 	if !exists {
 		return nil, false
 	}
-	if typ.Kind == reflect.Invalid {
-		return nil, true
-	}
-	if typ.Func != nil {
-		funcType := toFuncReflectType(typ.Func)
-		fn := reflect.MakeFunc(funcType, func(args []reflect.Value) []reflect.Value {
-			ret, err := p.callFunc(typ.Func, name, args)
-			if err != nil {
-				panic(err)
-			}
-			return ret
-		})
-		return fn.Interface(), true
-	}
-
-	ret, err := p.getValue(typ, name)
+	ret, err := p.getValue(typ, name, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -372,18 +357,23 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, args []reflect.Va
 
 	ret := make([]reflect.Value, 0, len(typ.Return))
 	for idx, retValue := range typ.Return {
-		typ := toReflectType(retValue)
-		rv := reflect.New(typ)
-		v := rv.Interface()
-		if wv, ok := v.(**WasmValue); ok {
-			*wv = &WasmValue{
-				plugin:    p,
-				valueName: funcRes.Return[idx].ID,
-				value:     funcRes.Return[idx].Value,
-			}
-			ret = append(ret, rv.Elem())
+		if retValue.IsStruct() {
+			ret = append(ret, reflect.ValueOf(
+				&StructValue{
+					typ:    retValue,
+					plugin: p,
+					name:   funcRes.Return[idx].ID,
+					value:  funcRes.Return[idx].Value,
+				},
+			))
 			continue
 		}
+		typ, err := retValue.ToReflect()
+		if err != nil {
+			return nil, err
+		}
+		rv := reflect.New(typ)
+		v := rv.Interface()
 		if err := json.Unmarshal([]byte(funcRes.Return[idx].Value), v); err != nil {
 			return nil, fmt.Errorf("failed to convert function return value(%d) %s to %s: %w", idx, funcRes.Return[idx].Value, typ.Kind(), err)
 		}
@@ -392,8 +382,41 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, args []reflect.Va
 	return ret, nil
 }
 
-func (p *WasmPlugin) getValue(typ *wasm.Type, name string) (any, error) {
-	res, err := p.call(wasm.NewGetRequest(name))
+func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (any, error) {
+	if typ.Kind == wasm.INVALID {
+		return nil, nil
+	}
+	if typ.HasMethod(name) {
+		// method call.
+		mtdType := typ.MethodTypeByName(name)
+		funcType, err := mtdType.ToReflect()
+		if err != nil {
+			return nil, err
+		}
+		fn := reflect.MakeFunc(funcType, func(args []reflect.Value) []reflect.Value {
+			ret, err := p.callFunc(mtdType, name, args)
+			if err != nil {
+				panic(err)
+			}
+			return ret
+		})
+		return fn.Interface(), nil
+	}
+	if typ.Kind == wasm.FUNC {
+		funcType, err := typ.ToReflect()
+		if err != nil {
+			return nil, err
+		}
+		fn := reflect.MakeFunc(funcType, func(args []reflect.Value) []reflect.Value {
+			ret, err := p.callFunc(typ.Func, name, args)
+			if err != nil {
+				panic(err)
+			}
+			return ret
+		})
+		return fn.Interface(), nil
+	}
+	res, err := p.call(wasm.NewGetRequest(name, selectors))
 	if err != nil {
 		return nil, err
 	}
@@ -401,36 +424,75 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rv := reflect.New(toReflectType(typ))
+	t, err := typ.ToReflect()
+	if err != nil {
+		return nil, err
+	}
+	for _, sel := range selectors {
+		var err error
+		t, err = getFieldTypeByName(t, sel)
+		if err != nil {
+			return nil, err
+		}
+		typ = typ.FieldTypeByName(sel)
+	}
+	if typ.IsStruct() {
+		return &StructValue{
+			typ:       typ,
+			name:      name,
+			selectors: selectors,
+			plugin:    p,
+		}, nil
+	}
+	rv := reflect.New(t)
 	if err := json.Unmarshal([]byte(valRes.Value), rv.Interface()); err != nil {
 		return nil, err
 	}
-	ret := rv.Elem().Interface()
-	if v, ok := ret.(*WasmValue); ok {
-		v.valueName = name
-		v.plugin = p
-	}
-	return ret, nil
+	return rv.Elem().Interface(), nil
 }
 
-// WasmValue represents a value from a WASM plugin.
+func getFieldTypeByName(t reflect.Type, sel string) (reflect.Type, error) {
+	switch t.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		return getFieldTypeByName(t.Elem(), sel)
+	case reflect.Struct:
+		sf, exists := t.FieldByName(sel)
+		if !exists {
+			return nil, fmt.Errorf("failed to find field %s type from %v", sel, t)
+		}
+		return sf.Type, nil
+	}
+	return nil, fmt.Errorf("failed to get field %s type from %v", sel, t)
+}
+
+// StructValue represents a struct type value from a WASM plugin.
 // It provides methods to interact with WASM plugin values, especially for gRPC clients.
-type WasmValue struct {
+type StructValue struct {
+	typ       *wasm.Type
 	plugin    *WasmPlugin
-	valueName string
+	name      string
+	selectors []string
 	value     any
 }
 
-// ExtractByKey implements query.KeyExtractor interface for WasmValue.
+// ExtractByKey implements query.KeyExtractor interface for StructValue.
 // It always returns false as WASM values don't support key extraction.
-func (v *WasmValue) ExtractByKey(key string) (any, bool) {
-	return nil, false
+func (v *StructValue) ExtractByKey(key string) (any, bool) {
+	value, err := v.plugin.getValue(
+		v.typ,
+		v.name,
+		append(append([]string{}, v.selectors...), key),
+	)
+	if err != nil {
+		panic(err)
+	}
+	return value, true
 }
 
 // ExistsMethod checks if a gRPC method exists on the WASM value.
 // This is used for gRPC client validation in WASM plugins.
-func (v *WasmValue) ExistsMethod(method string) bool {
-	res, err := v.plugin.call(wasm.NewGRPCExistsMethodRequest(v.valueName, method))
+func (v *StructValue) ExistsMethod(method string) bool {
+	res, err := v.plugin.call(wasm.NewGRPCExistsMethodRequest(v.name, method))
 	if err != nil {
 		return false
 	}
@@ -443,8 +505,8 @@ func (v *WasmValue) ExistsMethod(method string) bool {
 
 // BuildRequestMessage builds a protobuf request message for a gRPC method.
 // This is used to construct request messages for gRPC calls in WASM plugins.
-func (v *WasmValue) BuildRequestMessage(method string, msg []byte) (proto.Message, error) {
-	res, err := v.plugin.call(wasm.NewGRPCBuildRequestRequest(v.valueName, method, msg))
+func (v *StructValue) BuildRequestMessage(method string, msg []byte) (proto.Message, error) {
+	res, err := v.plugin.call(wasm.NewGRPCBuildRequestRequest(v.name, method, msg))
 	if err != nil {
 		return nil, err
 	}
@@ -480,12 +542,12 @@ func (v *WasmValue) BuildRequestMessage(method string, msg []byte) (proto.Messag
 
 // Invoke calls a gRPC method on the WASM value with the given request.
 // It returns the response message, status, and any error that occurred.
-func (v *WasmValue) Invoke(method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
+func (v *StructValue) Invoke(method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
 	reqMsg, err := protojson.Marshal(reqProto)
 	if err != nil {
 		return nil, nil, err
 	}
-	res, err := v.plugin.call(wasm.NewGRPCInvokeRequest(v.valueName, method, reqMsg))
+	res, err := v.plugin.call(wasm.NewGRPCInvokeRequest(v.name, method, reqMsg))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -522,34 +584,4 @@ func (v *WasmValue) Invoke(method string, reqProto proto.Message) (proto.Message
 	}
 	st := status.FromProto(&stProto)
 	return protoMsg, st, nil
-}
-
-func toFuncReflectType(t *wasm.FuncType) reflect.Type {
-	args := make([]reflect.Type, 0, len(t.Args))
-	for _, arg := range t.Args {
-		args = append(args, toReflectType(arg))
-	}
-	ret := make([]reflect.Type, 0, len(t.Return))
-	for _, r := range t.Return {
-		ret = append(ret, toReflectType(r))
-	}
-	return reflect.FuncOf(args, ret, false)
-}
-
-func toReflectType(t *wasm.Type) reflect.Type {
-	if t.Func != nil {
-		return toFuncReflectType(t.Func)
-	}
-	switch t.Kind {
-	case reflect.Bool:
-		return reflect.TypeOf(false)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Float32, reflect.Float64:
-		return reflect.TypeOf(0)
-	case reflect.String:
-		return reflect.TypeOf("")
-	case reflect.Array, reflect.Slice:
-	}
-	return reflect.TypeOf(&WasmValue{})
 }
