@@ -122,7 +122,11 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	plugin.nameToTypeMap = initRes.ToTypeMap()
+	typeMap, err := initRes.ToTypeMap()
+	if err != nil {
+		return nil, err
+	}
+	plugin.nameToTypeMap = typeMap
 	return plugin, nil
 }
 
@@ -278,7 +282,11 @@ func (p *WasmPlugin) setup(sctx *Context) (*Context, func(*Context), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	for k, v := range syncRes.ToTypeMap() {
+	typeMap, err := syncRes.ToTypeMap()
+	if err != nil {
+		return nil, nil, err
+	}
+	for k, v := range typeMap {
 		p.nameToTypeMap[k] = v
 	}
 	return sctx, func(sctx *Context) {
@@ -314,7 +322,11 @@ func (p *WasmPlugin) setupEachScenario(sctx *Context) (*Context, func(*Context),
 	if err != nil {
 		return nil, nil, err
 	}
-	for k, v := range syncRes.ToTypeMap() {
+	typeMap, err := syncRes.ToTypeMap()
+	if err != nil {
+		return nil, nil, err
+	}
+	for k, v := range typeMap {
 		p.nameToTypeMap[k] = v
 	}
 	return sctx, func(sctx *Context) {
@@ -337,7 +349,7 @@ func (p *WasmPlugin) ExtractByKey(name string) (any, bool) {
 	return ret, true
 }
 
-func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, args []reflect.Value) ([]reflect.Value, error) {
+func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []string, args []reflect.Value) ([]reflect.Value, error) {
 	fnArgs := make([]string, 0, len(args))
 	for _, arg := range args {
 		b, err := json.Marshal(arg.Interface())
@@ -347,7 +359,7 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, args []reflect.Va
 		fnArgs = append(fnArgs, string(b))
 	}
 
-	res, err := p.call(wasm.NewCallRequest(name, fnArgs))
+	res, err := p.call(wasm.NewCallRequest(name, selectors, fnArgs))
 	if err != nil {
 		return nil, err
 	}
@@ -390,15 +402,48 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	if typ.Kind == wasm.INVALID {
 		return nil, nil
 	}
-	if typ.HasMethod(name) {
-		// method call.
-		mtdType := typ.MethodTypeByName(name)
-		funcType, err := mtdType.ToReflect()
+	if len(selectors) != 0 {
+		for _, sel := range selectors[:len(selectors)-1] {
+			typ = typ.FieldTypeByName(sel)
+		}
+		lastSel := selectors[len(selectors)-1]
+		if typ.HasMethod(lastSel) {
+			// method call.
+			res, err := p.call(wasm.NewMethodRequest(name, selectors))
+			if err != nil {
+				return nil, err
+			}
+			mtdRes, err := convertCommandResponse[*wasm.MethodCommandResponse](res)
+			if err != nil {
+				return nil, err
+			}
+			mtdType, err := wasm.ResolveRef(mtdRes.Type, mtdRes.TypeRefMap)
+			if err != nil {
+				return nil, err
+			}
+			mtdType.Func.Args = mtdType.Func.Args[1:]
+			funcType, err := mtdType.ToReflect()
+			if err != nil {
+				return nil, err
+			}
+			fn := reflect.MakeFunc(replaceStructType(funcType), func(args []reflect.Value) []reflect.Value {
+				ret, err := p.callFunc(mtdType.Func, name, selectors, args)
+				if err != nil {
+					panic(err)
+				}
+				return ret
+			})
+			return fn.Interface(), nil
+		}
+		typ = typ.FieldTypeByName(lastSel)
+	}
+	if typ.Kind == wasm.FUNC {
+		funcType, err := typ.ToReflect()
 		if err != nil {
 			return nil, err
 		}
-		fn := reflect.MakeFunc(funcType, func(args []reflect.Value) []reflect.Value {
-			ret, err := p.callFunc(mtdType, name, args)
+		fn := reflect.MakeFunc(replaceStructType(funcType), func(args []reflect.Value) []reflect.Value {
+			ret, err := p.callFunc(typ.Func, name, selectors, args)
 			if err != nil {
 				panic(err)
 			}
@@ -406,19 +451,13 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 		})
 		return fn.Interface(), nil
 	}
-	if typ.Kind == wasm.FUNC {
-		funcType, err := typ.ToReflect()
-		if err != nil {
-			return nil, err
-		}
-		fn := reflect.MakeFunc(funcType, func(args []reflect.Value) []reflect.Value {
-			ret, err := p.callFunc(typ.Func, name, args)
-			if err != nil {
-				panic(err)
-			}
-			return ret
-		})
-		return fn.Interface(), nil
+	if typ.IsStruct() {
+		return &StructValue{
+			typ:       typ,
+			name:      name,
+			selectors: selectors,
+			plugin:    p,
+		}, nil
 	}
 	res, err := p.call(wasm.NewGetRequest(name, selectors))
 	if err != nil {
@@ -431,22 +470,6 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	t, err := typ.ToReflect()
 	if err != nil {
 		return nil, err
-	}
-	for _, sel := range selectors {
-		var err error
-		t, err = getFieldTypeByName(t, sel)
-		if err != nil {
-			return nil, err
-		}
-		typ = typ.FieldTypeByName(sel)
-	}
-	if typ.IsStruct() {
-		return &StructValue{
-			typ:       typ,
-			name:      name,
-			selectors: selectors,
-			plugin:    p,
-		}, nil
 	}
 	rv := reflect.New(t)
 	if err := json.Unmarshal([]byte(valRes.Value), rv.Interface()); err != nil {
@@ -467,6 +490,32 @@ func getFieldTypeByName(t reflect.Type, sel string) (reflect.Type, error) {
 		return sf.Type, nil
 	}
 	return nil, fmt.Errorf("failed to get field %s type from %v", sel, t)
+}
+
+func replaceStructType(t reflect.Type) reflect.Type {
+	switch t.Kind() {
+	case reflect.Pointer:
+		return reflect.New(replaceStructType(t.Elem())).Type()
+	case reflect.Map:
+		return reflect.MapOf(replaceStructType(t.Key()), replaceStructType(t.Elem()))
+	case reflect.Slice:
+		return reflect.SliceOf(replaceStructType(t.Elem()))
+	case reflect.Array:
+		return reflect.ArrayOf(t.Len(), replaceStructType(t.Elem()))
+	case reflect.Func:
+		args := make([]reflect.Type, 0, t.NumIn())
+		for i := range t.NumIn() {
+			args = append(args, replaceStructType(t.In(i)))
+		}
+		ret := make([]reflect.Type, 0, t.NumOut())
+		for i := range t.NumOut() {
+			ret = append(ret, replaceStructType(t.Out(i)))
+		}
+		return reflect.FuncOf(args, ret, false)
+	case reflect.Struct:
+		return reflect.TypeOf(StructValue{})
+	}
+	return t
 }
 
 // StructValue represents a struct type value from a WASM plugin.

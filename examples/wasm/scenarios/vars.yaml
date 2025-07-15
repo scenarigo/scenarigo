@@ -8,6 +8,7 @@ vars:
   map: '{{ plugins.plugin.Map }}'
   struct: '{{ plugins.plugin.Struct }}'
   structptr: '{{ plugins.plugin.StructPtr }}'
+  t: '{{ plugins.plugin.NewT() }}'
 title: use global variables
 steps:
   - title: Ping
@@ -27,3 +28,5 @@ steps:
         print_map_b: '{{ plugins.plugin.Println(vars.map.b) }}'
         print_struct_x: '{{ plugins.plugin.Println(vars.struct.X) }}'
         print_structptr_x: '{{ plugins.plugin.Println(vars.structptr.X) }}'
+        set_x: '{{ vars.t.SetValue(10) }}'
+        get_x: '{{ vars.t.GetValue() }}'

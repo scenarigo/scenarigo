@@ -159,6 +159,23 @@ var (
 	}
 )
 
+type T struct {
+	x any
+}
+
+func (t *T) SetValue(v any) bool {
+	t.x = v
+	return true
+}
+
+func (t *T) GetValue() any {
+	return t.x
+}
+
+func NewT() *T {
+	return new(T)
+}
+
 func Println(v any) int {
 	fmt.Println(v)
 	return 0

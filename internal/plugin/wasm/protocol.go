@@ -17,6 +17,7 @@ const (
 	TeardownCommand          Command = "teardown"
 	SyncCommand              Command = "sync"
 	CallCommand              Command = "call"
+	MethodCommand            Command = "method"
 	GetCommand               Command = "get"
 	GRPCExistsMethodCommand  Command = "grpc_exists_method"
 	GRPCBuildRequestCommand  Command = "grpc_build_request"
@@ -53,6 +54,7 @@ var (
 	_ CommandRequest = new(TeardownCommandRequest)
 	_ CommandRequest = new(SyncCommandRequest)
 	_ CommandRequest = new(CallCommandRequest)
+	_ CommandRequest = new(MethodCommandRequest)
 	_ CommandRequest = new(GetCommandRequest)
 	_ CommandRequest = new(GRPCExistsMethodCommandRequest)
 	_ CommandRequest = new(GRPCBuildRequestCommandRequest)
@@ -66,6 +68,7 @@ var (
 	_ CommandResponse = new(TeardownCommandResponse)
 	_ CommandResponse = new(SyncCommandResponse)
 	_ CommandResponse = new(CallCommandResponse)
+	_ CommandResponse = new(MethodCommandResponse)
 	_ CommandResponse = new(GetCommandResponse)
 	_ CommandResponse = new(GRPCExistsMethodCommandResponse)
 	_ CommandResponse = new(GRPCBuildRequestCommandResponse)
@@ -122,12 +125,24 @@ func NewSetupEachScenarioRequest(setupID string, ctx *context.SerializableContex
 }
 
 // NewCallRequest creates a new function call request.
-func NewCallRequest(name string, args []string) *Request {
+func NewCallRequest(name string, selectors []string, args []string) *Request {
 	return &Request{
 		CommandType: CallCommand,
 		Command: &CallCommandRequest{
-			Name: name,
-			Args: args,
+			Name:      name,
+			Selectors: selectors,
+			Args:      args,
+		},
+	}
+}
+
+// NewMethodRequest creates a new function method request.
+func NewMethodRequest(name string, selectors []string) *Request {
+	return &Request{
+		CommandType: MethodCommand,
+		Command: &MethodCommandRequest{
+			Name:      name,
+			Selectors: selectors,
 		},
 	}
 }
@@ -184,16 +199,21 @@ func (r *InitCommandRequest) isCommandRequest() bool { return true }
 
 // InitCommandResponse contains the types available from the WASM plugin.
 type InitCommandResponse struct {
-	Types []*NameWithType `json:"types"`
+	TypeRefMap map[string]*Type `json:"typeRefMap"`
+	Types      []*NameWithType  `json:"types"`
 }
 
 // ToTypeMap converts the response types to a name-to-type mapping.
-func (r *InitCommandResponse) ToTypeMap() map[string]*Type {
+func (r *InitCommandResponse) ToTypeMap() (map[string]*Type, error) {
 	nameToTypeMap := make(map[string]*Type)
 	for _, typ := range r.Types {
-		nameToTypeMap[typ.Name] = typ.Type
+		resolvedType, err := ResolveRef(typ.Type, r.TypeRefMap)
+		if err != nil {
+			return nil, err
+		}
+		nameToTypeMap[typ.Name] = resolvedType
 	}
-	return nameToTypeMap
+	return nameToTypeMap, nil
 }
 
 func (r *InitCommandResponse) isCommandResponse() bool { return true }
@@ -249,23 +269,29 @@ func (r *SyncCommandRequest) isCommandRequest() bool { return true }
 
 // SyncCommandResponse contains updated types from the WASM plugin.
 type SyncCommandResponse struct {
-	Types []*NameWithType `json:"types"`
+	TypeRefMap map[string]*Type `json:"typeRefMap"`
+	Types      []*NameWithType  `json:"types"`
 }
 
 // ToTypeMap converts the response types to a name-to-type mapping.
-func (r *SyncCommandResponse) ToTypeMap() map[string]*Type {
+func (r *SyncCommandResponse) ToTypeMap() (map[string]*Type, error) {
 	nameToTypeMap := make(map[string]*Type)
 	for _, typ := range r.Types {
-		nameToTypeMap[typ.Name] = typ.Type
+		resolvedType, err := ResolveRef(typ.Type, r.TypeRefMap)
+		if err != nil {
+			return nil, err
+		}
+		nameToTypeMap[typ.Name] = resolvedType
 	}
-	return nameToTypeMap
+	return nameToTypeMap, nil
 }
 
 func (r *SyncCommandResponse) isCommandResponse() bool { return true }
 
 type CallCommandRequest struct {
-	Name string   `json:"name"`
-	Args []string `json:"args"`
+	Name      string   `json:"name"`
+	Selectors []string `json:"selectors"`
+	Args      []string `json:"args"`
 }
 
 func (r *CallCommandRequest) isCommandRequest() bool { return true }
@@ -275,6 +301,20 @@ type CallCommandResponse struct {
 }
 
 func (r *CallCommandResponse) isCommandResponse() bool { return true }
+
+type MethodCommandRequest struct {
+	Name      string   `json:"name"`
+	Selectors []string `json:"selectors"`
+}
+
+func (r *MethodCommandRequest) isCommandRequest() bool { return true }
+
+type MethodCommandResponse struct {
+	TypeRefMap map[string]*Type `json:"typeRefMap"`
+	Type       *Type            `json:"type"`
+}
+
+func (r *MethodCommandResponse) isCommandResponse() bool { return true }
 
 type GetCommandRequest struct {
 	Name      string   `json:"name"`
@@ -392,6 +432,13 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 		}
 		r.Command = &v
 		return nil
+	case MethodCommand:
+		var v MethodCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
 	case GetCommand:
 		var v GetCommandRequest
 		if err := json.Unmarshal(req.Command, &v); err != nil {
@@ -476,6 +523,13 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 		}
 		r.Command = &v
 		return nil
+	case MethodCommand:
+		var v MethodCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
 	case GetCommand:
 		var v GetCommandResponse
 		if err := json.Unmarshal(res.Command, &v); err != nil {
@@ -516,6 +570,7 @@ type CommandHandler interface {
 	Teardown(*TeardownCommandRequest) (*TeardownCommandResponse, error)
 	Sync(*SyncCommandRequest) (*SyncCommandResponse, error)
 	Call(*CallCommandRequest) (*CallCommandResponse, error)
+	Method(*MethodCommandRequest) (*MethodCommandResponse, error)
 	Get(*GetCommandRequest) (*GetCommandResponse, error)
 	GRPCExistsMethod(*GRPCExistsMethodCommandRequest) (*GRPCExistsMethodCommandResponse, error)
 	GRPCBuildRequest(*GRPCBuildRequestCommandRequest) (*GRPCBuildRequestCommandResponse, error)
@@ -573,6 +628,12 @@ func handleCommand(r *Request, handler CommandHandler) (CommandResponse, error) 
 			return nil, err
 		}
 		return handler.Call(cmd)
+	case MethodCommand:
+		cmd, err := toCommandRequest[*MethodCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.Method(cmd)
 	case GetCommand:
 		cmd, err := toCommandRequest[*GetCommandRequest](r.Command)
 		if err != nil {

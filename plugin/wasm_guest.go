@@ -132,7 +132,10 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 			Type: typ,
 		})
 	}
-	return &wasm.InitCommandResponse{Types: types}, nil
+	return &wasm.InitCommandResponse{
+		TypeRefMap: wasm.TypeRefMap(),
+		Types:      types,
+	}, nil
 }
 
 func (h *handler) Setup(r *wasm.SetupCommandRequest) (*wasm.SetupCommandResponse, error) {
@@ -205,13 +208,27 @@ func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, e
 			Type: typ,
 		})
 	}
-	return &wasm.SyncCommandResponse{Types: types}, nil
+	return &wasm.SyncCommandResponse{
+		TypeRefMap: wasm.TypeRefMap(), Types: types,
+	}, nil
 }
 
 func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, error) {
 	v, exists := h.nameToValueMap[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("failed to find function: %s", r.Name)
+	}
+	if len(r.Selectors) != 0 {
+		// method call.
+		for _, sel := range r.Selectors[:len(r.Selectors)-1] {
+			var err error
+			v, err = getFieldValue(v, sel)
+			if err != nil {
+				return nil, err
+			}
+		}
+		methodName := r.Selectors[len(r.Selectors)-1]
+		v = v.MethodByName(methodName)
 	}
 	if len(r.Args) != v.Type().NumIn() {
 		return nil, fmt.Errorf(
@@ -235,7 +252,6 @@ func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, e
 		}
 		args = append(args, rv.Elem())
 	}
-
 	res := &wasm.CallCommandResponse{}
 	for i, retValue := range v.Call(args) {
 		b, err := json.Marshal(retValue.Interface())
@@ -255,6 +271,36 @@ func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, e
 		})
 	}
 	return res, nil
+}
+
+func (h *handler) Method(r *wasm.MethodCommandRequest) (*wasm.MethodCommandResponse, error) {
+	v, exists := h.nameToValueMap[r.Name]
+	if !exists {
+		return nil, fmt.Errorf("failed to find function: %s", r.Name)
+	}
+	for _, sel := range r.Selectors[:len(r.Selectors)-1] {
+		var err error
+		v, err = getFieldValue(v, sel)
+		if err != nil {
+			return nil, err
+		}
+	}
+	methodName := r.Selectors[len(r.Selectors)-1]
+	mtd, exists := v.Type().MethodByName(methodName)
+	if !exists {
+		return nil, fmt.Errorf("failed to find method from %s", methodName)
+	}
+	mtdType, err := wasm.NewType(mtd.Type)
+	if err != nil {
+		return nil, err
+	}
+	if mtdType.Kind != wasm.FUNC {
+		return nil, fmt.Errorf("failed to create method type: %s", mtdType)
+	}
+	return &wasm.MethodCommandResponse{
+		TypeRefMap: wasm.TypeRefMap(),
+		Type:       mtdType,
+	}, nil
 }
 
 func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, error) {
