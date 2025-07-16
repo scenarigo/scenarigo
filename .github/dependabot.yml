@@ -15,7 +15,9 @@ updates:
       - "zoncoen"
 
   - package-ecosystem: "gomod"
-    directory: "/"
+    directories:
+      - "/"
+      - "/plugin/testdata/wasm/src"
     schedule:
       interval: "daily"
       time: "12:00"
