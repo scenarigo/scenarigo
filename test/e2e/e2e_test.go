@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +51,8 @@ func TestE2E(t *testing.T) {
 	teardown := startGRPCServer(t)
 	defer teardown()
 
+	pluginTypes := []string{".so", ".wasm"}
+
 	for _, file := range files {
 		t.Run(file, func(t *testing.T) {
 			f, err := os.Open(file)
@@ -64,60 +67,96 @@ func TestE2E(t *testing.T) {
 			}
 
 			for _, scenario := range tc.Scenarios {
-				t.Run(scenario.Filename, func(t *testing.T) {
-					if scenario.Mocks != "" {
-						teardown := runMockServer(t, filepath.Join(dir, "mocks", scenario.Mocks))
-						defer teardown(t)
+				for _, pluginType := range pluginTypes {
+					// Skip WASM tests for scenarios that don't use plugins
+					scenarioPath := filepath.Join(dir, "scenarios", scenario.Filename)
+					if pluginType == ".wasm" && !scenarioUsesPlugins(scenarioPath) {
+						continue
 					}
 
-					config := &schema.Config{
-						Vars: map[string]any{
-							"global": `{{"aaa"}}`,
-						},
-						PluginDirectory: "testdata/gen/plugins",
-						Plugins:         schema.NewOrderedMap[string, schema.PluginConfig](),
-					}
-					for _, p := range scenario.Plugins {
-						config.Plugins.Set(p, schema.PluginConfig{})
-					}
+					testName := fmt.Sprintf("%s-%s", scenario.Filename, strings.TrimPrefix(pluginType, "."))
+					t.Run(testName, func(t *testing.T) {
+						if scenario.Mocks != "" {
+							teardown := runMockServer(t, filepath.Join(dir, "mocks", scenario.Mocks))
+							defer teardown(t)
+						}
 
-					r, err := scenarigo.NewRunner(
-						scenarigo.WithConfig(config),
-						scenarigo.WithScenarios(filepath.Join(dir, "scenarios", scenario.Filename)),
-					)
-					if err != nil {
-						t.Fatal(err)
-					}
+						config := &schema.Config{
+							Vars: map[string]any{
+								"global": `{{"aaa"}}`,
+							},
+							PluginDirectory: "testdata/gen/plugins",
+							Plugins:         schema.NewOrderedMap[string, schema.PluginConfig](),
+						}
+						for _, p := range scenario.Plugins {
+							// For WASM tests, adjust plugin names to match modified scenario content
+							pluginName := p
+							if pluginType == ".wasm" {
+								// Replace .so extension with .wasm in plugin name
+								if strings.HasSuffix(p, ".so") {
+									pluginName = strings.TrimSuffix(p, ".so") + ".wasm"
+								}
+							}
+							config.Plugins.Set(pluginName, schema.PluginConfig{})
+						}
 
-					var b bytes.Buffer
-					opts := []reporter.Option{reporter.WithWriter(&b)}
-					if scenario.Verbose {
-						opts = append(opts, reporter.WithVerboseLog())
-					}
-					ok := reporter.Run(func(rptr reporter.Reporter) {
-						r.Run(context.New(rptr))
-					}, opts...)
-					if ok != scenario.Success {
-						t.Errorf("expect %t but got %t", scenario.Success, ok)
-					}
+						var scenarioPath string
+						if pluginType == ".so" {
+							// Use original file path for .so tests to maintain backward compatibility
+							scenarioPath = filepath.Join(dir, "scenarios", scenario.Filename)
+						} else {
+							// Use modified scenario for .wasm tests
+							scenarioContent, err := loadAndModifyScenario(filepath.Join(dir, "scenarios", scenario.Filename), pluginType)
+							if err != nil {
+								t.Fatal(err)
+							}
 
-					f, err := os.Open(filepath.Join(dir, "stdout", scenario.Output.Stdout))
-					if err != nil {
-						t.Fatal(err)
-					}
-					defer f.Close()
+							tmpFile, err := os.CreateTemp("", "scenario-*.yaml")
+							if err != nil {
+								t.Fatal(err)
+							}
+							defer os.Remove(tmpFile.Name())
 
-					stdout, err := io.ReadAll(f)
-					if err != nil {
-						t.Fatal(err)
-					}
+							if _, err := tmpFile.Write(scenarioContent); err != nil {
+								t.Fatal(err)
+							}
+							tmpFile.Close()
 
-					if got, expect := testutil.ReplaceOutput(b.String()), string(stdout); got != expect {
-						dmp := diffmatchpatch.New()
-						diffs := dmp.DiffMain(expect, got, false)
-						t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
-					}
-				})
+							scenarioPath = tmpFile.Name()
+						}
+
+						r, err := scenarigo.NewRunner(
+							scenarigo.WithConfig(config),
+							scenarigo.WithScenarios(scenarioPath),
+						)
+						if err != nil {
+							t.Fatal(err)
+						}
+
+						var b bytes.Buffer
+						opts := []reporter.Option{reporter.WithWriter(&b)}
+						if scenario.Verbose {
+							opts = append(opts, reporter.WithVerboseLog())
+						}
+						ok := reporter.Run(func(rptr reporter.Reporter) {
+							r.Run(context.New(rptr))
+						}, opts...)
+						if ok != scenario.Success {
+							t.Errorf("expect %t but got %t", scenario.Success, ok)
+						}
+
+						expectedStdout, err := loadAndModifyExpectedOutput(filepath.Join(dir, "stdout", scenario.Output.Stdout), pluginType)
+						if err != nil {
+							t.Fatal(err)
+						}
+
+						if got, expect := testutil.ReplaceOutput(b.String()), string(expectedStdout); got != expect {
+							dmp := diffmatchpatch.New()
+							diffs := dmp.DiffMain(expect, got, false)
+							t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
+						}
+					})
+				}
 			}
 		})
 	}
@@ -139,6 +178,99 @@ type TestScenario struct {
 
 type ExpectOutput struct {
 	Stdout string `yaml:"stdout"`
+}
+
+func loadAndModifyScenario(scenarioPath, pluginType string) ([]byte, error) {
+	if pluginType == ".so" {
+		// For .so plugins, return original content without modification
+		return os.ReadFile(scenarioPath)
+	}
+
+	// Read and parse YAML manually to handle deprecated fields
+	content, err := os.ReadFile(scenarioPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse YAML documents (handle multiple scenarios in one file)
+	var scenarios []map[string]any
+	decoder := yaml.NewDecoder(bytes.NewReader(content))
+	for {
+		var scenario map[string]any
+		if err := decoder.Decode(&scenario); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("failed to decode YAML: %w", err)
+		}
+		scenarios = append(scenarios, scenario)
+	}
+
+	// Modify plugins for WASM tests
+	for _, scenario := range scenarios {
+		if plugins, ok := scenario["plugins"].(map[string]any); ok {
+			for pluginName, pluginPathAny := range plugins {
+				if pluginPath, ok := pluginPathAny.(string); ok && strings.HasSuffix(pluginPath, ".so") {
+					// Replace .so with .wasm
+					plugins[pluginName] = strings.TrimSuffix(pluginPath, ".so") + ".wasm"
+				}
+			}
+		}
+	}
+
+	// Marshal back to YAML
+	var buf bytes.Buffer
+	for i, scenario := range scenarios {
+		if i > 0 {
+			// Add document separator for multiple scenarios
+			buf.WriteString("\n---\n")
+		}
+		encoder := yaml.NewEncoder(&buf)
+		if err := encoder.Encode(scenario); err != nil {
+			encoder.Close()
+			return nil, fmt.Errorf("failed to encode scenario: %w", err)
+		}
+		encoder.Close()
+	}
+
+	return buf.Bytes(), nil
+}
+
+func scenarioUsesPlugins(scenarioPath string) bool {
+	content, err := os.ReadFile(scenarioPath)
+	if err != nil {
+		return false
+	}
+
+	// Check if scenario file contains plugin references
+	soPattern := regexp.MustCompile(`([a-zA-Z0-9_-]+)\.so`)
+	return soPattern.Match(content)
+}
+
+func loadAndModifyExpectedOutput(stdoutPath, pluginType string) ([]byte, error) {
+	content, err := os.ReadFile(stdoutPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Replace .so with the target plugin type (.wasm or .so) in expected output
+	if pluginType == ".wasm" {
+		// Replace plugin references from .so to .wasm
+		re := regexp.MustCompile(`([a-zA-Z0-9_-]+)\.so`)
+		content = re.ReplaceAll(content, []byte("${1}.wasm"))
+	}
+
+	return content, nil
+}
+
+func normalizePathForComparison(output, pluginType string) string {
+	if pluginType == ".wasm" {
+		// For WASM tests, replace temporary file paths with normalized paths
+		// This is a simple approach - replace temp file paths with testdata paths
+		tempPathRe := regexp.MustCompile(`/var/folders/[^/]+/[^/]+/T/scenario[^/]*\.yaml`)
+		output = tempPathRe.ReplaceAllString(output, "testdata/testcases/scenarios/{{scenario}}.yaml")
+	}
+	return output
 }
 
 func startGRPCServer(t *testing.T) func() {
