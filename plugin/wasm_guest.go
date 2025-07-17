@@ -4,7 +4,7 @@ package plugin
 
 import (
 	"bufio"
-	"context"
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +14,7 @@ import (
 
 	_ "github.com/goccy/wasi-go-net/wasip1"
 
+	"github.com/goccy/go-yaml"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -21,6 +22,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 
+	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/plugin"
 	"github.com/scenarigo/scenarigo/internal/plugin/wasm"
 )
@@ -81,7 +83,29 @@ func Register(initFn, syncFn DefinitionFunc) {
 		if content == exitCommand {
 			return
 		}
+		var finished bool
+		defer func() {
+			if !finished {
+				var errMsg string
+				if r := recover(); r != nil {
+					errMsg = fmt.Sprint(r)
+				} else {
+					errMsg = "plugin executed panic(nil) or runtime.Goexit"
+				}
+				var req wasm.Request
+				_ = json.Unmarshal([]byte(content), &req)
+				res := &wasm.Response{CommandType: req.CommandType, Error: errMsg}
+				b, _ := json.Marshal(res)
+				out := append(b, '\n')
+				scenarigo_write(
+					uint32(uintptr(unsafe.Pointer(&out[0]))),
+					uint32(len(out)),
+				)
+				os.Exit(1)
+			}
+		}()
 		res := wasm.HandleCommand([]byte(content), h)
+		finished = true
 		b, _ := json.Marshal(res)
 		out := append(b, '\n')
 		scenarigo_write(
@@ -213,6 +237,11 @@ func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, e
 	}, nil
 }
 
+var (
+	stepType          = reflect.TypeOf((*Step)(nil)).Elem()
+	leftArrowFuncType = reflect.TypeOf((*LeftArrowFunc)(nil)).Elem()
+)
+
 func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, error) {
 	v, exists := h.nameToValueMap[r.Name]
 	if !exists {
@@ -254,20 +283,30 @@ func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, e
 	}
 	res := &wasm.CallCommandResponse{}
 	for i, retValue := range v.Call(args) {
-		b, err := json.Marshal(retValue.Interface())
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to encode %s function return value (%d): %v",
-				r.Name,
-				i,
-				retValue.Interface(),
-			)
+		typ := retValue.Type()
+		var value string
+		switch {
+		case typ == stepType:
+			value = stepInterface
+		case typ == leftArrowFuncType:
+			value = leftArrowFuncInterface
+		default:
+			b, err := json.Marshal(retValue.Interface())
+			if err != nil {
+				return nil, fmt.Errorf(
+					"failed to encode %s function return value (%d): %v",
+					r.Name,
+					i,
+					retValue.Interface(),
+				)
+			}
+			value = string(b)
 		}
 		valueID := fmt.Sprintf("%p", &retValue)
 		h.nameToValueMap[valueID] = retValue
 		res.Return = append(res.Return, &wasm.ReturnValue{
 			ID:    valueID,
-			Value: string(b),
+			Value: value,
 		})
 	}
 	return res, nil
@@ -300,6 +339,89 @@ func (h *handler) Method(r *wasm.MethodCommandRequest) (*wasm.MethodCommandRespo
 	return &wasm.MethodCommandResponse{
 		TypeRefMap: wasm.TypeRefMap(),
 		Type:       mtdType,
+	}, nil
+}
+
+func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunCommandResponse, e error) {
+	step, exists := h.nameToValueMap[r.Instance]
+	if !exists {
+		return nil, fmt.Errorf("failed to find step instance from %s", r.Instance)
+	}
+	ctx := context.FromSerializable(r.Context)
+	result := step.MethodByName("Run").Call([]reflect.Value{
+		reflect.ValueOf(ctx),
+		reflect.ValueOf(r.Step),
+	})
+	if len(result) != 1 {
+		return nil, fmt.Errorf("failed to get result value from step.Run function. return values: %v", result)
+	}
+	resultCtx, ok := result[0].Interface().(*context.Context)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert result type to *context.Context from %T", result[0].Interface())
+	}
+	return &wasm.StepRunCommandResponse{
+		Context: resultCtx.ToSerializable(),
+	}, nil
+}
+
+func (h *handler) LeftArrowFuncExec(r *wasm.LeftArrowFuncExecCommandRequest) (*wasm.LeftArrowFuncExecCommandResponse, error) {
+	leftArrowFunc, exists := h.nameToValueMap[r.Instance]
+	if !exists {
+		return nil, fmt.Errorf("failed to find left arrow func instance from %s", r.Instance)
+	}
+	argValue, exists := h.nameToValueMap[r.ArgID]
+	if !exists {
+		return nil, fmt.Errorf("failed to find left arrow func argument instance from %s", r.ArgID)
+	}
+	var v any
+	if err := json.Unmarshal([]byte(r.Value), &v); err != nil {
+		return nil, err
+	}
+	result := leftArrowFunc.MethodByName("Exec").Call([]reflect.Value{argValue})
+	if len(result) != 2 {
+		return nil, fmt.Errorf("failed to get result value from LeftArrowFunc.Exec function. return values: %v", result)
+	}
+	if e := result[1].Interface(); e != nil {
+		return nil, e.(error)
+	}
+	res, err := json.Marshal(result[0].Interface())
+	if err != nil {
+		return nil, err
+	}
+	return &wasm.LeftArrowFuncExecCommandResponse{
+		Value: string(res),
+	}, nil
+}
+
+func (h *handler) LeftArrowFuncUnmarshalArg(r *wasm.LeftArrowFuncUnmarshalArgCommandRequest) (*wasm.LeftArrowFuncUnmarshalArgCommandResponse, error) {
+	leftArrowFunc, exists := h.nameToValueMap[r.Instance]
+	if !exists {
+		return nil, fmt.Errorf("failed to find left arrow func instance from %s", r.Instance)
+	}
+	result := leftArrowFunc.MethodByName("UnmarshalArg").Call([]reflect.Value{
+		reflect.ValueOf(func(v any) error {
+			if err := yaml.Unmarshal([]byte(r.Value), v); err != nil {
+				return err
+			}
+			return nil
+		}),
+	})
+	if len(result) != 2 {
+		return nil, fmt.Errorf("failed to get result value from LeftArrowFunc.UnmarshalArg function. return values: %v", result)
+	}
+	if e := result[1].Interface(); e != nil {
+		return nil, e.(error)
+	}
+	value := result[0]
+	valueID := fmt.Sprintf("%p", value)
+	h.nameToValueMap[valueID] = value
+	res, err := json.Marshal(value.Interface())
+	if err != nil {
+		return nil, err
+	}
+	return &wasm.LeftArrowFuncUnmarshalArgCommandResponse{
+		ValueID: valueID,
+		Value:   string(res),
 	}, nil
 }
 
@@ -378,7 +500,7 @@ func (h *handler) GRPCInvoke(r *wasm.GRPCInvokeCommandRequest) (*wasm.GRPCInvoke
 	if err := protojson.Unmarshal(r.Request, reqProtoMsg); err != nil {
 		return nil, err
 	}
-	resMsg, st, err := plugin.GRPCInvoke(context.Background(), method, reqProtoMsg)
+	resMsg, st, err := plugin.GRPCInvoke(gocontext.Background(), method, reqProtoMsg)
 	if err != nil {
 		return nil, err
 	}

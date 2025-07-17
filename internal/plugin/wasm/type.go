@@ -6,6 +6,10 @@ import (
 	"reflect"
 	"strings"
 	"unicode"
+
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/schema"
+	"github.com/scenarigo/scenarigo/template"
 )
 
 var cacheTypeMap = map[string]*Type{}
@@ -18,16 +22,18 @@ type NameWithType struct {
 
 // Type represents a type information from a WASM plugin.
 type Type struct {
-	Kind        Kind         `json:"kind"`
-	MethodNames []string     `json:"methodNames"`
-	Ref         string       `json:"ref"`
-	Any         *AnyType     `json:"any"`
-	Pointer     *PointerType `json:"pointer"`
-	Struct      *StructType  `json:"struct"`
-	Slice       *SliceType   `json:"slice"`
-	Array       *ArrayType   `json:"array"`
-	Map         *MapType     `json:"map"`
-	Func        *FuncType    `json:"func"`
+	Kind          Kind         `json:"kind"`
+	MethodNames   []string     `json:"methodNames"`
+	Step          bool         `json:"step"`
+	LeftArrowFunc bool         `json:"leftArrowFunc"`
+	Ref           string       `json:"ref"`
+	Any           *AnyType     `json:"any"`
+	Pointer       *PointerType `json:"pointer"`
+	Struct        *StructType  `json:"struct"`
+	Slice         *SliceType   `json:"slice"`
+	Array         *ArrayType   `json:"array"`
+	Map           *MapType     `json:"map"`
+	Func          *FuncType    `json:"func"`
 }
 
 type Kind string
@@ -58,6 +64,15 @@ const (
 	FUNC    Kind = "func"
 	POINTER Kind = "pointer"
 	ANY     Kind = "any"
+	ERROR   Kind = "error"
+)
+
+var (
+	errorType = reflect.TypeOf((*error)(nil)).Elem()
+	stepType  = reflect.TypeOf((*interface {
+		Run(*context.Context, *schema.Step) *context.Context
+	})(nil)).Elem()
+	leftArrowFuncType = reflect.TypeOf((*template.Func)(nil)).Elem()
 )
 
 // PointerTyep represents pointer type information from a WASM plugin.
@@ -142,12 +157,21 @@ func NewType(t reflect.Type) (*Type, error) {
 		mtdNames = append(mtdNames, t.Method(i).Name)
 	}
 	typ.MethodNames = mtdNames
+	if t.Implements(stepType) {
+		typ.Step = true
+	}
+	if t.Implements(leftArrowFuncType) {
+		typ.LeftArrowFunc = true
+	}
 	return typ, nil
 }
 
 func newType(t reflect.Type) (*Type, error) {
 	if t == nil {
 		return &Type{Kind: INVALID}, nil
+	}
+	if t == errorType {
+		return &Type{Kind: ERROR}, nil
 	}
 	switch t.Kind() {
 	case reflect.Invalid:
@@ -507,6 +531,8 @@ func (t *Type) ToReflect() (reflect.Type, error) {
 		return t.Pointer.ToReflect()
 	case ANY:
 		return t.Any.ToReflect()
+	case ERROR:
+		return errorType, nil
 	}
 	return nil, fmt.Errorf("failed to get reflect.Type from %s", t)
 }
@@ -586,7 +612,7 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 	switch t.Kind {
 	case INVALID, INT, INT8, INT16, INT32, INT64,
 		UINT, UINT8, UINT16, UINT32, UINT64, UINTPTR,
-		FLOAT32, FLOAT64, BOOL, STRING, BYTES, ANY:
+		FLOAT32, FLOAT64, BOOL, STRING, BYTES, ANY, ERROR:
 		return t, nil
 	case FUNC:
 		args := make([]*Type, 0, len(t.Func.Args))
@@ -611,7 +637,9 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 				Args:   args,
 				Return: rets,
 			},
-			MethodNames: t.MethodNames,
+			MethodNames:   t.MethodNames,
+			Step:          t.Step,
+			LeftArrowFunc: t.LeftArrowFunc,
 		}, nil
 	case MAP:
 		key, err := ResolveRef(t.Map.Key, typeRefMap)
@@ -628,7 +656,9 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 				Key:   key,
 				Value: value,
 			},
-			MethodNames: t.MethodNames,
+			MethodNames:   t.MethodNames,
+			Step:          t.Step,
+			LeftArrowFunc: t.LeftArrowFunc,
 		}, nil
 	case SLICE:
 		elem, err := ResolveRef(t.Slice.Elem, typeRefMap)
@@ -640,7 +670,9 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 			Slice: &SliceType{
 				Elem: elem,
 			},
-			MethodNames: t.MethodNames,
+			MethodNames:   t.MethodNames,
+			Step:          t.Step,
+			LeftArrowFunc: t.LeftArrowFunc,
 		}, nil
 	case ARRAY:
 		elem, err := ResolveRef(t.Array.Elem, typeRefMap)
@@ -653,7 +685,9 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 				Num:  t.Array.Num,
 				Elem: elem,
 			},
-			MethodNames: t.MethodNames,
+			MethodNames:   t.MethodNames,
+			Step:          t.Step,
+			LeftArrowFunc: t.LeftArrowFunc,
 		}, nil
 	case STRUCT:
 		fields := make([]*NameWithType, 0, len(t.Struct.Fields))
@@ -672,7 +706,9 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 			Struct: &StructType{
 				Fields: fields,
 			},
-			MethodNames: t.MethodNames,
+			MethodNames:   t.MethodNames,
+			Step:          t.Step,
+			LeftArrowFunc: t.LeftArrowFunc,
 		}, nil
 	case POINTER:
 		elem, err := ResolveRef(t.Pointer.Elem, typeRefMap)
@@ -684,7 +720,9 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 			Pointer: &PointerType{
 				Elem: elem,
 			},
-			MethodNames: t.MethodNames,
+			MethodNames:   t.MethodNames,
+			Step:          t.Step,
+			LeftArrowFunc: t.LeftArrowFunc,
 		}, nil
 	case REF:
 		refType, exists := typeRefMap[t.Ref]

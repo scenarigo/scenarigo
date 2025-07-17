@@ -128,7 +128,9 @@ func FromSerializable(sc *SerializableContext) *Context {
 
 	// Set vars
 	if sc.Vars != nil {
-		ctx = ctx.WithVars(sc.Vars)
+		for _, v := range sc.Vars {
+			ctx = ctx.WithVars(v)
+		}
 	}
 
 	// Set secrets

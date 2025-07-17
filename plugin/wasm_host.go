@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/goccy/go-yaml"
 	"github.com/goccy/wasi-go/imports"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -24,7 +25,9 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
 
+	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/plugin/wasm"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 var ignoreEnvNameMap = map[string]struct{}{
@@ -98,6 +101,12 @@ func openWasmPlugin(path string) (Plugin, error) {
 		return nil, err
 	}
 
+	plugin := &WasmPlugin{
+		wasmRuntime: r,
+		stdin:       stdinW,
+		stdout:      stdoutR,
+	}
+
 	// setting the buffer size to 1 ensures that the function can exit even if there is no receiver.
 	instanceModErrCh := make(chan error, 1)
 	go func() {
@@ -105,14 +114,10 @@ func openWasmPlugin(path string) (Plugin, error) {
 			ctx, compiledMod, modCfg,
 		)
 		instanceModErrCh <- err
+		plugin.closeResources(err)
 	}()
 
-	plugin := &WasmPlugin{
-		wasmRuntime:      r,
-		stdin:            stdinW,
-		stdout:           stdoutR,
-		instanceModErrCh: instanceModErrCh,
-	}
+	plugin.instanceModErrCh = instanceModErrCh
 
 	res, err := plugin.call(wasm.NewInitRequest())
 	if err != nil {
@@ -263,7 +268,7 @@ func (p *WasmPlugin) GetSetup() SetupFunc {
 	return func(sctx *Context) (*Context, func(*Context)) {
 		ctx, teardown, err := p.setup(sctx)
 		if err != nil {
-			panic(err)
+			ctx.Reporter().Fatal(err)
 		}
 		return ctx, teardown
 	}
@@ -290,12 +295,9 @@ func (p *WasmPlugin) setup(sctx *Context) (*Context, func(*Context), error) {
 		p.nameToTypeMap[k] = v
 	}
 	return sctx, func(sctx *Context) {
-		if _, err := p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable())); err != nil {
-			panic(err)
-		}
-		if err := p.close(); err != nil {
-			panic(err)
-		}
+		// ignore teardown process's error.
+		_, _ = p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable()))
+		_ = p.close()
 	}, nil
 }
 
@@ -303,7 +305,7 @@ func (p *WasmPlugin) GetSetupEachScenario() SetupFunc {
 	return func(sctx *Context) (*Context, func(*Context)) {
 		ctx, teardown, err := p.setupEachScenario(sctx)
 		if err != nil {
-			panic(err)
+			sctx.Reporter().Fatal(err)
 		}
 		return ctx, teardown
 	}
@@ -330,9 +332,8 @@ func (p *WasmPlugin) setupEachScenario(sctx *Context) (*Context, func(*Context),
 		p.nameToTypeMap[k] = v
 	}
 	return sctx, func(sctx *Context) {
-		if _, err := p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable())); err != nil {
-			panic(err)
-		}
+		// ignore teardown process's error.
+		_, _ = p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable()))
 	}, nil
 }
 
@@ -348,6 +349,11 @@ func (p *WasmPlugin) ExtractByKey(name string) (any, bool) {
 	}
 	return ret, true
 }
+
+const (
+	stepInterface          = "step"
+	leftArrowFuncInterface = "leftArrowFunc"
+)
 
 func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []string, args []reflect.Value) ([]reflect.Value, error) {
 	fnArgs := make([]string, 0, len(args))
@@ -373,7 +379,25 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 
 	ret := make([]reflect.Value, 0, len(typ.Return))
 	for idx, retValue := range typ.Return {
-		if retValue.IsStruct() {
+		value := funcRes.Return[idx].Value
+		switch {
+		case value == stepInterface:
+			ret = append(ret, reflect.ValueOf(
+				&stepValue{
+					plugin:   p,
+					instance: funcRes.Return[idx].ID,
+				},
+			))
+			continue
+		case value == leftArrowFuncInterface:
+			ret = append(ret, reflect.ValueOf(
+				&leftArrowFuncValue{
+					plugin:   p,
+					instance: funcRes.Return[idx].ID,
+				},
+			))
+			continue
+		case retValue.IsStruct():
 			ret = append(ret, reflect.ValueOf(
 				&StructValue{
 					typ:    retValue,
@@ -390,7 +414,7 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 		}
 		rv := reflect.New(typ)
 		v := rv.Interface()
-		if err := json.Unmarshal([]byte(funcRes.Return[idx].Value), v); err != nil {
+		if err := json.Unmarshal([]byte(value), v); err != nil {
 			return nil, fmt.Errorf("failed to convert function return value(%d) %s to %s: %w", idx, funcRes.Return[idx].Value, typ.Kind(), err)
 		}
 		ret = append(ret, rv.Elem())
@@ -438,6 +462,12 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 		typ = typ.FieldTypeByName(lastSel)
 	}
 	if typ.Kind == wasm.FUNC {
+		if typ.Step {
+			return &stepValue{
+				plugin:   p,
+				instance: name,
+			}, nil
+		}
 		funcType, err := typ.ToReflect()
 		if err != nil {
 			return nil, err
@@ -518,6 +548,74 @@ func replaceStructType(t reflect.Type) reflect.Type {
 	return t
 }
 
+type stepValue struct {
+	plugin   *WasmPlugin
+	instance string
+}
+
+func (v *stepValue) Run(ctx *Context, step *schema.Step) *Context {
+	res, err := v.plugin.call(wasm.NewStepRunRequest(v.instance, ctx.ToSerializable(), step))
+	if err != nil {
+		ctx.Reporter().Fatal(err)
+	}
+	stepRes, err := convertCommandResponse[*wasm.StepRunCommandResponse](res)
+	if err != nil {
+		ctx.Reporter().Fatal(err)
+	}
+	return context.FromSerializable(stepRes.Context)
+}
+
+type leftArrowFuncValue struct {
+	plugin   *WasmPlugin
+	instance string
+	argID    string
+}
+
+func (v *leftArrowFuncValue) Exec(arg any) (any, error) {
+	b, err := json.Marshal(arg)
+	if err != nil {
+		return nil, err
+	}
+	res, err := v.plugin.call(wasm.NewLeftArrowFuncExecRequest(v.instance, string(b), v.argID))
+	if err != nil {
+		return nil, err
+	}
+	execRes, err := convertCommandResponse[*wasm.LeftArrowFuncExecCommandResponse](res)
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if err := json.Unmarshal([]byte(execRes.Value), &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (v *leftArrowFuncValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	var decoded any
+	if err := unmarshal(&decoded); err != nil {
+		return nil, err
+	}
+	b, err := yaml.Marshal(decoded)
+	if err != nil {
+		return nil, err
+	}
+	res, err := v.plugin.call(wasm.NewLeftArrowFuncUnmarshalArgRequest(v.instance, string(b)))
+	if err != nil {
+		return nil, err
+	}
+	argRes, err := convertCommandResponse[*wasm.LeftArrowFuncUnmarshalArgCommandResponse](res)
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if err := json.Unmarshal([]byte(argRes.Value), &result); err != nil {
+		return nil, err
+	}
+	v.argID = argRes.ValueID
+	return result, nil
+}
+
 // StructValue represents a struct type value from a WASM plugin.
 // It provides methods to interact with WASM plugin values, especially for gRPC clients.
 type StructValue struct {
@@ -526,6 +624,73 @@ type StructValue struct {
 	name      string
 	selectors []string
 	value     any
+	argID     string
+}
+
+func (v *StructValue) Exec(arg any) (any, error) {
+	if !v.typ.LeftArrowFunc {
+		return nil, fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name)
+	}
+	b, err := json.Marshal(arg)
+	if err != nil {
+		return nil, err
+	}
+	res, err := v.plugin.call(wasm.NewLeftArrowFuncExecRequest(v.name, string(b), v.argID))
+	if err != nil {
+		return nil, err
+	}
+	execRes, err := convertCommandResponse[*wasm.LeftArrowFuncExecCommandResponse](res)
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if err := json.Unmarshal([]byte(execRes.Value), &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	if !v.typ.LeftArrowFunc {
+		return nil, fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name)
+	}
+	var decoded any
+	if err := unmarshal(&decoded); err != nil {
+		return nil, err
+	}
+	b, err := yaml.Marshal(decoded)
+	if err != nil {
+		return nil, err
+	}
+	res, err := v.plugin.call(wasm.NewLeftArrowFuncUnmarshalArgRequest(v.name, string(b)))
+	if err != nil {
+		return nil, err
+	}
+	argRes, err := convertCommandResponse[*wasm.LeftArrowFuncUnmarshalArgCommandResponse](res)
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if err := json.Unmarshal([]byte(argRes.Value), &result); err != nil {
+		return nil, err
+	}
+	v.argID = argRes.ValueID
+	return result, nil
+}
+
+func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
+	if !v.typ.Step {
+		ctx.Reporter().Fatal(fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name))
+	}
+	res, err := v.plugin.call(wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step))
+	if err != nil {
+		ctx.Reporter().Fatal(err)
+	}
+	stepRes, err := convertCommandResponse[*wasm.StepRunCommandResponse](res)
+	if err != nil {
+		ctx.Reporter().Fatal(err)
+	}
+	return context.FromSerializable(stepRes.Context)
 }
 
 // ExtractByKey implements query.KeyExtractor interface for StructValue.

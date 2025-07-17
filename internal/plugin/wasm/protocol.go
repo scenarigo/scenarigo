@@ -5,23 +5,27 @@ import (
 	"fmt"
 
 	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 // Command represents a WASM plugin command type.
 type Command string
 
 const (
-	InitCommand              Command = "init"
-	SetupCommand             Command = "setup"
-	SetupEachScenarioCommand Command = "setup_each_scenario"
-	TeardownCommand          Command = "teardown"
-	SyncCommand              Command = "sync"
-	CallCommand              Command = "call"
-	MethodCommand            Command = "method"
-	GetCommand               Command = "get"
-	GRPCExistsMethodCommand  Command = "grpc_exists_method"
-	GRPCBuildRequestCommand  Command = "grpc_build_request"
-	GRPCInvokeCommand        Command = "grpc_invoke"
+	InitCommand                      Command = "init"
+	SetupCommand                     Command = "setup"
+	SetupEachScenarioCommand         Command = "setup_each_scenario"
+	TeardownCommand                  Command = "teardown"
+	SyncCommand                      Command = "sync"
+	CallCommand                      Command = "call"
+	MethodCommand                    Command = "method"
+	StepRunCommand                   Command = "step_run"
+	LeftArrowFuncExecCommand         Command = "exec"
+	LeftArrowFuncUnmarshalArgCommand Command = "unmarshal_arg"
+	GetCommand                       Command = "get"
+	GRPCExistsMethodCommand          Command = "grpc_exists_method"
+	GRPCBuildRequestCommand          Command = "grpc_build_request"
+	GRPCInvokeCommand                Command = "grpc_invoke"
 )
 
 // Request represents a command request sent to WASM plugins.
@@ -55,6 +59,9 @@ var (
 	_ CommandRequest = new(SyncCommandRequest)
 	_ CommandRequest = new(CallCommandRequest)
 	_ CommandRequest = new(MethodCommandRequest)
+	_ CommandRequest = new(StepRunCommandRequest)
+	_ CommandRequest = new(LeftArrowFuncExecCommandRequest)
+	_ CommandRequest = new(LeftArrowFuncUnmarshalArgCommandRequest)
 	_ CommandRequest = new(GetCommandRequest)
 	_ CommandRequest = new(GRPCExistsMethodCommandRequest)
 	_ CommandRequest = new(GRPCBuildRequestCommandRequest)
@@ -69,6 +76,9 @@ var (
 	_ CommandResponse = new(SyncCommandResponse)
 	_ CommandResponse = new(CallCommandResponse)
 	_ CommandResponse = new(MethodCommandResponse)
+	_ CommandResponse = new(StepRunCommandResponse)
+	_ CommandResponse = new(LeftArrowFuncExecCommandResponse)
+	_ CommandResponse = new(LeftArrowFuncUnmarshalArgCommandResponse)
 	_ CommandResponse = new(GetCommandResponse)
 	_ CommandResponse = new(GRPCExistsMethodCommandResponse)
 	_ CommandResponse = new(GRPCBuildRequestCommandResponse)
@@ -143,6 +153,41 @@ func NewMethodRequest(name string, selectors []string) *Request {
 		Command: &MethodCommandRequest{
 			Name:      name,
 			Selectors: selectors,
+		},
+	}
+}
+
+// NewStepRunRequest creates a new step run request.
+func NewStepRunRequest(instance string, ctx *context.SerializableContext, step *schema.Step) *Request {
+	return &Request{
+		CommandType: StepRunCommand,
+		Command: &StepRunCommandRequest{
+			Instance: instance,
+			Context:  ctx,
+			Step:     step,
+		},
+	}
+}
+
+// NewLeftArrowFuncExecRequest creates a new LeftArrowFunc.Exec() request.
+func NewLeftArrowFuncExecRequest(instance string, value string, argID string) *Request {
+	return &Request{
+		CommandType: LeftArrowFuncExecCommand,
+		Command: &LeftArrowFuncExecCommandRequest{
+			Instance: instance,
+			Value:    value,
+			ArgID:    argID,
+		},
+	}
+}
+
+// NewLeftArrowFuncUnmarshalArgRequest creates a new LeftArrowFunc.UnmarshalArg() request.
+func NewLeftArrowFuncUnmarshalArgRequest(instance string, value string) *Request {
+	return &Request{
+		CommandType: LeftArrowFuncUnmarshalArgCommand,
+		Command: &LeftArrowFuncUnmarshalArgCommandRequest{
+			Instance: instance,
+			Value:    value,
 		},
 	}
 }
@@ -316,6 +361,48 @@ type MethodCommandResponse struct {
 
 func (r *MethodCommandResponse) isCommandResponse() bool { return true }
 
+type StepRunCommandRequest struct {
+	Instance string                       `json:"instance"`
+	Context  *context.SerializableContext `json:"context"`
+	Step     *schema.Step                 `json:"step"`
+}
+
+func (r *StepRunCommandRequest) isCommandRequest() bool { return true }
+
+type StepRunCommandResponse struct {
+	Context *context.SerializableContext `json:"context"`
+}
+
+func (r *StepRunCommandResponse) isCommandResponse() bool { return true }
+
+type LeftArrowFuncExecCommandRequest struct {
+	Instance string `json:"instance"`
+	Value    string `json:"value"`
+	ArgID    string `json:"argID"`
+}
+
+func (r *LeftArrowFuncExecCommandRequest) isCommandRequest() bool { return true }
+
+type LeftArrowFuncExecCommandResponse struct {
+	Value string `json:"value"`
+}
+
+func (r *LeftArrowFuncExecCommandResponse) isCommandResponse() bool { return true }
+
+type LeftArrowFuncUnmarshalArgCommandRequest struct {
+	Instance string `json:"instance"`
+	Value    string `json:"value"`
+}
+
+func (r *LeftArrowFuncUnmarshalArgCommandRequest) isCommandRequest() bool { return true }
+
+type LeftArrowFuncUnmarshalArgCommandResponse struct {
+	ValueID string `json:"valueID"`
+	Value   string `json:"value"`
+}
+
+func (r *LeftArrowFuncUnmarshalArgCommandResponse) isCommandResponse() bool { return true }
+
 type GetCommandRequest struct {
 	Name      string   `json:"name"`
 	Selectors []string `json:"selectors"`
@@ -439,6 +526,27 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 		}
 		r.Command = &v
 		return nil
+	case StepRunCommand:
+		var v StepRunCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncExecCommand:
+		var v LeftArrowFuncExecCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncUnmarshalArgCommand:
+		var v LeftArrowFuncUnmarshalArgCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
 	case GetCommand:
 		var v GetCommandRequest
 		if err := json.Unmarshal(req.Command, &v); err != nil {
@@ -475,11 +583,13 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 	var res struct {
 		CommandType Command         `json:"type"`
 		Command     json.RawMessage `json:"command"`
+		Error       string          `json:"error"`
 	}
 	if err := json.Unmarshal(b, &res); err != nil {
 		return err
 	}
 	r.CommandType = res.CommandType
+	r.Error = res.Error
 	switch res.CommandType {
 	case InitCommand:
 		var v InitCommandResponse
@@ -530,6 +640,27 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 		}
 		r.Command = &v
 		return nil
+	case StepRunCommand:
+		var v StepRunCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncExecCommand:
+		var v LeftArrowFuncExecCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncUnmarshalArgCommand:
+		var v LeftArrowFuncUnmarshalArgCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
 	case GetCommand:
 		var v GetCommandResponse
 		if err := json.Unmarshal(res.Command, &v); err != nil {
@@ -571,6 +702,9 @@ type CommandHandler interface {
 	Sync(*SyncCommandRequest) (*SyncCommandResponse, error)
 	Call(*CallCommandRequest) (*CallCommandResponse, error)
 	Method(*MethodCommandRequest) (*MethodCommandResponse, error)
+	StepRun(*StepRunCommandRequest) (*StepRunCommandResponse, error)
+	LeftArrowFuncExec(*LeftArrowFuncExecCommandRequest) (*LeftArrowFuncExecCommandResponse, error)
+	LeftArrowFuncUnmarshalArg(*LeftArrowFuncUnmarshalArgCommandRequest) (*LeftArrowFuncUnmarshalArgCommandResponse, error)
 	Get(*GetCommandRequest) (*GetCommandResponse, error)
 	GRPCExistsMethod(*GRPCExistsMethodCommandRequest) (*GRPCExistsMethodCommandResponse, error)
 	GRPCBuildRequest(*GRPCBuildRequestCommandRequest) (*GRPCBuildRequestCommandResponse, error)
@@ -634,6 +768,24 @@ func handleCommand(r *Request, handler CommandHandler) (CommandResponse, error) 
 			return nil, err
 		}
 		return handler.Method(cmd)
+	case StepRunCommand:
+		cmd, err := toCommandRequest[*StepRunCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.StepRun(cmd)
+	case LeftArrowFuncExecCommand:
+		cmd, err := toCommandRequest[*LeftArrowFuncExecCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.LeftArrowFuncExec(cmd)
+	case LeftArrowFuncUnmarshalArgCommand:
+		cmd, err := toCommandRequest[*LeftArrowFuncUnmarshalArgCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.LeftArrowFuncUnmarshalArg(cmd)
 	case GetCommand:
 		cmd, err := toCommandRequest[*GetCommandRequest](r.Command)
 		if err != nil {

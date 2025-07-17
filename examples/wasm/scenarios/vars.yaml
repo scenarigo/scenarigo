@@ -9,8 +9,27 @@ vars:
   struct: '{{ plugins.plugin.Struct }}'
   structptr: '{{ plugins.plugin.StructPtr }}'
   t: '{{ plugins.plugin.NewT() }}'
+  text: test
 title: use global variables
 steps:
+  - title: set
+    ref: '{{plugins.plugin.SetVar("key", "value")}}'
+    bind:
+      vars:
+        key: '{{vars.key}}'
+
+  - title: dump
+    ref: '{{plugins.plugin.DumpVarsStep}}'
+    vars:
+      message: |-
+        {{plugins.plugin.Join <-}}:
+          prefix: preout-
+          text: |-
+            {{plugins.plugin.Join <-}}:
+              prefix: prein-
+              text: '{{vars.text}}'
+              suffix: -sufin
+          suffix: -sufout
   - title: Ping
     protocol: grpc
     request:
@@ -30,3 +49,8 @@ steps:
         print_structptr_x: '{{ plugins.plugin.Println(vars.structptr.X) }}'
         set_x: '{{ vars.t.SetValue(10) }}'
         get_x: '{{ vars.t.GetValue() }}'
+
+  - ref: '{{plugins.plugin.Sleep("2s")}}'
+    timeout: 1ns
+    postTimeoutWaitingLimit: 1s
+
