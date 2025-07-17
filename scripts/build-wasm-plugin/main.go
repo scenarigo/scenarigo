@@ -95,9 +95,21 @@ func buildWasmPlugin(pluginName, srcDir, genDir string) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// Run scenarigo plugin build
-	cmd := exec.Command("scenarigo", "plugin", "build")
-	cmd.Dir = tempDir
+	// Create go.mod for plugin build
+	if err := createGoMod(tempDir); err != nil {
+		return fmt.Errorf("failed to create go.mod: %w", err)
+	}
+
+	// Get repository root for running scenarigo command
+	// The script is executed from the repository root, so current directory is the repo root
+	repoRoot, err := filepath.Abs(".")
+	if err != nil {
+		return fmt.Errorf("failed to get repository root: %w", err)
+	}
+
+	// Run scenarigo plugin build from repository root, but with config in tempDir
+	cmd := exec.Command("go", "run", "./cmd/scenarigo", "plugin", "build", "--wasm", "-c", filepath.Join(tempDir, "scenarigo.yaml"))
+	cmd.Dir = repoRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -110,6 +122,42 @@ func buildWasmPlugin(pluginName, srcDir, genDir string) error {
 	targetWasmPath := filepath.Join(genDir, pluginName+".wasm")
 
 	return copyFile(generatedWasmPath, targetWasmPath)
+}
+
+func createGoMod(tempDir string) error {
+	// Get the absolute path to repository root
+	// The script is executed from the repository root, so current directory is the repo root
+	repoRoot, err := filepath.Abs(".")
+	if err != nil {
+		return fmt.Errorf("failed to get repository root: %w", err)
+	}
+
+	// Initialize go module in plugin/src directory
+	pluginSrcDir := filepath.Join(tempDir, "plugin", "src")
+	cmd := exec.Command("go", "mod", "init", "temp-plugin-build")
+	cmd.Dir = pluginSrcDir
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run go mod init: %w", err)
+	}
+
+	// Use absolute path instead of relative path for replace directive
+	// This should be more reliable than relative paths
+	cmd = exec.Command("go", "mod", "edit", "-replace", "github.com/scenarigo/scenarigo="+repoRoot)
+	cmd.Dir = pluginSrcDir
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to add replace directive: %w", err)
+	}
+
+	// Add a simple dependency first to test if go.mod works
+	cmd = exec.Command("go", "mod", "tidy")
+	cmd.Dir = pluginSrcDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run go mod tidy: %w", err)
+	}
+
+	return nil
 }
 
 func copyDir(src, dst string) error {
