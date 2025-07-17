@@ -197,6 +197,8 @@ gen/plugins:
 		echo "build plugin $$(basename $$dir).so"; \
 		$(GO) build -buildmode=plugin -o $(GEN_PLUGINS_DIR)/$$(basename $$dir).so $$dir; \
 	done
+	@echo "building WASM plugins..."
+	@$(GO) run ./scripts/build-wasm-plugin/main.go $(PLUGINS_DIR)
 
 .PHONY: credits
 credits: $(GO_LICENSES) $(GOCREDITS) ## generate CREDITS
