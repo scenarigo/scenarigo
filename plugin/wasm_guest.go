@@ -15,6 +15,7 @@ import (
 	_ "github.com/goccy/wasi-go-net/wasip1"
 
 	"github.com/goccy/go-yaml"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -500,7 +501,8 @@ func (h *handler) GRPCInvoke(r *wasm.GRPCInvokeCommandRequest) (*wasm.GRPCInvoke
 	if err := protojson.Unmarshal(r.Request, reqProtoMsg); err != nil {
 		return nil, err
 	}
-	resMsg, st, err := plugin.GRPCInvoke(gocontext.Background(), method, reqProtoMsg)
+	ctx := metadata.NewOutgoingContext(gocontext.Background(), r.Metadata)
+	resMsg, st, err := plugin.GRPCInvoke(ctx, method, reqProtoMsg)
 	if err != nil {
 		return nil, err
 	}

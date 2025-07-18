@@ -69,11 +69,6 @@ func TestE2E(t *testing.T) {
 			for _, scenario := range tc.Scenarios {
 				for _, pluginType := range pluginTypes {
 					// Skip WASM tests for scenarios that don't use plugins
-					scenarioPath := filepath.Join(dir, "scenarios", scenario.Filename)
-					if pluginType == ".wasm" && !scenarioUsesPlugins(scenarioPath) {
-						continue
-					}
-
 					testName := fmt.Sprintf("%s-%s", scenario.Filename, strings.TrimPrefix(pluginType, "."))
 					t.Run(testName, func(t *testing.T) {
 						if scenario.Mocks != "" {
@@ -142,6 +137,7 @@ func TestE2E(t *testing.T) {
 							r.Run(context.New(rptr))
 						}, opts...)
 						if ok != scenario.Success {
+							fmt.Println(b.String())
 							t.Errorf("expect %t but got %t", scenario.Success, ok)
 						}
 
@@ -234,17 +230,6 @@ func loadAndModifyScenario(scenarioPath, pluginType string) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
-}
-
-func scenarioUsesPlugins(scenarioPath string) bool {
-	content, err := os.ReadFile(scenarioPath)
-	if err != nil {
-		return false
-	}
-
-	// Check if scenario file contains plugin references
-	soPattern := regexp.MustCompile(`([a-zA-Z0-9_-]+)\.so`)
-	return soPattern.Match(content)
 }
 
 func loadAndModifyExpectedOutput(stdoutPath, pluginType string) ([]byte, error) {

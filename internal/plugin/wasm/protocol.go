@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"google.golang.org/grpc/metadata"
+
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/schema"
 )
@@ -227,13 +229,14 @@ func NewGRPCBuildRequestRequest(client, method string, msg []byte) *Request {
 }
 
 // NewGRPCInvokeRequest creates a request to invoke a gRPC method.
-func NewGRPCInvokeRequest(client, method string, reqMsg []byte) *Request {
+func NewGRPCInvokeRequest(client, method string, reqMsg []byte, md metadata.MD) *Request {
 	return &Request{
 		CommandType: GRPCInvokeCommand,
 		Command: &GRPCInvokeCommandRequest{
-			Client:  client,
-			Method:  method,
-			Request: reqMsg,
+			Client:   client,
+			Method:   method,
+			Request:  reqMsg,
+			Metadata: md,
 		},
 	}
 }
@@ -445,9 +448,10 @@ type GRPCBuildRequestCommandResponse struct {
 func (r *GRPCBuildRequestCommandResponse) isCommandResponse() bool { return true }
 
 type GRPCInvokeCommandRequest struct {
-	Client  string `json:"client"`
-	Method  string `json:"method"`
-	Request []byte `json:"request"`
+	Client   string      `json:"client"`
+	Method   string      `json:"method"`
+	Request  []byte      `json:"request"`
+	Metadata metadata.MD `json:"metadata"`
 }
 
 func (r *GRPCInvokeCommandRequest) isCommandRequest() bool { return true }

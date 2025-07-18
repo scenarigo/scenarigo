@@ -10,6 +10,7 @@ vars:
   structptr: '{{ plugins.plugin.StructPtr }}'
   t: '{{ plugins.plugin.NewT() }}'
   text: test
+  cc: '{{ plugins.plugin.PassContext(ctx) }}'
 title: use global variables
 steps:
   - title: set

@@ -17,6 +17,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	stpb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -417,6 +418,20 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 		if err := json.Unmarshal([]byte(value), v); err != nil {
 			return nil, fmt.Errorf("failed to convert function return value(%d) %s to %s: %w", idx, funcRes.Return[idx].Value, typ.Kind(), err)
 		}
+		if rv.Elem().Kind() == reflect.Interface {
+			kind := rv.Elem().Elem().Kind()
+			if kind == reflect.Map || kind == reflect.Struct {
+				ret = append(ret, reflect.ValueOf(
+					&StructValue{
+						typ:    retValue,
+						plugin: p,
+						name:   funcRes.Return[idx].ID,
+						value:  funcRes.Return[idx].Value,
+					},
+				))
+				continue
+			}
+		}
 		ret = append(ret, rv.Elem())
 	}
 	return ret, nil
@@ -522,7 +537,12 @@ func getFieldTypeByName(t reflect.Type, sel string) (reflect.Type, error) {
 	return nil, fmt.Errorf("failed to get field %s type from %v", sel, t)
 }
 
+var ctxType = reflect.TypeOf((*Context)(nil))
+
 func replaceStructType(t reflect.Type) reflect.Type {
+	if t == ctxType {
+		return t
+	}
 	switch t.Kind() {
 	case reflect.Pointer:
 		return reflect.New(replaceStructType(t.Elem())).Type()
@@ -760,12 +780,16 @@ func (v *StructValue) BuildRequestMessage(method string, msg []byte) (proto.Mess
 
 // Invoke calls a gRPC method on the WASM value with the given request.
 // It returns the response message, status, and any error that occurred.
-func (v *StructValue) Invoke(method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
+func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		md = metadata.MD{}
+	}
 	reqMsg, err := protojson.Marshal(reqProto)
 	if err != nil {
 		return nil, nil, err
 	}
-	res, err := v.plugin.call(wasm.NewGRPCInvokeRequest(v.name, method, reqMsg))
+	res, err := v.plugin.call(wasm.NewGRPCInvokeRequest(v.name, method, reqMsg, md))
 	if err != nil {
 		return nil, nil, err
 	}

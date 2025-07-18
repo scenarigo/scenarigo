@@ -239,3 +239,7 @@ func SetVar(k string, v interface{}) (plugin.Step, error) {
 		return ctx.WithVars(map[string]interface{}{k: v})
 	}), nil
 }
+
+func PassContext(ctx *context.Context) bool {
+	return true
+}

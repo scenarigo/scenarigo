@@ -190,13 +190,15 @@ gen/mock: $(GOTYPENAMES) $(MOCKGEN)
 	done
 
 .PHONY: gen/plugins
-gen/plugins:
+gen/plugins: gen/plugins/wasm
 	@rm -rf $(GEN_PLUGINS_DIR)
 	@mkdir -p $(GEN_PLUGINS_DIR)
 	@for dir in $$(find $(PLUGINS_DIR) -name '*.go' | xargs -L1 -P8 dirname | sort | uniq); do \
 		echo "build plugin $$(basename $$dir).so"; \
 		$(GO) build -buildmode=plugin -o $(GEN_PLUGINS_DIR)/$$(basename $$dir).so $$dir; \
 	done
+
+gen/plugins/wasm:
 	@echo "building WASM plugins..."
 	@$(GO) run ./scripts/build-wasm-plugin/main.go $(PLUGINS_DIR)
 

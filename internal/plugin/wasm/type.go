@@ -65,6 +65,7 @@ const (
 	POINTER Kind = "pointer"
 	ANY     Kind = "any"
 	ERROR   Kind = "error"
+	CONTEXT Kind = "context"
 )
 
 var (
@@ -73,6 +74,7 @@ var (
 		Run(*context.Context, *schema.Step) *context.Context
 	})(nil)).Elem()
 	leftArrowFuncType = reflect.TypeOf((*template.Func)(nil)).Elem()
+	ctxType           = reflect.TypeOf((*context.Context)(nil))
 )
 
 // PointerTyep represents pointer type information from a WASM plugin.
@@ -172,6 +174,8 @@ func newType(t reflect.Type) (*Type, error) {
 	}
 	if t == errorType {
 		return &Type{Kind: ERROR}, nil
+	} else if t == ctxType {
+		return &Type{Kind: CONTEXT}, nil
 	}
 	switch t.Kind() {
 	case reflect.Invalid:
@@ -533,6 +537,8 @@ func (t *Type) ToReflect() (reflect.Type, error) {
 		return t.Any.ToReflect()
 	case ERROR:
 		return errorType, nil
+	case CONTEXT:
+		return ctxType, nil
 	}
 	return nil, fmt.Errorf("failed to get reflect.Type from %s", t)
 }
@@ -612,7 +618,7 @@ func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
 	switch t.Kind {
 	case INVALID, INT, INT8, INT16, INT32, INT64,
 		UINT, UINT8, UINT16, UINT32, UINT64, UINTPTR,
-		FLOAT32, FLOAT64, BOOL, STRING, BYTES, ANY, ERROR:
+		FLOAT32, FLOAT64, BOOL, STRING, BYTES, ANY, ERROR, CONTEXT:
 		return t, nil
 	case FUNC:
 		args := make([]*Type, 0, len(t.Func.Args))
