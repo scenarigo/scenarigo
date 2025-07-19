@@ -7,7 +7,6 @@ import (
 	"bytes"
 	gocontext "context"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -183,11 +182,10 @@ func TestE2E(t *testing.T) {
 								t.Fatal(err)
 							}
 
-							if got, expect := testutil.ReplaceOutput(b.String()), string(expectedStdout); got != expect {
+							if got, expect := testutil.ReplaceOutput(b.String()), testutil.ReplaceOutput(string(expectedStdout)); got != expect {
 								dmp := diffmatchpatch.New()
 								diffs := dmp.DiffMain(expect, got, false)
 								t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
-								fmt.Println(b.String())
 							}
 						})
 					}
@@ -221,54 +219,15 @@ func loadAndModifyScenario(scenarioPath, pluginType string) ([]byte, error) {
 		return os.ReadFile(scenarioPath)
 	}
 
-	// Read and parse YAML manually to handle deprecated fields
+	// For WASM plugins, use simple string replacement to preserve line numbers
 	content, err := os.ReadFile(scenarioPath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse YAML documents (handle multiple scenarios in one file)
-	var scenarios []map[string]any
-	decoder := yaml.NewDecoder(bytes.NewReader(content))
-	for {
-		var scenario map[string]any
-		if err := decoder.Decode(&scenario); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, fmt.Errorf("failed to decode YAML: %w", err)
-		}
-		scenarios = append(scenarios, scenario)
-	}
-
-	// Modify plugins for WASM tests
-	for _, scenario := range scenarios {
-		if plugins, ok := scenario["plugins"].(map[string]any); ok {
-			for pluginName, pluginPathAny := range plugins {
-				if pluginPath, ok := pluginPathAny.(string); ok && strings.HasSuffix(pluginPath, ".so") {
-					// Replace .so with .wasm
-					plugins[pluginName] = strings.TrimSuffix(pluginPath, ".so") + ".wasm"
-				}
-			}
-		}
-	}
-
-	// Marshal back to YAML
-	var buf bytes.Buffer
-	for i, scenario := range scenarios {
-		if i > 0 {
-			// Add document separator for multiple scenarios
-			buf.WriteString("\n---\n")
-		}
-		encoder := yaml.NewEncoder(&buf)
-		if err := encoder.Encode(scenario); err != nil {
-			encoder.Close()
-			return nil, fmt.Errorf("failed to encode scenario: %w", err)
-		}
-		encoder.Close()
-	}
-
-	return buf.Bytes(), nil
+	// Replace .so with .wasm using string replacement to preserve formatting
+	modifiedContent := strings.ReplaceAll(string(content), ".so", ".wasm")
+	return []byte(modifiedContent), nil
 }
 
 func loadAndModifyExpectedOutput(stdoutPath, pluginType string) ([]byte, error) {
@@ -278,7 +237,7 @@ func loadAndModifyExpectedOutput(stdoutPath, pluginType string) ([]byte, error) 
 	}
 
 	// Replace .so with the target plugin type (.wasm or .so) in expected output
-	if pluginType == ".wasm" {
+	if pluginType == "wasm" {
 		// Replace plugin references from .so to .wasm
 		re := regexp.MustCompile(`([a-zA-Z0-9_-]+)\.so`)
 		content = re.ReplaceAll(content, []byte("${1}.wasm"))
