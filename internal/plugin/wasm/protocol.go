@@ -247,8 +247,10 @@ func (r *InitCommandRequest) isCommandRequest() bool { return true }
 
 // InitCommandResponse contains the types available from the WASM plugin.
 type InitCommandResponse struct {
-	TypeRefMap map[string]*Type `json:"typeRefMap"`
-	Types      []*NameWithType  `json:"types"`
+	HasSetup             bool             `json:"hasSetup"`
+	HasSetupEachScenario bool             `json:"hasSetupEachScenario"`
+	TypeRefMap           map[string]*Type `json:"typeRefMap"`
+	Types                []*NameWithType  `json:"types"`
 }
 
 // ToTypeMap converts the response types to a name-to-type mapping.

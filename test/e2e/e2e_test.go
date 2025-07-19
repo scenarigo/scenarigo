@@ -51,148 +51,147 @@ func TestE2E(t *testing.T) {
 	teardown := startGRPCServer(t)
 	defer teardown()
 
-	pluginTypes := []string{".so", ".wasm"}
+	pluginTypes := []string{"so", "wasm"}
+	for _, pluginType := range pluginTypes {
+		t.Run(pluginType, func(t *testing.T) {
+			for _, file := range files {
+				t.Run(file, func(t *testing.T) {
+					f, err := os.Open(file)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer f.Close()
 
-	for _, file := range files {
-		t.Run(file, func(t *testing.T) {
-			f, err := os.Open(file)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer f.Close()
+					var tc TestCase
+					if err := yaml.NewDecoder(f).Decode(&tc); err != nil {
+						t.Fatal(err)
+					}
 
-			var tc TestCase
-			if err := yaml.NewDecoder(f).Decode(&tc); err != nil {
-				t.Fatal(err)
-			}
+					for _, scenario := range tc.Scenarios {
+						t.Run(scenario.Filename, func(t *testing.T) {
+							if scenario.Mocks != "" {
+								teardown := runMockServer(t, filepath.Join(dir, "mocks", scenario.Mocks))
+								defer teardown(t)
+							}
 
-			for _, scenario := range tc.Scenarios {
-				for _, pluginType := range pluginTypes {
-					// Skip WASM tests for scenarios that don't use plugins
-					testName := fmt.Sprintf("%s-%s", scenario.Filename, strings.TrimPrefix(pluginType, "."))
-					t.Run(testName, func(t *testing.T) {
-						if scenario.Mocks != "" {
-							teardown := runMockServer(t, filepath.Join(dir, "mocks", scenario.Mocks))
-							defer teardown(t)
-						}
+							// Get absolute paths before potentially changing working directory
+							pluginDir, err := filepath.Abs("testdata/gen/plugins")
+							if err != nil {
+								t.Fatal(err)
+							}
 
-						// Get absolute paths before potentially changing working directory
-						pluginDir, err := filepath.Abs("testdata/gen/plugins")
-						if err != nil {
-							t.Fatal(err)
-						}
+							expectedOutputPath, err := filepath.Abs(filepath.Join(dir, "stdout", scenario.Output.Stdout))
+							if err != nil {
+								t.Fatal(err)
+							}
 
-						expectedOutputPath, err := filepath.Abs(filepath.Join(dir, "stdout", scenario.Output.Stdout))
-						if err != nil {
-							t.Fatal(err)
-						}
+							config := &schema.Config{
+								Vars: map[string]any{
+									"global": `{{"aaa"}}`,
+								},
+								PluginDirectory: pluginDir,
+								Plugins:         schema.NewOrderedMap[string, schema.PluginConfig](),
+							}
+							for _, p := range scenario.Plugins {
+								// For WASM tests, adjust plugin names to match modified scenario content
+								pluginName := p
+								if pluginType == "wasm" {
+									// Replace .so extension with .wasm in plugin name
+									if filepath.Ext(p) == ".so" {
+										pluginName = strings.TrimSuffix(p, ".so") + ".wasm"
+									}
+								}
+								config.Plugins.Set(pluginName, schema.PluginConfig{})
+							}
 
-						config := &schema.Config{
-							Vars: map[string]any{
-								"global": `{{"aaa"}}`,
-							},
-							PluginDirectory: pluginDir,
-							Plugins:         schema.NewOrderedMap[string, schema.PluginConfig](),
-						}
-						for _, p := range scenario.Plugins {
-							// For WASM tests, adjust plugin names to match modified scenario content
-							pluginName := p
-							if pluginType == ".wasm" {
-								// Replace .so extension with .wasm in plugin name
-								if strings.HasSuffix(p, ".so") {
-									pluginName = strings.TrimSuffix(p, ".so") + ".wasm"
+							var r *scenarigo.Runner
+							originalScenarioPath := filepath.Join(dir, "scenarios", scenario.Filename)
+
+							if pluginType == "so" {
+								// Use original file path for .so tests to maintain backward compatibility
+								var err error
+								r, err = scenarigo.NewRunner(
+									scenarigo.WithConfig(config),
+									scenarigo.WithScenarios(originalScenarioPath),
+								)
+								if err != nil {
+									t.Fatal(err)
+								}
+							} else {
+								// Use modified scenario for .wasm tests
+								scenarioContent, err := loadAndModifyScenario(originalScenarioPath, pluginType)
+								if err != nil {
+									t.Fatal(err)
+								}
+
+								// Create a temporary file with the same name as the original
+								tmpDir, err := os.MkdirTemp("", "scenario-test-")
+								if err != nil {
+									t.Fatal(err)
+								}
+								defer os.RemoveAll(tmpDir)
+
+								// Create the same directory structure as the original testdata/testcases
+								testcasesDir := filepath.Join(tmpDir, "testdata", "testcases")
+								tmpScenarioPath := filepath.Join(testcasesDir, "scenarios", scenario.Filename)
+								scenarioDir := filepath.Dir(tmpScenarioPath)
+								if err := os.MkdirAll(scenarioDir, 0755); err != nil {
+									t.Fatal(err)
+								}
+
+								// Write the modified content to a file with the original filename
+								if err := os.WriteFile(tmpScenarioPath, scenarioContent, 0644); err != nil {
+									t.Fatal(err)
+								}
+
+								// Change to the temporary directory to ensure relative paths work correctly
+								originalWd, err := os.Getwd()
+								if err != nil {
+									t.Fatal(err)
+								}
+								defer os.Chdir(originalWd)
+
+								if err := os.Chdir(tmpDir); err != nil {
+									t.Fatal(err)
+								}
+
+								// Use the relative path that matches the original structure
+								relativePath := filepath.Join("testdata", "testcases", "scenarios", scenario.Filename)
+								r, err = scenarigo.NewRunner(
+									scenarigo.WithConfig(config),
+									scenarigo.WithScenarios(relativePath),
+								)
+								if err != nil {
+									t.Fatal(err)
 								}
 							}
-							config.Plugins.Set(pluginName, schema.PluginConfig{})
-						}
 
-						var r *scenarigo.Runner
-						originalScenarioPath := filepath.Join(dir, "scenarios", scenario.Filename)
-						
-						if pluginType == ".so" {
-							// Use original file path for .so tests to maintain backward compatibility
-							var err error
-							r, err = scenarigo.NewRunner(
-								scenarigo.WithConfig(config),
-								scenarigo.WithScenarios(originalScenarioPath),
-							)
-							if err != nil {
-								t.Fatal(err)
+							var b bytes.Buffer
+							opts := []reporter.Option{reporter.WithWriter(&b)}
+							if scenario.Verbose {
+								opts = append(opts, reporter.WithVerboseLog())
 							}
-						} else {
-							// Use modified scenario for .wasm tests
-							scenarioContent, err := loadAndModifyScenario(originalScenarioPath, pluginType)
+							ok := reporter.Run(func(rptr reporter.Reporter) {
+								r.Run(context.New(rptr))
+							}, opts...)
+							if ok != scenario.Success {
+								t.Errorf("expect %t but got %t", scenario.Success, ok)
+							}
+
+							expectedStdout, err := loadAndModifyExpectedOutput(expectedOutputPath, pluginType)
 							if err != nil {
 								t.Fatal(err)
 							}
 
-							// Create a temporary file with the same name as the original
-							tmpDir, err := os.MkdirTemp("", "scenario-test-")
-							if err != nil {
-								t.Fatal(err)
+							if got, expect := testutil.ReplaceOutput(b.String()), string(expectedStdout); got != expect {
+								dmp := diffmatchpatch.New()
+								diffs := dmp.DiffMain(expect, got, false)
+								t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
+								fmt.Println(b.String())
 							}
-							defer os.RemoveAll(tmpDir)
-
-							// Create the same directory structure as the original testdata/testcases
-							testcasesDir := filepath.Join(tmpDir, "testdata", "testcases")
-							tmpScenarioPath := filepath.Join(testcasesDir, "scenarios", scenario.Filename)
-							scenarioDir := filepath.Dir(tmpScenarioPath)
-							if err := os.MkdirAll(scenarioDir, 0755); err != nil {
-								t.Fatal(err)
-							}
-
-							// Write the modified content to a file with the original filename
-							if err := os.WriteFile(tmpScenarioPath, scenarioContent, 0644); err != nil {
-								t.Fatal(err)
-							}
-
-							// Change to the temporary directory to ensure relative paths work correctly
-							originalWd, err := os.Getwd()
-							if err != nil {
-								t.Fatal(err)
-							}
-							defer os.Chdir(originalWd)
-
-							if err := os.Chdir(tmpDir); err != nil {
-								t.Fatal(err)
-							}
-
-							// Use the relative path that matches the original structure
-							relativePath := filepath.Join("testdata", "testcases", "scenarios", scenario.Filename)
-							r, err = scenarigo.NewRunner(
-								scenarigo.WithConfig(config),
-								scenarigo.WithScenarios(relativePath),
-							)
-							if err != nil {
-								t.Fatal(err)
-							}
-						}
-
-						var b bytes.Buffer
-						opts := []reporter.Option{reporter.WithWriter(&b)}
-						if scenario.Verbose {
-							opts = append(opts, reporter.WithVerboseLog())
-						}
-						ok := reporter.Run(func(rptr reporter.Reporter) {
-							r.Run(context.New(rptr))
-						}, opts...)
-						if ok != scenario.Success {
-							fmt.Println(b.String())
-							t.Errorf("expect %t but got %t", scenario.Success, ok)
-						}
-
-						expectedStdout, err := loadAndModifyExpectedOutput(expectedOutputPath, pluginType)
-						if err != nil {
-							t.Fatal(err)
-						}
-
-						if got, expect := testutil.ReplaceOutput(b.String()), string(expectedStdout); got != expect {
-							dmp := diffmatchpatch.New()
-							diffs := dmp.DiffMain(expect, got, false)
-							t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
-						}
-					})
-				}
+						})
+					}
+				})
 			}
 		})
 	}

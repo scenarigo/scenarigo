@@ -132,6 +132,8 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
+	plugin.hasSetup = initRes.HasSetup
+	plugin.hasSetupEachScenario = initRes.HasSetupEachScenario
 	plugin.nameToTypeMap = typeMap
 	return plugin, nil
 }
@@ -143,14 +145,16 @@ const (
 // WasmPlugin represents a WASM plugin instance.
 // It manages the WASM runtime and provides communication with the WASM module.
 type WasmPlugin struct {
-	wasmRuntime      wazero.Runtime
-	nameToTypeMap    map[string]*wasm.Type
-	stdin            *os.File
-	stdout           *os.File
-	instanceModErrCh chan error
-	instanceModErr   error
-	closed           bool
-	mu               sync.Mutex
+	wasmRuntime          wazero.Runtime
+	nameToTypeMap        map[string]*wasm.Type
+	hasSetup             bool
+	hasSetupEachScenario bool
+	stdin                *os.File
+	stdout               *os.File
+	instanceModErrCh     chan error
+	instanceModErr       error
+	closed               bool
+	mu                   sync.Mutex
 }
 
 func (p *WasmPlugin) close() error {
@@ -266,6 +270,9 @@ func (p *WasmPlugin) Lookup(name string) (Symbol, error) {
 }
 
 func (p *WasmPlugin) GetSetup() SetupFunc {
+	if !p.hasSetup {
+		return nil
+	}
 	return func(sctx *Context) (*Context, func(*Context)) {
 		ctx, teardown, err := p.setup(sctx)
 		if err != nil {
@@ -303,6 +310,9 @@ func (p *WasmPlugin) setup(sctx *Context) (*Context, func(*Context), error) {
 }
 
 func (p *WasmPlugin) GetSetupEachScenario() SetupFunc {
+	if !p.hasSetupEachScenario {
+		return nil
+	}
 	return func(sctx *Context) (*Context, func(*Context)) {
 		ctx, teardown, err := p.setupEachScenario(sctx)
 		if err != nil {

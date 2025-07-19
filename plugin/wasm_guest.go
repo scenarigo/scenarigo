@@ -158,8 +158,10 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 		})
 	}
 	return &wasm.InitCommandResponse{
-		TypeRefMap: wasm.TypeRefMap(),
-		Types:      types,
+		HasSetup:             len(setups) != 0,
+		HasSetupEachScenario: len(setupsEachScenario) != 0,
+		TypeRefMap:           wasm.TypeRefMap(),
+		Types:                types,
 	}, nil
 }
 
