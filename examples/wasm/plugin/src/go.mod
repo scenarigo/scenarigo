@@ -31,11 +31,11 @@ require (
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
-	golang.org/x/mod v0.25.0 // indirect
-	golang.org/x/net v0.41.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
+	golang.org/x/mod v0.26.0 // indirect
+	golang.org/x/net v0.42.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/text v0.27.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250528174236-200df99c418a // indirect
 )
 
 replace github.com/scenarigo/scenarigo v0.21.3 => ../../../..

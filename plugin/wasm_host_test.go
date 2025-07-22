@@ -17,6 +17,14 @@ import (
 
 func TestWasmHost(t *testing.T) {
 	srcDir := filepath.Join("testdata", "wasm", "src")
+
+	// go mod tidy to avoid the build error
+	goModTidy := exec.Command("go", "mod", "tidy")
+	goModTidy.Dir = srcDir
+	if out, err := goModTidy.CombinedOutput(); err != nil {
+		t.Fatalf("%s: %v", string(out), err)
+	}
+
 	cmd := exec.Command("go", "build", "-o", "main.wasm", ".")
 	cmd.Env = append(os.Environ(), []string{
 		"GOOS=wasip1",

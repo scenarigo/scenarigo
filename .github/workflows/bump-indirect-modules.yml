@@ -26,7 +26,9 @@ jobs:
         restore-keys: |
           go-${{ steps.setup-go.outputs.go-version }}-
     - name: Bump indirect modules
-      run: ./scripts/bump-indirect-modules.sh || true && go mod tidy
+      run: |
+        ./scripts/bump-indirect-modules.sh || true && go mod tidy
+        cd plugin/testdata/wasm/src && go mod tidy
     - name: Show diff
       run: git add -N . && git diff
     - name: Generate token
