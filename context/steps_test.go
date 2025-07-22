@@ -18,6 +18,7 @@ func TestSteps(t *testing.T) {
 		step := steps.Get("foo")
 		if step == nil {
 			t.Fatal("failed to get")
+			return
 		}
 		if got, expect := step.Result, "passed"; got != expect {
 			t.Errorf("expect %q but got %q", expect, got)
@@ -27,6 +28,7 @@ func TestSteps(t *testing.T) {
 		step := steps.Get("bar")
 		if step == nil {
 			t.Fatal("failed to get")
+			return
 		}
 		if got, expect := step.Result, "failed"; got != expect {
 			t.Errorf("expect %q but got %q", expect, got)

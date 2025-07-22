@@ -2,47 +2,14 @@ package reporter
 
 import (
 	"bytes"
-	"regexp"
-	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
+
+	"github.com/scenarigo/scenarigo/internal/testutil"
 )
-
-// normalizeParallelOutput sorts consecutive === CONT lines to make test output deterministic.
-func normalizeParallelOutput(output string) string {
-	lines := strings.Split(output, "\n")
-	result := make([]string, 0, len(lines))
-
-	contPattern := regexp.MustCompile(`^=== CONT\s+`)
-
-	i := 0
-	for i < len(lines) {
-		line := lines[i]
-
-		// If this is a CONT line, collect all consecutive CONT lines
-		if contPattern.MatchString(line) {
-			contLines := []string{}
-
-			// Collect consecutive CONT lines
-			for i < len(lines) && contPattern.MatchString(lines[i]) {
-				contLines = append(contLines, lines[i])
-				i++
-			}
-
-			// Sort the CONT lines to make them deterministic
-			sort.Strings(contLines)
-			result = append(result, contLines...)
-		} else {
-			result = append(result, line)
-			i++
-		}
-	}
-
-	return strings.Join(result, "\n")
-}
 
 func TestReporter_Teardown(t *testing.T) {
 	pr := func(t *testing.T, r Reporter) *reporter {
@@ -55,9 +22,10 @@ func TestReporter_Teardown(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		f          func(*testing.T, *reporter)
-		expect     string
-		checkPanic bool
+		f             func(*testing.T, *reporter)
+		parallelTests []string
+		expect        string
+		checkPanic    bool
 	}{
 		"teardown is called after all parallel tests complete": {
 			f: func(t *testing.T, r *reporter) {
@@ -88,6 +56,7 @@ func TestReporter_Teardown(t *testing.T) {
 					r.Log("test3 sequential")
 				})
 			},
+			parallelTests: []string{"test1", "test2"},
 			expect: `
 === RUN   test1
 === PAUSE test1
@@ -205,6 +174,7 @@ ok  	teardown	0.000s
 					})
 				})
 			},
+			parallelTests: []string{"subtest/nested"},
 			expect: `
 === RUN   subtest
 === RUN   subtest/nested
@@ -245,6 +215,7 @@ ok  	parent_teardown	0.000s
 					r.Log("main test")
 				})
 			},
+			parallelTests: []string{"parallel_teardown/teardown_parallel"},
 			expect: `
 === RUN   main_test
 --- PASS: main_test (0.00s)
@@ -298,6 +269,7 @@ ok  	parallel_teardown	0.000s
 					time.Sleep(5 * time.Millisecond)
 				})
 			},
+			parallelTests: []string{"main1", "main2"},
 			expect: `
 === RUN   main1
 === PAUSE main1
@@ -366,9 +338,8 @@ ok  	teardown1	0.000s
 					}
 				}
 			} else {
-				normalizedActual := normalizeParallelOutput(actual)
-				normalizedExpected := normalizeParallelOutput(test.expect)
-
+				normalizedActual := testutil.NormalizeParallelOutput(actual, test.parallelTests)
+				normalizedExpected := testutil.NormalizeParallelOutput(test.expect, test.parallelTests)
 				if normalizedActual != normalizedExpected {
 					dmp := diffmatchpatch.New()
 					diffs := dmp.DiffMain(normalizedExpected, normalizedActual, false)
@@ -518,9 +489,8 @@ cleanup executed
 					t.Errorf("expected panic to be caught and reported, but got: %s", actual)
 				}
 			} else {
-				normalizedActual := normalizeParallelOutput(actual)
-				normalizedExpected := normalizeParallelOutput(test.expect)
-
+				normalizedActual := testutil.NormalizeParallelOutput(actual, []string{})
+				normalizedExpected := testutil.NormalizeParallelOutput(test.expect, []string{})
 				if normalizedActual != normalizedExpected {
 					dmp := diffmatchpatch.New()
 					diffs := dmp.DiffMain(normalizedExpected, normalizedActual, false)
