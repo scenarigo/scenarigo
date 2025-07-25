@@ -73,11 +73,7 @@ func (r *reporter) ToSerializable() *SerializableReporter {
 	return sr
 }
 
-// FromSerializable creates a new reporter struct from SerializableReporter.
-// This function reconstructs a reporter from serialized data received from WASM plugins.
-func FromSerializable(sr *SerializableReporter) *reporter {
-	// Create a new reporter
-	r := newReporter()
+func (r *reporter) SetFromSerializable(sr *SerializableReporter) {
 	r.name = sr.Name
 	r.goTestName = sr.GoTestName
 	r.depth = sr.Depth
@@ -103,7 +99,6 @@ func FromSerializable(sr *SerializableReporter) *reporter {
 
 	// Set children
 	if len(sr.Children) > 0 {
-		r.children = make([]*reporter, 0, len(sr.Children))
 		for _, childSR := range sr.Children {
 			child := FromSerializable(childSR)
 			child.parent = r
@@ -115,7 +110,14 @@ func FromSerializable(sr *SerializableReporter) *reporter {
 	if sr.Context != nil {
 		r.context = FromSerializableTestContext(sr.Context)
 	}
+}
 
+// FromSerializable creates a new reporter struct from SerializableReporter.
+// This function reconstructs a reporter from serialized data received from WASM plugins.
+func FromSerializable(sr *SerializableReporter) *reporter {
+	// Create a new reporter
+	r := newReporter()
+	r.SetFromSerializable(sr)
 	return r
 }
 

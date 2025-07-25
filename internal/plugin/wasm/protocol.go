@@ -38,9 +38,10 @@ type Request struct {
 
 // Response represents a command response from WASM plugins.
 type Response struct {
-	CommandType Command         `json:"type"`
-	Command     CommandResponse `json:"command"`
-	Error       string          `json:"error"`
+	CommandType Command                      `json:"type"`
+	Command     CommandResponse              `json:"command"`
+	Context     *context.SerializableContext `json:"context"`
+	Error       string                       `json:"error"`
 }
 
 // CommandRequest is an interface for all command request types.
@@ -96,12 +97,13 @@ func NewInitRequest() *Request {
 }
 
 // NewSetupRequest creates a new setup request with context.
-func NewSetupRequest(setupID string, ctx *context.SerializableContext) *Request {
+func NewSetupRequest(setupID string, ctx *context.SerializableContext, idx int) *Request {
 	return &Request{
 		CommandType: SetupCommand,
 		Command: &SetupCommandRequest{
 			ID:      setupID,
 			Context: ctx,
+			Idx:     idx,
 		},
 	}
 }
@@ -115,23 +117,24 @@ func NewSyncRequest() *Request {
 }
 
 // NewTeardownRequest creates a new teardown request with context.
-func NewTeardownRequest(setupID string, ctx *context.SerializableContext) *Request {
+func NewTeardownRequest(id string, ctx *context.SerializableContext) *Request {
 	return &Request{
 		CommandType: TeardownCommand,
 		Command: &TeardownCommandRequest{
-			SetupID: setupID,
+			ID:      id,
 			Context: ctx,
 		},
 	}
 }
 
 // NewSetupEachScenarioRequest creates a new setup request for each scenario.
-func NewSetupEachScenarioRequest(setupID string, ctx *context.SerializableContext) *Request {
+func NewSetupEachScenarioRequest(setupID string, ctx *context.SerializableContext, idx int) *Request {
 	return &Request{
 		CommandType: SetupEachScenarioCommand,
 		Command: &SetupEachScenarioCommandRequest{
 			ID:      setupID,
 			Context: ctx,
+			Idx:     idx,
 		},
 	}
 }
@@ -247,8 +250,8 @@ func (r *InitCommandRequest) isCommandRequest() bool { return true }
 
 // InitCommandResponse contains the types available from the WASM plugin.
 type InitCommandResponse struct {
-	HasSetup             bool             `json:"hasSetup"`
-	HasSetupEachScenario bool             `json:"hasSetupEachScenario"`
+	SetupNum             int              `json:"setupNum"`
+	SetupEachScenarioNum int              `json:"setupEachScenarioNum"`
 	TypeRefMap           map[string]*Type `json:"typeRefMap"`
 	Types                []*NameWithType  `json:"types"`
 }
@@ -271,6 +274,7 @@ func (r *InitCommandResponse) isCommandResponse() bool { return true }
 type SetupCommandRequest struct {
 	ID      string                       `json:"id"`
 	Context *context.SerializableContext `json:"context"`
+	Idx     int                          `json:"idx"`
 }
 
 func (r *SetupCommandRequest) ToContext() *context.Context {
@@ -279,13 +283,16 @@ func (r *SetupCommandRequest) ToContext() *context.Context {
 
 func (r *SetupCommandRequest) isCommandRequest() bool { return true }
 
-type SetupCommandResponse struct{}
+type SetupCommandResponse struct {
+	ExistsTeardown bool `json:"existsTeardown"`
+}
 
 func (r *SetupCommandResponse) isCommandResponse() bool { return true }
 
 type SetupEachScenarioCommandRequest struct {
 	ID      string                       `json:"id"`
 	Context *context.SerializableContext `json:"context"`
+	Idx     int                          `json:"idx"`
 }
 
 func (r *SetupEachScenarioCommandRequest) ToContext() *context.Context {
@@ -294,12 +301,14 @@ func (r *SetupEachScenarioCommandRequest) ToContext() *context.Context {
 
 func (r *SetupEachScenarioCommandRequest) isCommandRequest() bool { return true }
 
-type SetupEachScenarioCommandResponse struct{}
+type SetupEachScenarioCommandResponse struct {
+	ExistsTeardown bool `json:"existsTeardown"`
+}
 
 func (r *SetupEachScenarioCommandResponse) isCommandResponse() bool { return true }
 
 type TeardownCommandRequest struct {
-	SetupID string                       `json:"setupId"`
+	ID      string                       `json:"id"`
 	Context *context.SerializableContext `json:"context"`
 }
 
@@ -375,7 +384,8 @@ type StepRunCommandRequest struct {
 func (r *StepRunCommandRequest) isCommandRequest() bool { return true }
 
 type StepRunCommandResponse struct {
-	Context *context.SerializableContext `json:"context"`
+	Context        *context.SerializableContext `json:"context"`
+	IsSpawnContext bool                         `json:"isSpawnContext"`
 }
 
 func (r *StepRunCommandResponse) isCommandResponse() bool { return true }
@@ -587,14 +597,16 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 
 func (r *Response) UnmarshalJSON(b []byte) error {
 	var res struct {
-		CommandType Command         `json:"type"`
-		Command     json.RawMessage `json:"command"`
-		Error       string          `json:"error"`
+		CommandType Command                      `json:"type"`
+		Command     json.RawMessage              `json:"command"`
+		Context     *context.SerializableContext `json:"context"`
+		Error       string                       `json:"error"`
 	}
 	if err := json.Unmarshal(b, &res); err != nil {
 		return err
 	}
 	r.CommandType = res.CommandType
+	r.Context = res.Context
 	r.Error = res.Error
 	switch res.CommandType {
 	case InitCommand:

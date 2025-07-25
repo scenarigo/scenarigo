@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -28,6 +29,7 @@ import (
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/plugin/wasm"
+	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/schema"
 )
 
@@ -120,7 +122,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 
 	plugin.instanceModErrCh = instanceModErrCh
 
-	res, err := plugin.call(wasm.NewInitRequest())
+	res, err := plugin.call(nil, wasm.NewInitRequest())
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +134,8 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	plugin.hasSetup = initRes.HasSetup
-	plugin.hasSetupEachScenario = initRes.HasSetupEachScenario
+	plugin.setupNum = initRes.SetupNum
+	plugin.setupEachScenarioNum = initRes.SetupEachScenarioNum
 	plugin.nameToTypeMap = typeMap
 	return plugin, nil
 }
@@ -147,8 +149,8 @@ const (
 type WasmPlugin struct {
 	wasmRuntime          wazero.Runtime
 	nameToTypeMap        map[string]*wasm.Type
-	hasSetup             bool
-	hasSetupEachScenario bool
+	setupNum             int
+	setupEachScenarioNum int
 	stdin                *os.File
 	stdout               *os.File
 	instanceModErrCh     chan error
@@ -168,7 +170,7 @@ func (p *WasmPlugin) close() error {
 	return nil
 }
 
-func (p *WasmPlugin) call(req *wasm.Request) (wasm.CommandResponse, error) {
+func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -187,6 +189,14 @@ func (p *WasmPlugin) call(req *wasm.Request) (wasm.CommandResponse, error) {
 	res, err := wasm.DecodeResponse(resBytes)
 	if err != nil {
 		return nil, err
+	}
+	if res != nil && res.Context != nil {
+		r, ok := ctx.Reporter().(interface {
+			SetFromSerializable(*reporter.SerializableReporter)
+		})
+		if ok {
+			r.SetFromSerializable(res.Context.Reporter)
+		}
 	}
 	if res.Error != "" {
 		return nil, errors.New(res.Error)
@@ -270,24 +280,75 @@ func (p *WasmPlugin) Lookup(name string) (Symbol, error) {
 }
 
 func (p *WasmPlugin) GetSetup() SetupFunc {
-	if !p.hasSetup {
+	return p.getSetup(p.setupNum, func(ctx *Context, idx int) (*Context, func(*Context), error) {
+		return p.setup(ctx, idx)
+	})
+}
+
+func (p *WasmPlugin) GetSetupEachScenario() SetupFunc {
+	return p.getSetup(p.setupEachScenarioNum, func(ctx *Context, idx int) (*Context, func(*Context), error) {
+		return p.setupEachScenario(ctx, idx)
+	})
+}
+
+func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*Context, func(*Context), error)) SetupFunc {
+	if setupNum == 0 {
 		return nil
 	}
-	return func(sctx *Context) (*Context, func(*Context)) {
-		ctx, teardown, err := p.setup(sctx)
-		if err != nil {
-			ctx.Reporter().Fatal(err)
+	if setupNum == 1 {
+		return func(sctx *Context) (*Context, func(*Context)) {
+			ctx, teardown, err := setupCallback(sctx, 0)
+			if err != nil {
+				ctx.Reporter().Fatal(err)
+			}
+			return ctx, teardown
 		}
-		return ctx, teardown
+	}
+	return func(ctx *Context) (*Context, func(*Context)) {
+		var teardowns []func(*Context)
+		for i := 0; i < setupNum; i++ {
+			newCtx := ctx
+			ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
+				ctx, teardown, err := setupCallback(ctx, i)
+				if err != nil {
+					ctx.Reporter().Fatal(err)
+				}
+				if ctx != nil {
+					newCtx = ctx
+				}
+				if teardown != nil {
+					teardowns = append(teardowns, teardown)
+				}
+			})
+			ctx = newCtx.WithReporter(ctx.Reporter())
+		}
+		if len(teardowns) == 0 {
+			return ctx, nil
+		}
+		if len(teardowns) == 1 {
+			return ctx, teardowns[0]
+		}
+		return ctx, func(ctx *Context) {
+			for i, teardown := range teardowns {
+				ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
+					teardown(ctx)
+				})
+			}
+		}
 	}
 }
 
-func (p *WasmPlugin) setup(sctx *Context) (*Context, func(*Context), error) {
-	setupID := fmt.Sprintf("%p", sctx)
-	if _, err := p.call(wasm.NewSetupRequest(setupID, sctx.ToSerializable())); err != nil {
+func (p *WasmPlugin) setup(sctx *Context, idx int) (*Context, func(*Context), error) {
+	id := fmt.Sprintf("%p%d", sctx, idx)
+	setupBaseRes, err := p.call(sctx, wasm.NewSetupRequest(id, sctx.ToSerializable(), idx))
+	if err != nil {
 		return nil, nil, err
 	}
-	res, err := p.call(wasm.NewSyncRequest())
+	setupRes, err := convertCommandResponse[*wasm.SetupCommandResponse](setupBaseRes)
+	if err != nil {
+		return nil, nil, err
+	}
+	res, err := p.call(sctx, wasm.NewSyncRequest())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -302,32 +363,27 @@ func (p *WasmPlugin) setup(sctx *Context) (*Context, func(*Context), error) {
 	for k, v := range typeMap {
 		p.nameToTypeMap[k] = v
 	}
+	if !setupRes.ExistsTeardown {
+		return sctx, nil, nil
+	}
 	return sctx, func(sctx *Context) {
 		// ignore teardown process's error.
-		_, _ = p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable()))
+		_, _ = p.call(sctx, wasm.NewTeardownRequest(id, sctx.ToSerializable()))
 		_ = p.close()
 	}, nil
 }
 
-func (p *WasmPlugin) GetSetupEachScenario() SetupFunc {
-	if !p.hasSetupEachScenario {
-		return nil
-	}
-	return func(sctx *Context) (*Context, func(*Context)) {
-		ctx, teardown, err := p.setupEachScenario(sctx)
-		if err != nil {
-			sctx.Reporter().Fatal(err)
-		}
-		return ctx, teardown
-	}
-}
-
-func (p *WasmPlugin) setupEachScenario(sctx *Context) (*Context, func(*Context), error) {
-	setupID := fmt.Sprintf("%p", sctx)
-	if _, err := p.call(wasm.NewSetupEachScenarioRequest(setupID, sctx.ToSerializable())); err != nil {
+func (p *WasmPlugin) setupEachScenario(sctx *Context, idx int) (*Context, func(*Context), error) {
+	id := fmt.Sprintf("%p%d", sctx, idx)
+	setupBaseRes, err := p.call(sctx, wasm.NewSetupEachScenarioRequest(id, sctx.ToSerializable(), idx))
+	if err != nil {
 		return nil, nil, err
 	}
-	res, err := p.call(wasm.NewSyncRequest())
+	setupRes, err := convertCommandResponse[*wasm.SetupEachScenarioCommandResponse](setupBaseRes)
+	if err != nil {
+		return nil, nil, err
+	}
+	res, err := p.call(sctx, wasm.NewSyncRequest())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -342,9 +398,12 @@ func (p *WasmPlugin) setupEachScenario(sctx *Context) (*Context, func(*Context),
 	for k, v := range typeMap {
 		p.nameToTypeMap[k] = v
 	}
+	if !setupRes.ExistsTeardown {
+		return sctx, nil, nil
+	}
 	return sctx, func(sctx *Context) {
 		// ignore teardown process's error.
-		_, _ = p.call(wasm.NewTeardownRequest(setupID, sctx.ToSerializable()))
+		_, _ = p.call(sctx, wasm.NewTeardownRequest(id, sctx.ToSerializable()))
 	}, nil
 }
 
@@ -376,7 +435,7 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 		fnArgs = append(fnArgs, string(b))
 	}
 
-	res, err := p.call(wasm.NewCallRequest(name, selectors, fnArgs))
+	res, err := p.call(nil, wasm.NewCallRequest(name, selectors, fnArgs))
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +517,7 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 		lastSel := selectors[len(selectors)-1]
 		if typ.HasMethod(lastSel) {
 			// method call.
-			res, err := p.call(wasm.NewMethodRequest(name, selectors))
+			res, err := p.call(nil, wasm.NewMethodRequest(name, selectors))
 			if err != nil {
 				return nil, err
 			}
@@ -514,7 +573,7 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 			plugin:    p,
 		}, nil
 	}
-	res, err := p.call(wasm.NewGetRequest(name, selectors))
+	res, err := p.call(nil, wasm.NewGetRequest(name, selectors))
 	if err != nil {
 		return nil, err
 	}
@@ -584,13 +643,17 @@ type stepValue struct {
 }
 
 func (v *stepValue) Run(ctx *Context, step *schema.Step) *Context {
-	res, err := v.plugin.call(wasm.NewStepRunRequest(v.instance, ctx.ToSerializable(), step))
+	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.instance, ctx.ToSerializable(), step))
 	if err != nil {
-		ctx.Reporter().Fatal(err)
+		ctx.Reporter().FailNow()
+		return ctx
 	}
 	stepRes, err := convertCommandResponse[*wasm.StepRunCommandResponse](res)
 	if err != nil {
 		ctx.Reporter().Fatal(err)
+	}
+	if !stepRes.IsSpawnContext {
+		return ctx
 	}
 	return context.FromSerializable(stepRes.Context)
 }
@@ -606,7 +669,7 @@ func (v *leftArrowFuncValue) Exec(arg any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := v.plugin.call(wasm.NewLeftArrowFuncExecRequest(v.instance, string(b), v.argID))
+	res, err := v.plugin.call(nil, wasm.NewLeftArrowFuncExecRequest(v.instance, string(b), v.argID))
 	if err != nil {
 		return nil, err
 	}
@@ -630,7 +693,7 @@ func (v *leftArrowFuncValue) UnmarshalArg(unmarshal func(any) error) (any, error
 	if err != nil {
 		return nil, err
 	}
-	res, err := v.plugin.call(wasm.NewLeftArrowFuncUnmarshalArgRequest(v.instance, string(b)))
+	res, err := v.plugin.call(nil, wasm.NewLeftArrowFuncUnmarshalArgRequest(v.instance, string(b)))
 	if err != nil {
 		return nil, err
 	}
@@ -665,7 +728,7 @@ func (v *StructValue) Exec(arg any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := v.plugin.call(wasm.NewLeftArrowFuncExecRequest(v.name, string(b), v.argID))
+	res, err := v.plugin.call(nil, wasm.NewLeftArrowFuncExecRequest(v.name, string(b), v.argID))
 	if err != nil {
 		return nil, err
 	}
@@ -692,7 +755,7 @@ func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := v.plugin.call(wasm.NewLeftArrowFuncUnmarshalArgRequest(v.name, string(b)))
+	res, err := v.plugin.call(nil, wasm.NewLeftArrowFuncUnmarshalArgRequest(v.name, string(b)))
 	if err != nil {
 		return nil, err
 	}
@@ -712,9 +775,9 @@ func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
 	if !v.typ.Step {
 		ctx.Reporter().Fatal(fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name))
 	}
-	res, err := v.plugin.call(wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step))
+	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step))
 	if err != nil {
-		ctx.Reporter().Fatal(err)
+		return ctx
 	}
 	stepRes, err := convertCommandResponse[*wasm.StepRunCommandResponse](res)
 	if err != nil {
@@ -740,7 +803,7 @@ func (v *StructValue) ExtractByKey(key string) (any, bool) {
 // ExistsMethod checks if a gRPC method exists on the WASM value.
 // This is used for gRPC client validation in WASM plugins.
 func (v *StructValue) ExistsMethod(method string) bool {
-	res, err := v.plugin.call(wasm.NewGRPCExistsMethodRequest(v.name, method))
+	res, err := v.plugin.call(nil, wasm.NewGRPCExistsMethodRequest(v.name, method))
 	if err != nil {
 		return false
 	}
@@ -754,7 +817,7 @@ func (v *StructValue) ExistsMethod(method string) bool {
 // BuildRequestMessage builds a protobuf request message for a gRPC method.
 // This is used to construct request messages for gRPC calls in WASM plugins.
 func (v *StructValue) BuildRequestMessage(method string, msg []byte) (proto.Message, error) {
-	res, err := v.plugin.call(wasm.NewGRPCBuildRequestRequest(v.name, method, msg))
+	res, err := v.plugin.call(nil, wasm.NewGRPCBuildRequestRequest(v.name, method, msg))
 	if err != nil {
 		return nil, err
 	}
@@ -799,7 +862,7 @@ func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto prot
 	if err != nil {
 		return nil, nil, err
 	}
-	res, err := v.plugin.call(wasm.NewGRPCInvokeRequest(v.name, method, reqMsg, md))
+	res, err := v.plugin.call(nil, wasm.NewGRPCInvokeRequest(v.name, method, reqMsg, md))
 	if err != nil {
 		return nil, nil, err
 	}

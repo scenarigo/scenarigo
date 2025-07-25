@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strconv"
+	"sync"
 	"unsafe"
 
 	_ "github.com/goccy/wasi-go-net/wasip1"
@@ -84,35 +84,51 @@ func Register(initFn, syncFn DefinitionFunc) {
 		if content == exitCommand {
 			return
 		}
-		var finished bool
-		defer func() {
-			if !finished {
-				var errMsg string
-				if r := recover(); r != nil {
-					errMsg = fmt.Sprint(r)
-				} else {
-					errMsg = "plugin executed panic(nil) or runtime.Goexit"
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			var finished bool
+			defer func() {
+				if !finished {
+					var errMsg string
+					if r := recover(); r != nil {
+						errMsg = fmt.Sprint(r)
+					} else {
+						errMsg = "plugin executed panic(nil) or runtime.Goexit"
+					}
+					var sctx *context.SerializableContext
+					if h.ctx != nil {
+						sctx = h.ctx.ToSerializable()
+					}
+					var req wasm.Request
+					_ = json.Unmarshal([]byte(content), &req)
+					b, _ := json.Marshal(&wasm.Response{
+						CommandType: req.CommandType,
+						Context:     sctx,
+						Error:       errMsg,
+					})
+					out := append(b, '\n')
+					scenarigo_write(
+						uint32(uintptr(unsafe.Pointer(&out[0]))),
+						uint32(len(out)),
+					)
 				}
-				var req wasm.Request
-				_ = json.Unmarshal([]byte(content), &req)
-				res := &wasm.Response{CommandType: req.CommandType, Error: errMsg}
-				b, _ := json.Marshal(res)
-				out := append(b, '\n')
-				scenarigo_write(
-					uint32(uintptr(unsafe.Pointer(&out[0]))),
-					uint32(len(out)),
-				)
-				os.Exit(1)
+				wg.Done()
+			}()
+			h.ctx = nil
+			res := wasm.HandleCommand([]byte(content), h)
+			if h.ctx != nil {
+				res.Context = h.ctx.ToSerializable()
 			}
+			finished = true
+			b, _ := json.Marshal(res)
+			out := append(b, '\n')
+			scenarigo_write(
+				uint32(uintptr(unsafe.Pointer(&out[0]))),
+				uint32(len(out)),
+			)
 		}()
-		res := wasm.HandleCommand([]byte(content), h)
-		finished = true
-		b, _ := json.Marshal(res)
-		out := append(b, '\n')
-		scenarigo_write(
-			uint32(uintptr(unsafe.Pointer(&out[0]))),
-			uint32(len(out)),
-		)
+		wg.Wait()
 	}
 }
 
@@ -120,9 +136,10 @@ func Register(initFn, syncFn DefinitionFunc) {
 func scenarigo_write(ptr, size uint32)
 
 type handler struct {
+	ctx                *Context
 	initFn             DefinitionFunc
 	syncFn             DefinitionFunc
-	teardownMap        map[string][]func(*Context)
+	teardownMap        map[string]func(*Context)
 	funcNameToValueMap map[string]reflect.Value
 	nameToValueMap     map[string]reflect.Value
 }
@@ -131,7 +148,7 @@ func newHandler(initFn, syncFn DefinitionFunc) *handler {
 	return &handler{
 		initFn:             initFn,
 		syncFn:             syncFn,
-		teardownMap:        make(map[string][]func(*Context)),
+		teardownMap:        make(map[string]func(*Context)),
 		funcNameToValueMap: make(map[string]reflect.Value),
 		nameToValueMap:     make(map[string]reflect.Value),
 	}
@@ -158,8 +175,8 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 		})
 	}
 	return &wasm.InitCommandResponse{
-		HasSetup:             len(setups) != 0,
-		HasSetupEachScenario: len(setupsEachScenario) != 0,
+		SetupNum:             len(setups),
+		SetupEachScenarioNum: len(setupsEachScenario),
 		TypeRefMap:           wasm.TypeRefMap(),
 		Types:                types,
 	}, nil
@@ -167,47 +184,37 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 
 func (h *handler) Setup(r *wasm.SetupCommandRequest) (*wasm.SetupCommandResponse, error) {
 	ctx := r.ToContext()
-	for i, setup := range setups {
-		newCtx := ctx
-		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
-			ctx, teardown := setup(ctx)
-			if ctx != nil {
-				newCtx = ctx
-			}
-			if teardown != nil {
-				h.teardownMap[r.ID] = append(h.teardownMap[r.ID], teardown)
-			}
-		})
-		ctx = newCtx.WithReporter(ctx.Reporter())
+	setup := setups[r.Idx]
+	h.ctx = ctx
+	ctx, teardown := setup(ctx)
+	if ctx != nil {
+		h.ctx = ctx
 	}
-	return &wasm.SetupCommandResponse{}, nil
+	h.teardownMap[r.ID] = teardown
+	return &wasm.SetupCommandResponse{
+		ExistsTeardown: teardown != nil,
+	}, nil
 }
 
 func (h *handler) SetupEachScenario(r *wasm.SetupEachScenarioCommandRequest) (*wasm.SetupEachScenarioCommandResponse, error) {
 	ctx := r.ToContext()
-	for i, setup := range setupsEachScenario {
-		newCtx := ctx
-		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
-			ctx, teardown := setup(ctx)
-			if ctx != nil {
-				newCtx = ctx
-			}
-			if teardown != nil {
-				h.teardownMap[r.ID] = append(h.teardownMap[r.ID], teardown)
-			}
-		})
-		ctx = newCtx.WithReporter(ctx.Reporter())
+	setup := setupsEachScenario[r.Idx]
+	h.ctx = ctx
+	ctx, teardown := setup(ctx)
+	if ctx != nil {
+		h.ctx = ctx
 	}
-	return &wasm.SetupEachScenarioCommandResponse{}, nil
+	h.teardownMap[r.ID] = teardown
+	return &wasm.SetupEachScenarioCommandResponse{
+		ExistsTeardown: teardown != nil,
+	}, nil
 }
 
 func (h *handler) Teardown(r *wasm.TeardownCommandRequest) (*wasm.TeardownCommandResponse, error) {
 	ctx := r.ToContext()
-	for i, teardown := range h.teardownMap[r.SetupID] {
-		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
-			teardown(ctx)
-		})
-	}
+	teardown := h.teardownMap[r.ID]
+	h.ctx = ctx
+	teardown(ctx)
 	return &wasm.TeardownCommandResponse{}, nil
 }
 
@@ -351,6 +358,7 @@ func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunComma
 		return nil, fmt.Errorf("failed to find step instance from %s", r.Instance)
 	}
 	ctx := context.FromSerializable(r.Context)
+	h.ctx = ctx
 	result := step.MethodByName("Run").Call([]reflect.Value{
 		reflect.ValueOf(ctx),
 		reflect.ValueOf(r.Step),
@@ -363,7 +371,8 @@ func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunComma
 		return nil, fmt.Errorf("failed to convert result type to *context.Context from %T", result[0].Interface())
 	}
 	return &wasm.StepRunCommandResponse{
-		Context: resultCtx.ToSerializable(),
+		Context:        resultCtx.ToSerializable(),
+		IsSpawnContext: ctx != resultCtx,
 	}, nil
 }
 
