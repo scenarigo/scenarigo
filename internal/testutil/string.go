@@ -18,6 +18,7 @@ var (
 	ipv6AddrPattern    = regexp.MustCompile(`\[::\]:\d+`)
 	userAgentPattern   = regexp.MustCompile(fmt.Sprintf(`- scenarigo/%s`, version.String()))
 	dateHeaderPattern  = regexp.MustCompile(`Date:\n\s*- (.+)`)
+	pluginOpenPattern  = regexp.MustCompile(`plugin\.Open\("([^"]+)"\): realpath failed`)
 )
 
 // ReplaceOutput replaces result output.
@@ -28,6 +29,7 @@ func ReplaceOutput(s string) string {
 		ReplaceUserAgent,
 		ReplaceDateHeader,
 		ReplaceFilepath,
+		ReplacePluginOpen,
 	} {
 		s = f(s)
 	}
@@ -77,5 +79,19 @@ func ReplaceFilepath(s string) string {
 			break
 		}
 	}
-	return strings.ReplaceAll(s, root, filepath.FromSlash("/go/src/github.com/scenarigo/scenarigo"))
+	result := strings.ReplaceAll(s, root, filepath.FromSlash("/go/src/github.com/scenarigo/scenarigo"))
+	
+	// Additional pattern-based replacement for any scenarigo path that wasn't caught
+	// This uses regex to find any path ending with "scenarigo" and normalize it
+	scenarigoPathRe := regexp.MustCompile(`(/[^/\s]*)*scenarigo`)
+	result = scenarigoPathRe.ReplaceAllString(result, "/go/src/github.com/scenarigo/scenarigo")
+	
+	return result
 }
+
+// ReplacePluginOpen normalizes plugin.Open error messages to open error messages.
+func ReplacePluginOpen(s string) string {
+	// Replace "plugin.Open(...): realpath failed" with "open ...: no such file or directory"
+	return pluginOpenPattern.ReplaceAllString(s, "open ${1}: no such file or directory")
+}
+
