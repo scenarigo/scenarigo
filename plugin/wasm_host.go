@@ -192,10 +192,10 @@ func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse
 	}
 	if res != nil && res.Context != nil {
 		r, ok := ctx.Reporter().(interface {
-			SetFromSerializable(*reporter.SerializableReporter)
+			SetFromSerializable(string, map[string]*reporter.SerializableReporter)
 		})
 		if ok {
-			r.SetFromSerializable(res.Context.Reporter)
+			r.SetFromSerializable(res.Context.ReporterID, res.Context.ReporterMap)
 		}
 	}
 	if res.Error != "" {
@@ -342,23 +342,23 @@ func (p *WasmPlugin) setup(sctx *Context, idx int) (*Context, func(*Context), er
 	id := fmt.Sprintf("%p%d", sctx, idx)
 	setupBaseRes, err := p.call(sctx, wasm.NewSetupRequest(id, sctx.ToSerializable(), idx))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to setup: %w", err)
 	}
 	setupRes, err := convertCommandResponse[*wasm.SetupCommandResponse](setupBaseRes)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to convert setup response: %w", err)
 	}
 	res, err := p.call(sctx, wasm.NewSyncRequest())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to sync: %w", err)
 	}
 	syncRes, err := convertCommandResponse[*wasm.SyncCommandResponse](res)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to convert sync response: %w", err)
 	}
 	typeMap, err := syncRes.ToTypeMap()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get type map: %w", err)
 	}
 	for k, v := range typeMap {
 		p.nameToTypeMap[k] = v
@@ -652,10 +652,10 @@ func (v *stepValue) Run(ctx *Context, step *schema.Step) *Context {
 	if err != nil {
 		ctx.Reporter().Fatal(err)
 	}
-	if !stepRes.IsSpawnContext {
-		return ctx
-	}
-	return context.FromSerializable(stepRes.Context)
+	//	if !stepRes.IsSpawnContext {
+	//		return ctx
+	//	}
+	return context.FromSerializableWithContext(ctx, stepRes.Context)
 }
 
 type leftArrowFuncValue struct {

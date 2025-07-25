@@ -1,6 +1,7 @@
 package context
 
 import (
+	"context"
 	"path/filepath"
 
 	"github.com/scenarigo/scenarigo/reporter"
@@ -24,16 +25,17 @@ type SerializableSecrets struct {
 // It contains all the necessary context data that can be marshaled to JSON
 // for communication between host and WASM plugins.
 type SerializableContext struct {
-	ScenarioFilepath string                         `json:"scenarioFilepath,omitempty"`
-	PluginDir        string                         `json:"pluginDir,omitempty"`
-	Plugins          []map[string]any               `json:"plugins,omitempty"`
-	Vars             []any                          `json:"vars,omitempty"`
-	Secrets          *SerializableSecrets           `json:"secrets,omitempty"`
-	Steps            *Steps                         `json:"steps,omitempty"`
-	Request          any                            `json:"request,omitempty"`
-	Response         any                            `json:"response,omitempty"`
-	EnabledColor     bool                           `json:"enabledColor"`
-	Reporter         *reporter.SerializableReporter `json:"reporter,omitempty"`
+	ScenarioFilepath string                                    `json:"scenarioFilepath,omitempty"`
+	PluginDir        string                                    `json:"pluginDir,omitempty"`
+	Plugins          []map[string]any                          `json:"plugins,omitempty"`
+	Vars             []any                                     `json:"vars,omitempty"`
+	Secrets          *SerializableSecrets                      `json:"secrets,omitempty"`
+	Steps            *Steps                                    `json:"steps,omitempty"`
+	Request          any                                       `json:"request,omitempty"`
+	Response         any                                       `json:"response,omitempty"`
+	EnabledColor     bool                                      `json:"enabledColor"`
+	ReporterID       string                                    `json:"reporterID"`
+	ReporterMap      map[string]*reporter.SerializableReporter `json:"reporterMap"`
 }
 
 // ToSerializable converts Context to SerializableContext.
@@ -85,9 +87,11 @@ func (c *Context) ToSerializable() *SerializableContext {
 
 	// Convert reporter if it supports serialization
 	if r, ok := c.Reporter().(interface {
-		ToSerializable() *reporter.SerializableReporter
+		ToSerializable(map[string]*reporter.SerializableReporter) string
 	}); ok {
-		sc.Reporter = r.ToSerializable()
+		reporterMap := make(map[string]*reporter.SerializableReporter)
+		sc.ReporterID = r.ToSerializable(reporterMap)
+		sc.ReporterMap = reporterMap
 	}
 
 	return sc
@@ -96,11 +100,13 @@ func (c *Context) ToSerializable() *SerializableContext {
 // FromSerializable creates a new Context from SerializableContext.
 // This function reconstructs a context from serialized data received from WASM plugins.
 func FromSerializable(sc *SerializableContext) *Context {
-	ctx := New(nil)
+	return FromSerializableWithContext(New(nil), sc)
+}
 
+func FromSerializableWithContext(ctx *Context, sc *SerializableContext) *Context {
 	// Set reporter if it was serialized.
-	if sc.Reporter != nil {
-		ctx = ctx.WithReporter(reporter.FromSerializable(sc.Reporter))
+	if sc.ReporterID != "" {
+		reporter.AppendReporter(ctx.reporter, reporter.FromSerializable(sc.ReporterID, sc.ReporterMap))
 	}
 
 	// Set scenario filepath.
@@ -129,7 +135,8 @@ func FromSerializable(sc *SerializableContext) *Context {
 	// Set vars
 	if sc.Vars != nil {
 		for _, v := range sc.Vars {
-			ctx = ctx.WithVars(v)
+			vars, _ := ctx.ctx.Value(keyVars{}).(Vars)
+			ctx.ctx = context.WithValue(ctx.ctx, keyVars{}, vars.Append(v))
 		}
 	}
 

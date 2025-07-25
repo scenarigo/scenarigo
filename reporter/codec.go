@@ -1,6 +1,7 @@
 package reporter
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -16,7 +17,8 @@ type SerializableReporter struct {
 	IsParallel           bool                     `json:"isParallel"`
 	Logs                 []string                 `json:"logs,omitempty"`
 	Duration             time.Duration            `json:"duration"`
-	Children             []*SerializableReporter  `json:"children,omitempty"`
+	Parent               string                   `json:"parent,omitempty"`
+	Children             []string                 `json:"children,omitempty"`
 	Testing              bool                     `json:"testing"`
 	Retryable            bool                     `json:"retryable"`
 	NoFailurePropagation bool                     `json:"noFailurePropagation"`
@@ -36,7 +38,12 @@ type SerializableTestContext struct {
 
 // ToSerializable converts reporter struct to SerializableReporter.
 // This method serializes the reporter state for transmission to WASM plugins.
-func (r *reporter) ToSerializable() *SerializableReporter {
+func (r *reporter) ToSerializable(reporterMap map[string]*SerializableReporter) string {
+	id := reporterID(r)
+	if _, exists := reporterMap[id]; exists {
+		return id
+	}
+
 	sr := &SerializableReporter{
 		Name:                 r.name,
 		GoTestName:           r.goTestName,
@@ -48,6 +55,7 @@ func (r *reporter) ToSerializable() *SerializableReporter {
 		Retryable:            r.retryable,
 		NoFailurePropagation: r.noFailurePropagation,
 	}
+	reporterMap[id] = sr
 
 	// Convert logs
 	if r.logs != nil {
@@ -57,11 +65,15 @@ func (r *reporter) ToSerializable() *SerializableReporter {
 	// Convert duration
 	sr.Duration = r.getDuration()
 
+	if r.parent != nil {
+		sr.Parent = r.parent.ToSerializable(reporterMap)
+	}
+
 	// Convert children
 	if len(r.children) > 0 {
-		sr.Children = make([]*SerializableReporter, 0, len(r.children))
+		sr.Children = make([]string, 0, len(r.children))
 		for _, child := range r.children {
-			sr.Children = append(sr.Children, child.ToSerializable())
+			sr.Children = append(sr.Children, child.ToSerializable(reporterMap))
 		}
 	}
 
@@ -70,10 +82,31 @@ func (r *reporter) ToSerializable() *SerializableReporter {
 		sr.Context = r.context.ToSerializable()
 	}
 
-	return sr
+	return id
 }
 
-func (r *reporter) SetFromSerializable(sr *SerializableReporter) {
+func (r *reporter) SetFromSerializable(id string, srMap map[string]*SerializableReporter) {
+	rMap := make(map[string]*reporter)
+	r.setFromSerializable(srMap[id], rMap, srMap)
+}
+
+func (r *reporter) resolveReporter(id string, reporterMap map[string]*reporter, serializedReporterMap map[string]*SerializableReporter) *reporter {
+	if rep, exists := reporterMap[id]; exists {
+		return rep
+	}
+	rep, exists := serializedReporterMap[id]
+	if !exists {
+		return nil
+	}
+	ret := newReporter()
+	reporterMap[id] = ret
+	ret.setFromSerializable(rep, reporterMap, serializedReporterMap)
+	return ret
+}
+
+func (r *reporter) setFromSerializable(sr *SerializableReporter, reporterMap map[string]*reporter, serializedReporterMap map[string]*SerializableReporter) {
+	r.parent = r.resolveReporter(sr.Parent, reporterMap, serializedReporterMap)
+
 	r.name = sr.Name
 	r.goTestName = sr.GoTestName
 	r.depth = sr.Depth
@@ -99,8 +132,8 @@ func (r *reporter) SetFromSerializable(sr *SerializableReporter) {
 
 	// Set children
 	if len(sr.Children) > 0 {
-		for _, childSR := range sr.Children {
-			child := FromSerializable(childSR)
+		for _, childID := range sr.Children {
+			child := r.resolveReporter(childID, reporterMap, serializedReporterMap)
 			child.parent = r
 			r.children = append(r.children, child)
 		}
@@ -112,12 +145,16 @@ func (r *reporter) SetFromSerializable(sr *SerializableReporter) {
 	}
 }
 
+func reporterID(r *reporter) string {
+	return fmt.Sprintf("%p", r)
+}
+
 // FromSerializable creates a new reporter struct from SerializableReporter.
 // This function reconstructs a reporter from serialized data received from WASM plugins.
-func FromSerializable(sr *SerializableReporter) *reporter {
+func FromSerializable(id string, reporterMap map[string]*SerializableReporter) *reporter {
 	// Create a new reporter
 	r := newReporter()
-	r.SetFromSerializable(sr)
+	r.SetFromSerializable(id, reporterMap)
 	return r
 }
 
