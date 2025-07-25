@@ -200,6 +200,11 @@ gen/plugins:
 	@echo "building WASM plugins..."
 	@$(GO) run ./scripts/build-wasm-plugin/main.go $(PLUGINS_DIR)
 
+.PHONY: gen/plugins/wasm
+gen/plugins/wasm:
+	@echo "building WASM plugins..."
+	@$(GO) run ./scripts/build-wasm-plugin/main.go $(PLUGINS_DIR)
+
 .PHONY: credits
 credits: $(GO_LICENSES) $(GOCREDITS) ## generate CREDITS
 	@$(GO) mod download

@@ -143,6 +143,13 @@ func TestE2E(t *testing.T) {
 									t.Fatal(err)
 								}
 
+								// Copy all YAML files from scenarios directory for include support
+								originalScenariosDir := filepath.Join("testdata", "testcases", "scenarios")
+								tmpScenariosDir := filepath.Join(testcasesDir, "scenarios")
+								if err := copyAllScenarioFiles(originalScenariosDir, tmpScenariosDir, pluginType); err != nil {
+									t.Fatal(err)
+								}
+
 								// Change to the temporary directory to ensure relative paths work correctly
 								originalWd, err := os.Getwd()
 								if err != nil {
@@ -244,6 +251,56 @@ func loadAndModifyExpectedOutput(stdoutPath, pluginType string) ([]byte, error) 
 	}
 
 	return content, nil
+}
+
+// copyAllScenarioFiles recursively copies all YAML files from scenarios directory
+// for supporting include functionality in WASM tests
+func copyAllScenarioFiles(srcDir, dstDir, pluginType string) error {
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Only copy YAML files
+		if !strings.HasSuffix(info.Name(), ".yaml") && !strings.HasSuffix(info.Name(), ".yml") {
+			return nil
+		}
+
+		// Calculate relative path from source directory
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+
+		// Create destination path
+		dstPath := filepath.Join(dstDir, relPath)
+		dstFileDir := filepath.Dir(dstPath)
+
+		// Create destination directory if it doesn't exist
+		if err := os.MkdirAll(dstFileDir, 0755); err != nil {
+			return err
+		}
+
+		// Read the source file
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		// Apply the same modifications as the main scenario file for WASM tests
+		if pluginType == "wasm" {
+			modifiedContent := strings.ReplaceAll(string(content), ".so", ".wasm")
+			content = []byte(modifiedContent)
+		}
+
+		// Write to destination
+		return os.WriteFile(dstPath, content, 0644)
+	})
 }
 
 func startGRPCServer(t *testing.T) func() {
