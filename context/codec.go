@@ -1,7 +1,6 @@
 package context
 
 import (
-	"context"
 	"path/filepath"
 
 	"github.com/scenarigo/scenarigo/reporter"
@@ -135,8 +134,7 @@ func FromSerializableWithContext(ctx *Context, sc *SerializableContext) *Context
 	// Set vars
 	if sc.Vars != nil {
 		for _, v := range sc.Vars {
-			vars, _ := ctx.ctx.Value(keyVars{}).(Vars)
-			ctx.ctx = context.WithValue(ctx.ctx, keyVars{}, vars.Append(v))
+			ctx = ctx.WithVars(v)
 		}
 	}
 
