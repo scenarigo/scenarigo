@@ -3,25 +3,31 @@ package wasm
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
+
+	"google.golang.org/grpc/metadata"
 
 	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 // Command represents a WASM plugin command type.
 type Command string
 
 const (
-	InitCommand              Command = "init"
-	SetupCommand             Command = "setup"
-	SetupEachScenarioCommand Command = "setup_each_scenario"
-	TeardownCommand          Command = "teardown"
-	SyncCommand              Command = "sync"
-	CallCommand              Command = "call"
-	GetCommand               Command = "get"
-	GRPCExistsMethodCommand  Command = "grpc_exists_method"
-	GRPCBuildRequestCommand  Command = "grpc_build_request"
-	GRPCInvokeCommand        Command = "grpc_invoke"
+	InitCommand                      Command = "init"
+	SetupCommand                     Command = "setup"
+	SetupEachScenarioCommand         Command = "setup_each_scenario"
+	TeardownCommand                  Command = "teardown"
+	SyncCommand                      Command = "sync"
+	CallCommand                      Command = "call"
+	MethodCommand                    Command = "method"
+	StepRunCommand                   Command = "step_run"
+	LeftArrowFuncExecCommand         Command = "exec"
+	LeftArrowFuncUnmarshalArgCommand Command = "unmarshal_arg"
+	GetCommand                       Command = "get"
+	GRPCExistsMethodCommand          Command = "grpc_exists_method"
+	GRPCBuildRequestCommand          Command = "grpc_build_request"
+	GRPCInvokeCommand                Command = "grpc_invoke"
 )
 
 // Request represents a command request sent to WASM plugins.
@@ -32,9 +38,10 @@ type Request struct {
 
 // Response represents a command response from WASM plugins.
 type Response struct {
-	CommandType Command         `json:"type"`
-	Command     CommandResponse `json:"command"`
-	Error       string          `json:"error"`
+	CommandType Command                      `json:"type"`
+	Command     CommandResponse              `json:"command"`
+	Context     *context.SerializableContext `json:"context"`
+	Error       string                       `json:"error"`
 }
 
 // CommandRequest is an interface for all command request types.
@@ -54,6 +61,10 @@ var (
 	_ CommandRequest = new(TeardownCommandRequest)
 	_ CommandRequest = new(SyncCommandRequest)
 	_ CommandRequest = new(CallCommandRequest)
+	_ CommandRequest = new(MethodCommandRequest)
+	_ CommandRequest = new(StepRunCommandRequest)
+	_ CommandRequest = new(LeftArrowFuncExecCommandRequest)
+	_ CommandRequest = new(LeftArrowFuncUnmarshalArgCommandRequest)
 	_ CommandRequest = new(GetCommandRequest)
 	_ CommandRequest = new(GRPCExistsMethodCommandRequest)
 	_ CommandRequest = new(GRPCBuildRequestCommandRequest)
@@ -67,6 +78,10 @@ var (
 	_ CommandResponse = new(TeardownCommandResponse)
 	_ CommandResponse = new(SyncCommandResponse)
 	_ CommandResponse = new(CallCommandResponse)
+	_ CommandResponse = new(MethodCommandResponse)
+	_ CommandResponse = new(StepRunCommandResponse)
+	_ CommandResponse = new(LeftArrowFuncExecCommandResponse)
+	_ CommandResponse = new(LeftArrowFuncUnmarshalArgCommandResponse)
 	_ CommandResponse = new(GetCommandResponse)
 	_ CommandResponse = new(GRPCExistsMethodCommandResponse)
 	_ CommandResponse = new(GRPCBuildRequestCommandResponse)
@@ -82,12 +97,13 @@ func NewInitRequest() *Request {
 }
 
 // NewSetupRequest creates a new setup request with context.
-func NewSetupRequest(setupID string, ctx *context.SerializableContext) *Request {
+func NewSetupRequest(setupID string, ctx *context.SerializableContext, idx int) *Request {
 	return &Request{
 		CommandType: SetupCommand,
 		Command: &SetupCommandRequest{
 			ID:      setupID,
 			Context: ctx,
+			Idx:     idx,
 		},
 	}
 }
@@ -101,44 +117,93 @@ func NewSyncRequest() *Request {
 }
 
 // NewTeardownRequest creates a new teardown request with context.
-func NewTeardownRequest(setupID string, ctx *context.SerializableContext) *Request {
+func NewTeardownRequest(id string, ctx *context.SerializableContext) *Request {
 	return &Request{
 		CommandType: TeardownCommand,
 		Command: &TeardownCommandRequest{
-			SetupID: setupID,
+			ID:      id,
 			Context: ctx,
 		},
 	}
 }
 
 // NewSetupEachScenarioRequest creates a new setup request for each scenario.
-func NewSetupEachScenarioRequest(setupID string, ctx *context.SerializableContext) *Request {
+func NewSetupEachScenarioRequest(setupID string, ctx *context.SerializableContext, idx int) *Request {
 	return &Request{
 		CommandType: SetupEachScenarioCommand,
 		Command: &SetupEachScenarioCommandRequest{
 			ID:      setupID,
 			Context: ctx,
+			Idx:     idx,
 		},
 	}
 }
 
 // NewCallRequest creates a new function call request.
-func NewCallRequest(name string, args []string) *Request {
+func NewCallRequest(name string, selectors []string, args []string) *Request {
 	return &Request{
 		CommandType: CallCommand,
 		Command: &CallCommandRequest{
-			Name: name,
-			Args: args,
+			Name:      name,
+			Selectors: selectors,
+			Args:      args,
+		},
+	}
+}
+
+// NewMethodRequest creates a new function method request.
+func NewMethodRequest(name string, selectors []string) *Request {
+	return &Request{
+		CommandType: MethodCommand,
+		Command: &MethodCommandRequest{
+			Name:      name,
+			Selectors: selectors,
+		},
+	}
+}
+
+// NewStepRunRequest creates a new step run request.
+func NewStepRunRequest(instance string, ctx *context.SerializableContext, step *schema.Step) *Request {
+	return &Request{
+		CommandType: StepRunCommand,
+		Command: &StepRunCommandRequest{
+			Instance: instance,
+			Context:  ctx,
+			Step:     step,
+		},
+	}
+}
+
+// NewLeftArrowFuncExecRequest creates a new LeftArrowFunc.Exec() request.
+func NewLeftArrowFuncExecRequest(instance string, value string, argID string) *Request {
+	return &Request{
+		CommandType: LeftArrowFuncExecCommand,
+		Command: &LeftArrowFuncExecCommandRequest{
+			Instance: instance,
+			Value:    value,
+			ArgID:    argID,
+		},
+	}
+}
+
+// NewLeftArrowFuncUnmarshalArgRequest creates a new LeftArrowFunc.UnmarshalArg() request.
+func NewLeftArrowFuncUnmarshalArgRequest(instance string, value string) *Request {
+	return &Request{
+		CommandType: LeftArrowFuncUnmarshalArgCommand,
+		Command: &LeftArrowFuncUnmarshalArgCommandRequest{
+			Instance: instance,
+			Value:    value,
 		},
 	}
 }
 
 // NewGetRequest creates a new value get request.
-func NewGetRequest(name string) *Request {
+func NewGetRequest(name string, selectors []string) *Request {
 	return &Request{
 		CommandType: GetCommand,
 		Command: &GetCommandRequest{
-			Name: name,
+			Name:      name,
+			Selectors: selectors,
 		},
 	}
 }
@@ -167,13 +232,14 @@ func NewGRPCBuildRequestRequest(client, method string, msg []byte) *Request {
 }
 
 // NewGRPCInvokeRequest creates a request to invoke a gRPC method.
-func NewGRPCInvokeRequest(client, method string, reqMsg []byte) *Request {
+func NewGRPCInvokeRequest(client, method string, reqMsg []byte, md metadata.MD) *Request {
 	return &Request{
 		CommandType: GRPCInvokeCommand,
 		Command: &GRPCInvokeCommandRequest{
-			Client:  client,
-			Method:  method,
-			Request: reqMsg,
+			Client:   client,
+			Method:   method,
+			Request:  reqMsg,
+			Metadata: md,
 		},
 	}
 }
@@ -184,16 +250,23 @@ func (r *InitCommandRequest) isCommandRequest() bool { return true }
 
 // InitCommandResponse contains the types available from the WASM plugin.
 type InitCommandResponse struct {
-	Types []*NameWithType `json:"types"`
+	SetupNum             int              `json:"setupNum"`
+	SetupEachScenarioNum int              `json:"setupEachScenarioNum"`
+	TypeRefMap           map[string]*Type `json:"typeRefMap"`
+	Types                []*NameWithType  `json:"types"`
 }
 
 // ToTypeMap converts the response types to a name-to-type mapping.
-func (r *InitCommandResponse) ToTypeMap() map[string]*Type {
+func (r *InitCommandResponse) ToTypeMap() (map[string]*Type, error) {
 	nameToTypeMap := make(map[string]*Type)
 	for _, typ := range r.Types {
-		nameToTypeMap[typ.Name] = typ.Type
+		resolvedType, err := ResolveRef(typ.Type, r.TypeRefMap)
+		if err != nil {
+			return nil, err
+		}
+		nameToTypeMap[typ.Name] = resolvedType
 	}
-	return nameToTypeMap
+	return nameToTypeMap, nil
 }
 
 func (r *InitCommandResponse) isCommandResponse() bool { return true }
@@ -201,6 +274,7 @@ func (r *InitCommandResponse) isCommandResponse() bool { return true }
 type SetupCommandRequest struct {
 	ID      string                       `json:"id"`
 	Context *context.SerializableContext `json:"context"`
+	Idx     int                          `json:"idx"`
 }
 
 func (r *SetupCommandRequest) ToContext() *context.Context {
@@ -209,13 +283,16 @@ func (r *SetupCommandRequest) ToContext() *context.Context {
 
 func (r *SetupCommandRequest) isCommandRequest() bool { return true }
 
-type SetupCommandResponse struct{}
+type SetupCommandResponse struct {
+	ExistsTeardown bool `json:"existsTeardown"`
+}
 
 func (r *SetupCommandResponse) isCommandResponse() bool { return true }
 
 type SetupEachScenarioCommandRequest struct {
 	ID      string                       `json:"id"`
 	Context *context.SerializableContext `json:"context"`
+	Idx     int                          `json:"idx"`
 }
 
 func (r *SetupEachScenarioCommandRequest) ToContext() *context.Context {
@@ -224,12 +301,14 @@ func (r *SetupEachScenarioCommandRequest) ToContext() *context.Context {
 
 func (r *SetupEachScenarioCommandRequest) isCommandRequest() bool { return true }
 
-type SetupEachScenarioCommandResponse struct{}
+type SetupEachScenarioCommandResponse struct {
+	ExistsTeardown bool `json:"existsTeardown"`
+}
 
 func (r *SetupEachScenarioCommandResponse) isCommandResponse() bool { return true }
 
 type TeardownCommandRequest struct {
-	SetupID string                       `json:"setupId"`
+	ID      string                       `json:"id"`
 	Context *context.SerializableContext `json:"context"`
 }
 
@@ -249,23 +328,29 @@ func (r *SyncCommandRequest) isCommandRequest() bool { return true }
 
 // SyncCommandResponse contains updated types from the WASM plugin.
 type SyncCommandResponse struct {
-	Types []*NameWithType `json:"types"`
+	TypeRefMap map[string]*Type `json:"typeRefMap"`
+	Types      []*NameWithType  `json:"types"`
 }
 
 // ToTypeMap converts the response types to a name-to-type mapping.
-func (r *SyncCommandResponse) ToTypeMap() map[string]*Type {
+func (r *SyncCommandResponse) ToTypeMap() (map[string]*Type, error) {
 	nameToTypeMap := make(map[string]*Type)
 	for _, typ := range r.Types {
-		nameToTypeMap[typ.Name] = typ.Type
+		resolvedType, err := ResolveRef(typ.Type, r.TypeRefMap)
+		if err != nil {
+			return nil, err
+		}
+		nameToTypeMap[typ.Name] = resolvedType
 	}
-	return nameToTypeMap
+	return nameToTypeMap, nil
 }
 
 func (r *SyncCommandResponse) isCommandResponse() bool { return true }
 
 type CallCommandRequest struct {
-	Name string   `json:"name"`
-	Args []string `json:"args"`
+	Name      string   `json:"name"`
+	Selectors []string `json:"selectors"`
+	Args      []string `json:"args"`
 }
 
 func (r *CallCommandRequest) isCommandRequest() bool { return true }
@@ -276,8 +361,66 @@ type CallCommandResponse struct {
 
 func (r *CallCommandResponse) isCommandResponse() bool { return true }
 
+type MethodCommandRequest struct {
+	Name      string   `json:"name"`
+	Selectors []string `json:"selectors"`
+}
+
+func (r *MethodCommandRequest) isCommandRequest() bool { return true }
+
+type MethodCommandResponse struct {
+	TypeRefMap map[string]*Type `json:"typeRefMap"`
+	Type       *Type            `json:"type"`
+}
+
+func (r *MethodCommandResponse) isCommandResponse() bool { return true }
+
+type StepRunCommandRequest struct {
+	Instance string                       `json:"instance"`
+	Context  *context.SerializableContext `json:"context"`
+	Step     *schema.Step                 `json:"step"`
+}
+
+func (r *StepRunCommandRequest) isCommandRequest() bool { return true }
+
+type StepRunCommandResponse struct {
+	Context        *context.SerializableContext `json:"context"`
+	IsSpawnContext bool                         `json:"isSpawnContext"`
+}
+
+func (r *StepRunCommandResponse) isCommandResponse() bool { return true }
+
+type LeftArrowFuncExecCommandRequest struct {
+	Instance string `json:"instance"`
+	Value    string `json:"value"`
+	ArgID    string `json:"argId"`
+}
+
+func (r *LeftArrowFuncExecCommandRequest) isCommandRequest() bool { return true }
+
+type LeftArrowFuncExecCommandResponse struct {
+	Value string `json:"value"`
+}
+
+func (r *LeftArrowFuncExecCommandResponse) isCommandResponse() bool { return true }
+
+type LeftArrowFuncUnmarshalArgCommandRequest struct {
+	Instance string `json:"instance"`
+	Value    string `json:"value"`
+}
+
+func (r *LeftArrowFuncUnmarshalArgCommandRequest) isCommandRequest() bool { return true }
+
+type LeftArrowFuncUnmarshalArgCommandResponse struct {
+	ValueID string `json:"valueId"`
+	Value   string `json:"value"`
+}
+
+func (r *LeftArrowFuncUnmarshalArgCommandResponse) isCommandResponse() bool { return true }
+
 type GetCommandRequest struct {
-	Name string `json:"name"`
+	Name      string   `json:"name"`
+	Selectors []string `json:"selectors"`
 }
 
 func (r *GetCommandRequest) isCommandRequest() bool { return true }
@@ -317,9 +460,10 @@ type GRPCBuildRequestCommandResponse struct {
 func (r *GRPCBuildRequestCommandResponse) isCommandResponse() bool { return true }
 
 type GRPCInvokeCommandRequest struct {
-	Client  string `json:"client"`
-	Method  string `json:"method"`
-	Request []byte `json:"request"`
+	Client   string      `json:"client"`
+	Method   string      `json:"method"`
+	Request  []byte      `json:"request"`
+	Metadata metadata.MD `json:"metadata"`
 }
 
 func (r *GRPCInvokeCommandRequest) isCommandRequest() bool { return true }
@@ -333,30 +477,13 @@ type GRPCInvokeCommandResponse struct {
 
 func (r *GRPCInvokeCommandResponse) isCommandResponse() bool { return true }
 
-// NameWithType represents a named type from a WASM plugin.
-type NameWithType struct {
-	Name string `json:"name"`
-	Type *Type  `json:"type"`
-}
-
-// Type represents a type information from a WASM plugin.
-type Type struct {
-	Kind reflect.Kind `json:"kind"`
-	Func *FuncType    `json:"func"`
-}
-
-// FuncType represents function type information from a WASM plugin.
-type FuncType struct {
-	Args   []*Type `json:"args"`
-	Return []*Type `json:"return"`
-}
-
 // ReturnValue represents a return value from a WASM plugin function call.
 type ReturnValue struct {
 	ID    string `json:"id"`
 	Value string `json:"value"`
 }
 
+//nolint:cyclop
 func (r *Request) UnmarshalJSON(b []byte) error {
 	var req struct {
 		CommandType Command         `json:"type"`
@@ -409,6 +536,34 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 		}
 		r.Command = &v
 		return nil
+	case MethodCommand:
+		var v MethodCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case StepRunCommand:
+		var v StepRunCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil { //nolint:musttag
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncExecCommand:
+		var v LeftArrowFuncExecCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncUnmarshalArgCommand:
+		var v LeftArrowFuncUnmarshalArgCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
 	case GetCommand:
 		var v GetCommandRequest
 		if err := json.Unmarshal(req.Command, &v); err != nil {
@@ -441,15 +596,20 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 	return fmt.Errorf("unexpected command type: %s", req.CommandType)
 }
 
+//nolint:cyclop
 func (r *Response) UnmarshalJSON(b []byte) error {
 	var res struct {
-		CommandType Command         `json:"type"`
-		Command     json.RawMessage `json:"command"`
+		CommandType Command                      `json:"type"`
+		Command     json.RawMessage              `json:"command"`
+		Context     *context.SerializableContext `json:"context"`
+		Error       string                       `json:"error"`
 	}
 	if err := json.Unmarshal(b, &res); err != nil {
 		return err
 	}
 	r.CommandType = res.CommandType
+	r.Context = res.Context
+	r.Error = res.Error
 	switch res.CommandType {
 	case InitCommand:
 		var v InitCommandResponse
@@ -488,6 +648,34 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 		return nil
 	case CallCommand:
 		var v CallCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case MethodCommand:
+		var v MethodCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case StepRunCommand:
+		var v StepRunCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncExecCommand:
+		var v LeftArrowFuncExecCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case LeftArrowFuncUnmarshalArgCommand:
+		var v LeftArrowFuncUnmarshalArgCommandResponse
 		if err := json.Unmarshal(res.Command, &v); err != nil {
 			return err
 		}
@@ -533,6 +721,10 @@ type CommandHandler interface {
 	Teardown(*TeardownCommandRequest) (*TeardownCommandResponse, error)
 	Sync(*SyncCommandRequest) (*SyncCommandResponse, error)
 	Call(*CallCommandRequest) (*CallCommandResponse, error)
+	Method(*MethodCommandRequest) (*MethodCommandResponse, error)
+	StepRun(*StepRunCommandRequest) (*StepRunCommandResponse, error)
+	LeftArrowFuncExec(*LeftArrowFuncExecCommandRequest) (*LeftArrowFuncExecCommandResponse, error)
+	LeftArrowFuncUnmarshalArg(*LeftArrowFuncUnmarshalArgCommandRequest) (*LeftArrowFuncUnmarshalArgCommandResponse, error)
 	Get(*GetCommandRequest) (*GetCommandResponse, error)
 	GRPCExistsMethod(*GRPCExistsMethodCommandRequest) (*GRPCExistsMethodCommandResponse, error)
 	GRPCBuildRequest(*GRPCBuildRequestCommandRequest) (*GRPCBuildRequestCommandResponse, error)
@@ -552,6 +744,7 @@ func HandleCommand(b []byte, handler CommandHandler) *Response {
 	return &Response{CommandType: r.CommandType, Command: cmd}
 }
 
+//nolint:cyclop
 func handleCommand(r *Request, handler CommandHandler) (CommandResponse, error) {
 	switch r.CommandType {
 	case InitCommand:
@@ -590,6 +783,30 @@ func handleCommand(r *Request, handler CommandHandler) (CommandResponse, error) 
 			return nil, err
 		}
 		return handler.Call(cmd)
+	case MethodCommand:
+		cmd, err := toCommandRequest[*MethodCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.Method(cmd)
+	case StepRunCommand:
+		cmd, err := toCommandRequest[*StepRunCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.StepRun(cmd)
+	case LeftArrowFuncExecCommand:
+		cmd, err := toCommandRequest[*LeftArrowFuncExecCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.LeftArrowFuncExec(cmd)
+	case LeftArrowFuncUnmarshalArgCommand:
+		cmd, err := toCommandRequest[*LeftArrowFuncUnmarshalArgCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.LeftArrowFuncUnmarshalArg(cmd)
 	case GetCommand:
 		cmd, err := toCommandRequest[*GetCommandRequest](r.Command)
 		if err != nil {
@@ -653,24 +870,4 @@ func DecodeResponse(b []byte) (*Response, error) {
 		return nil, err
 	}
 	return &res, nil
-}
-
-// NewType creates a Type from a reflect.Type.
-func NewType(t reflect.Type) *Type {
-	if t.Kind() == reflect.Func {
-		return NewFuncType(t)
-	}
-	return &Type{Kind: t.Kind()}
-}
-
-// NewFuncType creates a function Type from a reflect.Type.
-func NewFuncType(t reflect.Type) *Type {
-	fn := &FuncType{}
-	for i := range t.NumIn() {
-		fn.Args = append(fn.Args, NewType(t.In(i)))
-	}
-	for i := range t.NumOut() {
-		fn.Return = append(fn.Return, NewType(t.Out(i)))
-	}
-	return &Type{Kind: t.Kind(), Func: fn}
 }

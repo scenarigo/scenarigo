@@ -8,6 +8,7 @@ import (
 
 	query "github.com/zoncoen/query-go"
 	yamlextractor "github.com/zoncoen/query-go/extractor/yaml"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
@@ -53,6 +54,39 @@ type keyExtractor struct {
 	v *dynamicpb.Message
 }
 
+type ProtoEnum struct {
+	number protoreflect.EnumNumber
+	desc   protoreflect.EnumDescriptor
+}
+
+type ProtoEnumType struct {
+	desc protoreflect.EnumDescriptor
+}
+
+func (t *ProtoEnumType) New(n protoreflect.EnumNumber) protoreflect.Enum {
+	return nil
+}
+
+func (t *ProtoEnumType) Descriptor() protoreflect.EnumDescriptor {
+	return t.desc
+}
+
+func (e *ProtoEnum) Type() protoreflect.EnumType {
+	return &ProtoEnumType{desc: e.desc}
+}
+
+func (e *ProtoEnum) Number() protoreflect.EnumNumber {
+	return e.number
+}
+
+func (e *ProtoEnum) ProtoReflect() protoreflect.Enum {
+	return e
+}
+
+func (e *ProtoEnum) Descriptor() protoreflect.EnumDescriptor {
+	return e.desc
+}
+
 // ExtractByKey implements the query.KeyExtractorContext interface.
 func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, bool) {
 	ci := query.IsCaseInsensitive(ctx)
@@ -86,6 +120,10 @@ func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, bool)
 				name = strings.ToLower(name)
 			}
 			if name == key {
+				field := e.v.Get(f).Interface()
+				if number, ok := field.(protoreflect.EnumNumber); ok {
+					return &ProtoEnum{desc: f.Enum(), number: number}, true
+				}
 				return e.v.Get(f).Interface(), true
 			}
 		}
