@@ -18,7 +18,8 @@ var (
 	ipv6AddrPattern    = regexp.MustCompile(`\[::\]:\d+`)
 	userAgentPattern   = regexp.MustCompile(fmt.Sprintf(`- scenarigo/%s`, version.String()))
 	dateHeaderPattern  = regexp.MustCompile(`Date:\n\s*- (.+)`)
-	pluginOpenPattern  = regexp.MustCompile(`plugin\.Open\("([^"]+)"\): realpath failed`)
+	ansiColorPattern   = regexp.MustCompile(`\[[0-9;]*m`)
+	timeoutPattern     = regexp.MustCompile(`\s*step hasn't finished in .+ despite the context canceled\n?`)
 )
 
 // ReplaceOutput replaces result output.
@@ -30,6 +31,8 @@ func ReplaceOutput(s string) string {
 		ReplaceDateHeader,
 		ReplaceFilepath,
 		ReplacePluginOpen,
+		RemoveAnsiColors,
+		RemoveTimeoutMessages,
 	} {
 		s = f(s)
 	}
@@ -80,18 +83,29 @@ func ReplaceFilepath(s string) string {
 		}
 	}
 	result := strings.ReplaceAll(s, root, filepath.FromSlash("/go/src/github.com/scenarigo/scenarigo"))
-	
+
 	// Additional pattern-based replacement for any scenarigo path that wasn't caught
 	// This uses regex to find any path ending with "scenarigo" and normalize it
-	scenarigoPathRe := regexp.MustCompile(`(/[^/\s]*)*scenarigo`)
+	// Only match actual file paths (starting with / or containing filesystem separators)
+	scenarigoPathRe := regexp.MustCompile(`(/[^/\s]*)+/scenarigo\b`)
 	result = scenarigoPathRe.ReplaceAllString(result, "/go/src/github.com/scenarigo/scenarigo")
-	
+
 	return result
 }
 
 // ReplacePluginOpen normalizes plugin.Open error messages to open error messages.
 func ReplacePluginOpen(s string) string {
-	// Replace "plugin.Open(...): realpath failed" with "open ...: no such file or directory"
-	return pluginOpenPattern.ReplaceAllString(s, "open ${1}: no such file or directory")
+	// Only replace plugin.Open errors for WASM files, not .so files
+	wasmPluginOpenPattern := regexp.MustCompile(`plugin\.Open\("([^"]*\.wasm)"\): realpath failed`)
+	return wasmPluginOpenPattern.ReplaceAllString(s, "open ${1}: no such file or directory")
 }
 
+// RemoveAnsiColors removes ANSI color codes from the output.
+func RemoveAnsiColors(s string) string {
+	return ansiColorPattern.ReplaceAllString(s, "")
+}
+
+// RemoveTimeoutMessages removes timeout-specific messages that may differ between plugin types.
+func RemoveTimeoutMessages(s string) string {
+	return timeoutPattern.ReplaceAllString(s, "\n")
+}

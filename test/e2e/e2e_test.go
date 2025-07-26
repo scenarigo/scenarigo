@@ -155,7 +155,7 @@ func TestE2E(t *testing.T) {
 								if err != nil {
 									t.Fatal(err)
 								}
-								defer os.Chdir(originalWd)
+								defer func() { _ = os.Chdir(originalWd) }()
 
 								if err := os.Chdir(tmpDir); err != nil {
 									t.Fatal(err)
@@ -254,7 +254,7 @@ func loadAndModifyExpectedOutput(stdoutPath, pluginType string) ([]byte, error) 
 }
 
 // copyAllScenarioFiles recursively copies all YAML files from scenarios directory
-// for supporting include functionality in WASM tests
+// for supporting include functionality in WASM tests.
 func copyAllScenarioFiles(srcDir, dstDir, pluginType string) error {
 	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

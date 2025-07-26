@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	gocontext "context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -332,7 +333,7 @@ func TestWasmHost(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, st, err := wasmValue.Invoke("Echo", protoMsg)
+		res, st, err := wasmValue.Invoke(gocontext.Background(), "Echo", protoMsg)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -42,7 +42,10 @@ func TestReporterSerializationRoundtrip(t *testing.T) {
 	}
 
 	// Deserialize back to reporter
-	restored := FromSerializable(serialized)
+	reporterMap := map[string]*SerializableReporter{
+		serialized.Name: serialized,
+	}
+	restored := FromSerializable(serialized.Name, reporterMap)
 
 	// Verify core properties are preserved
 	if restored.Failed() != originalReporter.Failed() {
@@ -91,7 +94,10 @@ func TestReporterSerializationWithFromT(t *testing.T) {
 	}
 
 	// Deserialize back
-	restored := FromSerializable(serialized)
+	reporterMap := map[string]*SerializableReporter{
+		serialized.Name: serialized,
+	}
+	restored := FromSerializable(serialized.Name, reporterMap)
 
 	// Verify the reporter name is preserved
 	if restored.getName() != originalReporter.getName() {

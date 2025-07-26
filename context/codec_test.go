@@ -157,8 +157,11 @@ func TestContextWithReporterSerialization(t *testing.T) {
 	serialized := originalContext.ToSerializable()
 
 	// Verify reporter was serialized
-	if serialized.Reporter == nil {
-		t.Error("Reporter should be serialized when it supports ToSerializable")
+	if serialized.ReporterID == "" {
+		t.Error("ReporterID should be set when reporter supports ToSerializable")
+	}
+	if serialized.ReporterMap == nil {
+		t.Error("ReporterMap should be set when reporter supports ToSerializable")
 	}
 
 	// Deserialize

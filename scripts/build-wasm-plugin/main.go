@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,7 +58,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		fmt.Printf("Built WASM plugin: %s.wasm\n", pluginName)
+		log.Printf("Built WASM plugin: %s.wasm\n", pluginName)
 	}
 }
 
