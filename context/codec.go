@@ -105,7 +105,11 @@ func FromSerializable(sc *SerializableContext) *Context {
 func FromSerializableWithContext(ctx *Context, sc *SerializableContext) *Context {
 	// Set reporter if it was serialized.
 	if sc.ReporterID != "" {
-		reporter.AppendReporter(ctx.reporter, reporter.FromSerializable(sc.ReporterID, sc.ReporterMap))
+		if ctx.reporter == nil {
+			ctx.reporter = reporter.FromSerializable(sc.ReporterID, sc.ReporterMap)
+		} else {
+			reporter.AppendReporter(ctx.reporter, reporter.FromSerializable(sc.ReporterID, sc.ReporterMap))
+		}
 	}
 
 	// Set scenario filepath.
