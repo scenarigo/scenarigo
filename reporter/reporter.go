@@ -271,7 +271,11 @@ func (r *reporter) printTestSummary() {
 }
 
 func AppendReporter(dst Reporter, src Reporter) {
-	dst.(*reporter).appendChildren(src.(*reporter).children...)
+	d, dok := dst.(*reporter)
+	s, sok := src.(*reporter)
+	if dok && sok {
+		d.appendChildren(s.children...)
+	}
 }
 
 func (r *reporter) appendChildren(children ...*reporter) {
