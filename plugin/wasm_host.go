@@ -190,7 +190,7 @@ func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse
 	if err != nil {
 		return nil, err
 	}
-	if res != nil && res.Context != nil {
+	if res != nil && res.Context != nil && res.Context.ReporterID != "" {
 		r, ok := ctx.Reporter().(interface {
 			SetFromSerializable(string, map[string]*reporter.SerializableReporter)
 		})
