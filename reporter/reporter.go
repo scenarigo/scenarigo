@@ -270,6 +270,14 @@ func (r *reporter) printTestSummary() {
 	_, _ = r.context.print(r.context.testSummary.String(r.context.noColor)) //nolint:forbidigo
 }
 
+func AppendReporter(dst Reporter, src Reporter) {
+	d, dok := dst.(*reporter)
+	s, sok := src.(*reporter)
+	if dok && sok {
+		d.appendChildren(s.children...)
+	}
+}
+
 func (r *reporter) appendChildren(children ...*reporter) {
 	r.m.Lock()
 	r.children = append(r.children, children...)

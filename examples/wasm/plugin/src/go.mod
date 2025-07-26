@@ -5,6 +5,7 @@ go 1.23.8
 toolchain go1.24.3
 
 require (
+	github.com/goccy/go-yaml v1.18.0
 	github.com/scenarigo/scenarigo v0.21.3
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
@@ -16,7 +17,6 @@ require (
 	carvel.dev/ytt v0.50.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
-	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/goccy/wasi-go v0.2.0 // indirect
 	github.com/goccy/wasi-go-net v0.3.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

@@ -4,16 +4,18 @@ package plugin
 
 import (
 	"bufio"
-	"context"
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
-	"strconv"
+	"sync"
 	"unsafe"
 
 	_ "github.com/goccy/wasi-go-net/wasip1"
 
+	"github.com/goccy/go-yaml"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -21,6 +23,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 
+	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/plugin"
 	"github.com/scenarigo/scenarigo/internal/plugin/wasm"
 )
@@ -81,13 +84,51 @@ func Register(initFn, syncFn DefinitionFunc) {
 		if content == exitCommand {
 			return
 		}
-		res := wasm.HandleCommand([]byte(content), h)
-		b, _ := json.Marshal(res)
-		out := append(b, '\n')
-		scenarigo_write(
-			uint32(uintptr(unsafe.Pointer(&out[0]))),
-			uint32(len(out)),
-		)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			var finished bool
+			defer func() {
+				if !finished {
+					var errMsg string
+					if r := recover(); r != nil {
+						errMsg = fmt.Sprint(r)
+					} else {
+						errMsg = "plugin executed panic(nil) or runtime.Goexit"
+					}
+					var sctx *context.SerializableContext
+					if h.ctx != nil {
+						sctx = h.ctx.ToSerializable()
+					}
+					var req wasm.Request
+					_ = json.Unmarshal([]byte(content), &req)
+					b, _ := json.Marshal(&wasm.Response{
+						CommandType: req.CommandType,
+						Context:     sctx,
+						Error:       errMsg,
+					})
+					out := append(b, '\n')
+					scenarigo_write(
+						uint32(uintptr(unsafe.Pointer(&out[0]))),
+						uint32(len(out)),
+					)
+				}
+				wg.Done()
+			}()
+			h.ctx = nil
+			res := wasm.HandleCommand([]byte(content), h)
+			if h.ctx != nil {
+				res.Context = h.ctx.ToSerializable()
+			}
+			finished = true
+			b, _ := json.Marshal(res)
+			out := append(b, '\n')
+			scenarigo_write(
+				uint32(uintptr(unsafe.Pointer(&out[0]))),
+				uint32(len(out)),
+			)
+		}()
+		wg.Wait()
 	}
 }
 
@@ -95,20 +136,21 @@ func Register(initFn, syncFn DefinitionFunc) {
 func scenarigo_write(ptr, size uint32)
 
 type handler struct {
+	ctx                *Context
 	initFn             DefinitionFunc
 	syncFn             DefinitionFunc
-	teardownMap        map[string][]func(*Context)
+	teardownMap        map[string]func(*Context)
 	funcNameToValueMap map[string]reflect.Value
-	idToValueMap       map[string]reflect.Value
+	nameToValueMap     map[string]reflect.Value
 }
 
 func newHandler(initFn, syncFn DefinitionFunc) *handler {
 	return &handler{
 		initFn:             initFn,
 		syncFn:             syncFn,
-		teardownMap:        make(map[string][]func(*Context)),
+		teardownMap:        make(map[string]func(*Context)),
 		funcNameToValueMap: make(map[string]reflect.Value),
-		idToValueMap:       make(map[string]reflect.Value),
+		nameToValueMap:     make(map[string]reflect.Value),
 	}
 }
 
@@ -118,96 +160,114 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 		if !def.Value.IsValid() {
 			types = append(types, &wasm.NameWithType{
 				Name: def.Name,
-				Type: &wasm.Type{Kind: reflect.Invalid},
+				Type: &wasm.Type{Kind: wasm.INVALID},
 			})
 			continue
 		}
-		if def.Value.Type().Kind() == reflect.Func {
-			h.funcNameToValueMap[def.Name] = def.Value
-		} else {
-			h.idToValueMap[def.Name] = def.Value
+		h.nameToValueMap[def.Name] = def.Value
+		typ, err := wasm.NewType(def.Value.Type())
+		if err != nil {
+			return nil, err
 		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
-			Type: wasm.NewType(def.Value.Type()),
+			Type: typ,
 		})
 	}
-	return &wasm.InitCommandResponse{Types: types}, nil
+	return &wasm.InitCommandResponse{
+		SetupNum:             len(setups),
+		SetupEachScenarioNum: len(setupsEachScenario),
+		TypeRefMap:           wasm.TypeRefMap(),
+		Types:                types,
+	}, nil
 }
 
 func (h *handler) Setup(r *wasm.SetupCommandRequest) (*wasm.SetupCommandResponse, error) {
 	ctx := r.ToContext()
-	for i, setup := range setups {
-		newCtx := ctx
-		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
-			ctx, teardown := setup(ctx)
-			if ctx != nil {
-				newCtx = ctx
-			}
-			if teardown != nil {
-				h.teardownMap[r.ID] = append(h.teardownMap[r.ID], teardown)
-			}
-		})
-		ctx = newCtx.WithReporter(ctx.Reporter())
+	setup := setups[r.Idx]
+	h.ctx = ctx
+	ctx, teardown := setup(ctx)
+	if ctx != nil {
+		h.ctx = ctx
 	}
-	return &wasm.SetupCommandResponse{}, nil
+	h.teardownMap[r.ID] = teardown
+	return &wasm.SetupCommandResponse{
+		ExistsTeardown: teardown != nil,
+	}, nil
 }
 
 func (h *handler) SetupEachScenario(r *wasm.SetupEachScenarioCommandRequest) (*wasm.SetupEachScenarioCommandResponse, error) {
 	ctx := r.ToContext()
-	for i, setup := range setupsEachScenario {
-		newCtx := ctx
-		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
-			ctx, teardown := setup(ctx)
-			if ctx != nil {
-				newCtx = ctx
-			}
-			if teardown != nil {
-				h.teardownMap[r.ID] = append(h.teardownMap[r.ID], teardown)
-			}
-		})
-		ctx = newCtx.WithReporter(ctx.Reporter())
+	setup := setupsEachScenario[r.Idx]
+	h.ctx = ctx
+	ctx, teardown := setup(ctx)
+	if ctx != nil {
+		h.ctx = ctx
 	}
-	return &wasm.SetupEachScenarioCommandResponse{}, nil
+	h.teardownMap[r.ID] = teardown
+	return &wasm.SetupEachScenarioCommandResponse{
+		ExistsTeardown: teardown != nil,
+	}, nil
 }
 
 func (h *handler) Teardown(r *wasm.TeardownCommandRequest) (*wasm.TeardownCommandResponse, error) {
 	ctx := r.ToContext()
-	for i, teardown := range h.teardownMap[r.SetupID] {
-		ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
-			teardown(ctx)
-		})
-	}
+	teardown := h.teardownMap[r.ID]
+	h.ctx = ctx
+	teardown(ctx)
 	return &wasm.TeardownCommandResponse{}, nil
 }
 
 func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, error) {
 	defs := h.syncFn()
 	for _, def := range defs {
-		h.idToValueMap[def.Name] = def.Value
+		h.nameToValueMap[def.Name] = def.Value
 	}
 	var types []*wasm.NameWithType
 	for _, def := range defs {
 		if !def.Value.IsValid() {
 			types = append(types, &wasm.NameWithType{
 				Name: def.Name,
-				Type: &wasm.Type{Kind: reflect.Invalid},
+				Type: &wasm.Type{Kind: wasm.INVALID},
 			})
 			continue
 		}
-		h.idToValueMap[def.Name] = def.Value
+		h.nameToValueMap[def.Name] = def.Value
+		typ, err := wasm.NewType(def.Value.Type())
+		if err != nil {
+			return nil, err
+		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
-			Type: wasm.NewType(def.Value.Type()),
+			Type: typ,
 		})
 	}
-	return &wasm.SyncCommandResponse{Types: types}, nil
+	return &wasm.SyncCommandResponse{
+		TypeRefMap: wasm.TypeRefMap(), Types: types,
+	}, nil
 }
 
+var (
+	stepType          = reflect.TypeOf((*Step)(nil)).Elem()
+	leftArrowFuncType = reflect.TypeOf((*LeftArrowFunc)(nil)).Elem()
+)
+
 func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, error) {
-	v, exists := h.funcNameToValueMap[r.Name]
+	v, exists := h.nameToValueMap[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("failed to find function: %s", r.Name)
+	}
+	if len(r.Selectors) != 0 {
+		// method call.
+		for _, sel := range r.Selectors[:len(r.Selectors)-1] {
+			var err error
+			v, err = getFieldValue(v, sel)
+			if err != nil {
+				return nil, err
+			}
+		}
+		methodName := r.Selectors[len(r.Selectors)-1]
+		v = v.MethodByName(methodName)
 	}
 	if len(r.Args) != v.Type().NumIn() {
 		return nil, fmt.Errorf(
@@ -231,38 +291,181 @@ func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, e
 		}
 		args = append(args, rv.Elem())
 	}
-
 	res := &wasm.CallCommandResponse{}
 	for i, retValue := range v.Call(args) {
-		b, err := json.Marshal(retValue.Interface())
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to encode %s function return value (%d): %v",
-				r.Name,
-				i,
-				retValue.Interface(),
-			)
+		typ := retValue.Type()
+		var value string
+		switch {
+		case typ == stepType:
+			value = stepInterface
+		case typ == leftArrowFuncType:
+			value = leftArrowFuncInterface
+		default:
+			b, err := json.Marshal(retValue.Interface())
+			if err != nil {
+				return nil, fmt.Errorf(
+					"failed to encode %s function return value (%d): %v",
+					r.Name,
+					i,
+					retValue.Interface(),
+				)
+			}
+			value = string(b)
 		}
 		valueID := fmt.Sprintf("%p", &retValue)
-		h.idToValueMap[valueID] = retValue
+		h.nameToValueMap[valueID] = retValue
 		res.Return = append(res.Return, &wasm.ReturnValue{
 			ID:    valueID,
-			Value: string(b),
+			Value: value,
 		})
 	}
 	return res, nil
 }
 
+func (h *handler) Method(r *wasm.MethodCommandRequest) (*wasm.MethodCommandResponse, error) {
+	v, exists := h.nameToValueMap[r.Name]
+	if !exists {
+		return nil, fmt.Errorf("failed to find function: %s", r.Name)
+	}
+	for _, sel := range r.Selectors[:len(r.Selectors)-1] {
+		var err error
+		v, err = getFieldValue(v, sel)
+		if err != nil {
+			return nil, err
+		}
+	}
+	methodName := r.Selectors[len(r.Selectors)-1]
+	mtd, exists := v.Type().MethodByName(methodName)
+	if !exists {
+		return nil, fmt.Errorf("failed to find method from %s", methodName)
+	}
+	mtdType, err := wasm.NewType(mtd.Type)
+	if err != nil {
+		return nil, err
+	}
+	if mtdType.Kind != wasm.FUNC {
+		return nil, fmt.Errorf("failed to create method type: %s", mtdType)
+	}
+	return &wasm.MethodCommandResponse{
+		TypeRefMap: wasm.TypeRefMap(),
+		Type:       mtdType,
+	}, nil
+}
+
+func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunCommandResponse, e error) {
+	step, exists := h.nameToValueMap[r.Instance]
+	if !exists {
+		return nil, fmt.Errorf("failed to find step instance from %s", r.Instance)
+	}
+	ctx := context.FromSerializable(r.Context)
+	h.ctx = ctx
+	result := step.MethodByName("Run").Call([]reflect.Value{
+		reflect.ValueOf(ctx),
+		reflect.ValueOf(r.Step),
+	})
+	if len(result) != 1 {
+		return nil, fmt.Errorf("failed to get result value from step.Run function. return values: %v", result)
+	}
+	resultCtx, ok := result[0].Interface().(*context.Context)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert result type to *context.Context from %T", result[0].Interface())
+	}
+	return &wasm.StepRunCommandResponse{
+		Context:        resultCtx.ToSerializable(),
+		IsSpawnContext: ctx != resultCtx,
+	}, nil
+}
+
+func (h *handler) LeftArrowFuncExec(r *wasm.LeftArrowFuncExecCommandRequest) (*wasm.LeftArrowFuncExecCommandResponse, error) {
+	leftArrowFunc, exists := h.nameToValueMap[r.Instance]
+	if !exists {
+		return nil, fmt.Errorf("failed to find left arrow func instance from %s", r.Instance)
+	}
+	argValue, exists := h.nameToValueMap[r.ArgID]
+	if !exists {
+		return nil, fmt.Errorf("failed to find left arrow func argument instance from %s", r.ArgID)
+	}
+	var v any
+	if err := json.Unmarshal([]byte(r.Value), &v); err != nil {
+		return nil, err
+	}
+	result := leftArrowFunc.MethodByName("Exec").Call([]reflect.Value{argValue})
+	if len(result) != 2 {
+		return nil, fmt.Errorf("failed to get result value from LeftArrowFunc.Exec function. return values: %v", result)
+	}
+	if e := result[1].Interface(); e != nil {
+		return nil, e.(error)
+	}
+	res, err := json.Marshal(result[0].Interface())
+	if err != nil {
+		return nil, err
+	}
+	return &wasm.LeftArrowFuncExecCommandResponse{
+		Value: string(res),
+	}, nil
+}
+
+func (h *handler) LeftArrowFuncUnmarshalArg(r *wasm.LeftArrowFuncUnmarshalArgCommandRequest) (*wasm.LeftArrowFuncUnmarshalArgCommandResponse, error) {
+	leftArrowFunc, exists := h.nameToValueMap[r.Instance]
+	if !exists {
+		return nil, fmt.Errorf("failed to find left arrow func instance from %s", r.Instance)
+	}
+	result := leftArrowFunc.MethodByName("UnmarshalArg").Call([]reflect.Value{
+		reflect.ValueOf(func(v any) error {
+			if err := yaml.Unmarshal([]byte(r.Value), v); err != nil {
+				return err
+			}
+			return nil
+		}),
+	})
+	if len(result) != 2 {
+		return nil, fmt.Errorf("failed to get result value from LeftArrowFunc.UnmarshalArg function. return values: %v", result)
+	}
+	if e := result[1].Interface(); e != nil {
+		return nil, e.(error)
+	}
+	value := result[0]
+	valueID := fmt.Sprintf("%p", value)
+	h.nameToValueMap[valueID] = value
+	res, err := json.Marshal(value.Interface())
+	if err != nil {
+		return nil, err
+	}
+	return &wasm.LeftArrowFuncUnmarshalArgCommandResponse{
+		ValueID: valueID,
+		Value:   string(res),
+	}, nil
+}
+
 func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, error) {
-	v, exists := h.idToValueMap[r.Name]
+	v, exists := h.nameToValueMap[r.Name]
 	if !exists {
 		return nil, fmt.Errorf("failed to find value: %s", r.Name)
+	}
+	for _, sel := range r.Selectors {
+		var err error
+		v, err = getFieldValue(v, sel)
+		if err != nil {
+			return nil, err
+		}
 	}
 	b, err := json.Marshal(v.Interface())
 	if err != nil {
 		return nil, err
 	}
-	return &wasm.GetCommandResponse{Value: string(b)}, nil
+	return &wasm.GetCommandResponse{
+		Value: string(b),
+	}, nil
+}
+
+func getFieldValue(v reflect.Value, sel string) (reflect.Value, error) {
+	switch v.Type().Kind() {
+	case reflect.Pointer, reflect.Interface:
+		return getFieldValue(v.Elem(), sel)
+	case reflect.Struct:
+		return v.FieldByName(sel), nil
+	}
+	return reflect.Value{}, fmt.Errorf("failed to get field %s value from %v", sel, v)
 }
 
 func (h *handler) GRPCExistsMethod(r *wasm.GRPCExistsMethodCommandRequest) (*wasm.GRPCExistsMethodCommandResponse, error) {
@@ -309,7 +512,8 @@ func (h *handler) GRPCInvoke(r *wasm.GRPCInvokeCommandRequest) (*wasm.GRPCInvoke
 	if err := protojson.Unmarshal(r.Request, reqProtoMsg); err != nil {
 		return nil, err
 	}
-	resMsg, st, err := plugin.GRPCInvoke(context.Background(), method, reqProtoMsg)
+	ctx := metadata.NewOutgoingContext(gocontext.Background(), r.Metadata)
+	resMsg, st, err := plugin.GRPCInvoke(ctx, method, reqProtoMsg)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +561,7 @@ func (h *handler) currentFileDescriptorSetBytes() ([]byte, error) {
 }
 
 func (h *handler) getMethod(clientName, methodName string) (reflect.Value, error) {
-	client, exists := h.idToValueMap[clientName]
+	client, exists := h.nameToValueMap[clientName]
 	if !exists {
 		return reflect.Value{}, fmt.Errorf("unknown clientName: %q", clientName)
 	}
