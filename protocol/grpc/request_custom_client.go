@@ -90,7 +90,7 @@ func (client *customServiceClient) buildRequestMessage(ctx *context.Context) (pr
 
 func (client *customServiceClient) invoke(ctx gocontext.Context, reqMsg proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
 	if client.customClient != nil {
-		return client.customClient.Invoke(client.r.Method, reqMsg)
+		return client.customClient.Invoke(ctx, client.r.Method, reqMsg)
 	}
 	return plugin.GRPCInvoke(ctx, client.method, reqMsg, opts...)
 }

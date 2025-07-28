@@ -15,7 +15,7 @@ import (
 type CustomGRPCClient interface {
 	ExistsMethod(method string) bool
 	BuildRequestMessage(method string, params []byte) (proto.Message, error)
-	Invoke(method string, req proto.Message) (proto.Message, *status.Status, error)
+	Invoke(ctx context.Context, method string, req proto.Message) (proto.Message, *status.Status, error)
 }
 
 var (
