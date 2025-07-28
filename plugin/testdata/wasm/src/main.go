@@ -74,7 +74,42 @@ func setupClient(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
 	}
 }
 
-var Foo int = 1
+var (
+	Int     int     = 1
+	Int8    int8    = 2
+	Int16   int16   = 3
+	Int32   int32   = 4
+	Int64   int64   = 5
+	Uint    uint    = 6
+	Uint8   uint8   = 7
+	Uint16  uint16  = 8
+	Uint32  uint32  = 9
+	Uint64  uint64  = 10
+	Float32 float32 = 11
+	Float64 float64 = 12
+	Uintptr uintptr = 13
+	Bool    bool    = true
+	String  string  = "hello"
+	Bytes   []byte  = []byte("world")
+	Map             = map[string]any{"a": "x", "b": 1}
+	Slice           = []any{1, -2, 3.14, true, "hello"}
+	Array           = [2]int64{1, 2}
+	Struct          = struct {
+		X int
+		Y string
+	}{
+		X: 1,
+		Y: "hello",
+	}
+	StructPtr = &struct {
+		X int
+		Y string
+	}{
+		X: 1,
+		Y: "hello",
+	}
+	Any any = 1
+)
 
 func Bar() int {
 	return 2
@@ -86,7 +121,28 @@ func main() {
 			return []*plugin.Definition{
 				plugin.ToDefinition("Bar", Bar),
 				plugin.ToDefinition("EchoClient", EchoClient),
-				plugin.ToDefinition("Foo", Foo),
+				plugin.ToDefinition("Int", Int),
+				plugin.ToDefinition("Int8", Int8),
+				plugin.ToDefinition("Int16", Int16),
+				plugin.ToDefinition("Int32", Int32),
+				plugin.ToDefinition("Int64", Int64),
+				plugin.ToDefinition("Uint", Uint),
+				plugin.ToDefinition("Uint8", Uint8),
+				plugin.ToDefinition("Uint16", Uint16),
+				plugin.ToDefinition("Uint32", Uint32),
+				plugin.ToDefinition("Uint64", Uint64),
+				plugin.ToDefinition("Float32", Float32),
+				plugin.ToDefinition("Float64", Float64),
+				plugin.ToDefinition("Uintptr", Uintptr),
+				plugin.ToDefinition("Bool", Bool),
+				plugin.ToDefinition("String", String),
+				plugin.ToDefinition("Bytes", Bytes),
+				plugin.ToDefinition("Map", Map),
+				plugin.ToDefinition("Slice", Slice),
+				plugin.ToDefinition("Array", Array),
+				plugin.ToDefinition("Struct", Struct),
+				plugin.ToDefinition("StructPtr", StructPtr),
+				plugin.ToDefinition("Any", Any),
 				plugin.ToDefinition("ServerAddr", ServerAddr),
 			}
 		},
@@ -94,7 +150,28 @@ func main() {
 			return []*plugin.Definition{
 				plugin.ToDefinition("Bar", Bar),
 				plugin.ToDefinition("EchoClient", EchoClient),
-				plugin.ToDefinition("Foo", Foo),
+				plugin.ToDefinition("Int", Int),
+				plugin.ToDefinition("Int8", Int8),
+				plugin.ToDefinition("Int16", Int16),
+				plugin.ToDefinition("Int32", Int32),
+				plugin.ToDefinition("Int64", Int64),
+				plugin.ToDefinition("Uint", Uint),
+				plugin.ToDefinition("Uint8", Uint8),
+				plugin.ToDefinition("Uint16", Uint16),
+				plugin.ToDefinition("Uint32", Uint32),
+				plugin.ToDefinition("Uint64", Uint64),
+				plugin.ToDefinition("Float32", Float32),
+				plugin.ToDefinition("Float64", Float64),
+				plugin.ToDefinition("Uintptr", Uintptr),
+				plugin.ToDefinition("Bool", Bool),
+				plugin.ToDefinition("String", String),
+				plugin.ToDefinition("Bytes", Bytes),
+				plugin.ToDefinition("Map", Map),
+				plugin.ToDefinition("Slice", Slice),
+				plugin.ToDefinition("Array", Array),
+				plugin.ToDefinition("Struct", Struct),
+				plugin.ToDefinition("StructPtr", StructPtr),
+				plugin.ToDefinition("Any", Any),
 				plugin.ToDefinition("ServerAddr", ServerAddr),
 			}
 		},

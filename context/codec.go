@@ -24,16 +24,21 @@ type SerializableSecrets struct {
 // It contains all the necessary context data that can be marshaled to JSON
 // for communication between host and WASM plugins.
 type SerializableContext struct {
-	ScenarioFilepath string                         `json:"scenarioFilepath,omitempty"`
-	PluginDir        string                         `json:"pluginDir,omitempty"`
-	Plugins          []map[string]any               `json:"plugins,omitempty"`
-	Vars             []any                          `json:"vars,omitempty"`
-	Secrets          *SerializableSecrets           `json:"secrets,omitempty"`
-	Steps            *Steps                         `json:"steps,omitempty"`
-	Request          any                            `json:"request,omitempty"`
-	Response         any                            `json:"response,omitempty"`
-	EnabledColor     bool                           `json:"enabledColor"`
-	Reporter         *reporter.SerializableReporter `json:"reporter,omitempty"`
+	ScenarioFilepath string               `json:"scenarioFilepath,omitempty"`
+	PluginDir        string               `json:"pluginDir,omitempty"`
+	Plugins          []map[string]any     `json:"plugins,omitempty"`
+	Vars             []any                `json:"vars,omitempty"`
+	Secrets          *SerializableSecrets `json:"secrets,omitempty"`
+	Steps            *Steps               `json:"steps,omitempty"`
+	Request          any                  `json:"request,omitempty"`
+	Response         any                  `json:"response,omitempty"`
+	EnabledColor     bool                 `json:"enabledColor"`
+	// ReporterID is used to look up the reference to the reporter from the ReporterMap.
+	// The value of ReporterID is determined in the reporter's ToSerializable method.
+	ReporterID string `json:"reporterId"`
+	// The reporter has parent and children fields, which are processed recursively.
+	// Since references can be circular, a ReporterMap is used to manage the references.
+	ReporterMap map[string]*reporter.SerializableReporter `json:"reporterMap"`
 }
 
 // ToSerializable converts Context to SerializableContext.
@@ -85,9 +90,11 @@ func (c *Context) ToSerializable() *SerializableContext {
 
 	// Convert reporter if it supports serialization
 	if r, ok := c.Reporter().(interface {
-		ToSerializable() *reporter.SerializableReporter
+		ToSerializable(map[string]*reporter.SerializableReporter) string
 	}); ok {
-		sc.Reporter = r.ToSerializable()
+		reporterMap := make(map[string]*reporter.SerializableReporter)
+		sc.ReporterID = r.ToSerializable(reporterMap)
+		sc.ReporterMap = reporterMap
 	}
 
 	return sc
@@ -95,12 +102,19 @@ func (c *Context) ToSerializable() *SerializableContext {
 
 // FromSerializable creates a new Context from SerializableContext.
 // This function reconstructs a context from serialized data received from WASM plugins.
-func FromSerializable(sc *SerializableContext) *Context {
-	ctx := New(nil)
+func FromSerializable(sc *SerializableContext) (*Context, error) {
+	return FromSerializableWithContext(New(nil), sc)
+}
 
+// FromSerializableWithContext applies the result of SerializableContext to the given Context.
+func FromSerializableWithContext(ctx *Context, sc *SerializableContext) (*Context, error) {
 	// Set reporter if it was serialized.
-	if sc.Reporter != nil {
-		ctx = ctx.WithReporter(reporter.FromSerializable(sc.Reporter))
+	if sc.ReporterID != "" {
+		r, err := reporter.FromSerializableWithReporter(ctx.reporter, sc.ReporterID, sc.ReporterMap)
+		if err != nil {
+			return nil, err
+		}
+		ctx.reporter = r
 	}
 
 	// Set scenario filepath.
@@ -128,7 +142,9 @@ func FromSerializable(sc *SerializableContext) *Context {
 
 	// Set vars
 	if sc.Vars != nil {
-		ctx = ctx.WithVars(sc.Vars)
+		for _, v := range sc.Vars {
+			ctx = ctx.WithVars(v)
+		}
 	}
 
 	// Set secrets
@@ -163,5 +179,5 @@ func FromSerializable(sc *SerializableContext) *Context {
 	// Set enabled color
 	ctx = ctx.WithEnabledColor(sc.EnabledColor)
 
-	return ctx
+	return ctx, nil
 }

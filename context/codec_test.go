@@ -32,7 +32,10 @@ func TestContextSerializationRoundtrip(t *testing.T) {
 	serialized := originalContext.ToSerializable()
 
 	// Deserialize back to context
-	restored := FromSerializable(serialized)
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize context: %v", err)
+	}
 
 	// Verify properties are preserved through public API
 	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
@@ -106,7 +109,10 @@ func TestContextSerializationBasic(t *testing.T) {
 
 	// Serialize and deserialize
 	serialized := originalContext.ToSerializable()
-	restored := FromSerializable(serialized)
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize context: %v", err)
+	}
 
 	// Verify basic properties are preserved
 	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
@@ -157,12 +163,18 @@ func TestContextWithReporterSerialization(t *testing.T) {
 	serialized := originalContext.ToSerializable()
 
 	// Verify reporter was serialized
-	if serialized.Reporter == nil {
-		t.Error("Reporter should be serialized when it supports ToSerializable")
+	if serialized.ReporterID == "" {
+		t.Error("ReporterID should be set when reporter supports ToSerializable")
+	}
+	if serialized.ReporterMap == nil {
+		t.Error("ReporterMap should be set when reporter supports ToSerializable")
 	}
 
 	// Deserialize
-	restored := FromSerializable(serialized)
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize context: %v", err)
+	}
 
 	// Verify context properties
 	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
@@ -195,7 +207,10 @@ func TestContextMultipleVarsAndPlugins(t *testing.T) {
 
 	// Serialize and deserialize
 	serialized := originalContext.ToSerializable()
-	restored := FromSerializable(serialized)
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize context: %v", err)
+	}
 
 	// Verify basic properties
 	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
@@ -298,7 +313,10 @@ func TestContextWithSecretsSerialization(t *testing.T) {
 	}
 
 	// Test deserialization (basic check only due to current implementation limitation)
-	restored := FromSerializable(serialized)
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize context: %v", err)
+	}
 
 	// Verify context properties are preserved
 	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
@@ -334,7 +352,10 @@ func TestContextWithEmptySecretsSerialization(t *testing.T) {
 	}
 
 	// Deserialize back to context
-	restored := FromSerializable(serialized)
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize context: %v", err)
+	}
 
 	// Verify secrets remain nil
 	restoredSecrets := restored.Secrets()
@@ -428,7 +449,10 @@ func TestContextSecretsComplexDataSerialization(t *testing.T) {
 	}
 
 	// Test deserialization (basic check only due to current implementation limitation)
-	restored := FromSerializable(serialized)
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize context: %v", err)
+	}
 
 	// Verify context properties are preserved
 	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
@@ -444,4 +468,73 @@ func TestContextSecretsComplexDataSerialization(t *testing.T) {
 
 	// Note: Due to current implementation, deserialized secrets are wrapped in another layer
 	// This test focuses on serialization correctness and basic deserialization functionality
+}
+
+func TestFromSerializableWithContextPluginDirError(t *testing.T) {
+	// Test FromSerializableWithContext with empty plugin directory path
+	originalReporter := reporter.FromT(t)
+	originalContext := New(originalReporter)
+
+	// Create serialized context with empty plugin directory
+	serialized := &SerializableContext{
+		ScenarioFilepath: "/test/scenario.yaml",
+		PluginDir:        "", // Empty string that will be handled gracefully
+		Vars:             []any{"test_var"},
+	}
+
+	// Test the function
+	restored, err := FromSerializableWithContext(originalContext, serialized)
+	if err != nil {
+		t.Fatalf("FromSerializableWithContext should handle empty plugin dir gracefully: %v", err)
+	}
+
+	// Verify plugin dir was set even if empty
+	if restored == nil {
+		t.Error("FromSerializableWithContext should not return nil")
+	}
+}
+
+func TestContextSerializationWithComplexData(t *testing.T) {
+	// Test serialization with complex nested data structures
+	originalReporter := reporter.FromT(t)
+	originalContext := New(originalReporter)
+
+	// Create complex data structures
+	complexPlugin := map[string]any{
+		"name": "complex-plugin",
+		"config": map[string]any{
+			"nested": map[string]any{
+				"deep": map[string]any{
+					"value": 42,
+					"array": []int{1, 2, 3},
+				},
+			},
+		},
+	}
+
+	// Set complex data in context
+	originalContext = originalContext.WithScenarioFilepath("/complex/test.yaml")
+	originalContext = originalContext.WithPluginDir("/complex/plugins")
+	originalContext = originalContext.WithPlugins(complexPlugin)
+	originalContext = originalContext.WithEnabledColor(true)
+
+	// Serialize the context
+	serialized := originalContext.ToSerializable()
+
+	// Verify complex data was serialized correctly
+	if !reflect.DeepEqual(serialized.Plugins[0], complexPlugin) {
+		t.Errorf("Complex plugin data mismatch during serialization")
+	}
+
+	// Deserialize and verify complex data is preserved
+	restored, err := FromSerializable(serialized)
+	if err != nil {
+		t.Fatalf("Failed to deserialize complex context: %v", err)
+	}
+
+	// Verify basic properties
+	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
+		t.Errorf("ScenarioFilepath mismatch: expected %s, got %s",
+			originalContext.ScenarioFilepath(), restored.ScenarioFilepath())
+	}
 }
