@@ -38,9 +38,9 @@ jobs:
     - name: Build
       run: make build
     - name: Run examples
-      run: make test/examples
-      env:
-        SCENARIGO_COLOR: true
+      run: |
+        env
+        make test/examples
     - uses: actions/upload-artifact@v4
       if: matrix.os == 'ubuntu-latest' && startsWith(matrix.go-version, 'stable')
       with:
