@@ -37,9 +37,10 @@ jobs:
           go-${{ steps.setup-go.outputs.go-version }}-
     - name: Build
       run: make build
-    - name: Run examples
+    - name: Run examples debug
       run: |
         echo "run with script"
+
         script -q -e -c "bash --noprofile --norc" <<'EOF'
         env
         make test/examples
