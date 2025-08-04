@@ -39,9 +39,9 @@ jobs:
       run: make build
     - name: Run examples
       run: |
+        echo "run with script"
         script -q -e -c "bash --noprofile --norc" <<'EOF'
         env
-        echo 'exec in script command'
         make test/examples
         EOF
     - uses: actions/upload-artifact@v4
