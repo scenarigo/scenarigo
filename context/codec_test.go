@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/color"
 	"github.com/scenarigo/scenarigo/reporter"
 )
 
@@ -22,7 +23,11 @@ func TestContextSerializationRoundtrip(t *testing.T) {
 	originalContext = originalContext.WithPlugins(map[string]any{"plugin2": map[string]int{"port": 8080}})
 	originalContext = originalContext.WithRequest(map[string]any{"method": "GET", "url": "http://example.com"})
 	originalContext = originalContext.WithResponse(map[string]any{"status": 200, "body": "OK"})
-	originalContext = originalContext.WithEnabledColor(true)
+
+	// Set ColorConfig with enabled state
+	colorConfig := color.New()
+	colorConfig.SetEnabled(true)
+	originalContext = originalContext.WithColorConfig(colorConfig)
 
 	// Create Steps object for testing
 	steps := &Steps{}
@@ -45,9 +50,12 @@ func TestContextSerializationRoundtrip(t *testing.T) {
 			originalContext.PluginDir(), restored.PluginDir())
 	}
 
-	if restored.EnabledColor() != originalContext.EnabledColor() {
-		t.Errorf("EnabledColor mismatch: expected %t, got %t",
-			originalContext.EnabledColor(), restored.EnabledColor())
+	// Verify ColorConfig enabled state is preserved
+	if restored.ColorConfig() == nil {
+		t.Error("ColorConfig should be restored")
+	} else if restored.ColorConfig().IsEnabled() != originalContext.ColorConfig().IsEnabled() {
+		t.Errorf("ColorConfig enabled state mismatch: expected %t, got %t",
+			originalContext.ColorConfig().IsEnabled(), restored.ColorConfig().IsEnabled())
 	}
 
 	// Verify plugins (note: may be nested due to multiple WithPlugins calls)
@@ -102,7 +110,11 @@ func TestContextSerializationBasic(t *testing.T) {
 	originalContext = originalContext.WithVars("basicVar")
 	originalContext = originalContext.WithRequest(map[string]any{"method": "POST"})
 	originalContext = originalContext.WithResponse(map[string]any{"status": 200})
-	originalContext = originalContext.WithEnabledColor(false)
+
+	// Set ColorConfig with disabled state
+	colorConfig := color.New()
+	colorConfig.SetEnabled(false)
+	originalContext = originalContext.WithColorConfig(colorConfig)
 
 	// Serialize and deserialize
 	serialized := originalContext.ToSerializable()
@@ -114,9 +126,12 @@ func TestContextSerializationBasic(t *testing.T) {
 			originalContext.ScenarioFilepath(), restored.ScenarioFilepath())
 	}
 
-	if restored.EnabledColor() != originalContext.EnabledColor() {
-		t.Errorf("EnabledColor mismatch: expected %t, got %t",
-			originalContext.EnabledColor(), restored.EnabledColor())
+	// Verify ColorConfig disabled state is preserved
+	if restored.ColorConfig() == nil {
+		t.Error("ColorConfig should be restored")
+	} else if restored.ColorConfig().IsEnabled() != originalContext.ColorConfig().IsEnabled() {
+		t.Errorf("ColorConfig enabled state mismatch: expected %t, got %t",
+			originalContext.ColorConfig().IsEnabled(), restored.ColorConfig().IsEnabled())
 	}
 
 	if !reflect.DeepEqual(restored.Request(), originalContext.Request()) {

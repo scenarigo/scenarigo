@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/printer"
 	"github.com/hashicorp/go-multierror"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/scenarigo/scenarigo/color"
 	"github.com/zoncoen/query-go"
 )
 
@@ -153,7 +153,7 @@ func WithQuery(err error, q *query.Query) error {
 
 // WithNode set ast.Node to error if errors instance is PathError or MultiPathError.
 func WithNode(err error, node ast.Node) error {
-	return WithNodeAndColored(err, node, !color.NoColor)
+	return WithNodeAndColored(err, node, color.New().IsEnabled())
 }
 
 // WithNodeAndColored set ast.Node and colored to error if errors instance is PathError or MultiPathError.
