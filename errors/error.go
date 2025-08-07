@@ -236,6 +236,11 @@ func (e *PathError) yml() string {
 	return p.PrintErrorToken(node.GetToken(), e.EnabledColor)
 }
 
+func (e *PathError) err() string {
+	var p printer.Printer
+	return p.PrintErrorMessage(e.Err.Error(), e.EnabledColor)
+}
+
 func (e *PathError) Error() string {
 	yml := e.yml()
 	if yml != "" {
@@ -251,12 +256,12 @@ func (e *PathError) Error() string {
 		if !strings.HasSuffix(yml, "\n") {
 			yml += "\n"
 		}
-		return fmt.Sprintf("%s\n%s", e.Err.Error(), yml)
+		return fmt.Sprintf("%s\n%s", e.err(), yml)
 	}
 	if e.Path != "" {
-		return fmt.Sprintf("%s: %s", e.Path, e.Err.Error())
+		return fmt.Sprintf("%s: %s", e.Path, e.err())
 	}
-	return e.Err.Error()
+	return e.err()
 }
 
 // MultiPathError represents multiple error with path.

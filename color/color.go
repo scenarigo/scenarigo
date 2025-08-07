@@ -1,10 +1,14 @@
 package color
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/fatih/color"
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/lexer"
+	"github.com/goccy/go-yaml/printer"
 )
 
 const (
@@ -91,3 +95,65 @@ func (c *Config) Yellow() *Color { return c.yellow }
 func (c *Config) Blue() *Color   { return c.blue }
 func (c *Config) Cyan() *Color   { return c.cyan }
 func (c *Config) White() *Color  { return c.white }
+
+// MarshalYAML marshals the given value to YAML with optional color formatting.
+func (c *Config) MarshalYAML(v any) ([]byte, error) {
+	b, err := yaml.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	if !c.IsEnabled() {
+		return b, nil
+	}
+	tokens := lexer.Tokenize(string(b))
+	var p printer.Printer
+	p.Bool = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiMagenta),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Number = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiMagenta),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.MapKey = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiCyan),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Anchor = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiYellow),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Alias = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiYellow),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.String = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiGreen),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Comment = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiBlack),
+			Suffix: format(color.Reset),
+		}
+	}
+	return []byte(p.PrintTokens(tokens)), nil
+}
+
+const escape = "\x1b"
+
+func format(attr color.Attribute) string {
+	return fmt.Sprintf("%s[%dm", escape, attr)
+}

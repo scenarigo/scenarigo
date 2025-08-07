@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/goccy/go-yaml"
 	"github.com/mattn/go-encoding"
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
@@ -109,8 +108,8 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 		Body:   reqBody,
 	}
 	ctx = ctx.WithRequest((*RequestExtractor)(reqDump))
-	if b, err := yaml.Marshal(reqDump); err == nil {
-		ctx.Reporter().Logf("request:\n%s", r.addIndent(string(b), indentNum))
+	if b, err := ctx.ColorConfig().MarshalYAML(map[string]*Request{"request": reqDump}); err == nil {
+		ctx.Reporter().Log(r.addIndent(string(b), indentNum))
 	} else {
 		ctx.Reporter().Logf("failed to dump request:\n%s", err)
 	}
@@ -141,8 +140,8 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 		rvalue.Body = respBody
 	}
 	ctx = ctx.WithResponse((*ResponseExtractor)(&rvalue))
-	if b, err := yaml.Marshal(rvalue); err == nil {
-		ctx.Reporter().Logf("response:\n%s", r.addIndent(string(b), indentNum))
+	if b, err := ctx.ColorConfig().MarshalYAML(map[string]*response{"response": &rvalue}); err == nil {
+		ctx.Reporter().Log(r.addIndent(string(b), indentNum))
 	} else {
 		ctx.Reporter().Logf("failed to dump response:\n%s", err)
 	}
