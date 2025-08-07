@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"golang.org/x/mod/module"
@@ -140,7 +139,7 @@ type ExecutionConfig struct {
 }
 
 // LoadConfig loads a configuration from path.
-func LoadConfig(path string) (*Config, error) {
+func LoadConfig(path string, opts ...LoadOption) (*Config, error) {
 	r, err := os.OpenFile(path, os.O_RDONLY, 0o400)
 	if err != nil {
 		return nil, err
@@ -152,17 +151,24 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to get root directory: %w", err)
 	}
 
-	return LoadConfigFromReader(r, root)
+	return LoadConfigFromReader(r, root, opts...)
 }
 
 // LoadConfigFromReader loads a configuration from r.
-func LoadConfigFromReader(r io.Reader, root string) (*Config, error) {
+func LoadConfigFromReader(r io.Reader, root string, opts ...LoadOption) (*Config, error) {
 	b, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
 
-	docs, err := readDocsWithSchemaVersionFromBytes(b)
+	var opt loadOption
+	for _, o := range opts {
+		if err := o(&opt); err != nil {
+			return nil, err
+		}
+	}
+
+	docs, err := readDocsWithSchemaVersionFromBytes(b, &opt)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +192,7 @@ func LoadConfigFromReader(r io.Reader, root string) (*Config, error) {
 			cfg.Comments = cm
 		}
 		cfg.Node = d.doc.Body
-		if err := validate(&cfg); err != nil {
+		if err := validate(&cfg, &opt); err != nil {
 			return nil, err
 		}
 		return &cfg, nil
@@ -196,20 +202,20 @@ func LoadConfigFromReader(r io.Reader, root string) (*Config, error) {
 		return nil, errors.WithNodeAndColored(
 			errors.ErrorPathf("schemaVersion", "unknown version %q", d.schemaVersion),
 			d.doc.Body,
-			!color.NoColor,
+			opt.colorConfig.IsEnabled(),
 		)
 	}
 }
 
-func validate(c *Config) error {
+func validate(c *Config, opt *loadOption) error {
 	var errs []error
 	for i, p := range c.Scenarios {
-		if err := stat(c, p, (&yaml.PathBuilder{}).Root().Child("scenarios").Index(uint(i)).Build()); err != nil {
+		if err := stat(c, p, (&yaml.PathBuilder{}).Root().Child("scenarios").Index(uint(i)).Build(), opt); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	for _, item := range c.Plugins.ToSlice() {
-		if err := stat(c, item.Value.Src, (&yaml.PathBuilder{}).Root().Child("plugins").Child(item.Key).Child("src").Build()); err != nil {
+		if err := stat(c, item.Value.Src, (&yaml.PathBuilder{}).Root().Child("plugins").Child(item.Key).Child("src").Build(), opt); err != nil {
 			var neErr notExist
 			if errors.As(err, &neErr) {
 				m := item.Value.Src
@@ -231,14 +237,14 @@ func validate(c *Config) error {
 
 type notExist error
 
-func stat(c *Config, p string, path *yaml.Path) error {
+func stat(c *Config, p string, path *yaml.Path, opt *loadOption) error {
 	if _, err := os.Stat(filepathutil.From(c.Root, p)); err != nil {
 		if os.IsNotExist(err) {
 			err = notExist(errors.Errorf("%s: no such file or directory", p))
 		}
 		return errors.WithNodeAndColored(
 			errors.WithPath(err, strings.TrimPrefix(path.String(), "$.")),
-			c.Node, !color.NoColor,
+			c.Node, opt.colorConfig.IsEnabled(),
 		)
 	}
 	return nil

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml/ast"
+	"github.com/scenarigo/scenarigo/color"
 	"github.com/scenarigo/scenarigo/reporter"
 )
 
@@ -20,7 +21,7 @@ type (
 	keyRequest          struct{}
 	keyResponse         struct{}
 	keyYAMLNode         struct{}
-	keyEnabledColor     struct{}
+	keyColorConfig      struct{}
 )
 
 // Context represents a scenarigo context.
@@ -262,22 +263,22 @@ func (c *Context) Node() ast.Node {
 	return node
 }
 
-// WithEnabledColor returns a copy of c with enabledColor flag.
-func (c *Context) WithEnabledColor(enabledColor bool) *Context {
+// WithColorConfig returns a copy of c with color configuration.
+func (c *Context) WithColorConfig(colorConfig *color.Config) *Context {
 	return newContext(
-		context.WithValue(c.ctx, keyEnabledColor{}, enabledColor),
+		context.WithValue(c.ctx, keyColorConfig{}, colorConfig),
 		c.reqCtx,
 		c.reporter,
 	)
 }
 
-// EnabledColor returns whether color output is enabled.
-func (c *Context) EnabledColor() bool {
-	enabledColor, ok := c.ctx.Value(keyEnabledColor{}).(bool)
+// ColorConfig returns the color configuration if available.
+func (c *Context) ColorConfig() *color.Config {
+	colorConfig, ok := c.ctx.Value(keyColorConfig{}).(*color.Config)
 	if ok {
-		return enabledColor
+		return colorConfig
 	}
-	return false
+	return nil
 }
 
 // Run runs f as a subtest of c called name.

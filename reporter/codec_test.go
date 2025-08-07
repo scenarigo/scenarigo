@@ -144,8 +144,11 @@ func TestTestContextSerialization(t *testing.T) {
 		t.Errorf("Verbose mismatch: expected %t, got %t", originalContext.verbose, restored.verbose)
 	}
 
-	if restored.noColor != originalContext.noColor {
-		t.Errorf("NoColor mismatch: expected %t, got %t", originalContext.noColor, restored.noColor)
+	// Compare ColorConfig enabled state (colorConfig is always non-nil now)
+	originalEnabled := originalContext.colorConfig.IsEnabled()
+	restoredEnabled := restored.colorConfig.IsEnabled()
+	if restoredEnabled != originalEnabled {
+		t.Errorf("ColorConfig enabled state mismatch: expected %t, got %t", originalEnabled, restoredEnabled)
 	}
 
 	if restored.enabledTestSummary != originalContext.enabledTestSummary {

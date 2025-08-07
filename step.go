@@ -25,7 +25,7 @@ func runStep(ctx *context.Context, scenario *schema.Scenario, s *schema.Step, st
 						"invalid vars",
 					),
 					ctx.Node(),
-					ctx.EnabledColor(),
+					ctx.ColorConfig().IsEnabled(),
 				),
 			)
 		}
@@ -39,7 +39,7 @@ func runStep(ctx *context.Context, scenario *schema.Scenario, s *schema.Step, st
 				errors.WithNodeAndColored(
 					errors.WithPath(err, fmt.Sprintf("steps[%d].secrets", stepIdx)),
 					ctx.Node(),
-					ctx.EnabledColor(),
+					ctx.ColorConfig().IsEnabled(),
 				),
 			)
 		}
@@ -49,7 +49,7 @@ func runStep(ctx *context.Context, scenario *schema.Scenario, s *schema.Step, st
 	if s.Include != "" {
 		baseDir := filepath.Dir(scenario.Filepath())
 		include := filepath.Join(baseDir, s.Include)
-		scenarios, err := schema.LoadScenarios(include)
+		scenarios, err := schema.LoadScenarios(include, schema.WithColorConfig(ctx.ColorConfig()))
 		if err != nil {
 			ctx.Reporter().Fatalf(`failed to include "%s" as step: %s`, s.Include, err)
 		}
@@ -83,7 +83,7 @@ func runStep(ctx *context.Context, scenario *schema.Scenario, s *schema.Step, st
 						`failed to reference "%s" as step`, s.Ref,
 					),
 					ctx.Node(),
-					ctx.EnabledColor(),
+					ctx.ColorConfig().IsEnabled(),
 				),
 			)
 		}
@@ -96,7 +96,7 @@ func runStep(ctx *context.Context, scenario *schema.Scenario, s *schema.Step, st
 						`failed to reference "%s" as step: not implement plugin.Step interface`, s.Ref,
 					),
 					ctx.Node(),
-					ctx.EnabledColor(),
+					ctx.ColorConfig().IsEnabled(),
 				),
 			)
 		}
@@ -119,7 +119,7 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 			errors.WithNodeAndColored(
 				errors.WithPath(err, fmt.Sprintf("steps[%d].request", stepIdx)),
 				ctx.Node(),
-				ctx.EnabledColor(),
+				ctx.ColorConfig().IsEnabled(),
 			),
 		)
 	}
@@ -129,7 +129,7 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 			errors.WithNodeAndColored(
 				errors.WithPath(err, fmt.Sprintf("steps[%d].expect", stepIdx)),
 				ctx.Node(),
-				ctx.EnabledColor(),
+				ctx.ColorConfig().IsEnabled(),
 			),
 		)
 	}
@@ -137,7 +137,7 @@ func invokeAndAssert(ctx *context.Context, s *schema.Step, stepIdx int) *context
 		err = errors.WithNodeAndColored(
 			errors.WithPath(err, fmt.Sprintf("steps[%d].expect", stepIdx)),
 			ctx.Node(),
-			ctx.EnabledColor(),
+			ctx.ColorConfig().IsEnabled(),
 		)
 		var assertErr *assert.Error
 		if errors.As(err, &assertErr) {

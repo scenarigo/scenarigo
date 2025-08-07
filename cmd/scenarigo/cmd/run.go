@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/fatih/color"
 	"github.com/pkg/errors"
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo/color"
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/spf13/cobra"
@@ -64,13 +64,13 @@ func run(cmd *cobra.Command, args []string) error {
 		reporterOpts = append(reporterOpts, reporter.WithVerboseLog())
 	}
 
-	noColor := color.NoColor
+	// Create color config and determine final setting based on schema config
+	colorConfig := color.New()
 	if cfg != nil && cfg.Output.Colored != nil {
-		noColor = !*cfg.Output.Colored
+		colorConfig.SetEnabled(*cfg.Output.Colored)
 	}
-	if noColor {
-		reporterOpts = append(reporterOpts, reporter.WithNoColor())
-	}
+
+	reporterOpts = append(reporterOpts, reporter.WithColorConfig(colorConfig))
 
 	if cfg != nil && cfg.Output.Summary {
 		reporterOpts = append(reporterOpts, reporter.WithTestSummary())
@@ -91,7 +91,8 @@ func run(cmd *cobra.Command, args []string) error {
 	var reportErr error
 	success := reporter.Run(
 		func(rptr reporter.Reporter) {
-			r.Run(context.New(rptr))
+			ctx := context.New(rptr)
+			r.Run(ctx)
 			reportErr = r.CreateTestReport(rptr)
 		},
 		reporterOpts...,

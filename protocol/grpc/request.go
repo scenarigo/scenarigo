@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 
 	"dario.cat/mergo"
 	"google.golang.org/grpc"
@@ -280,23 +279,6 @@ func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any,
 	return nil, false
 }
 
-const (
-	indentNum = 2
-)
-
-func (r *Request) addIndent(s string, indentNum int) string {
-	indent := strings.Repeat(" ", indentNum)
-	lines := []string{}
-	for _, line := range strings.Split(s, "\n") {
-		if line == "" {
-			lines = append(lines, line)
-		} else {
-			lines = append(lines, fmt.Sprintf("%s%s", indent, line))
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
 // Invoke implements protocol.Invoker interface.
 func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	opts := &RequestOptions{}
@@ -366,8 +348,8 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 		resp.Trailer = yamlutil.NewMDMarshaler(trailer)
 	}
 	ctx = ctx.WithResponse((*ResponseExtractor)(resp))
-	if b, err := yaml.Marshal(resp); err == nil {
-		ctx.Reporter().Logf("response:\n%s", r.addIndent(string(b), indentNum))
+	if b, err := ctx.ColorConfig().MarshalYAML(map[string]*response{"response": resp}); err == nil {
+		ctx.Reporter().Log(string(b))
 	} else {
 		ctx.Reporter().Logf("failed to dump response:\n%s", err)
 	}
@@ -429,8 +411,8 @@ func (r *Request) dumpRequest(ctx *context.Context, reqMsg proto.Message) *conte
 		dumpReq.Metadata = yamlutil.NewMDMarshaler(reqMD)
 	}
 	ctx = ctx.WithRequest((*RequestExtractor)(dumpReq))
-	if b, err := yaml.Marshal(dumpReq); err == nil {
-		ctx.Reporter().Logf("request:\n%s", r.addIndent(string(b), indentNum))
+	if b, err := ctx.ColorConfig().MarshalYAML(map[string]*request{"request": dumpReq}); err == nil {
+		ctx.Reporter().Log(string(b))
 	} else {
 		ctx.Reporter().Logf("failed to dump request:\n%s", err)
 	}
