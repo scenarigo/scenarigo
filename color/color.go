@@ -1,7 +1,6 @@
 package color
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 
@@ -44,14 +43,12 @@ func New() *Config {
 	c.colors = []*Color{c.red, c.hiRed, c.green, c.yellow, c.blue, c.cyan, c.white}
 
 	// Initialize from SCENARIGO_COLOR environment variable
-	fmt.Println("check SCENARIGO_COLOR", os.Getenv(envScenarigoColor))
 	if envColor := os.Getenv(envScenarigoColor); envColor != "" {
 		if result, err := strconv.ParseBool(envColor); err == nil {
 			c.enabled = &result
 			c.updateColorInstances()
 		}
 	}
-	fmt.Println("enabled color", c.enabled)
 	return c
 }
 
