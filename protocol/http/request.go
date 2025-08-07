@@ -76,19 +76,6 @@ const (
 	indentNum = 2
 )
 
-func (r *Request) addIndent(s string, indentNum int) string {
-	indent := strings.Repeat(" ", indentNum)
-	lines := []string{}
-	for _, line := range strings.Split(s, "\n") {
-		if line == "" {
-			lines = append(lines, line)
-		} else {
-			lines = append(lines, fmt.Sprintf("%s%s", indent, line))
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
 // Invoke implements protocol.Invoker interface.
 func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	client, err := r.buildClient(ctx)
@@ -109,7 +96,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	}
 	ctx = ctx.WithRequest((*RequestExtractor)(reqDump))
 	if b, err := ctx.ColorConfig().MarshalYAML(map[string]*Request{"request": reqDump}); err == nil {
-		ctx.Reporter().Log(r.addIndent(string(b), indentNum))
+		ctx.Reporter().Log(string(b))
 	} else {
 		ctx.Reporter().Logf("failed to dump request:\n%s", err)
 	}
@@ -141,7 +128,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	}
 	ctx = ctx.WithResponse((*ResponseExtractor)(&rvalue))
 	if b, err := ctx.ColorConfig().MarshalYAML(map[string]*response{"response": &rvalue}); err == nil {
-		ctx.Reporter().Log(r.addIndent(string(b), indentNum))
+		ctx.Reporter().Log(string(b))
 	} else {
 		ctx.Reporter().Logf("failed to dump response:\n%s", err)
 	}
