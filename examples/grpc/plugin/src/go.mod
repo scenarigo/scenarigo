@@ -2,12 +2,12 @@ module github.com/scenarigo/scenarigo/examples/grpc/plugin/src
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.24.6
 
 require (
 	github.com/scenarigo/scenarigo v0.22.1
 	google.golang.org/grpc v1.73.0
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.7
 )
 
 require github.com/stretchr/testify v1.9.0 // indirect
