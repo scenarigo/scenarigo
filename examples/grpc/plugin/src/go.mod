@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/grpc/plugin/src
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.24.6
 
 require (
 	github.com/scenarigo/scenarigo v0.22.1
@@ -27,7 +27,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
-	golang.org/x/mod v0.26.0 // indirect
+	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
