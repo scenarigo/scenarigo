@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/secrets/plugin/src
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.24.6
 
 require github.com/stretchr/testify v1.9.0 // indirect
 
