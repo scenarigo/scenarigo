@@ -7,7 +7,7 @@ replace github.com/scenarigo/scenarigo => ../../../..
 require (
 	github.com/goccy/wasi-go-net v0.3.0
 	github.com/scenarigo/scenarigo v0.0.0-00010101000000-000000000000
-	google.golang.org/grpc v1.73.0
+	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.6
 )
 
