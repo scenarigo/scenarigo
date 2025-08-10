@@ -23,7 +23,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.3
+    - uses: actions/cache/restore@v4.2.4
       id: go-cache
       with:
         path: |
@@ -61,7 +61,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.3
+    - uses: actions/cache/restore@v4.2.4
       id: go-cache
       with:
         path: |
@@ -97,7 +97,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@v4.2.3
+    - uses: actions/cache/restore@v4.2.4
       id: go-cache
       with:
         path: |
@@ -106,7 +106,7 @@ jobs:
         key: go-ubuntu-latest-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
         restore-keys: |
           go-${{ steps.setup-go.outputs.go-version }}-
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         path: ./go/src/github.com/${{ github.repository }}/dist/
     - name: Move artifacts
