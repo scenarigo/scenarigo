@@ -13,7 +13,7 @@ jobs:
       go-version: ${{ steps.matrix.outputs.versions }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
     - name: Install Go
@@ -51,7 +51,7 @@ jobs:
         go-version: ${{ fromJson(needs.matrix.outputs.go-version) }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
     - name: Install Go
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
         path: go/src/github.com/${{ github.repository }}

@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Install Go
       uses: actions/setup-go@v5
       with:
@@ -49,7 +49,7 @@ jobs:
         go install golang.org/dl/gotip@latest
         gotip download
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Build
       env:
         GO: gotip
