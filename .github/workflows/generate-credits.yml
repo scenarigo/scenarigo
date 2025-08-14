@@ -17,7 +17,7 @@ jobs:
         app_id: ${{ secrets.WRITE_APP_ID }}
         private_key: ${{ secrets.WRITE_PRIVATE_KEY }}
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ github.event.pull_request.head.ref }}
         token: ${{ steps.generate_token.outputs.token }}

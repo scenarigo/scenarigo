@@ -16,7 +16,7 @@ jobs:
     - uses: suzuki-shunsuke/get-pr-action@v0.1.0
       id: pr
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{steps.pr.outputs.merge_commit_sha}}
     - name: Install Go
@@ -58,7 +58,7 @@ jobs:
         app_id: ${{ secrets.WRITE_APP_ID }}
         private_key: ${{ secrets.WRITE_PRIVATE_KEY }}
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ref: ${{ github.event.pull_request.head.ref }}
         token: ${{ steps.generate_token.outputs.token }}
