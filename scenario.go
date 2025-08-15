@@ -32,7 +32,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 				errors.WithNodeAndColored(
 					errors.WithPath(err, "vars"),
 					ctx.Node(),
-					ctx.EnabledColor(),
+					ctx.ColorConfig().IsEnabled(),
 				),
 			)
 		}
@@ -46,7 +46,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 				errors.WithNodeAndColored(
 					errors.WithPath(err, "secrets"),
 					ctx.Node(),
-					ctx.EnabledColor(),
+					ctx.ColorConfig().IsEnabled(),
 				),
 			)
 		}
@@ -80,7 +80,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 							fmt.Sprintf("steps[%d].if", idx),
 						),
 						stepCtx.Node(),
-						stepCtx.EnabledColor(),
+						stepCtx.ColorConfig().IsEnabled(),
 					),
 				)
 			} else if !run {
@@ -111,7 +111,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 								"invalid bind",
 							),
 							stepCtx.Node(),
-							stepCtx.EnabledColor(),
+							stepCtx.ColorConfig().IsEnabled(),
 						),
 					)
 				}
@@ -128,7 +128,7 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 								"invalid bind",
 							),
 							stepCtx.Node(),
-							stepCtx.EnabledColor(),
+							stepCtx.ColorConfig().IsEnabled(),
 						),
 					)
 				}
@@ -170,7 +170,7 @@ func openPlugins(ctx *context.Context, s *schema.Scenario) (*context.Context, se
 				errors.WithNodeAndColored(
 					errors.WithPath(err, fmt.Sprintf("plugins.'%s'", name)),
 					ctx.Node(),
-					ctx.EnabledColor(),
+					ctx.ColorConfig().IsEnabled(),
 				),
 			)
 		}
@@ -223,7 +223,7 @@ func runStepWithTimeout(ctx *context.Context, scenario *schema.Scenario, step *s
 					"timeout exceeded",
 				),
 				ctx.Node(),
-				ctx.EnabledColor(),
+				ctx.ColorConfig().IsEnabled(),
 			),
 		)
 		// wait for the result context for a little

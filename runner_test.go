@@ -39,15 +39,15 @@ func TestRunnerWithScenarios(t *testing.T) {
 }
 
 func TestRunnerWithOptionsFromEnv(t *testing.T) {
-	t.Setenv(envScenarigoColor, "true")
+	t.Setenv("SCENARIGO_COLOR", "true")
 	runner, err := NewRunner(
 		WithOptionsFromEnv(true),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !runner.enabledColor {
-		t.Fatalf("failed to set enabledColor from env")
+	if !runner.colorConfig.IsEnabled() {
+		t.Fatalf("failed to set colorConfig from env")
 	}
 }
 
@@ -452,8 +452,8 @@ func TestWithConfig(t *testing.T) {
 			},
 			expect: &Runner{
 				scenarioFiles: []string{},
-				enabledColor:  colored,
 				rootDir:       wd,
+				// colorConfig will be set but we need to check it separately
 			},
 		},
 		"output report": {
@@ -493,13 +493,22 @@ func TestWithConfig(t *testing.T) {
 				cmp.AllowUnexported(Runner{}, schema.OrderedMap[string, schema.PluginConfig]{}, schema.ProtocolOptions{}),
 				cmp.FilterPath(func(p cmp.Path) bool {
 					switch p.String() {
-					case "pluginSetup", "pluginTeardown":
+					case "pluginSetup", "pluginTeardown", "colorConfig":
 						return true
 					}
 					return false
 				}, cmp.Ignore()),
 			); diff != "" {
 				t.Errorf("differs (-want +got):\n%s", diff)
+			}
+
+			// Check colorConfig separately if test involves color configuration
+			if test.config != nil && test.config.Output.Colored != nil {
+				expectedColorEnabled := *test.config.Output.Colored
+				actualColorEnabled := got.colorConfig.IsEnabled()
+				if expectedColorEnabled != actualColorEnabled {
+					t.Errorf("colorConfig.IsEnabled() mismatch: expected %t, got %t", expectedColorEnabled, actualColorEnabled)
+				}
 			}
 		})
 	}
