@@ -27,13 +27,6 @@ func TestContext(t *testing.T) {
 			t.Fatal("failed to get node")
 		}
 	})
-	t.Run("enabledColor", func(t *testing.T) {
-		ctx := context.FromT(t)
-		ctx = ctx.WithEnabledColor(true)
-		if !ctx.EnabledColor() {
-			t.Fatal("failed to get enabledColor")
-		}
-	})
 }
 
 func TestRunWithRetry(t *testing.T) {

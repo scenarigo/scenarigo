@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
@@ -31,10 +30,10 @@ func readDocsWithSchemaVersion(path string) ([]*docWithSchemaVersion, error) {
 	if err != nil {
 		return nil, err
 	}
-	return readDocsWithSchemaVersionFromBytes(b)
+	return readDocsWithSchemaVersionFromBytes(b, nil)
 }
 
-func readDocsWithSchemaVersionFromBytes(b []byte) ([]*docWithSchemaVersion, error) {
+func readDocsWithSchemaVersionFromBytes(b []byte, opt *loadOption) ([]*docWithSchemaVersion, error) {
 	f, err := parser.ParseBytes(b, 1)
 	if err != nil {
 		return nil, err
@@ -54,7 +53,7 @@ func readDocsWithSchemaVersionFromBytes(b []byte) ([]*docWithSchemaVersion, erro
 			return nil, errors.WithNodeAndColored(
 				errors.WithPath(err, "schemaVersion"),
 				doc.Body,
-				!color.NoColor,
+				opt.colorConfig.IsEnabled(),
 			)
 		}
 

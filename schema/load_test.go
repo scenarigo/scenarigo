@@ -341,7 +341,7 @@ func TestLoadScenarios(t *testing.T) {
 					),
 					cmp.FilterPath(func(path cmp.Path) bool {
 						s := path.String()
-						return s == "Node"
+						return s == "Node" || s == "colorConfig"
 					}, cmp.Ignore()),
 				); diff != "" {
 					t.Errorf("scenario differs (-want +got):\n%s", diff)
@@ -563,7 +563,7 @@ steps:
 					),
 					cmp.FilterPath(func(path cmp.Path) bool {
 						s := path.String()
-						return s == "Node"
+						return s == "Node" || s == "colorConfig"
 					}, cmp.Ignore()),
 				); diff != "" {
 					t.Errorf("scenario differs (-want +got):\n%s", diff)

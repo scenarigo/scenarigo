@@ -3,6 +3,7 @@ package context
 import (
 	"path/filepath"
 
+	"github.com/scenarigo/scenarigo/color"
 	"github.com/scenarigo/scenarigo/reporter"
 )
 
@@ -32,7 +33,7 @@ type SerializableContext struct {
 	Steps            *Steps                         `json:"steps,omitempty"`
 	Request          any                            `json:"request,omitempty"`
 	Response         any                            `json:"response,omitempty"`
-	EnabledColor     bool                           `json:"enabledColor"`
+	ColorEnabled     bool                           `json:"colorEnabled"`
 	Reporter         *reporter.SerializableReporter `json:"reporter,omitempty"`
 }
 
@@ -42,7 +43,11 @@ func (c *Context) ToSerializable() *SerializableContext {
 	sc := &SerializableContext{
 		ScenarioFilepath: c.ScenarioFilepath(),
 		PluginDir:        c.PluginDir(),
-		EnabledColor:     c.EnabledColor(),
+	}
+
+	// Store ColorConfig enabled state for WASM plugins
+	if colorConfig := c.ColorConfig(); colorConfig != nil {
+		sc.ColorEnabled = colorConfig.IsEnabled()
 	}
 
 	// Convert plugins
@@ -160,8 +165,10 @@ func FromSerializable(sc *SerializableContext) *Context {
 		ctx = ctx.WithResponse(sc.Response)
 	}
 
-	// Set enabled color
-	ctx = ctx.WithEnabledColor(sc.EnabledColor)
+	// Restore ColorConfig with preserved enabled state
+	colorConfig := color.New()
+	colorConfig.SetEnabled(sc.ColorEnabled)
+	ctx = ctx.WithColorConfig(colorConfig)
 
 	return ctx
 }

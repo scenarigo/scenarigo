@@ -16,7 +16,7 @@ import (
 	"unicode"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/fatih/color"
+	"github.com/scenarigo/scenarigo/color"
 )
 
 // teardownFunc represents a named teardown function.
@@ -267,7 +267,7 @@ func (r *reporter) printTestSummary() {
 	if !r.context.enabledTestSummary {
 		return
 	}
-	_, _ = r.context.print(r.context.testSummary.String(r.context.noColor)) //nolint:forbidigo
+	_, _ = r.context.print(r.context.testSummary.String(r.context.colorConfig)) //nolint:forbidigo
 }
 
 func (r *reporter) appendChildren(children ...*reporter) {
@@ -609,24 +609,15 @@ func (r *reporter) getChildren() []Reporter {
 }
 
 func (r *reporter) passColor() *color.Color {
-	if r.context.noColor {
-		return color.New()
-	}
-	return color.New(color.FgGreen)
+	return r.context.colorConfig.Green()
 }
 
 func (r *reporter) failColor() *color.Color {
-	if r.context.noColor {
-		return color.New()
-	}
-	return color.New(color.FgHiRed)
+	return r.context.colorConfig.Red()
 }
 
 func (r *reporter) skipColor() *color.Color {
-	if r.context.noColor {
-		return color.New()
-	}
-	return color.New(color.FgYellow)
+	return r.context.colorConfig.Yellow()
 }
 
 // Teardown registers a named function to be called when all parallel subtests complete.

@@ -7,6 +7,7 @@ import (
 
 	"github.com/goccy/go-yaml/ast"
 
+	"github.com/scenarigo/scenarigo/color"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/protocol"
 )
@@ -30,13 +31,27 @@ type Scenario struct {
 	// This field doesn't need to hold some data because anchors expand by the decoder.
 	Anchors anchors `yaml:"anchors,omitempty"`
 
-	filepath string   // YAML filepath
-	Node     ast.Node `yaml:"-"`
+	filepath    string        // YAML filepath
+	Node        ast.Node      `yaml:"-"`
+	colorConfig *color.Config // Color configuration for error reporting
 }
 
 // Filepath returns YAML filepath of s.
 func (s *Scenario) Filepath() string {
 	return s.filepath
+}
+
+// setColorConfig sets the color configuration for error reporting.
+func (s *Scenario) setColorConfig(config *color.Config) {
+	s.colorConfig = config
+}
+
+// getColorEnabled returns whether color is enabled for error reporting.
+func (s *Scenario) getColorEnabled() bool {
+	if s.colorConfig == nil {
+		s.colorConfig = color.New()
+	}
+	return s.colorConfig.IsEnabled()
 }
 
 // Validate validates a scenario.
@@ -45,15 +60,17 @@ func (s *Scenario) Validate() error {
 	for i, stp := range s.Steps {
 		if stp.ID != "" {
 			if !stepIDRegexp.MatchString(stp.ID) {
-				return errors.WithNode(
+				return errors.WithNodeAndColored(
 					errors.ErrorPath(fmt.Sprintf("steps[%d].id", i), "step id must contain only alphanumeric characters, -, or _"),
 					s.Node,
+					s.getColorEnabled(),
 				)
 			}
 			if _, ok := ids[stp.ID]; ok {
-				return errors.WithNode(
+				return errors.WithNodeAndColored(
 					errors.ErrorPathf(fmt.Sprintf("steps[%d].id", i), "step id %q is duplicated", stp.ID),
 					s.Node,
+					s.getColorEnabled(),
 				)
 			}
 			ids[stp.ID] = struct{}{}
@@ -61,14 +78,16 @@ func (s *Scenario) Validate() error {
 
 		if stp.Include == "" && stp.Ref == nil {
 			if stp.Protocol == "" {
-				return errors.WithNode(
+				return errors.WithNodeAndColored(
 					errors.ErrorPath(fmt.Sprintf("steps[%d]", i), "no protocol"),
 					s.Node,
+					s.getColorEnabled(),
 				)
 			} else if protocol.Get(stp.Protocol) == nil {
-				return errors.WithNode(
+				return errors.WithNodeAndColored(
 					errors.ErrorPathf(fmt.Sprintf("steps[%d].protocol", i), "protocol %q not found", stp.Protocol),
 					s.Node,
+					s.getColorEnabled(),
 				)
 			}
 		}

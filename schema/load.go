@@ -11,10 +11,10 @@ import (
 	ytt "carvel.dev/ytt/pkg/cmd/template"
 	yttui "carvel.dev/ytt/pkg/cmd/ui"
 	yttfiles "carvel.dev/ytt/pkg/files"
-	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/scenarigo/scenarigo/color"
 
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
@@ -43,7 +43,9 @@ func LoadScenariosFromReader(r io.Reader, opts ...LoadOption) ([]*Scenario, erro
 }
 
 func loadScenarios(path string, b []byte, opts ...LoadOption) ([]*Scenario, error) {
-	var opt loadOption
+	opt := loadOption{
+		colorConfig: color.New(),
+	}
 	for _, o := range opts {
 		if err := o(&opt); err != nil {
 			return nil, err
@@ -69,7 +71,7 @@ func loadScenarios(path string, b []byte, opts ...LoadOption) ([]*Scenario, erro
 		}
 	}
 
-	docs, err := readDocsWithSchemaVersionFromBytes(b)
+	docs, err := readDocsWithSchemaVersionFromBytes(b, &opt)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +87,7 @@ func loadScenarios(path string, b []byte, opts ...LoadOption) ([]*Scenario, erro
 				return nil, errors.WithNodeAndColored(
 					errors.ErrorPath("schemaVersion", "ytt feature is not enabled"),
 					doc.doc.Body,
-					!color.NoColor,
+					opt.colorConfig.IsEnabled(),
 				)
 			}
 
@@ -116,12 +118,12 @@ func loadScenarios(path string, b []byte, opts ...LoadOption) ([]*Scenario, erro
 			return nil, errors.WithNodeAndColored(
 				errors.ErrorPathf("schemaVersion", "unknown version %q", doc.schemaVersion),
 				doc.doc.Body,
-				!color.NoColor,
+				opt.colorConfig.IsEnabled(),
 			)
 		}
 	}
 
-	return loadScenariosFromFileAST(file)
+	return loadScenariosFromFileAST(file, &opt)
 }
 
 func runYTT(opts *ytt.Options, yttUI yttui.TTY, files ...*yttfiles.File) ([]byte, error) {
@@ -180,7 +182,7 @@ func findAllfiles(paths ...string) ([]string, error) {
 	return files, nil
 }
 
-func loadScenariosFromFileAST(f *ast.File) ([]*Scenario, error) {
+func loadScenariosFromFileAST(f *ast.File, opt *loadOption) ([]*Scenario, error) {
 	var buf bytes.Buffer
 	dec := yaml.NewDecoder(&buf, yaml.UseOrderedMap(), yaml.Strict())
 	var scenarios []*Scenario
@@ -191,6 +193,7 @@ func loadScenariosFromFileAST(f *ast.File) ([]*Scenario, error) {
 		}
 		s.filepath = f.Name
 		s.Node = doc.Body
+		s.setColorConfig(opt.colorConfig)
 		if err := s.Validate(); err != nil {
 			return nil, fmt.Errorf("validation error: %s: %w", s.filepath, err)
 		}
@@ -202,6 +205,7 @@ func loadScenariosFromFileAST(f *ast.File) ([]*Scenario, error) {
 type loadOption struct {
 	configRoot  string
 	inputConfig InputConfig
+	colorConfig *color.Config
 
 	yttOpts         *ytt.Options
 	yttUI           yttui.TTY
@@ -225,6 +229,14 @@ func WithInputConfig(root string, c InputConfig) func(*loadOption) error {
 			}
 			o.defaultYTTFiles = defaultFiles
 		}
+		return nil
+	}
+}
+
+// WithColorConfig is an option to specify color configuration.
+func WithColorConfig(config *color.Config) LoadOption {
+	return func(o *loadOption) error {
+		o.colorConfig = config
 		return nil
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/fatih/color"
+	"github.com/scenarigo/scenarigo/color"
 )
 
 type testSummary struct {
@@ -47,12 +47,12 @@ func (s *testSummary) append(testFileRelPath string, r Reporter) {
 // Failed tests:
 //   - scenarios/scenario1.yaml
 //   - scenarios/scenario2.yaml
-func (s *testSummary) String(noColor bool) string {
+func (s *testSummary) String(colorConfig *color.Config) string {
 	totalText := fmt.Sprintf("%d tests run", s.passedCount+len(s.failed)+s.skippedCount)
-	passedText := s.passColor(noColor).Sprintf("%d passed", s.passedCount)
-	failedText := s.failColor(noColor).Sprintf("%d failed", len(s.failed))
-	skippedText := s.skipColor(noColor).Sprintf("%d skipped", s.skippedCount)
-	failedFiles := s.failColor(noColor).Sprint(s.failedFiles())
+	passedText := s.passColor(colorConfig).Sprintf("%d passed", s.passedCount)
+	failedText := s.failColor(colorConfig).Sprintf("%d failed", len(s.failed))
+	skippedText := s.skipColor(colorConfig).Sprintf("%d skipped", s.skippedCount)
+	failedFiles := s.failColor(colorConfig).Sprint(s.failedFiles())
 	return fmt.Sprintf(
 		"\n%s: %s, %s, %s\n\n%s",
 		totalText, passedText, failedText, skippedText, failedFiles,
@@ -77,23 +77,23 @@ func (s *testSummary) failedFiles() string {
 	return result
 }
 
-func (s *testSummary) passColor(noColor bool) *color.Color {
-	if noColor {
-		return color.New()
+func (s *testSummary) passColor(colorConfig *color.Config) *color.Color {
+	if colorConfig != nil {
+		return colorConfig.Green()
 	}
-	return color.New(color.FgGreen)
+	return color.New().Green()
 }
 
-func (s *testSummary) failColor(noColor bool) *color.Color {
-	if noColor {
-		return color.New()
+func (s *testSummary) failColor(colorConfig *color.Config) *color.Color {
+	if colorConfig != nil {
+		return colorConfig.HiRed()
 	}
-	return color.New(color.FgHiRed)
+	return color.New().HiRed()
 }
 
-func (s *testSummary) skipColor(noColor bool) *color.Color {
-	if noColor {
-		return color.New()
+func (s *testSummary) skipColor(colorConfig *color.Config) *color.Color {
+	if colorConfig != nil {
+		return colorConfig.Yellow()
 	}
-	return color.New(color.FgYellow)
+	return color.New().Yellow()
 }

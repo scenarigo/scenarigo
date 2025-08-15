@@ -2,6 +2,8 @@ package reporter
 
 import (
 	"time"
+
+	"github.com/scenarigo/scenarigo/color"
 )
 
 // SerializableReporter represents a serializable version of reporter struct.
@@ -28,7 +30,7 @@ type SerializableReporter struct {
 type SerializableTestContext struct {
 	MaxParallel        int   `json:"maxParallel"`
 	Verbose            bool  `json:"verbose"`
-	NoColor            bool  `json:"noColor"`
+	ColorEnabled       bool  `json:"colorEnabled"`
 	EnabledTestSummary bool  `json:"enabledTestSummary"`
 	Running            int   `json:"running"`
 	NumWaiting         int64 `json:"numWaiting"`
@@ -128,7 +130,7 @@ func (c *testContext) ToSerializable() *SerializableTestContext {
 	return &SerializableTestContext{
 		MaxParallel:        c.maxParallel,
 		Verbose:            c.verbose,
-		NoColor:            c.noColor,
+		ColorEnabled:       c.colorConfig.IsEnabled(),
 		EnabledTestSummary: c.enabledTestSummary,
 		Running:            c.running,
 		NumWaiting:         c.numWaiting,
@@ -139,13 +141,18 @@ func (c *testContext) ToSerializable() *SerializableTestContext {
 // This function reconstructs a test context from serialized data received from WASM plugins.
 func FromSerializableTestContext(sc *SerializableTestContext) *testContext {
 	ctx := &testContext{
-		w:                  &nopWriter{},
-		startParallel:      make(chan bool),
-		maxParallel:        sc.MaxParallel,
-		running:            sc.Running,
-		numWaiting:         sc.NumWaiting,
-		verbose:            sc.Verbose,
-		noColor:            sc.NoColor,
+		w:             &nopWriter{},
+		startParallel: make(chan bool),
+		maxParallel:   sc.MaxParallel,
+		running:       sc.Running,
+		numWaiting:    sc.NumWaiting,
+		verbose:       sc.Verbose,
+		// Restore ColorConfig with preserved enabled state
+		colorConfig: func() *color.Config {
+			c := color.New()
+			c.SetEnabled(sc.ColorEnabled)
+			return c
+		}(),
 		enabledTestSummary: sc.EnabledTestSummary,
 	}
 	if sc.EnabledTestSummary {
