@@ -5,6 +5,8 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+
+	"github.com/scenarigo/scenarigo/color"
 )
 
 // Option represents an option for test reporter.
@@ -31,10 +33,10 @@ func WithVerboseLog() Option {
 	}
 }
 
-// WithNoColor returns an option to disable colored log.
-func WithNoColor() Option {
+// WithColorConfig returns an option to set color configuration.
+func WithColorConfig(colorConfig *color.Config) Option {
 	return func(ctx *testContext) {
-		ctx.noColor = true
+		ctx.colorConfig = colorConfig
 	}
 }
 
@@ -68,7 +70,7 @@ type testContext struct {
 	// verbose indicates that prints verbose log or not.
 	verbose bool
 
-	noColor bool
+	colorConfig *color.Config
 
 	enabledTestSummary bool
 	testSummary        *testSummary
@@ -82,7 +84,8 @@ func newTestContext(opts ...Option) *testContext {
 		w:             &nopWriter{},
 		startParallel: make(chan bool),
 		maxParallel:   1,
-		running:       1, // Set the count to 1 for the main (sequential) test.
+		running:       1,           // Set the count to 1 for the main (sequential) test.
+		colorConfig:   color.New(), // Always provide a default ColorConfig
 	}
 	for _, opt := range opts {
 		opt(ctx)

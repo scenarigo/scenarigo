@@ -9,11 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 
-	"github.com/fatih/color"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
+	"github.com/scenarigo/scenarigo/color"
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
@@ -39,7 +38,7 @@ type Runner struct {
 	protocols       schema.ProtocolOptions
 	scenarioFiles   []string
 	scenarioReaders []io.Reader
-	enabledColor    bool
+	colorConfig     *color.Config
 	rootDir         string
 	inputConfig     schema.InputConfig
 	reportConfig    schema.ReportConfig
@@ -49,7 +48,7 @@ type Runner struct {
 // NewRunner returns a new test runner.
 func NewRunner(opts ...func(*Runner) error) (*Runner, error) {
 	r := &Runner{} //nolint:exhaustruct
-	r.enabledColor = !color.NoColor
+	r.colorConfig = color.New()
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
 			return nil, err
@@ -94,7 +93,7 @@ func WithConfig(config *schema.Config) func(*Runner) error {
 		r.plugins = config.Plugins
 		r.protocols = config.Protocols
 		if config.Output.Colored != nil {
-			r.enabledColor = *config.Output.Colored
+			r.colorConfig.SetEnabled(*config.Output.Colored)
 		}
 		r.inputConfig = config.Input
 		r.reportConfig = config.Output.Report
@@ -181,20 +180,8 @@ func getAllFiles(paths ...string) ([]string, error) {
 	return files, nil
 }
 
-const (
-	envScenarigoColor = "SCENARIGO_COLOR"
-)
-
 func (r *Runner) setOptionsFromEnv() {
-	r.setEnabledColor(os.Getenv(envScenarigoColor))
-}
-
-func (r *Runner) setEnabledColor(envColor string) {
-	if envColor == "" {
-		return
-	}
-	result, _ := strconv.ParseBool(envColor)
-	r.enabledColor = result
+	// do nothing. colorConfig is already reflected by SCENARIGO_COLOR.
 }
 
 // ScenarioFiles returns all scenario file paths.
@@ -205,6 +192,7 @@ func (r *Runner) ScenarioFiles() []string {
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
 	// setup context
+	ctx = ctx.WithColorConfig(r.colorConfig)
 	if r.vars != nil {
 		vars, err := ctx.ExecuteTemplate(r.vars)
 		if err != nil {
@@ -213,7 +201,7 @@ func (r *Runner) Run(ctx *context.Context) {
 				errors.WithNodeAndColored(
 					errors.WithPath(err, "vars"),
 					r.configNode,
-					r.enabledColor,
+					r.colorConfig.IsEnabled(),
 				),
 			)
 		}
@@ -227,7 +215,7 @@ func (r *Runner) Run(ctx *context.Context) {
 				errors.WithNodeAndColored(
 					errors.WithPath(err, "secrets"),
 					r.configNode,
-					r.enabledColor,
+					r.colorConfig.IsEnabled(),
 				),
 			)
 		}
@@ -236,7 +224,6 @@ func (r *Runner) Run(ctx *context.Context) {
 	if r.pluginDir != nil {
 		ctx = ctx.WithPluginDir(*r.pluginDir)
 	}
-	ctx = ctx.WithEnabledColor(r.enabledColor)
 
 	// open plugins
 	pluginDir := r.rootDir
@@ -277,6 +264,7 @@ func (r *Runner) Run(ctx *context.Context) {
 
 	opts := []schema.LoadOption{
 		schema.WithInputConfig(r.rootDir, r.inputConfig),
+		schema.WithColorConfig(r.colorConfig),
 	}
 
 FILE_LOOP:
@@ -308,7 +296,7 @@ FILE_LOOP:
 	for i, reader := range r.scenarioReaders {
 		ctx.Run(fmt.Sprint(i), func(ctx *context.Context) {
 			ctx.Reporter().Parallel()
-			scns, err := schema.LoadScenariosFromReader(reader)
+			scns, err := schema.LoadScenariosFromReader(reader, schema.WithColorConfig(ctx.ColorConfig()))
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
@@ -367,6 +355,7 @@ func (r *Runner) Dump(ctx gocontext.Context, w io.Writer) error {
 	defer enc.Close()
 	opts := []schema.LoadOption{
 		schema.WithInputConfig(r.rootDir, r.inputConfig),
+		schema.WithColorConfig(r.colorConfig),
 	}
 FILE_LOOP:
 	for _, f := range r.scenarioFiles {

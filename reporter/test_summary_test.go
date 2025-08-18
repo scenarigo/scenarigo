@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/scenarigo/scenarigo/color"
 )
 
 func Test_testSummaryAppend(t *testing.T) {
@@ -124,7 +125,10 @@ Failed tests:
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := test.testSummary.String(true)
+			// Create a ColorConfig with color disabled for testing
+			colorConfig := color.New()
+			colorConfig.SetEnabled(false)
+			got := test.testSummary.String(colorConfig)
 			if diff := cmp.Diff(test.expect, got); diff != "" {
 				t.Errorf("differs (-want +got):\n%s", diff)
 			}
