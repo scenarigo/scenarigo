@@ -15,13 +15,12 @@ func init() {
 	assert.RegisterCustomEqualer(assert.EqualerFunc(equalMessage))
 }
 
-var protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
+var (
+	protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
+	uint64Type   = reflect.TypeOf(uint64(0))
+)
 
 func equalEnum(expected any, got any) (bool, error) {
-	s, ok := expected.(string)
-	if !ok {
-		return false, nil
-	}
 	enum, ok := got.(protoreflect.Enum)
 	if !ok {
 		return false, nil
@@ -29,6 +28,16 @@ func equalEnum(expected any, got any) (bool, error) {
 	number := enum.Descriptor().Values().ByNumber(enum.Number())
 	if number == nil {
 		// If enum.Number() is a reserved value or unknown value, the number variable will be nil.
+		return false, nil
+	}
+	rexp := reflect.ValueOf(expected)
+	if rexp.CanConvert(uint64Type) {
+		// specified direct number.
+		exp := rexp.Convert(uint64Type).Uint()
+		return exp == uint64(enum.Number()), nil
+	}
+	s, ok := expected.(string)
+	if !ok {
 		return false, nil
 	}
 	if string(number.Name()) == s {

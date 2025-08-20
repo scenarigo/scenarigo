@@ -11,10 +11,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/scenarigo/scenarigo/plugin"
-
 	emptypb "github.com/scenarigo/scenarigo/examples/wasm/plugin/src/pb/empty"
 	servicepb "github.com/scenarigo/scenarigo/examples/wasm/plugin/src/pb/service"
+	"github.com/scenarigo/scenarigo/plugin"
 )
 
 func init() {
