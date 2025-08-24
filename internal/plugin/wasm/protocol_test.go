@@ -21,10 +21,10 @@ func (h *mockCommandHandler) Init(*InitCommandRequest) (*InitCommandResponse, er
 			{
 				Name: "testFunc",
 				Type: &Type{
-					Kind: reflect.Func,
+					Kind: FUNC,
 					Func: &FuncType{
-						Args:   []*Type{{Kind: reflect.String}},
-						Return: []*Type{{Kind: reflect.Int}},
+						Args:   []*Type{{Kind: STRING}},
+						Return: []*Type{{Kind: INT}},
 					},
 				},
 			},
@@ -49,7 +49,7 @@ func (h *mockCommandHandler) Sync(*SyncCommandRequest) (*SyncCommandResponse, er
 		Types: []*NameWithType{
 			{
 				Name: "syncedFunc",
-				Type: &Type{Kind: reflect.Bool},
+				Type: &Type{Kind: BOOL},
 			},
 		},
 	}, nil
@@ -57,7 +57,7 @@ func (h *mockCommandHandler) Sync(*SyncCommandRequest) (*SyncCommandResponse, er
 
 func (h *mockCommandHandler) Call(req *CallCommandRequest) (*CallCommandResponse, error) {
 	return &CallCommandResponse{
-		Return: []*ReturnValue{
+		Return: []*Value{
 			{ID: "result", Value: "called_" + req.Name},
 		},
 	}, nil
@@ -65,7 +65,9 @@ func (h *mockCommandHandler) Call(req *CallCommandRequest) (*CallCommandResponse
 
 func (h *mockCommandHandler) Get(req *GetCommandRequest) (*GetCommandResponse, error) {
 	return &GetCommandResponse{
-		Value: "value_of_" + req.Name,
+		Value: &Value{
+			Value: "value_of_" + req.Name,
+		},
 	}, nil
 }
 
@@ -89,6 +91,33 @@ func (h *mockCommandHandler) GRPCInvoke(req *GRPCInvokeCommandRequest) (*GRPCInv
 		ResponseBytes: []byte(`{"result": "success"}`),
 		StatusProto:   []byte("status_ok"),
 	}, nil
+}
+
+func (h *mockCommandHandler) LeftArrowFuncExec(*LeftArrowFuncExecCommandRequest) (*LeftArrowFuncExecCommandResponse, error) {
+	return &LeftArrowFuncExecCommandResponse{
+		Value: &Value{
+			Value: "mock_exec_result",
+		},
+	}, nil
+}
+
+func (h *mockCommandHandler) LeftArrowFuncUnmarshalArg(*LeftArrowFuncUnmarshalArgCommandRequest) (*LeftArrowFuncUnmarshalArgCommandResponse, error) {
+	return &LeftArrowFuncUnmarshalArgCommandResponse{
+		Value: &Value{
+			Value: "mock_unmarshal_result",
+		},
+	}, nil
+}
+
+func (h *mockCommandHandler) Method(*MethodCommandRequest) (*MethodCommandResponse, error) {
+	return &MethodCommandResponse{
+		TypeRefMap: map[string]*Type{},
+		Type:       &Type{Kind: BOOL},
+	}, nil
+}
+
+func (h *mockCommandHandler) StepRun(*StepRunCommandRequest) (*StepRunCommandResponse, error) {
+	return &StepRunCommandResponse{}, nil
 }
 
 func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
@@ -125,7 +154,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 				Vars: []any{
 					map[string]interface{}{"key1": "value1"},
 				},
-			}),
+			}, 0),
 			validateFunc: func(t *testing.T, resp *Response) {
 				t.Helper()
 				if resp.CommandType != SetupCommand {
@@ -159,7 +188,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 		},
 		{
 			name: "CallRequest",
-			req:  NewCallRequest("testFunction", []string{"arg1", "arg2"}),
+			req:  NewCallRequest("testFunction", []string{"arg1", "arg2"}, []*Value{}),
 			validateFunc: func(t *testing.T, resp *Response) {
 				t.Helper()
 				if resp.CommandType != CallCommand {
@@ -180,7 +209,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 		},
 		{
 			name: "GetRequest",
-			req:  NewGetRequest("testVariable"),
+			req:  NewGetRequest("testVariable", []string{}),
 			validateFunc: func(t *testing.T, resp *Response) {
 				t.Helper()
 				if resp.CommandType != GetCommand {
@@ -191,8 +220,8 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 					t.Fatalf("Command type mismatch: got %T, want *GetCommandResponse", resp.Command)
 				}
 				expectedValue := "value_of_testVariable"
-				if getResp.Value != expectedValue {
-					t.Errorf("Value mismatch: got %s, want %s", getResp.Value, expectedValue)
+				if getResp.Value.Value != expectedValue {
+					t.Errorf("Value mismatch: got %s, want %s", getResp.Value.Value, expectedValue)
 				}
 			},
 		},
@@ -259,7 +288,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 				Vars: []any{
 					map[string]interface{}{"scenario": "test"},
 				},
-			}),
+			}, 0),
 			validateFunc: func(t *testing.T, resp *Response) {
 				t.Helper()
 				if resp.CommandType != SetupEachScenarioCommand {
@@ -273,7 +302,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 		},
 		{
 			name: "GRPCInvokeRequest",
-			req:  NewGRPCInvokeRequest("TestClient", "InvokeMethod", []byte(`{"request": "payload"}`)),
+			req:  NewGRPCInvokeRequest("TestClient", "InvokeMethod", []byte(`{"request": "payload"}`), nil),
 			validateFunc: func(t *testing.T, resp *Response) {
 				t.Helper()
 				if resp.CommandType != GRPCInvokeCommand {
@@ -469,32 +498,38 @@ func TestToTypeMapMethods(t *testing.T) {
 	// Test InitCommandResponse.ToTypeMap
 	initResp := &InitCommandResponse{
 		Types: []*NameWithType{
-			{Name: "func1", Type: &Type{Kind: reflect.String}},
-			{Name: "func2", Type: &Type{Kind: reflect.Int}},
+			{Name: "func1", Type: &Type{Kind: STRING}},
+			{Name: "func2", Type: &Type{Kind: INT}},
 		},
 	}
 
-	typeMap := initResp.ToTypeMap()
+	typeMap, err := initResp.ToTypeMap()
+	if err != nil {
+		t.Fatalf("InitCommandResponse ToTypeMap failed: %v", err)
+	}
 	if len(typeMap) != 2 {
 		t.Errorf("InitCommandResponse ToTypeMap length: got %d, want 2", len(typeMap))
 	}
-	if typeMap["func1"].Kind != reflect.String {
-		t.Errorf("func1 type: got %v, want %v", typeMap["func1"].Kind, reflect.String)
+	if typeMap["func1"].Kind != STRING {
+		t.Errorf("func1 type: got %v, want %v", typeMap["func1"].Kind, STRING)
 	}
 
 	// Test SyncCommandResponse.ToTypeMap
 	syncResp := &SyncCommandResponse{
 		Types: []*NameWithType{
-			{Name: "syncFunc", Type: &Type{Kind: reflect.Bool}},
+			{Name: "syncFunc", Type: &Type{Kind: BOOL}},
 		},
 	}
 
-	syncTypeMap := syncResp.ToTypeMap()
+	syncTypeMap, err := syncResp.ToTypeMap()
+	if err != nil {
+		t.Fatalf("SyncCommandResponse ToTypeMap failed: %v", err)
+	}
 	if len(syncTypeMap) != 1 {
 		t.Errorf("SyncCommandResponse ToTypeMap length: got %d, want 1", len(syncTypeMap))
 	}
-	if syncTypeMap["syncFunc"].Kind != reflect.Bool {
-		t.Errorf("syncFunc type: got %v, want %v", syncTypeMap["syncFunc"].Kind, reflect.Bool)
+	if syncTypeMap["syncFunc"].Kind != BOOL {
+		t.Errorf("syncFunc type: got %v, want %v", syncTypeMap["syncFunc"].Kind, BOOL)
 	}
 }
 
@@ -505,21 +540,30 @@ func TestToContextMethods(t *testing.T) {
 
 	// Test SetupCommandRequest.ToContext
 	setupReq := &SetupCommandRequest{Context: ctx}
-	convertedCtx := setupReq.ToContext()
+	convertedCtx, err := context.FromSerializable(setupReq.Context)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if convertedCtx == nil {
 		t.Error("SetupCommandRequest.ToContext() returned nil")
 	}
 
 	// Test SetupEachScenarioCommandRequest.ToContext
 	scenarioReq := &SetupEachScenarioCommandRequest{Context: ctx}
-	convertedCtx = scenarioReq.ToContext()
+	convertedCtx, err = context.FromSerializable(scenarioReq.Context)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if convertedCtx == nil {
 		t.Error("SetupEachScenarioCommandRequest.ToContext() returned nil")
 	}
 
 	// Test TeardownCommandRequest.ToContext
 	teardownReq := &TeardownCommandRequest{Context: ctx}
-	convertedCtx = teardownReq.ToContext()
+	convertedCtx, err = context.FromSerializable(teardownReq.Context)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if convertedCtx == nil {
 		t.Error("TeardownCommandRequest.ToContext() returned nil")
 	}
@@ -549,29 +593,38 @@ func TestToCommandResponse(t *testing.T) {
 
 func TestNewTypeAndNewFuncType(t *testing.T) {
 	// Test NewType with non-function type
-	stringType := reflect.TypeOf("")
-	typ := NewType(stringType)
-	if typ.Kind != reflect.String {
-		t.Errorf("NewType Kind: got %v, want %v", typ.Kind, reflect.String)
+	stringValue := reflect.ValueOf("")
+	typ, err := NewType(stringValue)
+	if err != nil {
+		t.Fatalf("NewType failed: %v", err)
+	}
+	if typ.Kind != STRING {
+		t.Errorf("NewType Kind: got %v, want %v", typ.Kind, STRING)
 	}
 	if typ.Func != nil {
 		t.Error("NewType Func should be nil for non-function type")
 	}
 
 	// Test NewType with function type
-	funcType := reflect.TypeOf(func(string, int) (bool, error) { return false, nil })
-	funcTyp := NewType(funcType)
-	if funcTyp.Kind != reflect.Func {
-		t.Errorf("NewType Kind: got %v, want %v", funcTyp.Kind, reflect.Func)
+	funcValue := reflect.ValueOf(func(string, int) (bool, error) { return false, nil })
+	funcTyp, err := NewType(funcValue)
+	if err != nil {
+		t.Fatalf("NewType failed: %v", err)
+	}
+	if funcTyp.Kind != FUNC {
+		t.Errorf("NewType Kind: got %v, want %v", funcTyp.Kind, FUNC)
 	}
 	if funcTyp.Func == nil {
 		t.Error("NewType Func should not be nil for function type")
 	}
 
 	// Test NewFuncType directly
-	directFuncTyp := NewFuncType(funcType)
-	if directFuncTyp.Kind != reflect.Func {
-		t.Errorf("NewFuncType Kind: got %v, want %v", directFuncTyp.Kind, reflect.Func)
+	directFuncTyp, err := newFuncType(funcValue)
+	if err != nil {
+		t.Fatalf("NewFuncType failed: %v", err)
+	}
+	if directFuncTyp.Kind != FUNC {
+		t.Errorf("NewFuncType Kind: got %v, want %v", directFuncTyp.Kind, FUNC)
 	}
 	if directFuncTyp.Func == nil {
 		t.Error("NewFuncType Func should not be nil")

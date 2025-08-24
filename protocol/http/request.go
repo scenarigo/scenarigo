@@ -72,10 +72,6 @@ func (r ResponseExtractor) ExtractByKey(key string) (any, bool) {
 	return nil, false
 }
 
-const (
-	indentNum = 2
-)
-
 // Invoke implements protocol.Invoker interface.
 func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	client, err := r.buildClient(ctx)

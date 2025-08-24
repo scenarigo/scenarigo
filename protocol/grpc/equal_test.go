@@ -19,6 +19,7 @@ func TestEqualEnum(t *testing.T) {
 		"expected is not string": {
 			expected: 1,
 			got:      test.UserType_CUSTOMER,
+			ok:       true,
 		},
 		"got is not enum": {
 			expected: "CUSTOMER",
