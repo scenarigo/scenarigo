@@ -6,6 +6,8 @@ import (
 	gocontext "context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httputil"
 	"os"
 	"reflect"
 	"strconv"
@@ -311,7 +313,7 @@ func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*
 			ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
 				ctx, teardown, err := setupCallback(ctx, i)
 				if err != nil {
-					ctx.Reporter().Fatal(err)
+					return
 				}
 				if ctx != nil {
 					newCtx = ctx
@@ -502,7 +504,8 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 
 func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (any, error) {
 	if typ.Kind == wasm.INVALID {
-		return nil, fmt.Errorf("invalid type")
+		fqdn := strings.Join(append([]string{name}, selectors...), ".")
+		return nil, fmt.Errorf("%s: invalid type", fqdn)
 	}
 	if len(selectors) != 0 {
 		for _, sel := range selectors[:len(selectors)-1] {
@@ -884,4 +887,27 @@ func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto prot
 	}
 	st := status.FromProto(&stProto)
 	return protoMsg, st, nil
+}
+
+func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
+	r, err := httputil.DumpRequest(req, true)
+	if err != nil {
+		return nil, err
+	}
+	res, err := v.plugin.call(nil, wasm.NewHTTPCallRequest(v.name, r))
+	if err != nil {
+		return nil, err
+	}
+	httpCallRes, err := convertCommandResponse[*wasm.HTTPCallCommandResponse](res)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.ReadResponse(
+		bufio.NewReader(bytes.NewBuffer(httpCallRes.Response)),
+		req,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

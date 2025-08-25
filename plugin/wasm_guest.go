@@ -4,9 +4,12 @@ package plugin
 
 import (
 	"bufio"
+	"bytes"
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httputil"
 	"os"
 	"reflect"
 	"sync"
@@ -167,7 +170,7 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 		h.nameToValueMap[def.Name] = def.Value
 		typ, err := wasm.NewType(def.Value)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create wasm type for %s: %w", def.Name, err)
 		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
@@ -244,7 +247,7 @@ func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, e
 		h.nameToValueMap[def.Name] = def.Value
 		typ, err := wasm.NewType(def.Value)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create wasm type for %s: %w", def.Name, err)
 		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
@@ -558,4 +561,36 @@ func (h *handler) getMethod(clientName, methodName string) (reflect.Value, error
 		}
 	}
 	return method, nil
+}
+
+func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallCommandResponse, error) {
+	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBuffer(r.Request)))
+	if err != nil {
+		return nil, err
+	}
+	client, exists := h.nameToValueMap[r.Client]
+	if !exists {
+		return nil, fmt.Errorf("unknown clientName: %q", r.Client)
+	}
+	do := client.MethodByName("Do")
+	if !do.IsValid() {
+		return nil, fmt.Errorf("failed to find Do method from client: %s", r.Client)
+	}
+	results := do.Call([]reflect.Value{reflect.ValueOf(req)})
+	if len(results) != 2 {
+		return nil, fmt.Errorf("unexpected return value length(%d) of HTTP method call", len(results))
+	}
+	if !results[0].IsValid() || !results[1].IsValid() {
+		return nil, fmt.Errorf("HTTP response value is invalid: response:%v: error:%v", results[0], results[1])
+	}
+	if err := results[1].Interface().(error); err != nil {
+		return nil, err
+	}
+	resp, err := httputil.DumpResponse(results[0].Interface().(*http.Response), true)
+	if err != nil {
+		return nil, err
+	}
+	return &wasm.HTTPCallCommandResponse{
+		Response: resp,
+	}, nil
 }
