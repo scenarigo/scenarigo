@@ -28,6 +28,11 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 			sctx := ctx.ToSerializable()
 			v = reflect.ValueOf(sctx)
 		}
+	} else if t == errorType {
+		if err, ok := v.Interface().(error); ok {
+			ret.Value = err.Error()
+			return ret, nil
+		}
 	}
 	var isImplementedCustomInterface bool
 	if t == stepType || t.Implements(stepType) {

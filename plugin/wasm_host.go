@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	gocontext "context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -478,6 +479,15 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 		typ, err := retValue.ToReflect()
 		if err != nil {
 			return nil, err
+		}
+		if retValue.Kind == wasm.ERROR {
+			var errText string
+			_ = json.Unmarshal([]byte(value.Value), &errText)
+			if errText != "" {
+				return nil, errors.New(errText)
+			}
+			ret = append(ret, reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()))
+			continue
 		}
 		rv, err := wasm.DecodeValueWithType(typ, []byte(value.Value))
 		if err != nil {

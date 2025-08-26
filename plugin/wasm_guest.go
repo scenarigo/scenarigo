@@ -568,6 +568,7 @@ func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallComman
 	if err != nil {
 		return nil, err
 	}
+	req.RequestURI = ""
 	client, exists := h.nameToValueMap[r.Client]
 	if !exists {
 		return nil, fmt.Errorf("unknown clientName: %q", r.Client)
