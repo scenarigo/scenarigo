@@ -584,8 +584,8 @@ func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallComman
 	if !results[0].IsValid() || !results[1].IsValid() {
 		return nil, fmt.Errorf("HTTP response value is invalid: response:%v: error:%v", results[0], results[1])
 	}
-	if err := results[1].Interface().(error); err != nil {
-		return nil, err
+	if e := results[1].Interface(); e != nil {
+		return nil, e.(error)
 	}
 	resp, err := httputil.DumpResponse(results[0].Interface().(*http.Response), true)
 	if err != nil {
