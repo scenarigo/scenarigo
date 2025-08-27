@@ -344,10 +344,18 @@ func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunComma
 		return nil, err
 	}
 	h.ctx = ctx
-	result := step.MethodByName("Run").Call([]reflect.Value{
-		reflect.ValueOf(ctx),
-		reflect.ValueOf(r.Step),
-	})
+	var result []reflect.Value
+	if r.IsFunc {
+		result = step.Call([]reflect.Value{
+			reflect.ValueOf(ctx),
+			reflect.ValueOf(r.Step),
+		})
+	} else {
+		result = step.MethodByName("Run").Call([]reflect.Value{
+			reflect.ValueOf(ctx),
+			reflect.ValueOf(r.Step),
+		})
+	}
 	if len(result) != 1 {
 		return nil, fmt.Errorf("failed to get result value from step.Run function. return values: %v", result)
 	}
@@ -569,6 +577,7 @@ func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallComman
 		return nil, err
 	}
 	req.RequestURI = ""
+	fmt.Printf("guest: req: %+v\n", req)
 	client, exists := h.nameToValueMap[r.Client]
 	if !exists {
 		return nil, fmt.Errorf("unknown clientName: %q", r.Client)

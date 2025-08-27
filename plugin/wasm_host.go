@@ -424,6 +424,7 @@ func (p *WasmPlugin) ExtractByKey(name string) (any, bool) {
 }
 
 func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []string, args []reflect.Value) ([]reflect.Value, error) {
+	fmt.Println("callFunc", name, selectors)
 	fnArgs := make([]*wasm.Value, 0, len(args))
 	for _, arg := range args {
 		fnArg, err := wasm.EncodeValue(arg)
@@ -454,6 +455,15 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 				&stepValue{
 					plugin:   p,
 					instance: value.ID,
+				},
+			))
+			continue
+		case value.IsStepFunc:
+			ret = append(ret, reflect.ValueOf(
+				&stepValue{
+					plugin:   p,
+					instance: value.ID,
+					isFunc:   true,
 				},
 			))
 			continue
@@ -558,6 +568,12 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 				plugin:   p,
 				instance: name,
 			}, nil
+		} else if typ.StepFunc {
+			return &stepValue{
+				plugin:   p,
+				instance: name,
+				isFunc:   true,
+			}, nil
 		}
 		funcType, err := typ.ToReflect()
 		if err != nil {
@@ -633,10 +649,11 @@ func replaceStructType(t reflect.Type) reflect.Type {
 type stepValue struct {
 	plugin   *WasmPlugin
 	instance string
+	isFunc   bool
 }
 
 func (v *stepValue) Run(ctx *Context, step *schema.Step) *Context {
-	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.instance, ctx.ToSerializable(), step))
+	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.instance, ctx.ToSerializable(), step, v.isFunc))
 	if err != nil {
 		ctx.Reporter().FailNow()
 		return ctx
@@ -769,7 +786,7 @@ func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
 	if !v.typ.Step {
 		ctx.Reporter().Fatal(fmt.Errorf("%s doesn't implement plugin.Step", v.name))
 	}
-	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step))
+	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step, false))
 	if err != nil {
 		return ctx
 	}
@@ -900,10 +917,12 @@ func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto prot
 }
 
 func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
+	fmt.Printf("host: req: %+v\n", req)
 	r, err := httputil.DumpRequest(req, true)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("request", r)
 	res, err := v.plugin.call(nil, wasm.NewHTTPCallRequest(v.name, r))
 	if err != nil {
 		return nil, err

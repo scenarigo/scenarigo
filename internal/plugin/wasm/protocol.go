@@ -166,13 +166,14 @@ func NewMethodRequest(name string, selectors []string) *Request {
 }
 
 // NewStepRunRequest creates a new step run request.
-func NewStepRunRequest(instance string, ctx *context.SerializableContext, step *schema.Step) *Request {
+func NewStepRunRequest(instance string, ctx *context.SerializableContext, step *schema.Step, isFunc bool) *Request {
 	return &Request{
 		CommandType: StepRunCommand,
 		Command: &StepRunCommandRequest{
 			Instance: instance,
 			Context:  ctx,
 			Step:     step,
+			IsFunc:   isFunc,
 		},
 	}
 }
@@ -383,6 +384,7 @@ type StepRunCommandRequest struct {
 	Instance string                       `json:"instance"`
 	Context  *context.SerializableContext `json:"context"`
 	Step     *schema.Step                 `json:"step"`
+	IsFunc   bool                         `json:"isFunc"`
 }
 
 func (r *StepRunCommandRequest) isCommandRequest() bool { return true }

@@ -25,6 +25,7 @@ type Type struct {
 	Kind          Kind         `json:"kind"`
 	MethodNames   []string     `json:"methodNames"`
 	Step          bool         `json:"step"`
+	StepFunc      bool         `json:"stepFunc"`
 	LeftArrowFunc bool         `json:"leftArrowFunc"`
 	Ref           string       `json:"ref"`
 	Any           *AnyType     `json:"any"`
@@ -75,6 +76,9 @@ var (
 	stepType  = reflect.TypeOf((*interface {
 		Run(*context.Context, *schema.Step) *context.Context
 	})(nil)).Elem()
+	stepFuncType = reflect.TypeOf(
+		(*func(*context.Context, *schema.Step) *context.Context)(nil),
+	).Elem()
 	leftArrowFuncType = reflect.TypeOf((*template.Func)(nil)).Elem()
 	ctxType           = reflect.TypeOf((*context.Context)(nil))
 )
@@ -164,6 +168,9 @@ func NewType(v reflect.Value) (*Type, error) {
 	typ.MethodNames = mtdNames
 	if t.Implements(stepType) {
 		typ.Step = true
+	}
+	if t == stepFuncType {
+		typ.StepFunc = true
 	}
 	if t.Implements(leftArrowFuncType) {
 		typ.LeftArrowFunc = true
@@ -640,6 +647,7 @@ func resolveRef(t *Type, typeRefMap map[string]*Type, resolvedMap map[*Type]*Typ
 	ret := &Type{
 		MethodNames:   t.MethodNames,
 		Step:          t.Step,
+		StepFunc:      t.StepFunc,
 		LeftArrowFunc: t.LeftArrowFunc,
 	}
 	switch t.Kind {

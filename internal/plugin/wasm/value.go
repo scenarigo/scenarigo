@@ -13,6 +13,7 @@ type Value struct {
 	ID              string `json:"id"`
 	Value           string `json:"value"`
 	IsStep          bool   `json:"isStep"`
+	IsStepFunc      bool   `json:"isStepFunc"`
 	IsLeftArrowFunc bool   `json:"isLeftArrowFunc"`
 }
 
@@ -34,17 +35,21 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 			return ret, nil
 		}
 	}
-	var isImplementedCustomInterface bool
+	var isImplementedSpecialType bool
 	if t == stepType || t.Implements(stepType) {
 		ret.IsStep = true
-		isImplementedCustomInterface = true
+		isImplementedSpecialType = true
+	}
+	if t == stepFuncType {
+		ret.IsStepFunc = true
+		isImplementedSpecialType = true
 	}
 	if t == leftArrowFuncType || t.Implements(leftArrowFuncType) {
 		ret.IsLeftArrowFunc = true
-		isImplementedCustomInterface = true
+		isImplementedSpecialType = true
 	}
 	ret.ID = fmt.Sprintf("%p", &v)
-	if !isImplementedCustomInterface {
+	if !isImplementedSpecialType {
 		b, err := json.Marshal(v.Interface())
 		if err != nil {
 			return nil, fmt.Errorf("failed to encode %T value", v.Interface())
