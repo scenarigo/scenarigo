@@ -120,6 +120,10 @@ func (h *mockCommandHandler) StepRun(*StepRunCommandRequest) (*StepRunCommandRes
 	return &StepRunCommandResponse{}, nil
 }
 
+func (h *mockCommandHandler) HTTPCall(*HTTPCallCommandRequest) (*HTTPCallCommandResponse, error) {
+	return &HTTPCallCommandResponse{}, nil
+}
+
 func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 	handler := &mockCommandHandler{}
 

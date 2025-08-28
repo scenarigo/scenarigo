@@ -461,7 +461,7 @@ func TestProtocolNewFunctions(t *testing.T) {
 	// Test NewStepRunRequest
 	ctx := &context.SerializableContext{}
 	step := &schema.Step{Title: "test step"}
-	stepReq := NewStepRunRequest("instance1", ctx, step)
+	stepReq := NewStepRunRequest("instance1", ctx, step, false)
 	if stepReq.CommandType != StepRunCommand {
 		t.Errorf("NewStepRunRequest() CommandType = %v, want StepRunCommand", stepReq.CommandType)
 	}
@@ -1818,5 +1818,14 @@ func TestHandleCommandError(t *testing.T) {
 	resp := HandleCommand(invalidJSON, &mockCommandHandler{})
 	if resp.Error == "" {
 		t.Error("HandleCommand() should return error for invalid JSON")
+	}
+}
+
+func TestIsStepFuncType(t *testing.T) {
+	fn := func(ctx *context.Context, step *schema.Step) *context.Context {
+		return nil
+	}
+	if !isStepFuncType(reflect.TypeOf(fn)) {
+		t.Fatal("unexpected result")
 	}
 }

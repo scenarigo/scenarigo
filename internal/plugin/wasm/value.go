@@ -40,7 +40,7 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 		ret.IsStep = true
 		isImplementedSpecialType = true
 	}
-	if t == stepFuncType {
+	if isStepFuncType(t) {
 		ret.IsStepFunc = true
 		isImplementedSpecialType = true
 	}

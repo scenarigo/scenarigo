@@ -76,11 +76,9 @@ var (
 	stepType  = reflect.TypeOf((*interface {
 		Run(*context.Context, *schema.Step) *context.Context
 	})(nil)).Elem()
-	stepFuncType = reflect.TypeOf(
-		(*func(*context.Context, *schema.Step) *context.Context)(nil),
-	).Elem()
 	leftArrowFuncType = reflect.TypeOf((*template.Func)(nil)).Elem()
 	ctxType           = reflect.TypeOf((*context.Context)(nil))
+	schemaStepType    = reflect.TypeOf((*schema.Step)(nil))
 )
 
 // PointerTyep represents pointer type information from a WASM plugin.
@@ -169,7 +167,7 @@ func NewType(v reflect.Value) (*Type, error) {
 	if t.Implements(stepType) {
 		typ.Step = true
 	}
-	if t == stepFuncType {
+	if isStepFuncType(t) {
 		typ.StepFunc = true
 	}
 	if t.Implements(leftArrowFuncType) {
@@ -744,4 +742,27 @@ func resolveRef(t *Type, typeRefMap map[string]*Type, resolvedMap map[*Type]*Typ
 
 func newZeroValue(t reflect.Type) reflect.Value {
 	return reflect.New(t).Elem()
+}
+
+// isStepFuncType compares with `func(ctx *context.Context, step *schema.Step) *context.Context` type.
+func isStepFuncType(t reflect.Type) bool {
+	if t.Kind() != reflect.Func {
+		return false
+	}
+	if t.NumIn() != 2 {
+		return false
+	}
+	if t.NumOut() != 1 {
+		return false
+	}
+	if t.In(0) != ctxType {
+		return false
+	}
+	if t.In(1) != schemaStepType {
+		return false
+	}
+	if t.Out(0) != ctxType {
+		return false
+	}
+	return true
 }
