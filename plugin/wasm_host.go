@@ -424,7 +424,6 @@ func (p *WasmPlugin) ExtractByKey(name string) (any, bool) {
 }
 
 func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []string, args []reflect.Value) ([]reflect.Value, error) {
-	fmt.Println("callFunc", name, selectors)
 	fnArgs := make([]*wasm.Value, 0, len(args))
 	for _, arg := range args {
 		fnArg, err := wasm.EncodeValue(arg)
@@ -500,15 +499,17 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	}
 	if typ.Kind == wasm.FUNC {
 		if typ.Step {
-			return &stepValue{
-				plugin:   p,
-				instance: name,
+			return &StructValue{
+				typ:    typ,
+				plugin: p,
+				name:   name,
 			}, nil
 		} else if typ.StepFunc {
-			return &stepValue{
-				plugin:   p,
-				instance: name,
-				isFunc:   true,
+			return &StructValue{
+				typ:    typ,
+				plugin: p,
+				name:   name,
+				isFunc: true,
 			}, nil
 		}
 		funcType, err := typ.ToReflect()
@@ -547,11 +548,16 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	return v.Interface(), nil
 }
 
-var ctxType = reflect.TypeOf((*Context)(nil))
+var (
+	ctxType = reflect.TypeOf((*Context)(nil))
+)
 
 func replaceStructType(t reflect.Type) reflect.Type {
 	if t == ctxType {
 		return t
+	}
+	if wasm.IsStepFuncType(t) {
+		return reflect.TypeOf(&StructValue{})
 	}
 	switch t.Kind() {
 	case reflect.Pointer:
@@ -578,80 +584,6 @@ func replaceStructType(t reflect.Type) reflect.Type {
 	return t
 }
 
-type stepValue struct {
-	plugin   *WasmPlugin
-	instance string
-	isFunc   bool
-}
-
-func (v *stepValue) Run(ctx *Context, step *schema.Step) *Context {
-	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.instance, ctx.ToSerializable(), step, v.isFunc))
-	if err != nil {
-		ctx.Reporter().FailNow()
-		return ctx
-	}
-	stepRes, err := convertCommandResponse[*wasm.StepRunCommandResponse](res)
-	if err != nil {
-		ctx.Reporter().Fatal(err)
-	}
-	newCtx, err := context.FromSerializableWithContext(ctx, stepRes.Context)
-	if err != nil {
-		ctx.Reporter().Fatal(err)
-	}
-	return newCtx
-}
-
-type leftArrowFuncValue struct {
-	plugin   *WasmPlugin
-	instance string
-	argID    string
-}
-
-func (v *leftArrowFuncValue) Exec(arg any) (any, error) {
-	value, err := wasm.EncodeValue(reflect.ValueOf(arg))
-	if err != nil {
-		return nil, err
-	}
-	res, err := v.plugin.call(nil, wasm.NewLeftArrowFuncExecRequest(v.instance, value.Value, v.argID))
-	if err != nil {
-		return nil, err
-	}
-	execRes, err := convertCommandResponse[*wasm.LeftArrowFuncExecCommandResponse](res)
-	if err != nil {
-		return nil, err
-	}
-	result, err := v.plugin.decodeValue(execRes.Value.Type, execRes.Value)
-	if err != nil {
-		return nil, err
-	}
-	return result.Interface(), nil
-}
-
-func (v *leftArrowFuncValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
-	var decoded any
-	if err := unmarshal(&decoded); err != nil {
-		return nil, err
-	}
-	b, err := yaml.Marshal(decoded)
-	if err != nil {
-		return nil, err
-	}
-	res, err := v.plugin.call(nil, wasm.NewLeftArrowFuncUnmarshalArgRequest(v.instance, string(b)))
-	if err != nil {
-		return nil, err
-	}
-	argRes, err := convertCommandResponse[*wasm.LeftArrowFuncUnmarshalArgCommandResponse](res)
-	if err != nil {
-		return nil, err
-	}
-	result, err := v.plugin.decodeValue(argRes.Value.Type, argRes.Value)
-	if err != nil {
-		return nil, err
-	}
-	v.argID = argRes.Value.ID
-	return result, nil
-}
-
 // StructValue represents a struct type value from a WASM plugin.
 // It provides methods to interact with WASM plugin values, especially for gRPC clients.
 type StructValue struct {
@@ -661,6 +593,7 @@ type StructValue struct {
 	selectors []string
 	value     any
 	argID     string
+	isFunc    bool
 }
 
 func (v *StructValue) Exec(arg any) (any, error) {
@@ -715,18 +648,19 @@ func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
 }
 
 func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
-	if !v.typ.Step {
+	if !v.typ.Step && !v.typ.StepFunc {
 		ctx.Reporter().Fatal(fmt.Errorf("%s doesn't implement plugin.Step", v.name))
 	}
-	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step, false))
+	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step, v.isFunc))
 	if err != nil {
+		ctx.Reporter().FailNow()
 		return ctx
 	}
 	stepRes, err := convertCommandResponse[*wasm.StepRunCommandResponse](res)
 	if err != nil {
 		ctx.Reporter().Fatal(err)
 	}
-	newCtx, err := context.FromSerializable(stepRes.Context)
+	newCtx, err := context.FromSerializableWithContext(ctx, stepRes.Context)
 	if err != nil {
 		ctx.Reporter().Fatal(err)
 	}
@@ -885,24 +819,30 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 	switch {
 	case v.Type.Step:
 		return reflect.ValueOf(
-			&stepValue{
-				plugin:   p,
-				instance: v.ID,
+			&StructValue{
+				typ:    v.Type,
+				plugin: p,
+				name:   v.ID,
+				value:  v.Value,
 			},
 		), nil
 	case v.Type.StepFunc:
 		return reflect.ValueOf(
-			&stepValue{
-				plugin:   p,
-				instance: v.ID,
-				isFunc:   true,
+			&StructValue{
+				typ:    v.Type,
+				plugin: p,
+				name:   v.ID,
+				value:  v.Value,
+				isFunc: true,
 			},
 		), nil
 	case v.Type.LeftArrowFunc:
 		return reflect.ValueOf(
-			&leftArrowFuncValue{
-				plugin:   p,
-				instance: v.ID,
+			&StructValue{
+				typ:    v.Type,
+				plugin: p,
+				name:   v.ID,
+				value:  v.Value,
 			},
 		), nil
 	case v.Type.IsStruct():
