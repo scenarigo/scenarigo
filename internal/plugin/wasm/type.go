@@ -167,7 +167,11 @@ func NewType(v reflect.Value) (*Type, error) {
 	if t.Implements(stepType) {
 		typ.Step = true
 	}
-	if isStepFuncType(t) {
+	if t.Kind() == reflect.Interface && v.IsValid() && v.Elem().IsValid() {
+		if isStepFuncType(v.Elem().Type()) {
+			typ.StepFunc = true
+		}
+	} else if isStepFuncType(t) {
 		typ.StepFunc = true
 	}
 	if t.Implements(leftArrowFuncType) {

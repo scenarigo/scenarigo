@@ -449,75 +449,11 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 	ret := make([]reflect.Value, 0, len(typ.Return))
 	for idx, retValue := range typ.Return {
 		value := funcRes.Return[idx]
-		switch {
-		case value.IsStep:
-			ret = append(ret, reflect.ValueOf(
-				&stepValue{
-					plugin:   p,
-					instance: value.ID,
-				},
-			))
-			continue
-		case value.IsStepFunc:
-			ret = append(ret, reflect.ValueOf(
-				&stepValue{
-					plugin:   p,
-					instance: value.ID,
-					isFunc:   true,
-				},
-			))
-			continue
-		case value.IsLeftArrowFunc:
-			ret = append(ret, reflect.ValueOf(
-				&leftArrowFuncValue{
-					plugin:   p,
-					instance: value.ID,
-				},
-			))
-			continue
-		case retValue.IsStruct():
-			ret = append(ret, reflect.ValueOf(
-				&StructValue{
-					typ:    retValue,
-					plugin: p,
-					name:   value.ID,
-					value:  value.Value,
-				},
-			))
-			continue
-		}
-		typ, err := retValue.ToReflect()
+		v, err := p.decodeValue(retValue, value)
 		if err != nil {
 			return nil, err
 		}
-		if retValue.Kind == wasm.ERROR {
-			var errText string
-			_ = json.Unmarshal([]byte(value.Value), &errText)
-			if errText != "" {
-				return nil, errors.New(errText)
-			}
-			ret = append(ret, reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()))
-			continue
-		}
-		rv, err := wasm.DecodeValueWithType(typ, []byte(value.Value))
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert function return value(%d) %s to %s: %w", idx, value.Value, typ.Kind(), err)
-		}
-		if rv.Kind() == reflect.Interface {
-			kind := rv.Elem().Kind()
-			if kind == reflect.Map || kind == reflect.Struct {
-				ret = append(ret, reflect.ValueOf(
-					&StructValue{
-						typ:    retValue,
-						plugin: p,
-						name:   value.ID,
-						value:  value.Value,
-					},
-				))
-				continue
-			}
-		}
-		ret = append(ret, rv)
+		ret = append(ret, v)
 	}
 	return ret, nil
 }
@@ -604,11 +540,7 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	if err != nil {
 		return nil, err
 	}
-	t, err := typ.ToReflect()
-	if err != nil {
-		return nil, err
-	}
-	v, err := wasm.DecodeValueWithType(t, []byte(valRes.Value.Value))
+	v, err := p.decodeValue(typ, valRes.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -688,7 +620,7 @@ func (v *leftArrowFuncValue) Exec(arg any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := execRes.Value.ToReflect()
+	result, err := v.plugin.decodeValue(execRes.Value.Type, execRes.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -712,7 +644,7 @@ func (v *leftArrowFuncValue) UnmarshalArg(unmarshal func(any) error) (any, error
 	if err != nil {
 		return nil, err
 	}
-	result, err := argRes.Value.ToReflect()
+	result, err := v.plugin.decodeValue(argRes.Value.Type, argRes.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -747,7 +679,7 @@ func (v *StructValue) Exec(arg any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := execRes.Value.ToReflect()
+	result, err := v.plugin.decodeValue(execRes.Value.Type, execRes.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -774,7 +706,7 @@ func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := argRes.Value.ToReflect()
+	result, err := v.plugin.decodeValue(argRes.Value.Type, argRes.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -922,7 +854,7 @@ func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("request", r)
+	fmt.Println("request", string(r))
 	res, err := v.plugin.call(nil, wasm.NewHTTPCallRequest(v.name, r))
 	if err != nil {
 		return nil, err
@@ -939,4 +871,70 @@ func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	return resp, nil
+}
+
+func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, error) {
+	if v.Type.Kind == wasm.ERROR {
+		var errText string
+		_ = json.Unmarshal([]byte(v.Value), &errText)
+		if errText != "" {
+			return reflect.Value{}, errors.New(errText)
+		}
+		return reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()), nil
+	}
+	switch {
+	case v.Type.Step:
+		return reflect.ValueOf(
+			&stepValue{
+				plugin:   p,
+				instance: v.ID,
+			},
+		), nil
+	case v.Type.StepFunc:
+		return reflect.ValueOf(
+			&stepValue{
+				plugin:   p,
+				instance: v.ID,
+				isFunc:   true,
+			},
+		), nil
+	case v.Type.LeftArrowFunc:
+		return reflect.ValueOf(
+			&leftArrowFuncValue{
+				plugin:   p,
+				instance: v.ID,
+			},
+		), nil
+	case v.Type.IsStruct():
+		return reflect.ValueOf(
+			&StructValue{
+				typ:    v.Type,
+				plugin: p,
+				name:   v.ID,
+				value:  v.Value,
+			},
+		), nil
+	}
+	rtyp, err := typ.ToReflect()
+	if err != nil {
+		return reflect.Value{}, err
+	}
+	rv, err := wasm.DecodeValueWithType(rtyp, []byte(v.Value))
+	if err != nil {
+		return reflect.Value{}, fmt.Errorf("failed to convert value %s to %s: %w", v.Value, rtyp.Kind(), err)
+	}
+	if rv.Kind() == reflect.Interface {
+		kind := rv.Elem().Kind()
+		if kind == reflect.Map || kind == reflect.Struct {
+			return reflect.ValueOf(
+				&StructValue{
+					typ:    typ,
+					plugin: p,
+					name:   v.ID,
+					value:  v.Value,
+				},
+			), nil
+		}
+	}
+	return rv, nil
 }
