@@ -40,33 +40,34 @@ type Type struct {
 type Kind string
 
 const (
-	INVALID Kind = "invalid"
-	REF     Kind = "ref"
-	INT     Kind = "int"
-	INT8    Kind = "int8"
-	INT16   Kind = "int16"
-	INT32   Kind = "int32"
-	INT64   Kind = "int64"
-	UINT    Kind = "uint"
-	UINT8   Kind = "uint8"
-	UINT16  Kind = "uint16"
-	UINT32  Kind = "uint32"
-	UINT64  Kind = "uint64"
-	UINTPTR Kind = "uintptr"
-	FLOAT32 Kind = "float32"
-	FLOAT64 Kind = "float64"
-	STRING  Kind = "string"
-	BYTES   Kind = "bytes"
-	BOOL    Kind = "bool"
-	STRUCT  Kind = "struct"
-	SLICE   Kind = "slice"
-	ARRAY   Kind = "array"
-	MAP     Kind = "map"
-	FUNC    Kind = "func"
-	POINTER Kind = "pointer"
-	ANY     Kind = "any"
-	ERROR   Kind = "error"
-	CONTEXT Kind = "context"
+	INVALID    Kind = "invalid"
+	REF        Kind = "ref"
+	INT        Kind = "int"
+	INT8       Kind = "int8"
+	INT16      Kind = "int16"
+	INT32      Kind = "int32"
+	INT64      Kind = "int64"
+	UINT       Kind = "uint"
+	UINT8      Kind = "uint8"
+	UINT16     Kind = "uint16"
+	UINT32     Kind = "uint32"
+	UINT64     Kind = "uint64"
+	UINTPTR    Kind = "uintptr"
+	FLOAT32    Kind = "float32"
+	FLOAT64    Kind = "float64"
+	STRING     Kind = "string"
+	BYTES      Kind = "bytes"
+	BOOL       Kind = "bool"
+	STRUCT     Kind = "struct"
+	SLICE      Kind = "slice"
+	ARRAY      Kind = "array"
+	MAP        Kind = "map"
+	FUNC       Kind = "func"
+	POINTER    Kind = "pointer"
+	ANY        Kind = "any"
+	ERROR      Kind = "error"
+	CONTEXT    Kind = "context"
+	SCHEMASTEP Kind = "schema.step"
 )
 
 const nullString = "null"
@@ -153,31 +154,38 @@ func toTypeID(t reflect.Type) string {
 func NewType(v reflect.Value) (*Type, error) {
 	t := v.Type()
 	if _, exists := cacheTypeMap[toTypeID(t)]; exists {
-		return &Type{Kind: REF, Ref: toTypeID(t)}, nil
+		typ := &Type{Kind: REF, Ref: toTypeID(t)}
+		setAttribute(v, typ)
+		return typ, nil
 	}
 	typ, err := newType(v)
 	if err != nil {
 		return nil, err
 	}
+	setAttribute(v, typ)
 	mtdNames := make([]string, 0, t.NumMethod())
 	for i := range t.NumMethod() {
 		mtdNames = append(mtdNames, t.Method(i).Name)
 	}
 	typ.MethodNames = mtdNames
+	return typ, nil
+}
+
+func setAttribute(v reflect.Value, typ *Type) {
+	t := v.Type()
 	if t.Implements(stepType) {
 		typ.Step = true
 	}
 	if t.Kind() == reflect.Interface && v.IsValid() && v.Elem().IsValid() {
-		if isStepFuncType(v.Elem().Type()) {
+		if IsStepFuncType(v.Elem().Type()) {
 			typ.StepFunc = true
 		}
-	} else if isStepFuncType(t) {
+	} else if IsStepFuncType(t) {
 		typ.StepFunc = true
 	}
 	if t.Implements(leftArrowFuncType) {
 		typ.LeftArrowFunc = true
 	}
-	return typ, nil
 }
 
 //nolint:cyclop
@@ -191,6 +199,8 @@ func newType(v reflect.Value) (*Type, error) {
 		return &Type{Kind: ERROR}, nil
 	case ctxType:
 		return &Type{Kind: CONTEXT}, nil
+	case schemaStepType:
+		return &Type{Kind: SCHEMASTEP}, nil
 	}
 	switch t.Kind() {
 	case reflect.Invalid:
@@ -563,6 +573,8 @@ func (t *Type) ToReflect() (reflect.Type, error) {
 		return errorType, nil
 	case CONTEXT:
 		return ctxType, nil
+	case SCHEMASTEP:
+		return schemaStepType, nil
 	}
 	return nil, fmt.Errorf("failed to get reflect.Type from %s", t)
 }
@@ -655,7 +667,7 @@ func resolveRef(t *Type, typeRefMap map[string]*Type, resolvedMap map[*Type]*Typ
 	switch t.Kind {
 	case INVALID, INT, INT8, INT16, INT32, INT64,
 		UINT, UINT8, UINT16, UINT32, UINT64, UINTPTR,
-		FLOAT32, FLOAT64, BOOL, STRING, BYTES, ANY, ERROR, CONTEXT:
+		FLOAT32, FLOAT64, BOOL, STRING, BYTES, ANY, ERROR, CONTEXT, SCHEMASTEP:
 		return t, nil
 	case FUNC:
 		ret.Kind = FUNC
@@ -748,8 +760,8 @@ func newZeroValue(t reflect.Type) reflect.Value {
 	return reflect.New(t).Elem()
 }
 
-// isStepFuncType compares with `func(ctx *context.Context, step *schema.Step) *context.Context` type.
-func isStepFuncType(t reflect.Type) bool {
+// IsStepFuncType compares with `func(ctx *context.Context, step *schema.Step) *context.Context` type.
+func IsStepFuncType(t reflect.Type) bool {
 	if t.Kind() != reflect.Func {
 		return false
 	}
