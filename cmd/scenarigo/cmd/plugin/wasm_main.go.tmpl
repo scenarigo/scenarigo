@@ -4,12 +4,14 @@ import (
 	"crypto/tls"
 	"net/http"
 
+	"github.com/goccy/wasi-go-net/wasip1"
 	_ "github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/plugin"
 )
 
 func init() {
 	http.DefaultTransport = &http.Transport{
+		DialContext: wasip1.DialContext,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
