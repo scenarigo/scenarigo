@@ -1,9 +1,20 @@
 package main
 
 import (
+	"crypto/tls"
+	"net/http"
+
 	_ "github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/plugin"
 )
+
+func init() {
+	http.DefaultTransport = &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+}
 
 func main() {
 	plugin.Register(

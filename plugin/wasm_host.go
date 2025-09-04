@@ -55,7 +55,6 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	stdinR, stdinW, err := os.Pipe()
 	if err != nil {
 		return nil, err
