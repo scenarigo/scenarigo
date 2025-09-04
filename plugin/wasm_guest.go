@@ -346,7 +346,7 @@ func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunComma
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("isFunc", r.IsFunc)
+	fmt.Println("isFunc", r.IsFunc, "step", step)
 	h.ctx = ctx
 	var result []reflect.Value
 	/*
@@ -394,7 +394,7 @@ func (h *handler) LeftArrowFuncExec(r *wasm.LeftArrowFuncExecCommandRequest) (*w
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Exec: save res.ID", res.ID)
+	fmt.Println("Exec: save res.ID", res.ID, "result[0]", result[0])
 	h.nameToValueMap[res.ID] = result[0]
 	return &wasm.LeftArrowFuncExecCommandResponse{
 		Value: res,
