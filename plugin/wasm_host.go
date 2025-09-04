@@ -71,6 +71,10 @@ func openWasmPlugin(path string) (Plugin, error) {
 		WithFSConfig(wazero.NewFSConfig().WithFSMount(os.DirFS("/"), ""))
 
 	srcEnvs := os.Environ()
+	srcEnvs = append(srcEnvs, []string{
+		"GOOGLE_API_USE_MTLS_ENDPOINT=never",
+		"GOOGLE_API_USE_CLIENT_CERTIFICATE=false",
+	}...)
 	envs := make([]string, 0, len(srcEnvs))
 	for _, kv := range srcEnvs {
 		i := strings.IndexByte(kv, '=')
@@ -597,6 +601,7 @@ type StructValue struct {
 }
 
 func (v *StructValue) Exec(arg any) (any, error) {
+	fmt.Println("StructValue.Exec", v.name)
 	if !v.typ.LeftArrowFunc {
 		return nil, fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name)
 	}
@@ -620,6 +625,7 @@ func (v *StructValue) Exec(arg any) (any, error) {
 }
 
 func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	fmt.Println("StructValue.UnmarshalArg", v.name)
 	if !v.typ.LeftArrowFunc {
 		return nil, fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name)
 	}
@@ -647,12 +653,18 @@ func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	return result.Interface(), nil
 }
 
+const fatalDefaultErrorMsg = "plugin executed panic(nil) or runtime.Goexit"
+
 func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
+	fmt.Println("StructValue.Run", v.name)
 	if !v.typ.Step && !v.typ.StepFunc {
 		ctx.Reporter().Fatal(fmt.Errorf("%s doesn't implement plugin.Step", v.name))
 	}
 	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step, v.isFunc))
 	if err != nil {
+		if e := err.Error(); e != fatalDefaultErrorMsg {
+			ctx.Reporter().Error(err)
+		}
 		ctx.Reporter().FailNow()
 		return ctx
 	}

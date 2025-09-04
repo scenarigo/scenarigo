@@ -98,7 +98,7 @@ func Register(initFn, syncFn DefinitionFunc) {
 					if r := recover(); r != nil {
 						errMsg = fmt.Sprint(r)
 					} else {
-						errMsg = "plugin executed panic(nil) or runtime.Goexit"
+						errMsg = fatalDefaultErrorMsg
 					}
 					var sctx *context.SerializableContext
 					if h.ctx != nil {
@@ -389,6 +389,8 @@ func (h *handler) LeftArrowFuncExec(r *wasm.LeftArrowFuncExecCommandRequest) (*w
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Exec: save res.ID", res.ID)
+	h.nameToValueMap[res.ID] = result[0]
 	return &wasm.LeftArrowFuncExecCommandResponse{
 		Value: res,
 	}, nil
