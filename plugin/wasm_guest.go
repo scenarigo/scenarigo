@@ -336,6 +336,8 @@ func (h *handler) Method(r *wasm.MethodCommandRequest) (*wasm.MethodCommandRespo
 }
 
 func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunCommandResponse, e error) {
+	fmt.Println("guest: StepRun")
+	fmt.Println("instance", r.Instance)
 	step, exists := h.nameToValueMap[r.Instance]
 	if !exists {
 		return nil, fmt.Errorf("failed to find step instance from %s", r.Instance)
@@ -344,19 +346,22 @@ func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunComma
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("isFunc", r.IsFunc)
 	h.ctx = ctx
 	var result []reflect.Value
-	if r.IsFunc {
-		result = step.Call([]reflect.Value{
-			reflect.ValueOf(ctx),
-			reflect.ValueOf(r.Step),
-		})
-	} else {
-		result = step.MethodByName("Run").Call([]reflect.Value{
-			reflect.ValueOf(ctx),
-			reflect.ValueOf(r.Step),
-		})
-	}
+	/*
+		if r.IsFunc {
+			result = step.Call([]reflect.Value{
+				reflect.ValueOf(ctx),
+				reflect.ValueOf(r.Step),
+			})
+		} else {
+	*/
+	result = step.MethodByName("Run").Call([]reflect.Value{
+		reflect.ValueOf(ctx),
+		reflect.ValueOf(r.Step),
+	})
+	//	}
 	if len(result) != 1 {
 		return nil, fmt.Errorf("failed to get result value from step.Run function. return values: %v", result)
 	}
