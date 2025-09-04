@@ -783,6 +783,7 @@ func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto prot
 }
 
 func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Content-Length", strconv.Itoa(int(req.ContentLength)))
 	fmt.Printf("host: req: %+v\n", req)
 	r, err := httputil.DumpRequest(req, true)
 	if err != nil {
@@ -797,6 +798,7 @@ func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("response", string(httpCallRes.Response))
 	resp, err := http.ReadResponse(
 		bufio.NewReader(bytes.NewBuffer(httpCallRes.Response)),
 		req,

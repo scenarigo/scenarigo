@@ -7,6 +7,7 @@ import (
 	"bytes"
 	gocontext "context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -572,6 +573,7 @@ func (h *handler) getMethod(clientName, methodName string) (reflect.Value, error
 }
 
 func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallCommandResponse, error) {
+	fmt.Println("guest: request", string(r.Request))
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBuffer(r.Request)))
 	if err != nil {
 		return nil, err
@@ -596,7 +598,13 @@ func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallComman
 	if e := results[1].Interface(); e != nil {
 		return nil, e.(error)
 	}
-	resp, err := httputil.DumpResponse(results[0].Interface().(*http.Response), true)
+	httpRes := results[0].Interface().(*http.Response)
+	if httpRes == nil {
+		return nil, errors.New("failed to get http response")
+	}
+	defer httpRes.Body.Close()
+	fmt.Printf("response: %+v\n", httpRes)
+	resp, err := httputil.DumpResponse(httpRes, true)
 	if err != nil {
 		return nil, err
 	}
