@@ -395,7 +395,11 @@ func (h *handler) LeftArrowFuncExec(r *wasm.LeftArrowFuncExecCommandRequest) (*w
 		return nil, err
 	}
 	fmt.Println("Exec: save res.ID", res.ID, "result[0]", result[0])
-	h.nameToValueMap[res.ID] = result[0]
+	if result[0].Kind() == reflect.Interface {
+		h.nameToValueMap[res.ID] = result[0].Elem()
+	} else {
+		h.nameToValueMap[res.ID] = result[0]
+	}
 	return &wasm.LeftArrowFuncExecCommandResponse{
 		Value: res,
 	}, nil
