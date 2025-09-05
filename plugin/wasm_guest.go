@@ -571,13 +571,11 @@ func (h *handler) getMethod(clientName, methodName string) (reflect.Value, error
 }
 
 func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallCommandResponse, error) {
-	fmt.Println("guest: request", string(r.Request))
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBuffer(r.Request)))
 	if err != nil {
 		return nil, err
 	}
 	req.RequestURI = ""
-	fmt.Printf("guest: req: %+v\n", req)
 	client, exists := h.nameToValueMap[r.Client]
 	if !exists {
 		return nil, fmt.Errorf("unknown clientName: %q", r.Client)
@@ -601,7 +599,6 @@ func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallComman
 		return nil, errors.New("failed to get http response")
 	}
 	defer httpRes.Body.Close()
-	fmt.Printf("response: %+v\n", httpRes)
 	resp, err := httputil.DumpResponse(httpRes, true)
 	if err != nil {
 		return nil, err

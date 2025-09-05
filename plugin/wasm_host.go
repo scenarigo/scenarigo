@@ -601,7 +601,6 @@ type StructValue struct {
 }
 
 func (v *StructValue) Exec(arg any) (any, error) {
-	fmt.Println("StructValue.Exec", v.name)
 	if !v.typ.LeftArrowFunc {
 		return nil, fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name)
 	}
@@ -625,7 +624,6 @@ func (v *StructValue) Exec(arg any) (any, error) {
 }
 
 func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
-	fmt.Println("StructValue.UnmarshalArg", v.name)
 	if !v.typ.LeftArrowFunc {
 		return nil, fmt.Errorf("%s doesn't implement plugin.LeftArrowFunc", v.name)
 	}
@@ -656,7 +654,6 @@ func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
 const fatalDefaultErrorMsg = "plugin executed panic(nil) or runtime.Goexit"
 
 func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
-	fmt.Println("StructValue.Run", v.name)
 	if !v.typ.Step && !v.typ.StepFunc {
 		ctx.Reporter().Fatal(fmt.Errorf("%s doesn't implement plugin.Step", v.name))
 	}
@@ -796,12 +793,10 @@ func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto prot
 
 func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Content-Length", strconv.Itoa(int(req.ContentLength)))
-	fmt.Printf("host: req: %+v\n", req)
 	r, err := httputil.DumpRequest(req, true)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("request", string(r))
 	res, err := v.plugin.call(nil, wasm.NewHTTPCallRequest(v.name, r))
 	if err != nil {
 		return nil, err
@@ -810,7 +805,6 @@ func (v *StructValue) Do(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("response", string(httpCallRes.Response))
 	resp, err := http.ReadResponse(
 		bufio.NewReader(bytes.NewBuffer(httpCallRes.Response)),
 		req,
