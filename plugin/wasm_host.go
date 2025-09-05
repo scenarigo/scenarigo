@@ -87,6 +87,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 	}
 	ctx, sys, err := imports.NewBuilder().
 		WithSocketsExtension("wasmedgev2", compiledMod).
+		WithWasiGoNetExtension().
 		WithStdio(int(stdinR.Fd()), int(os.Stdout.Fd()), int(os.Stderr.Fd())).
 		WithEnv(envs...).
 		WithDirs("/").

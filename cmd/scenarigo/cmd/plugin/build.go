@@ -790,7 +790,7 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 
 		// To replace net.Listen and net.Dialer.DialContext defined in the net package with Listen and DialContext defined in github.com/goccy/wasi-go-net/wasip1, use an overlay.
 		// Without doing this, it is not possible to access the network without rewriting the Go source code used for the wasm plugin.
-		overlayFile, err := net.CreateReplacedNetPkgOverlayFile(ctx, net.WithGoCommandPath(goCmd))
+		overlayFile, err := net.CreateReplacedNetworkingPkgOverlayFile(ctx, net.WithGoCommandPath(goCmd))
 		if err != nil {
 			return fmt.Errorf("failed to create overlay file: %w", err)
 		}
