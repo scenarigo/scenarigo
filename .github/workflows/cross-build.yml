@@ -15,7 +15,7 @@ jobs:
         fetch-depth: 0
     - name: Install Go
       id: setup-go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: stable
         check-latest: true
@@ -55,7 +55,7 @@ jobs:
         fetch-depth: 0
     - name: Install Go
       id: setup-go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: stable
         check-latest: true
