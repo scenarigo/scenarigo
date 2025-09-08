@@ -1,0 +1,18 @@
+title: constant retry scenario
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+  expect:
+    code: OK
+- protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+  expect:
+    code: OK
+retry:
+  constant:
+    interval: 10ms
+    maxRetries: 1

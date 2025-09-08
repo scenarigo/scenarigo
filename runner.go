@@ -286,10 +286,19 @@ FILE_LOOP:
 			}
 			for _, scn := range scns {
 				ctx = ctx.WithNode(scn.Node)
-				ctx.Run(scn.Title, func(ctx *context.Context) {
-					ctx.Reporter().Parallel()
-					_ = RunScenario(ctx, scn)
-				})
+				if scn.Retry != nil {
+					// Run scenario with retry policy
+					context.RunWithRetry(ctx, scn.Title, func(ctx *context.Context) {
+						ctx.Reporter().Parallel()
+						_ = RunScenario(ctx, scn)
+					}, scn.Retry)
+				} else {
+					// Run scenario without retry
+					ctx.Run(scn.Title, func(ctx *context.Context) {
+						ctx.Reporter().Parallel()
+						_ = RunScenario(ctx, scn)
+					})
+				}
 			}
 		})
 	}
@@ -302,10 +311,19 @@ FILE_LOOP:
 			}
 			for _, scn := range scns {
 				ctx = ctx.WithNode(scn.Node)
-				ctx.Run(scn.Title, func(ctx *context.Context) {
-					ctx.Reporter().Parallel()
-					_ = RunScenario(ctx, scn)
-				})
+				if scn.Retry != nil {
+					// Run scenario with retry policy
+					context.RunWithRetry(ctx, scn.Title, func(ctx *context.Context) {
+						ctx.Reporter().Parallel()
+						_ = RunScenario(ctx, scn)
+					}, scn.Retry)
+				} else {
+					// Run scenario without retry
+					ctx.Run(scn.Title, func(ctx *context.Context) {
+						ctx.Reporter().Parallel()
+						_ = RunScenario(ctx, scn)
+					})
+				}
 			}
 		})
 	}

@@ -411,9 +411,13 @@ steps:
 
 ### Timeout/Retry
 
-You can set timeout and retry policy for each step.
+You can set timeout and retry policy for each step or for the entire scenario.
 Duration strings are parsed by [`time.ParseDuration`](https://pkg.go.dev/time#ParseDuration).
 Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+
+#### Step-level Retry
+
+You can set retry policy for individual steps:
 
 ```yaml
 steps:
@@ -474,6 +478,55 @@ Note: `maxInterval` caps the retry interval, not the randomized interval.
 |8|128s|[64s, 192s]|
 |9|180s|[90s, 270s]|
 |10|180s|[90s, 270s]|
+
+#### Scenario-level Retry
+
+You can also set retry policy for the entire scenario. This will retry all steps in the scenario if any step fails:
+
+```yaml
+title: my test scenario
+retry:                   # retry policy for the entire scenario
+  constant:
+    interval: 5s
+    maxRetries: 3
+    maxElapsedTime: 30s
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: http://example.com
+  expect:
+    code: OK
+- protocol: http
+  request:
+    method: POST
+    url: http://example.com/data
+    body:
+      key: value
+  expect:
+    code: Created
+```
+
+When a scenario has a retry policy, if any step fails, the entire scenario will be retried according to the policy. This is useful when you want to retry a sequence of dependent steps together.
+
+You can also use exponential backoff for scenario-level retry:
+
+```yaml
+title: my test scenario
+retry:
+  exponential:
+    initialInterval: 1s
+    factor: 2
+    maxRetries: 5
+    maxElapsedTime: 1m
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: http://example.com
+  expect:
+    code: OK
+```
 
 ### Using conditions to control step execution
 
