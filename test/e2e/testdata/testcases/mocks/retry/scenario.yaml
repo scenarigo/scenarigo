@@ -1,0 +1,14 @@
+mocks:
+- protocol: http
+  response:
+    code: 200
+- protocol: http
+  response:
+    code: 500
+
+- protocol: http
+  response:
+    code: 200
+- protocol: http
+  response:
+    code: 200

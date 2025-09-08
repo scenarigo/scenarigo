@@ -149,6 +149,51 @@ secrets:
 				}
 			},
 		},
+		"scenario-level retry": {
+			yaml: `
+---
+title: /echo
+steps:
+- title: POST /echo
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/echo"
+    body:
+      message: hello
+  expect:
+    code: 200
+    body:
+      message: '{{request.body.message}}'
+retry:
+  constant:
+    interval: 10ms
+    maxRetries: 1
+`,
+			config: parseConfig(t, `
+schemaVersion: config/v1
+vars:
+  var1: '{{"VAR1"}}'
+secrets:
+  sec1: '{{"SEC1"}}'
+`),
+			setup: func(ctx *context.Context) func(*context.Context) {
+				mux := http.NewServeMux()
+				mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+					defer r.Body.Close()
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = io.Copy(w, r.Body)
+				})
+
+				s := httptest.NewServer(mux)
+				t.Setenv("TEST_ADDR", s.URL)
+
+				return func(*context.Context) {
+					s.Close()
+					os.Unsetenv("TEST_ADDR")
+				}
+			},
+		},
 		"exclude all files": {
 			config: &schema.Config{
 				Scenarios: []string{

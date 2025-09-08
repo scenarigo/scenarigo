@@ -1,5 +1,18 @@
 title: retry
 scenarios:
+# scenario-level retry
+- filename: retry/scenario-constant.yaml
+  mocks: retry/scenario.yaml
+  success: true
+  output:
+    stdout: retry/scenario-constant-success.txt
+- filename: retry/scenario-constant.yaml
+  mocks: retry/scenario-failure.yaml
+  success: false
+  output:
+    stdout: retry/scenario-constant-failure.txt
+
+# step-level retry
 - filename: retry/step-never.yaml
   mocks: retry/step-never.yaml
   success: false

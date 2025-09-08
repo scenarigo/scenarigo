@@ -25,6 +25,7 @@ type Scenario struct {
 	Vars          map[string]any    `yaml:"vars,omitempty"`
 	Secrets       map[string]any    `yaml:"secrets,omitempty"`
 	Steps         []*Step           `yaml:"steps,omitempty"`
+	Retry         *RetryPolicy      `yaml:"retry,omitempty"`
 
 	// The strict YAML decoder fails to decode if finds an unknown field.
 	// Anchors is the field for enabling to define YAML anchors by avoiding the error.
