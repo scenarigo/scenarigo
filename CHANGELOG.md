@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## [v0.23.0](https://github.com/scenarigo/scenarigo/compare/v0.22.1...v0.23.0) - 2025-09-08
+### New Features
+- Support WebAssembly Plugin System ( PoC ) by @goccy in https://github.com/scenarigo/scenarigo/pull/574
+- Fix colorize feature by @goccy in https://github.com/scenarigo/scenarigo/pull/594
+- Improve wasm plugin system by @goccy in https://github.com/scenarigo/scenarigo/pull/591
+- implement scenario-level retry by @zoncoen in https://github.com/scenarigo/scenarigo/pull/613
+### Dependency Upgrades
+- bump dependencies by @zoncoen in https://github.com/scenarigo/scenarigo/pull/588
+- chore(deps): bump google.golang.org/grpc from 1.73.0 to 1.74.2 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/589
+- chore(deps): bump google.golang.org/grpc from 1.73.0 to 1.74.2 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/590
+- chore(deps): bump the github-actions group with 2 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/604
+- chore(deps): bump the go-patch group across 2 directories with 1 update by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/603
+- chore(deps): bump the go-minor group across 2 directories with 2 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/602
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/596
+- chore(deps): bump actions/checkout from 4 to 5 in the github-actions group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/605
+- chore(deps): bump the go-minor group across 2 directories with 1 update by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/606
+- chore(deps): bump the go-patch group across 2 directories with 1 update by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/607
+- chore(deps): bump the go-minor group across 1 directory with 2 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/611
+- chore(deps): bump actions/setup-go from 5 to 6 in the github-actions group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/610
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/608
+
 ## [v0.22.1](https://github.com/scenarigo/scenarigo/compare/v0.22.0...v0.22.1) - 2025-07-07
 ### Bug Fixes
 - fix parallel flag by @zoncoen in https://github.com/scenarigo/scenarigo/pull/577
