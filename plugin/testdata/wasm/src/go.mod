@@ -1,6 +1,6 @@
 module test
 
-go 1.23.0
+go 1.24.0
 
 replace github.com/scenarigo/scenarigo => ../../../..
 
@@ -31,7 +31,7 @@ require (
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
 	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
 )
