@@ -46,3 +46,4 @@
 	vPrefix = true
 	releaseBranch = main
 	versionFile = version/version.go
+    release = draft
