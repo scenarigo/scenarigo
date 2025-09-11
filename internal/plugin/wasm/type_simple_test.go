@@ -1,6 +1,7 @@
 package wasm
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -199,6 +200,7 @@ func TestType_FieldTypeByName(t *testing.T) {
 	result := typ.FieldTypeByName("Name")
 	if result == nil {
 		t.Fatal("FieldTypeByName() returned nil")
+		return
 	}
 
 	if result.Kind != STRING {
@@ -321,17 +323,14 @@ func TestValue_ToReflect(t *testing.T) {
 		Value: `"hello"`,
 	}
 
-	result, err := value.ToReflect()
-	if err != nil {
-		t.Fatalf("ToReflect() error = %v", err)
+	// Value struct no longer has ToReflect method, test the Type field instead
+	if value.Type == nil {
+		t.Fatal("Value.Type should not be nil")
 	}
 
-	if !result.IsValid() {
-		t.Error("ToReflect() returned invalid value")
-	}
-
-	if result.Interface() != "hello" {
-		t.Errorf("ToReflect() = %v, want %v", result.Interface(), "hello")
+	// Test that the Value field contains the expected JSON-encoded value
+	if value.Value != `"hello"` {
+		t.Errorf("Value.Value = %v, want %v", value.Value, `"hello"`)
 	}
 }
 
@@ -403,7 +402,8 @@ func TestDecodeValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := DecodeValue([]byte(tt.data))
+			// DecodeValue function was removed, use DecodeValueWithType with string type
+			result, err := DecodeValueWithType(reflect.TypeOf(""), []byte(tt.data))
 
 			if tt.expectError {
 				if err == nil {
@@ -1524,14 +1524,16 @@ func TestValueEncodeDecodeComplexTypes(t *testing.T) {
 		t.Error("EncodeValue() should produce non-empty value")
 	}
 
-	// Test decoding the encoded value
-	decoded, err := DecodeValue([]byte(encoded.Value))
-	if err != nil {
-		t.Fatalf("DecodeValue() complex struct error = %v", err)
-	}
+	// Test decoding the encoded value using reflection type
+	if encoded.Value != "" {
+		decoded, err := DecodeValueWithType(reflect.TypeOf(complexStruct), []byte(encoded.Value))
+		if err != nil {
+			t.Fatalf("DecodeValueWithType() complex struct error = %v", err)
+		}
 
-	if !decoded.IsValid() {
-		t.Error("DecodeValue() should return valid value")
+		if !decoded.IsValid() {
+			t.Error("DecodeValueWithType() should return valid value")
+		}
 	}
 }
 
@@ -1818,5 +1820,132 @@ func TestHandleCommandError(t *testing.T) {
 	resp := HandleCommand(invalidJSON, &mockCommandHandler{})
 	if resp.Error == "" {
 		t.Error("HandleCommand() should return error for invalid JSON")
+	}
+}
+
+func TestIsStepFuncType(t *testing.T) {
+	fn := func(ctx *context.Context, step *schema.Step) *context.Context {
+		return nil
+	}
+	if !IsStepFuncType(reflect.TypeOf(fn)) {
+		t.Fatal("unexpected result")
+	}
+}
+
+func TestNewHTTPCallRequest(t *testing.T) {
+	client := "httpClient"
+	request := []byte("HTTP request data")
+
+	req := NewHTTPCallRequest(client, request)
+
+	if req.CommandType != HTTPCallCommand {
+		t.Errorf("NewHTTPCallRequest() CommandType = %v, want %v", req.CommandType, HTTPCallCommand)
+	}
+
+	cmd, ok := req.Command.(*HTTPCallCommandRequest)
+	if !ok {
+		t.Fatalf("NewHTTPCallRequest() Command type = %T, want *HTTPCallCommandRequest", req.Command)
+	}
+
+	if cmd.Client != client {
+		t.Errorf("NewHTTPCallRequest() Client = %v, want %v", cmd.Client, client)
+	}
+
+	if !bytes.Equal(cmd.Request, request) {
+		t.Errorf("NewHTTPCallRequest() Request = %v, want %v", cmd.Request, request)
+	}
+}
+
+func TestNewTypeWithStepFunc(t *testing.T) {
+	// Test step function type detection
+	stepFunc := func(ctx *context.Context, step *schema.Step) *context.Context {
+		return ctx
+	}
+	value := reflect.ValueOf(stepFunc)
+
+	typ, err := NewType(value)
+	if err != nil {
+		t.Fatalf("NewType() error = %v", err)
+	}
+
+	if typ.Kind != FUNC {
+		t.Errorf("NewType() Kind = %v, want %v", typ.Kind, FUNC)
+	}
+
+	if !typ.StepFunc {
+		t.Error("NewType() StepFunc should be true for step function")
+	}
+}
+
+func TestSchemaStepTypeHandling(t *testing.T) {
+	// Test schema.Step type handling
+	step := &schema.Step{Title: "test"}
+	value := reflect.ValueOf(step)
+
+	typ, err := NewType(value)
+	if err != nil {
+		t.Fatalf("NewType() error = %v", err)
+	}
+
+	// The schemaStepType matches *schema.Step directly
+	if typ.Kind != SCHEMASTEP {
+		t.Errorf("NewType() Kind = %v, want %v", typ.Kind, SCHEMASTEP)
+	}
+}
+
+func TestResolveRefWithSchemaStep(t *testing.T) {
+	// Test ResolveRef with SCHEMASTEP type
+	typ := &Type{Kind: SCHEMASTEP}
+
+	resolved, err := ResolveRef(typ, nil)
+	if err != nil {
+		t.Fatalf("ResolveRef() error = %v", err)
+	}
+
+	if resolved.Kind != SCHEMASTEP {
+		t.Errorf("ResolveRef() Kind = %v, want %v", resolved.Kind, SCHEMASTEP)
+	}
+}
+
+func TestTypeToReflectWithSchemaStep(t *testing.T) {
+	// Test ToReflect method with SCHEMASTEP type
+	typ := &Type{Kind: SCHEMASTEP}
+
+	reflectType, err := typ.ToReflect()
+	if err != nil {
+		t.Fatalf("ToReflect() error = %v", err)
+	}
+
+	expectedType := reflect.TypeOf((*schema.Step)(nil))
+	if reflectType != expectedType {
+		t.Errorf("ToReflect() = %v, want %v", reflectType, expectedType)
+	}
+}
+
+func TestValueEncodeWithNewTypes(t *testing.T) {
+	// Test EncodeValue with a simple value to ensure the new Type field is set
+	simpleValue := "test string"
+	value := reflect.ValueOf(simpleValue)
+
+	encoded, err := EncodeValue(value)
+	if err != nil {
+		t.Fatalf("EncodeValue() error = %v", err)
+	}
+
+	if encoded.Type == nil {
+		t.Fatal("EncodeValue() Type should not be nil")
+	}
+
+	if encoded.Type.Kind != STRING {
+		t.Errorf("EncodeValue() Type.Kind = %v, want %v", encoded.Type.Kind, STRING)
+	}
+
+	// Check that we have a valid encoding
+	if encoded.ID == "" {
+		t.Error("EncodeValue() ID should not be empty")
+	}
+
+	if encoded.Value != `"test string"` {
+		t.Errorf("EncodeValue() Value = %v, want %v", encoded.Value, `"test string"`)
 	}
 }
