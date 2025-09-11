@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [v0.23.1](https://github.com/scenarigo/scenarigo/compare/v0.23.0...v0.23.1) - 2025-09-11
+### Dependency Upgrades
+- chore(deps): bump Songmu/tagpr from 1.8.4 to 1.9.0 in the github-actions group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/614
+- chore(deps): bump the go-minor group across 2 directories with 2 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/615
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/616
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/619
+
 ## [v0.23.0](https://github.com/scenarigo/scenarigo/compare/v0.22.1...v0.23.0) - 2025-09-08
 ### New Features
 - Support WebAssembly Plugin System ( PoC ) by @goccy in https://github.com/scenarigo/scenarigo/pull/574
