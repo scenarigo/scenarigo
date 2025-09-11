@@ -30,6 +30,7 @@ linters:
   - testpackage
   - tparallel
   - unparam
+  - usetesting
   - varnamelen
   - wrapcheck
   - wsl
@@ -76,6 +77,9 @@ linters:
     - linters:
       - staticcheck
       text: 'SA1019: "github.com/golang/protobuf'
+    - linters:
+      - gocyclo
+      path: internal/plugin/wasm/protocol.go
     paths:
     - third_party$
     - builtin$

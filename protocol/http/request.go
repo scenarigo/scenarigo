@@ -72,6 +72,10 @@ func (r ResponseExtractor) ExtractByKey(key string) (any, bool) {
 	return nil, false
 }
 
+type httpClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 // Invoke implements protocol.Invoker interface.
 func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	client, err := r.buildClient(ctx)
@@ -131,25 +135,25 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	return ctx, rvalue, nil
 }
 
-func (r *Request) buildClient(ctx *context.Context) (*http.Client, error) {
-	client := &http.Client{
-		Transport: &charsetRoundTripper{
-			base: &encodingRoundTripper{
-				base: http.DefaultTransport,
-			},
-		},
-	}
+func (r *Request) buildClient(ctx *context.Context) (httpClient, error) {
 	if r.Client != "" {
 		x, err := ctx.ExecuteTemplate(r.Client)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get client")
 		}
-		var ok bool
-		if client, ok = x.(*http.Client); !ok {
+		client, ok := x.(httpClient)
+		if !ok {
 			return nil, errors.Errorf(`client must be "*http.Client" but got "%T"`, x)
 		}
+		return client, nil
 	}
-	return client, nil
+	return &http.Client{
+		Transport: &charsetRoundTripper{
+			base: &encodingRoundTripper{
+				base: http.DefaultTransport,
+			},
+		},
+	}, nil
 }
 
 type charsetRoundTripper struct {
