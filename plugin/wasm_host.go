@@ -302,7 +302,7 @@ func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*
 		return func(sctx *Context) (*Context, func(*Context)) {
 			ctx, teardown, err := setupCallback(sctx, 0)
 			if err != nil {
-				ctx.Reporter().Fatal(err)
+				captureWasmPluginFatal(ctx, err)
 			}
 			return ctx, teardown
 		}
@@ -314,6 +314,7 @@ func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*
 			ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
 				ctx, teardown, err := setupCallback(ctx, i)
 				if err != nil {
+					captureWasmPluginFatal(ctx, err)
 					return
 				}
 				if ctx != nil {
@@ -498,13 +499,7 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 		typ = typ.FieldTypeByName(lastSel)
 	}
 	if typ.Kind == wasm.FUNC {
-		if typ.Step {
-			return &StructValue{
-				typ:    typ,
-				plugin: p,
-				name:   name,
-			}, nil
-		} else if typ.StepFunc {
+		if typ.Step || typ.StepFunc {
 			return &StructValue{
 				typ:    typ,
 				plugin: p,
@@ -643,27 +638,25 @@ func (v *StructValue) UnmarshalArg(unmarshal func(any) error) (any, error) {
 	return result.Interface(), nil
 }
 
-const fatalDefaultErrorMsg = "plugin executed panic(nil) or runtime.Goexit"
-
 func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
 	if !v.typ.Step && !v.typ.StepFunc {
-		ctx.Reporter().Fatal(fmt.Errorf("%s doesn't implement plugin.Step", v.name))
+		captureWasmPluginError(ctx, fmt.Errorf("%s doesn't implement plugin.Step", v.name))
+		return ctx
 	}
 	res, err := v.plugin.call(ctx, wasm.NewStepRunRequest(v.name, ctx.ToSerializable(), step))
 	if err != nil {
-		if e := err.Error(); e != fatalDefaultErrorMsg {
-			ctx.Reporter().Error(err)
-		}
-		ctx.Reporter().FailNow()
+		captureWasmPluginError(ctx, err)
 		return ctx
 	}
 	stepRes, err := convertCommandResponse[*wasm.StepRunCommandResponse](res)
 	if err != nil {
-		ctx.Reporter().Fatal(err)
+		captureWasmPluginFatal(ctx, err)
+		return ctx
 	}
 	newCtx, err := context.FromSerializableWithContext(ctx, stepRes.Context)
 	if err != nil {
-		ctx.Reporter().Fatal(err)
+		captureWasmPluginFatal(ctx, err)
+		return ctx
 	}
 	return newCtx
 }
@@ -853,4 +846,31 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 		}
 	}
 	return rv, nil
+}
+
+func captureWasmPluginFatal(ctx *Context, err error) {
+	if ctx == nil {
+		return
+	}
+	r := ctx.Reporter()
+	if r == nil {
+		return
+	}
+	r.Fatal(err)
+}
+
+const fatalDefaultErrorMsg = "plugin executed panic(nil) or runtime.Goexit"
+
+func captureWasmPluginError(ctx *Context, err error) {
+	if ctx == nil {
+		return
+	}
+	r := ctx.Reporter()
+	if r == nil {
+		return
+	}
+	if e := err.Error(); e != fatalDefaultErrorMsg {
+		r.Error(err)
+	}
+	r.FailNow()
 }
