@@ -10,42 +10,40 @@ import (
 
 // Value represents a return value from a WASM plugin function call.
 type Value struct {
-	ID              string `json:"id"`
-	Value           string `json:"value"`
-	IsStep          bool   `json:"isStep"`
-	IsLeftArrowFunc bool   `json:"isLeftArrowFunc"`
-}
-
-func (v *Value) ToReflect() (reflect.Value, error) {
-	return DecodeValue([]byte(v.Value))
+	ID    string `json:"id"`
+	Value string `json:"value"`
+	Type  *Type  `json:"type"`
 }
 
 func EncodeValue(v reflect.Value) (*Value, error) {
-	t := v.Type()
-	ret := &Value{}
-	if t == ctxType {
+	t, err := NewType(v)
+	if err != nil {
+		return nil, err
+	}
+	ret := &Value{
+		ID:   fmt.Sprintf("%p", &v),
+		Type: t,
+	}
+	switch t.Kind {
+	case CONTEXT:
 		if ctx, ok := v.Interface().(*context.Context); ok {
 			sctx := ctx.ToSerializable()
 			v = reflect.ValueOf(sctx)
 		}
-	}
-	var isImplementedCustomInterface bool
-	if t == stepType || t.Implements(stepType) {
-		ret.IsStep = true
-		isImplementedCustomInterface = true
-	}
-	if t == leftArrowFuncType || t.Implements(leftArrowFuncType) {
-		ret.IsLeftArrowFunc = true
-		isImplementedCustomInterface = true
-	}
-	ret.ID = fmt.Sprintf("%p", &v)
-	if !isImplementedCustomInterface {
-		b, err := json.Marshal(v.Interface())
-		if err != nil {
-			return nil, fmt.Errorf("failed to encode %T value", v.Interface())
+	case ERROR:
+		if err, ok := v.Interface().(error); ok {
+			ret.Value = err.Error()
+			return ret, nil
 		}
-		ret.Value = string(b)
 	}
+	if t.Step || t.StepFunc || t.LeftArrowFunc {
+		return ret, nil
+	}
+	b, err := json.Marshal(v.Interface())
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode %T value", v.Interface())
+	}
+	ret.Value = string(b)
 	return ret, nil
 }
 
@@ -67,12 +65,4 @@ func DecodeValueWithType(t reflect.Type, data []byte) (reflect.Value, error) {
 		return reflect.Value{}, fmt.Errorf("failed to decode %s value from %q", t, data)
 	}
 	return rv.Elem(), nil
-}
-
-func DecodeValue(data []byte) (reflect.Value, error) {
-	var v any
-	if err := json.Unmarshal(data, &v); err != nil {
-		return reflect.Value{}, fmt.Errorf("failed to decode value from %q", data)
-	}
-	return reflect.ValueOf(v), nil
 }
