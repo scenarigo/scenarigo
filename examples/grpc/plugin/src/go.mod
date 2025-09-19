@@ -17,7 +17,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
-	github.com/goccy/wasi-go v0.2.0 // indirect
+	github.com/goccy/wasi-go v0.3.0 // indirect
 	github.com/goccy/wasi-go-net v0.3.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -31,7 +31,7 @@ require (
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
 	golang.org/x/mod v0.28.0 // indirect
-	golang.org/x/net v0.43.0 // indirect
+	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
