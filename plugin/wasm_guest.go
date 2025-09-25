@@ -4,15 +4,20 @@ package plugin
 
 import (
 	"bufio"
+	"bytes"
 	gocontext "context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"reflect"
 	"sync"
 	"unsafe"
 
-	_ "github.com/goccy/wasi-go-net/wasip1"
+	_ "github.com/goccy/wasi-go/ext/wasip1"
 
 	"github.com/goccy/go-yaml"
 	"google.golang.org/grpc/metadata"
@@ -94,7 +99,7 @@ func Register(initFn, syncFn DefinitionFunc) {
 					if r := recover(); r != nil {
 						errMsg = fmt.Sprint(r)
 					} else {
-						errMsg = "plugin executed panic(nil) or runtime.Goexit"
+						errMsg = fatalDefaultErrorMsg
 					}
 					var sctx *context.SerializableContext
 					if h.ctx != nil {
@@ -167,7 +172,7 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 		h.nameToValueMap[def.Name] = def.Value
 		typ, err := wasm.NewType(def.Value)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create wasm type for %s: %w", def.Name, err)
 		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
@@ -244,7 +249,7 @@ func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, e
 		h.nameToValueMap[def.Name] = def.Value
 		typ, err := wasm.NewType(def.Value)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create wasm type for %s: %w", def.Name, err)
 		}
 		types = append(types, &wasm.NameWithType{
 			Name: def.Name,
@@ -341,7 +346,8 @@ func (h *handler) StepRun(r *wasm.StepRunCommandRequest) (res *wasm.StepRunComma
 		return nil, err
 	}
 	h.ctx = ctx
-	result := step.MethodByName("Run").Call([]reflect.Value{
+	var result []reflect.Value
+	result = step.MethodByName("Run").Call([]reflect.Value{
 		reflect.ValueOf(ctx),
 		reflect.ValueOf(r.Step),
 	})
@@ -376,6 +382,11 @@ func (h *handler) LeftArrowFuncExec(r *wasm.LeftArrowFuncExecCommandRequest) (*w
 	res, err := wasm.EncodeValue(result[0])
 	if err != nil {
 		return nil, err
+	}
+	if result[0].Kind() == reflect.Interface {
+		h.nameToValueMap[res.ID] = result[0].Elem()
+	} else {
+		h.nameToValueMap[res.ID] = result[0]
 	}
 	return &wasm.LeftArrowFuncExecCommandResponse{
 		Value: res,
@@ -558,4 +569,60 @@ func (h *handler) getMethod(clientName, methodName string) (reflect.Value, error
 		}
 	}
 	return method, nil
+}
+
+func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallCommandResponse, error) {
+	req, err := http.ReadRequest(bufio.NewReader(bytes.NewBuffer(r.Request)))
+	if err != nil {
+		return nil, err
+	}
+	if v := req.Header.Get(requestURLHeaderName); v != "" {
+		u, err := url.Parse(v)
+		if err == nil {
+			req.URL = u
+		}
+	}
+	// When http.ReadRequest is performed, a value is assigned to RequestURI.
+	// However, if this field contains a value when sending the HTTP request, it results in an error.
+	// Therefore, we explicitly set it to empty.
+	req.RequestURI = ""
+
+	// We remove the header that was used to store the full URL.
+	req.Header.Del(requestURLHeaderName)
+
+	// When httputil.DumpRequestOut is executed, a gzip header is added even if the Accept-Encoding header is not being used.
+	// Since using Accept-Encoding complicates the response body decoding process,
+	// we explicitly set it to empty in order to receive the response as uncompressed data.
+	req.Header.Set("Accept-Encoding", "")
+
+	client, exists := h.nameToValueMap[r.Client]
+	if !exists {
+		return nil, fmt.Errorf("unknown clientName: %q", r.Client)
+	}
+	do := client.MethodByName("Do")
+	if !do.IsValid() {
+		return nil, fmt.Errorf("failed to find Do method from client: %s", r.Client)
+	}
+	results := do.Call([]reflect.Value{reflect.ValueOf(req)})
+	if len(results) != 2 {
+		return nil, fmt.Errorf("unexpected return value length(%d) of HTTP method call", len(results))
+	}
+	if !results[0].IsValid() || !results[1].IsValid() {
+		return nil, fmt.Errorf("HTTP response value is invalid: response:%v: error:%v", results[0], results[1])
+	}
+	if e := results[1].Interface(); e != nil {
+		return nil, e.(error)
+	}
+	httpRes := results[0].Interface().(*http.Response)
+	if httpRes == nil {
+		return nil, errors.New("failed to get http response")
+	}
+	defer httpRes.Body.Close()
+	resp, err := httputil.DumpResponse(httpRes, true)
+	if err != nil {
+		return nil, err
+	}
+	return &wasm.HTTPCallCommandResponse{
+		Response: resp,
+	}, nil
 }
