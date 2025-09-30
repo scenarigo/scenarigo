@@ -1,6 +1,8 @@
 package main
 
 import (
+	// This import statement is essential because calling the init() function defined in the scenarigo package is necessary to register HTTP and gRPC protocols.
+	_ "github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/plugin"
 )
 

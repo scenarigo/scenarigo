@@ -28,6 +28,7 @@ const (
 	GRPCExistsMethodCommand          Command = "grpc_exists_method"
 	GRPCBuildRequestCommand          Command = "grpc_build_request"
 	GRPCInvokeCommand                Command = "grpc_invoke"
+	HTTPCallCommand                  Command = "http_call"
 )
 
 // Request represents a command request sent to WASM plugins.
@@ -69,6 +70,7 @@ var (
 	_ CommandRequest = new(GRPCExistsMethodCommandRequest)
 	_ CommandRequest = new(GRPCBuildRequestCommandRequest)
 	_ CommandRequest = new(GRPCInvokeCommandRequest)
+	_ CommandRequest = new(HTTPCallCommandRequest)
 )
 
 var (
@@ -86,6 +88,7 @@ var (
 	_ CommandResponse = new(GRPCExistsMethodCommandResponse)
 	_ CommandResponse = new(GRPCBuildRequestCommandResponse)
 	_ CommandResponse = new(GRPCInvokeCommandResponse)
+	_ CommandResponse = new(HTTPCallCommandResponse)
 )
 
 // NewInitRequest creates a new initialization request.
@@ -242,6 +245,17 @@ func NewGRPCInvokeRequest(client, method string, reqMsg []byte, md metadata.MD) 
 			Method:   method,
 			Request:  reqMsg,
 			Metadata: md,
+		},
+	}
+}
+
+// NewHTTPRequest creates a request to http request.
+func NewHTTPCallRequest(client string, req []byte) *Request {
+	return &Request{
+		CommandType: HTTPCallCommand,
+		Command: &HTTPCallCommandRequest{
+			Client:  client,
+			Request: req,
 		},
 	}
 }
@@ -464,6 +478,19 @@ type GRPCInvokeCommandResponse struct {
 
 func (r *GRPCInvokeCommandResponse) isCommandResponse() bool { return true }
 
+type HTTPCallCommandRequest struct {
+	Client  string `json:"client"`
+	Request []byte `json:"request"`
+}
+
+func (r *HTTPCallCommandRequest) isCommandRequest() bool { return true }
+
+type HTTPCallCommandResponse struct {
+	Response []byte `json:"response"`
+}
+
+func (r *HTTPCallCommandResponse) isCommandResponse() bool { return true }
+
 //nolint:cyclop
 func (r *Request) UnmarshalJSON(b []byte) error {
 	var req struct {
@@ -568,6 +595,13 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 		return nil
 	case GRPCInvokeCommand:
 		var v GRPCInvokeCommandRequest
+		if err := json.Unmarshal(req.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
+	case HTTPCallCommand:
+		var v HTTPCallCommandRequest
 		if err := json.Unmarshal(req.Command, &v); err != nil {
 			return err
 		}
@@ -690,6 +724,13 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 		}
 		r.Command = &v
 		return nil
+	case HTTPCallCommand:
+		var v HTTPCallCommandResponse
+		if err := json.Unmarshal(res.Command, &v); err != nil {
+			return err
+		}
+		r.Command = &v
+		return nil
 	}
 	return fmt.Errorf("unexpected command type: %s", res.CommandType)
 }
@@ -710,6 +751,7 @@ type CommandHandler interface {
 	GRPCExistsMethod(*GRPCExistsMethodCommandRequest) (*GRPCExistsMethodCommandResponse, error)
 	GRPCBuildRequest(*GRPCBuildRequestCommandRequest) (*GRPCBuildRequestCommandResponse, error)
 	GRPCInvoke(*GRPCInvokeCommandRequest) (*GRPCInvokeCommandResponse, error)
+	HTTPCall(*HTTPCallCommandRequest) (*HTTPCallCommandResponse, error)
 }
 
 // HandleCommand processes a command from WASM plugin and returns a response.
@@ -812,6 +854,12 @@ func handleCommand(r *Request, handler CommandHandler) (CommandResponse, error) 
 			return nil, err
 		}
 		return handler.GRPCInvoke(cmd)
+	case HTTPCallCommand:
+		cmd, err := toCommandRequest[*HTTPCallCommandRequest](r.Command)
+		if err != nil {
+			return nil, err
+		}
+		return handler.HTTPCall(cmd)
 	}
 	return nil, fmt.Errorf("unknown command type: %s", r.CommandType)
 }

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	net "github.com/goccy/wasi-go-net"
+	wasiext "github.com/goccy/wasi-go/ext"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
@@ -788,9 +788,9 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 			return err
 		}
 
-		// To replace net.Listen and net.Dialer.DialContext defined in the net package with Listen and DialContext defined in github.com/goccy/wasi-go-net/wasip1, use an overlay.
-		// Without doing this, it is not possible to access the network without rewriting the Go source code used for the wasm plugin.
-		overlayFile, err := net.CreateReplacedNetPkgOverlayFile(ctx, net.WithGoCommandPath(goCmd))
+		// To replace net.Listen and net.Dialer.DialContext and crypto/x509.Certificate.Verify and exec.Command.Start etc.
+		// Without doing this, it is not possible to use http(s) and exec.Command feature in the wasm plugin.
+		overlayFile, err := wasiext.CreateOverlay(ctx, wasiext.WithGoCommandPath(goCmd))
 		if err != nil {
 			return fmt.Errorf("failed to create overlay file: %w", err)
 		}

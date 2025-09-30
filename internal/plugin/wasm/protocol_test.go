@@ -120,6 +120,10 @@ func (h *mockCommandHandler) StepRun(*StepRunCommandRequest) (*StepRunCommandRes
 	return &StepRunCommandResponse{}, nil
 }
 
+func (h *mockCommandHandler) HTTPCall(*HTTPCallCommandRequest) (*HTTPCallCommandResponse, error) {
+	return &HTTPCallCommandResponse{}, nil
+}
+
 func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 	handler := &mockCommandHandler{}
 
@@ -317,6 +321,20 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 				}
 				if invokeResp.ResponseFQDN != "com.example.Response" {
 					t.Errorf("ResponseFQDN mismatch: got %s, want com.example.Response", invokeResp.ResponseFQDN)
+				}
+			},
+		},
+		{
+			name: "HTTPCallRequest",
+			req:  NewHTTPCallRequest("HttpClient", []byte("GET /test HTTP/1.1\r\nHost: example.com\r\n\r\n")),
+			validateFunc: func(t *testing.T, resp *Response) {
+				t.Helper()
+				if resp.CommandType != HTTPCallCommand {
+					t.Errorf("CommandType mismatch: got %v, want %v", resp.CommandType, HTTPCallCommand)
+				}
+				_, ok := resp.Command.(*HTTPCallCommandResponse)
+				if !ok {
+					t.Fatalf("Command type mismatch: got %T, want *HTTPCallCommandResponse", resp.Command)
 				}
 			},
 		},
