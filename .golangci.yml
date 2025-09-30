@@ -30,7 +30,6 @@ linters:
   - testpackage
   - tparallel
   - unparam
-  - usetesting
   - varnamelen
   - wrapcheck
   - wsl
