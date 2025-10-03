@@ -1,5 +1,7 @@
 carvel.dev/ytt v0.50.0 h1:otS2H45ya406sikV17k9FP9Xo0MOVwbHByuA+cPvc4E=
 carvel.dev/ytt v0.50.0/go.mod h1:qnB4lXG2eR1F8f9sid21DYzU8hFGFAx/7HO2pvUysHk=
+dario.cat/mergo v1.0.2 h1:85+piFYR1tMbRrLcDwR18y4UKJ3aH1Tbzi24VRW1TK8=
+dario.cat/mergo v1.0.2/go.mod h1:E/hbnu0NxMFBjpMIE34DRGLWqDy0g5FuKDhCb31ngxA=
 github.com/BurntSushi/toml v1.2.1 h1:9F2/+DoOYIOksmaJFPw1tGFy1eDnIJXg+UHjuD8lTak=
 github.com/BurntSushi/toml v1.2.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/bufbuild/protocompile v0.14.1 h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/FBatYVw=
@@ -73,6 +75,8 @@ github.com/tetratelabs/wazero v1.9.0 h1:IcZ56OuxrtaEz8UYNRHBrUa9bYeX9oVY93KspZZB
 github.com/tetratelabs/wazero v1.9.0/go.mod h1:TSbcXCfFP0L2FGkRPxHphadXPjo1T6W+CseNNY7EkjM=
 github.com/zoncoen/query-go v1.3.2 h1:7gE0EYEmbHPlZC4becyLQZSE6iIQuUyfomvCEvtGB+I=
 github.com/zoncoen/query-go v1.3.2/go.mod h1:Al1T6+Jinwu1bzZ7puVTlCr+r6qVAZ7YLer3cIqG7+I=
+github.com/zoncoen/query-go/extractor/protobuf v0.1.4 h1:sVDfMrP1keeNTEpGjEPUhGtHx2UxGQZ0s/Uj1MQrHi8=
+github.com/zoncoen/query-go/extractor/protobuf v0.1.4/go.mod h1:p7mQxZKWR3X2oabRhyx3iv8AJVIkQsjfffgPKWDjanE=
 github.com/zoncoen/query-go/extractor/yaml v0.2.2 h1:+A85j5FtJh7I22yGx9GbHGN+S3z6b9T2leS7cPAROAM=
 github.com/zoncoen/query-go/extractor/yaml v0.2.2/go.mod h1:UwIFSsTCSpoVMzAR2Egif/7u0tUimmhBpnC2WGDRn44=
 go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=

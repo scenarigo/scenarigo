@@ -7,7 +7,7 @@ toolchain go1.25.1
 require (
 	github.com/scenarigo/scenarigo v0.23.0
 	google.golang.org/grpc v1.75.1
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.10
 )
 
 require github.com/stretchr/testify v1.9.0 // indirect
@@ -17,7 +17,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
-	github.com/goccy/wasi-go v0.2.0 // indirect
+	github.com/goccy/wasi-go v0.3.0 // indirect
 	github.com/goccy/wasi-go-net v0.3.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
