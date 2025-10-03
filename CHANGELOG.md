@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [v0.23.1](https://github.com/scenarigo/scenarigo/compare/v0.23.0...v0.23.1) - 2025-10-03
+### New Features
+- Fix wasm plugin system by @goccy in https://github.com/scenarigo/scenarigo/pull/621
+### Dependency Upgrades
+- chore(deps): bump Songmu/tagpr from 1.8.4 to 1.9.0 in the github-actions group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/614
+- chore(deps): bump the go-minor group across 2 directories with 2 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/615
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/616
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/619
+- chore(deps): bump google.golang.org/grpc from 1.75.0 to 1.75.1 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/624
+- chore(deps): bump google.golang.org/grpc from 1.75.0 to 1.75.1 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/625
+- chore(deps): bump actions/cache from 4.2.4 to 4.3.0 in the github-actions group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/627
+- chore(deps): bump google.golang.org/protobuf from 1.36.8 to 1.36.9 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/623
+- chore(deps): bump google.golang.org/protobuf from 1.36.8 to 1.36.9 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/626
+- chore(deps): bump google.golang.org/protobuf from 1.36.9 to 1.36.10 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/628
+
 ## [v0.23.0](https://github.com/scenarigo/scenarigo/compare/v0.22.1...v0.23.0) - 2025-09-08
 ### New Features
 - Support WebAssembly Plugin System ( PoC ) by @goccy in https://github.com/scenarigo/scenarigo/pull/574
