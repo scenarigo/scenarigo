@@ -36,7 +36,61 @@ steps:
       name: '{{vars.repo}}'
 ```
 
-## Installation
+## Features
+
+- **Multi-Protocol Support** - Test both HTTP/REST and gRPC APIs
+- **YAML-based Scenarios** - Write test scenarios in a readable, declarative format
+- **Template Strings** - Dynamic value generation and validation with template expressions
+- **Plugin System** - Extend functionality by writing custom Go plugins
+- **Variables and Secrets** - Manage test data with variable scoping and secret masking
+- **Retry Policies** - Built-in retry with constant or exponential backoff strategies
+- **Conditional Execution** - Control test flow with conditional step execution
+- **ytt Integration** - Advanced templating and overlay capabilities for test scenarios
+
+## Quick Start
+
+### Installation
+
+Install Scenarigo using Go:
+
+```shell
+$ go install github.com/scenarigo/scenarigo/cmd/scenarigo@latest
+```
+
+### Your First Test
+
+Create a simple test scenario file `hello.yaml`:
+
+```yaml
+title: Hello Scenarigo
+steps:
+- title: Check GitHub API
+  protocol: http
+  request:
+    method: GET
+    url: https://api.github.com/repos/scenarigo/scenarigo
+  expect:
+    code: OK
+    body:
+      name: scenarigo
+```
+
+### Running Tests
+
+Create a configuration file and run the test:
+
+```shell
+# Initialize configuration
+$ scenarigo config init
+
+# Run the test
+$ scenarigo run hello.yaml
+ok      hello.yaml     0.123s
+```
+
+That's it! You've just run your first Scenarigo test. Continue reading to learn more advanced features.
+
+## Installation (Detailed)
 
 ### go install command (recommend)
 
@@ -125,6 +179,12 @@ $ scenarigo run
 ok      github.yaml     0.068s
 ```
 
+Alternatively, provide the paths to specific test files as arguments.
+
+```shell
+$ scenarigo run github.yaml
+```
+
 You can see all commands and options by `scenarigo help`.
 
 ```
@@ -153,11 +213,14 @@ Use "scenarigo [command] --help" for more information about a command.
 
 ## How to write test scenarios
 
-You can write test scenarios easily in YAML.
+You can write test scenarios easily in YAML. A test scenario consists of steps that are executed sequentially from top to bottom. Each step represents an API request (HTTP or gRPC) and its expected response.
+
+Scenarigo supports testing both HTTP/REST and gRPC APIs. The following sections describe how to write tests for each protocol.
+
+## HTTP Testing
 
 ### Send HTTP requests
 
-A test scenario consists of some steps. A step represents an API request. The scenario steps will be run from top to bottom sequentially.
 This simple example has a step that sends a `GET` request to `http://example.com/message`.
 
 ```yaml
@@ -222,10 +285,20 @@ Available `Content-Type` header to encode request body is the following.
 
 ### Check HTTP responses
 
-You can test your APIs by checking responses. If the result differs expected values, Scenarigo aborts the execution of the test scenario and notify the error.
+You can test your APIs by checking responses. If the result differs from the expected values, Scenarigo aborts the execution of the test scenario and notifies the error.
+
+Scenarigo provides three ways to validate response values in the `expect` field:
+
+1. **[Exact Matching](#exact-matching)** - Compare values directly for equality
+2. **[Template Expressions](#template-expressions)** - Use conditional expressions with the actual value `$`
+3. **[Assertion Functions](#assertion-functions)** - Use built-in assertion functions for common validations
+
+#### Exact Matching
+
+The simplest way to validate responses is to specify the expected values directly. Scenarigo will compare them for exact equality.
 
 ```yaml
-title: check /message
+title: exact matching
 steps:
 - title: GET /message
   protocol: http
@@ -243,11 +316,14 @@ steps:
       message: hello
 ```
 
-Scenarigo allows [template string](#template-string) as expected values.
-Besides, you can write assertions by conditional expressions with the actual value `$`.
+This method is best when you know the exact expected value and want a simple equality check.
+
+#### Template Expressions
+
+For more flexible validations, you can use [template string](#template-string) expressions with the actual value represented by `$`. This allows you to write conditional expressions and perform calculations.
 
 ```yaml
-title: check /message
+title: template expressions
 steps:
 - title: GET /message
   protocol: http
@@ -261,9 +337,524 @@ steps:
     header:
       Content-Type: application/json; charset=utf-8
     body:
-      id: {{int($) > 0}}
-      message: '{{"hello" + " world"}}'
+      id: '{{int($) > 0}}'                                    # Check if id is positive
+      message: '{{"hello" + " world"}}'                       # String concatenation
+      timestamp: '{{time($) > time("2024-01-01T00:00:00Z")}}' # Time comparison
 ```
+
+Template expressions are useful when:
+- You need to perform range checks or comparisons
+- The exact value is unknown but must satisfy certain conditions
+- You want to perform type conversions before validation
+
+#### Assertion Functions
+
+Scenarigo provides the `assert` variable with built-in assertion functions for common validation patterns. These functions offer a more expressive and readable way to validate responses.
+
+**Available Assertion Functions:**
+
+<table>
+  <thead>
+    <tr>
+      <th>Function</th>
+      <th>Usage</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>notZero</td>
+      <td><code>'{{assert.notZero}}'</code></td>
+      <td>Ensures the value is not a zero value</td>
+    </tr>
+    <tr>
+      <td>regexp</td>
+      <td><code>'{{assert.regexp("^[a-z]+$")}}'</code></td>
+      <td>Ensures the value matches the regular expression pattern</td>
+    </tr>
+    <tr>
+      <td>length</td>
+      <td><code>'{{assert.length(3)}}'</code></td>
+      <td>Ensures the length of a string, array, slice, or map equals the expected value</td>
+    </tr>
+    <tr>
+      <td>greaterThan</td>
+      <td><code>'{{assert.greaterThan(10)}}'</code></td>
+      <td>Ensures the value is greater than the expected value</td>
+    </tr>
+    <tr>
+      <td>greaterThanOrEqual</td>
+      <td><code>'{{assert.greaterThanOrEqual(10)}}'</code></td>
+      <td>Ensures the value is greater than or equal to the expected value</td>
+    </tr>
+    <tr>
+      <td>lessThan</td>
+      <td><code>'{{assert.lessThan(100)}}'</code></td>
+      <td>Ensures the value is less than the expected value</td>
+    </tr>
+    <tr>
+      <td>lessThanOrEqual</td>
+      <td><code>'{{assert.lessThanOrEqual(100)}}'</code></td>
+      <td>Ensures the value is less than or equal to the expected value</td>
+    </tr>
+    <tr>
+      <td>contains</td>
+      <td><code>'{{assert.contains &lt;-}}': value</code></td>
+      <td>Ensures the array or slice contains the specified value (uses <a href="#left-arrow-function-(a-function-takes-arguments-in-yaml)">Left Arrow Function</a>)</td>
+    </tr>
+    <tr>
+      <td>notContains</td>
+      <td><code>'{{assert.notContains &lt;-}}': value</code></td>
+      <td>Ensures the array or slice does not contain the specified value (uses <a href="#left-arrow-function-(a-function-takes-arguments-in-yaml)">Left Arrow Function</a>)</td>
+    </tr>
+    <tr>
+      <td>and</td>
+      <td><code>'{{assert.and &lt;-}}': [assertion1, assertion2]</code></td>
+      <td>Ensures the value passes all assertions (uses <a href="#left-arrow-function-(a-function-takes-arguments-in-yaml)">Left Arrow Function</a>)</td>
+    </tr>
+    <tr>
+      <td>or</td>
+      <td><code>'{{assert.or &lt;-}}': [assertion1, assertion2]</code></td>
+      <td>Ensures the value passes at least one of the assertions (uses <a href="#left-arrow-function-(a-function-takes-arguments-in-yaml)">Left Arrow Function</a>)</td>
+    </tr>
+  </tbody>
+</table>
+
+**Example:**
+
+```yaml
+title: assertion functions
+steps:
+- title: GET /users/1
+  protocol: http
+  request:
+    method: GET
+    url: http://example.com/users/1
+  expect:
+    code: OK
+    body:
+      id: '{{assert.notZero}}'
+      name: '{{assert.regexp("^[A-Za-z ]+$")}}'
+      age: '{{assert.greaterThanOrEqual(0)}}'
+      email: '{{assert.regexp("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")}}'
+      tags: '{{assert.length(3)}}'
+```
+
+For advanced assertions, you can combine multiple conditions using the `and` and `or` functions with the [Left Arrow Function](#left-arrow-function-(a-function-takes-arguments-in-yaml)) syntax:
+
+```yaml
+expect:
+  body:
+    # Ensures age is between 20 and 65
+    age:
+      '{{assert.and <-}}':
+      - '{{assert.greaterThanOrEqual(20)}}'
+      - '{{assert.lessThanOrEqual(65)}}'
+    # Ensures status is either "active" or "pending"
+    status:
+      '{{assert.or <-}}':
+      - active
+      - pending
+```
+
+#### Adding Custom Assertions via Plugins
+
+You can extend the assertion functions by creating a plugin that implements the `assert.Assertion` interface. This allows you to add domain-specific validations tailored to your testing needs.
+
+**Example Plugin (`plugin/src/main.go`):**
+
+```go
+package main
+
+import (
+	"fmt"
+	"regexp"
+
+	"github.com/scenarigo/scenarigo/assert"
+)
+
+// EmailFormat returns an assertion that validates email format
+var EmailFormat = assert.AssertionFunc(func(v any) error {
+	email, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("expected string but got %T", v)
+	}
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, _ := regexp.MatchString(pattern, email)
+	if !matched {
+		return fmt.Errorf("%q is not a valid email format", email)
+	}
+	return nil
+})
+
+// InRange returns an assertion that validates a number is within a range
+func InRange(min, max int) assert.Assertion {
+	return assert.AssertionFunc(func(v any) error {
+		var num int
+		switch val := v.(type) {
+		case int:
+			num = val
+		case float64:
+			num = int(val)
+		default:
+			return fmt.Errorf("expected number but got %T", v)
+		}
+		if num < min || num > max {
+			return fmt.Errorf("%d is not in range [%d, %d]", num, min, max)
+		}
+		return nil
+	})
+}
+```
+
+**Usage in Test Scenarios:**
+
+```yaml
+title: custom assertions
+plugins:
+  myassert: myassert.so
+steps:
+- title: POST /users
+  protocol: http
+  request:
+    method: POST
+    url: http://example.com/users
+    body:
+      name: John Doe
+      email: john@example.com
+      age: 30
+  expect:
+    code: Created
+    body:
+      email: '{{plugins.myassert.EmailFormat}}'
+      age: '{{plugins.myassert.InRange(18, 65)}}'
+```
+
+The `assert.Assertion` interface requires only one method:
+
+```go
+type Assertion interface {
+    Assert(v any) error
+}
+```
+
+You can implement this interface directly or use the convenient `assert.AssertionFunc` adapter to convert a function into an assertion.
+
+#### Combining Validation Methods
+
+You can combine all three validation methods in a single test scenario to leverage the strengths of each approach:
+
+```yaml
+title: combined validation
+steps:
+- title: POST /users
+  protocol: http
+  request:
+    method: POST
+    url: http://example.com/users
+    body:
+      name: John Doe
+      email: john@example.com
+  expect:
+    code: Created                                             # Exact matching
+    body:
+      id: '{{assert.notZero}}'                                # Assertion function
+      name: John Doe                                          # Exact matching
+      email: '{{assert.regexp("^[^@]+@[^@]+$")}}'             # Assertion function
+      createdAt: '{{time($) > time("2024-01-01T00:00:00Z")}}' # Template expression
+      status: active                                          # Exact matching
+```
+
+### Custom Client
+
+Scenarigo allows you to use custom clients defined in plugins. You can pass custom clients through the `client` field in your test scenarios.
+
+For HTTP tests, you can pass a custom `*http.Client` instance defined in your plugin:
+
+```go main.go
+package main
+
+import (
+	"net/http"
+	"time"
+)
+
+var CustomHTTPClient = &http.Client{
+	Timeout: 10 * time.Second,
+	// Add custom transport, middleware, etc.
+}
+```
+
+```yaml http-test.yaml
+title: test with custom HTTP client
+plugins:
+  client: client.so
+steps:
+- title: GET /api/resource
+  protocol: http
+  request:
+    method: GET
+    url: http://example.com/api/resource
+    client: '{{plugins.client.CustomHTTPClient}}'
+  expect:
+    code: OK
+```
+
+Using custom clients allows you to:
+- Configure custom timeouts and retry policies
+- Add authentication tokens or headers
+- Implement custom middleware or interceptors
+- Mock or stub external dependencies for testing
+
+## gRPC Testing
+
+Scenarigo supports gRPC API testing with two methods for loading service definitions: Protocol Buffers files or gRPC reflection.
+
+### Send gRPC requests
+
+#### Using Protocol Buffers files
+
+You can load `.proto` files to define the service schema:
+
+```yaml
+title: gRPC test with proto files
+steps:
+- title: Call Echo service
+  protocol: grpc
+  request:
+    target: localhost:50051
+    service: myapp.EchoService
+    method: Echo
+    message:
+      text: "Hello, gRPC!"
+    options:
+      proto:
+        imports:
+        - ./proto        # Import paths for .proto files
+        files:
+        - service.proto  # Proto files to load
+      auth:
+        insecure: true   # Use insecure connection (for development)
+  expect:
+    status:
+      code: OK
+    message:
+      text: "Hello, gRPC!"
+```
+
+**Configuration options:**
+- `target`: The gRPC server address (e.g., `localhost:50051`)
+- `service`: Full service name as defined in the `.proto` file
+- `method`: The RPC method name to call
+- `message`: The request message (as YAML/JSON matching the protobuf structure)
+- `options.proto.imports`: List of directories to search for `.proto` files
+- `options.proto.files`: List of `.proto` files to load
+- `options.auth.insecure`: Set to `true` for insecure connections (no TLS)
+
+**Setting Default Options in `scenarigo.yaml`:**
+
+To avoid repeating common options like `proto` imports and `auth` configuration in every test scenario, you can define them as defaults in your `scenarigo.yaml` configuration file:
+
+```yaml scenarigo.yaml
+schemaVersion: config/v1
+
+scenarios:
+- scenarios
+
+protocols:
+  grpc:
+    request:
+      proto:
+        imports:
+        - ./proto        # Default import paths for all gRPC tests
+      auth:
+        insecure: true   # Default auth settings for all gRPC tests
+```
+
+When default options are configured, individual test scenarios can omit these settings:
+
+```yaml
+title: gRPC test with defaults
+steps:
+- title: Call Echo service
+  protocol: grpc
+  request:
+    target: localhost:50051
+    service: myapp.EchoService
+    method: Echo
+    message:
+      text: "Hello, gRPC!"
+    options:
+      proto:
+        files:
+        - service.proto  # Only specify the files, imports come from defaults
+  expect:
+    status:
+      code: OK
+    message:
+      text: "Hello, gRPC!"
+```
+
+If a test scenario specifies options that conflict with the defaults, the scenario-level settings take precedence. The settings are merged, allowing you to override specific values while keeping others from the defaults.
+
+#### Using gRPC reflection
+
+If your gRPC server supports [gRPC reflection](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md), Scenarigo can automatically discover service definitions:
+
+```yaml
+title: gRPC test with reflection
+steps:
+- title: Call Echo service
+  protocol: grpc
+  request:
+    target: localhost:50051
+    service: myapp.EchoService
+    method: Echo
+    message:
+      text: "Hello, gRPC!"
+    options:
+      reflection:
+        enabled: true    # Enable gRPC reflection
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message:
+      text: "Hello, gRPC!"
+```
+
+gRPC reflection is particularly useful during development and testing as it eliminates the need to maintain `.proto` files in your test repository.
+
+### Check gRPC responses
+
+Similar to HTTP testing, you can validate gRPC responses using the same three validation methods:
+
+#### Exact Matching
+
+```yaml
+expect:
+  status:
+    code: OK           # gRPC status code
+  message:
+    id: 123
+    text: "exact match"
+```
+
+#### Template Expressions
+
+```yaml
+expect:
+  status:
+    code: OK
+  message:
+    id: '{{int($) > 0}}'
+    text: '{{size($) > 0}}'
+    timestamp: '{{time($) > time("2024-01-01T00:00:00Z")}}'
+```
+
+#### Assertion Functions
+
+```yaml
+expect:
+  status:
+    code: OK
+  message:
+    id: '{{assert.notZero}}'
+    text: '{{assert.regexp("^[A-Za-z]+$")}}'
+    items: '{{assert.length(5)}}'
+```
+
+### Custom Client
+
+For gRPC tests, you can pass an auto-generated gRPC client instance:
+
+```go main.go
+package main
+
+import (
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	pb "path/to/your/protobuf/package"
+)
+
+func GetCustomGRPCClient() (pb.YourServiceClient, error) {
+	conn, err := grpc.Dial(
+		"localhost:50051",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Add custom interceptors, options, etc.
+	)
+	if err != nil {
+		return nil, err
+	}
+	return pb.NewYourServiceClient(conn), nil
+}
+```
+
+```yaml grpc-test.yaml
+title: test with custom gRPC client
+plugins:
+  client: client.so
+steps:
+- title: Call RPC method
+  protocol: grpc
+  request:
+    client: '{{plugins.client.GetCustomGRPCClient()}}'
+    method: YourMethod
+    message:
+      field: value
+  expect:
+    status:
+      code: OK
+```
+
+### gRPC-specific features
+
+#### Status codes
+
+gRPC uses a different set of status codes than HTTP. Common status codes include:
+
+- `OK` (0): Success
+- `CANCELLED` (1): Operation cancelled
+- `INVALID_ARGUMENT` (3): Invalid argument
+- `NOT_FOUND` (5): Not found
+- `ALREADY_EXISTS` (6): Already exists
+- `PERMISSION_DENIED` (7): Permission denied
+- `UNAUTHENTICATED` (16): Unauthenticated
+
+See the [full list of gRPC status codes](https://grpc.github.io/grpc/core/md_doc_statuscodes.html).
+
+#### Authentication
+
+For TLS-enabled gRPC servers, configure authentication options:
+
+```yaml
+request:
+  target: secure.example.com:443
+  service: myapp.SecureService
+  method: GetData
+  options:
+    auth:
+      # TLS/SSL configuration
+      cacert: /path/to/ca.pem        # CA certificate
+      cert: /path/to/client-cert.pem # Client certificate
+      key: /path/to/client-key.pem   # Client private key
+      serverName: example.com        # Server name for TLS verification
+```
+
+For insecure connections (development only):
+
+```yaml
+request:
+  options:
+    auth:
+      insecure: true
+```
+
+## Common Features
+
+The following features are available for both HTTP and gRPC testing.
 
 ### Variables
 
@@ -579,7 +1170,11 @@ steps:
 
 ## Template String
 
-Scenarigo provides the original template string feature which is evaluated at runtime. You can use expressions with a pair of double braces `{{}}` in YAML strings. All expression return an arbitrary value.
+Template strings are a core feature of Scenarigo that enable dynamic values and validations throughout your test scenarios. This section provides a complete reference for template string syntax and capabilities.
+
+### Overview
+
+Scenarigo provides a powerful template string feature evaluated at runtime. You can use expressions with a pair of double braces `{{}}` in YAML strings. All expressions return an arbitrary value.
 
 For instance, `'{{1}}'` is evaluated as an integer `1` at runtime.
 
@@ -1682,3 +2277,27 @@ steps:
       message: "{{request.body.message}}"
   timeout: 30s
 ```
+
+## Examples
+
+This repository includes practical examples demonstrating various Scenarigo features. You can find them in the [`examples/`](./examples) directory:
+
+### Running Examples
+
+To run any example:
+
+```shell
+# Navigate to the example directory
+$ cd examples/grpc
+
+# Build plugins
+$ scenarigo plugin build
+
+# Run the tests
+$ scenarigo run
+```
+
+Each example directory contains:
+- `scenarigo.yaml` - Configuration file
+- `scenarios/` - Test scenario files
+- `README.md` (in some examples) - Detailed explanation

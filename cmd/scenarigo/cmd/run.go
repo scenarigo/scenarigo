@@ -28,9 +28,12 @@ func init() {
 }
 
 var runCmd = &cobra.Command{
-	Use:           "run",
-	Short:         "run test scenarios",
-	Long:          "Runs test scenarios.",
+	Use:   "run [file...]",
+	Short: "run test scenarios",
+	Long: `Runs test scenarios.
+
+You can specify the file paths of the tests you want to run as arguments.
+If you do not specify any arguments, it will execute the tests specified in the configuration file.`,
 	RunE:          run,
 	SilenceErrors: true,
 	SilenceUsage:  true,
