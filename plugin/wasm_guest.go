@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -72,20 +71,45 @@ func ToDefinition(name string, value any) *Definition {
 // It is used by WASM plugins to provide their exported functions and variables.
 type DefinitionFunc func() []*Definition
 
+//go:wasmimport scenarigo write
+func scenarigo_write(ptr, size uint32)
+
+//go:wasmimport scenarigo read_length
+func scenarigo_read_length() uint32
+
+//go:wasmimport scenarigo read
+func scenarigo_read(uint32)
+
+func writePluginContent(content []byte) {
+	if content == nil {
+		scenarigo_write(0, 0)
+		return
+	}
+	scenarigo_write(
+		uint32(uintptr(unsafe.Pointer(&content[0]))),
+		uint32(len(content)),
+	)
+}
+
+func readPluginContent() string {
+	length := scenarigo_read_length()
+	if length == 0 {
+		return ""
+	}
+	buf := make([]byte, length)
+	scenarigo_read(
+		uint32(uintptr(unsafe.Pointer(&buf[0]))),
+	)
+	return string(buf)
+}
+
 // Register starts the WASM plugin main loop with initialization and sync functions.
 // This function should be called from the main function of WASM plugins.
 // initFn provides initial definitions, syncFn provides updated definitions during sync.
 func Register(initFn, syncFn DefinitionFunc) {
-	reader := bufio.NewReader(os.Stdin)
 	h := newHandler(initFn, syncFn)
 	for {
-		content, err := reader.ReadString('\n')
-		if err != nil {
-			continue
-		}
-		if content == "" {
-			continue
-		}
+		content := readPluginContent()
 		if content == exitCommand {
 			return
 		}
@@ -112,11 +136,7 @@ func Register(initFn, syncFn DefinitionFunc) {
 						Context:     sctx,
 						Error:       errMsg,
 					})
-					out := append(b, '\n')
-					scenarigo_write(
-						uint32(uintptr(unsafe.Pointer(&out[0]))),
-						uint32(len(out)),
-					)
+					writePluginContent(b)
 				}
 				wg.Done()
 			}()
@@ -127,18 +147,11 @@ func Register(initFn, syncFn DefinitionFunc) {
 			}
 			finished = true
 			b, _ := json.Marshal(res)
-			out := append(b, '\n')
-			scenarigo_write(
-				uint32(uintptr(unsafe.Pointer(&out[0]))),
-				uint32(len(out)),
-			)
+			writePluginContent(b)
 		}()
 		wg.Wait()
 	}
 }
-
-//go:wasmimport scenarigo scenarigo_write
-func scenarigo_write(ptr, size uint32)
 
 type handler struct {
 	ctx                *Context

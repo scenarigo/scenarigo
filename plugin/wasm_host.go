@@ -55,20 +55,14 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	stdinR, stdinW, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
 	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
-	modCfg := wazero.NewModuleConfig().
-		WithStdin(stdinR).
-		WithStdout(os.Stdout).
-		WithStderr(os.Stderr).
-		WithFSConfig(wazero.NewFSConfig().WithFSMount(os.DirFS("/"), ""))
-
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		return nil, err
+	}
 	srcEnvs := os.Environ()
 	envs := make([]string, 0, len(srcEnvs))
 	for _, kv := range srcEnvs {
@@ -77,14 +71,12 @@ func openWasmPlugin(path string) (Plugin, error) {
 		if _, exists := ignoreEnvNameMap[key]; exists {
 			continue
 		}
-		value := kv[i+1:]
-		modCfg = modCfg.WithEnv(key, value)
 		envs = append(envs, kv)
 	}
 	ctx, sys, err := imports.NewBuilder().
 		WithSocketsExtension("wasmedgev2", compiledMod).
 		WithWasiGoExtension().
-		WithStdio(int(stdinR.Fd()), int(os.Stdout.Fd()), int(os.Stderr.Fd())).
+		WithStdio(-1, int(stdoutW.Fd()), int(stderrW.Fd())).
 		WithEnv(envs...).
 		WithDirs("/").
 		Instantiate(ctx, r)
@@ -96,27 +88,68 @@ func openWasmPlugin(path string) (Plugin, error) {
 	host := r.NewHostModuleBuilder("scenarigo")
 	host.NewFunctionBuilder().WithGoModuleFunction(
 		api.GoModuleFunc(func(ctx gocontext.Context, mod api.Module, stack []uint64) {
-			b, _ := mod.Memory().Read(uint32(stack[0]), uint32(stack[1]))
-			_, _ = stdoutW.Write(b)
+			plg := getPluginFromContext(ctx)
+			if plg == nil {
+				panic("failed to get plugin from context")
+			}
+			req := <-plg.reqCh
+
+			plg.req = req
+			// Since the request needs to be referenced again in the `read` host function, it is stored in plg.req.
+			// These functions are evaluated sequentially, so they are thread-safe.
+			stack[0] = uint64(len(req))
+		}),
+		[]api.ValueType{},
+		[]api.ValueType{api.ValueTypeI32},
+	).Export("read_length")
+	host.NewFunctionBuilder().WithGoModuleFunction(
+		api.GoModuleFunc(func(ctx gocontext.Context, mod api.Module, stack []uint64) {
+			plg := getPluginFromContext(ctx)
+			if plg == nil {
+				panic("failed to get plugin from context")
+			}
+			// plg.req is always initialized with the correct value inside the `read_length` host function.
+			// The `read_length` host function and the `read` host function are always executed sequentially.
+			if ok := mod.Memory().Write(uint32(stack[0]), plg.req); !ok { //nolint:gosec
+				panic("failed to write plugin request content")
+			}
+		}),
+		[]api.ValueType{api.ValueTypeI32},
+		[]api.ValueType{},
+	).Export("read")
+	host.NewFunctionBuilder().WithGoModuleFunction(
+		api.GoModuleFunc(func(ctx gocontext.Context, mod api.Module, stack []uint64) {
+			plg := getPluginFromContext(ctx)
+			if plg == nil {
+				panic("failed to get plugin from context")
+			}
+			//nolint:gosec
+			b, ok := mod.Memory().Read(uint32(stack[0]), uint32(stack[1]))
+			if !ok {
+				panic("failed to read memory from plugin")
+			}
+			plg.resCh <- b
 		}),
 		[]api.ValueType{api.ValueTypeI32, api.ValueTypeI32},
 		[]api.ValueType{},
-	).Export("scenarigo_write")
+	).Export("write")
 	if _, err := host.Instantiate(ctx); err != nil {
 		return nil, err
 	}
 
 	plugin := &WasmPlugin{
 		wasmRuntime: r,
-		stdin:       stdinW,
-		stdout:      stdoutR,
+		reqCh:       make(chan []byte, 1),
+		resCh:       make(chan []byte),
+		stdoutR:     stdoutR,
+		stderrR:     stderrR,
 	}
 
 	// setting the buffer size to 1 ensures that the function can exit even if there is no receiver.
 	instanceModErrCh := make(chan error, 1)
 	go func() {
 		_, err := r.InstantiateModule(
-			ctx, compiledMod, modCfg,
+			withPlugin(ctx, plugin), compiledMod, wazero.NewModuleConfig(),
 		)
 		instanceModErrCh <- err
 		plugin.closeResources(err)
@@ -142,6 +175,20 @@ func openWasmPlugin(path string) (Plugin, error) {
 	return plugin, nil
 }
 
+type pluginKey struct{}
+
+func getPluginFromContext(ctx gocontext.Context) *WasmPlugin {
+	v := ctx.Value(pluginKey{})
+	if v == nil {
+		return nil
+	}
+	return v.(*WasmPlugin)
+}
+
+func withPlugin(ctx gocontext.Context, plg *WasmPlugin) gocontext.Context {
+	return gocontext.WithValue(ctx, pluginKey{}, plg)
+}
+
 const (
 	exitCommand = "exit\n"
 )
@@ -153,8 +200,11 @@ type WasmPlugin struct {
 	nameToTypeMap        map[string]*wasm.Type
 	setupNum             int
 	setupEachScenarioNum int
-	stdin                *os.File
-	stdout               *os.File
+	req                  []byte
+	reqCh                chan []byte
+	resCh                chan []byte
+	stdoutR              *os.File
+	stderrR              *os.File
 	instanceModErrCh     chan error
 	instanceModErr       error
 	closed               bool
@@ -220,21 +270,8 @@ func (p *WasmPlugin) write(cmd []byte) error {
 	if p.closed {
 		return p.instanceModErr
 	}
-
-	writeCh := make(chan error)
-	go func() {
-		_, err := p.stdin.Write(cmd)
-		writeCh <- err
-	}()
-	select {
-	case err := <-p.instanceModErrCh:
-		// If the module instance is terminated,
-		// it is considered that the termination process has been completed.
-		p.closeResources(err)
-		return err
-	case err := <-writeCh:
-		return err
-	}
+	p.reqCh <- cmd
+	return nil
 }
 
 func (p *WasmPlugin) read() ([]byte, error) {
@@ -242,40 +279,22 @@ func (p *WasmPlugin) read() ([]byte, error) {
 		return nil, errors.New("plugin has already been closed")
 	}
 
-	type readResult struct {
-		response []byte
-		err      error
-	}
-	readCh := make(chan readResult)
-	go func() {
-		reader := bufio.NewReader(p.stdout)
-		content, err := reader.ReadString('\n')
-		if err != nil {
-			readCh <- readResult{err: fmt.Errorf("failed to receive response from wasm plugin: %w", err)}
-			return
-		}
-		if content == "" {
-			readCh <- readResult{err: errors.New("receive empty response from wasm plugin")}
-			return
-		}
-		readCh <- readResult{response: []byte(content)}
-	}()
 	select {
 	case err := <-p.instanceModErrCh:
 		// If the module instance is terminated,
 		// it is considered that the termination process has been completed.
 		p.closeResources(err)
 		return nil, err
-	case result := <-readCh:
-		return result.response, result.err
+	case res := <-p.resCh:
+		return res, nil
 	}
 }
 
 func (p *WasmPlugin) closeResources(instanceModErr error) {
 	p.instanceModErr = instanceModErr
 	p.closed = true
-	p.stdin.Close()
-	p.stdout.Close()
+	p.stdoutR.Close()
+	p.stderrR.Close()
 }
 
 func (p *WasmPlugin) Lookup(name string) (Symbol, error) {
