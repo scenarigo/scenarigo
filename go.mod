@@ -11,7 +11,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fatih/color v1.18.0
 	github.com/goccy/go-yaml v1.18.0
-	github.com/goccy/wasi-go v0.3.1
+	github.com/goccy/wasi-go v0.3.2
 	github.com/golang/mock v1.7.0-rc.1
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/go-multierror v1.1.1
