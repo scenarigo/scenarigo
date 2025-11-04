@@ -1,13 +1,14 @@
 package plugin
 
 import (
-	"context"
+	gocontext "context"
 	"reflect"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
@@ -15,11 +16,11 @@ import (
 type CustomGRPCClient interface {
 	ExistsMethod(method string) bool
 	BuildRequestMessage(method string, params []byte) (proto.Message, error)
-	Invoke(ctx context.Context, method string, req proto.Message) (proto.Message, *status.Status, error)
+	Invoke(ctx *context.Context, method string, req proto.Message) (proto.Message, *status.Status, error)
 }
 
 var (
-	typeContext  = reflect.TypeOf((*context.Context)(nil)).Elem()
+	typeContext  = reflect.TypeOf((*gocontext.Context)(nil)).Elem()
 	typeMessage  = reflect.TypeOf((*proto.Message)(nil)).Elem()
 	typeCallOpts = reflect.TypeOf([]grpc.CallOption(nil))
 )
@@ -61,7 +62,7 @@ func ValidateGRPCMethod(method reflect.Value) error {
 	return nil
 }
 
-func GRPCInvoke(ctx context.Context, method reflect.Value, reqMsg proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
+func GRPCInvoke(ctx gocontext.Context, method reflect.Value, reqMsg proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
 	in := []reflect.Value{
 		reflect.ValueOf(ctx),
 		reflect.ValueOf(reqMsg),

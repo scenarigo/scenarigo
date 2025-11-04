@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"bytes"
-	gocontext "context"
 	"fmt"
 	"reflect"
 
@@ -88,11 +87,11 @@ func (client *customServiceClient) buildRequestMessage(ctx *context.Context) (pr
 	return reqMsg, nil
 }
 
-func (client *customServiceClient) invoke(ctx gocontext.Context, reqMsg proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
+func (client *customServiceClient) invoke(ctx *context.Context, reqMsg proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
 	if client.customClient != nil {
 		return client.customClient.Invoke(ctx, client.r.Method, reqMsg)
 	}
-	return plugin.GRPCInvoke(ctx, client.method, reqMsg, opts...)
+	return plugin.GRPCInvoke(ctx.RequestContext(), client.method, reqMsg, opts...)
 }
 
 func buildRequestMsg(ctx *context.Context, req any, src any) error {

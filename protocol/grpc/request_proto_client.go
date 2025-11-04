@@ -158,10 +158,10 @@ func (client *protoClient) buildRequestMessage(ctx *context.Context) (proto.Mess
 	return in, nil
 }
 
-func (client *protoClient) invoke(ctx gocontext.Context, in proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
+func (client *protoClient) invoke(ctx *context.Context, in proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
 	out := dynamicpb.NewMessage(client.md.Output())
 	var sts *status.Status
-	if err := client.conn.Invoke(ctx, client.fullMethodName, in, out, opts...); err != nil {
+	if err := client.conn.Invoke(ctx.RequestContext(), client.fullMethodName, in, out, opts...); err != nil {
 		sts = status.Convert(err)
 	}
 	return out, sts, nil

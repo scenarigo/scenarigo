@@ -47,10 +47,10 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	rcfg := wazero.NewRuntimeConfigInterpreter().
-		WithCloseOnContextDone(true)
-
-	r := wazero.NewRuntimeWithConfig(ctx, rcfg)
+	r := wazero.NewRuntimeWithConfig(
+		ctx,
+		wazero.NewRuntimeConfigInterpreter().WithCloseOnContextDone(true),
+	)
 	compiledMod, err := r.CompileModule(ctx, wasmFile)
 	if err != nil {
 		return nil, err
@@ -747,8 +747,8 @@ func (v *StructValue) BuildRequestMessage(method string, msg []byte) (proto.Mess
 
 // Invoke calls a gRPC method on the WASM value with the given request.
 // It returns the response message, status, and any error that occurred.
-func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
-	md, ok := metadata.FromOutgoingContext(ctx)
+func (v *StructValue) Invoke(ctx *context.Context, method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
+	md, ok := metadata.FromOutgoingContext(ctx.RequestContext())
 	if !ok {
 		md = metadata.MD{}
 	}
@@ -756,7 +756,7 @@ func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto prot
 	if err != nil {
 		return nil, nil, err
 	}
-	res, err := v.plugin.call(nil, wasm.NewGRPCInvokeRequest(v.name, method, reqMsg, md))
+	res, err := v.plugin.call(ctx, wasm.NewGRPCInvokeRequest(v.name, method, reqMsg, md))
 	if err != nil {
 		return nil, nil, err
 	}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/goccy/go-yaml"
+
 	"github.com/scenarigo/scenarigo/context"
 )
 
@@ -39,11 +41,16 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 	if t.Step || t.StepFunc || t.LeftArrowFunc {
 		return ret, nil
 	}
-	b, err := json.Marshal(v.Interface())
+	// normalize yaml.MapSlice or yaml.MapItem value.
+	b, err := yaml.Marshal(v.Interface())
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode %T value", v.Interface())
+		return nil, fmt.Errorf("failed to encode value to yaml text: %w", err)
 	}
-	ret.Value = string(b)
+	encoded, err := yaml.YAMLToJSON(b)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode to json value: %w", err)
+	}
+	ret.Value = string(encoded)
 	return ret, nil
 }
 

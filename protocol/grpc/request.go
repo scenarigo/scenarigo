@@ -328,7 +328,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 		grpc.Header(&header),
 		grpc.Trailer(&trailer),
 	}
-	respMsg, sts, err := client.invoke(ctx.RequestContext(), reqMsg, callOpts...)
+	respMsg, sts, err := client.invoke(ctx, reqMsg, callOpts...)
 	if err != nil {
 		return ctx, nil, err
 	}
@@ -359,7 +359,7 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 
 type serviceClient interface {
 	buildRequestMessage(*context.Context) (proto.Message, error)
-	invoke(gocontext.Context, proto.Message, ...grpc.CallOption) (proto.Message, *status.Status, error)
+	invoke(*context.Context, proto.Message, ...grpc.CallOption) (proto.Message, *status.Status, error)
 }
 
 func (r *Request) buildClient(ctx *context.Context, opts *RequestOptions) (serviceClient, error) {
