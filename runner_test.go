@@ -194,6 +194,80 @@ secrets:
 				}
 			},
 		},
+		"global vars and secrets cloned per scenario": {
+			yaml: `
+---
+title: Scenario 1
+steps:
+- title: POST /echo
+  vars:
+    message: '{{vars.shared.message}}'
+    secret: '{{secrets.shared.value}}'
+  bind:
+    vars:
+      shared:
+        message: scenario-1
+    secrets:
+      shared:
+        value: scenario-1-secret
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/echo"
+    body:
+      message: '{{vars.message}}'
+      secret: '{{vars.secret}}'
+  expect:
+    code: 200
+    body:
+      message: original-message
+      secret: original-secret
+---
+title: Scenario 2
+steps:
+- title: POST /echo
+  vars:
+    message: '{{vars.shared.message}}'
+    secret: '{{secrets.shared.value}}'
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/echo"
+    body:
+      message: '{{vars.message}}'
+      secret: '{{vars.secret}}'
+  expect:
+    code: 200
+    body:
+      message: original-message
+      secret: original-secret
+`,
+			config: parseConfig(t, `
+schemaVersion: config/v1
+vars:
+  shared:
+    message: original-message
+secrets:
+  shared:
+    value: original-secret
+`),
+			setup: func(ctx *context.Context) func(*context.Context) {
+				mux := http.NewServeMux()
+				mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+					defer r.Body.Close()
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = io.Copy(w, r.Body)
+				})
+
+				s := httptest.NewServer(mux)
+				t.Setenv("TEST_ADDR", s.URL)
+
+				return func(*context.Context) {
+					s.Close()
+					os.Unsetenv("TEST_ADDR")
+				}
+			},
+		},
 		"exclude all files": {
 			config: &schema.Config{
 				Scenarios: []string{
