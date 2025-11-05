@@ -16,6 +16,7 @@ import (
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/deepcopy"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
 	"github.com/scenarigo/scenarigo/plugin"
 	"github.com/scenarigo/scenarigo/protocol/grpc"
@@ -193,6 +194,7 @@ func (r *Runner) ScenarioFiles() []string {
 func (r *Runner) Run(ctx *context.Context) {
 	// setup context
 	ctx = ctx.WithColorConfig(r.colorConfig)
+	var baseVars any
 	if r.vars != nil {
 		vars, err := ctx.ExecuteTemplate(r.vars)
 		if err != nil {
@@ -205,8 +207,9 @@ func (r *Runner) Run(ctx *context.Context) {
 				),
 			)
 		}
-		ctx = ctx.WithVars(vars)
+		baseVars = vars
 	}
+	var baseSecrets any
 	if r.secrets != nil {
 		secrets, err := ctx.ExecuteTemplate(r.secrets)
 		if err != nil {
@@ -219,7 +222,7 @@ func (r *Runner) Run(ctx *context.Context) {
 				),
 			)
 		}
-		ctx = ctx.WithSecrets(secrets)
+		baseSecrets = secrets
 	}
 	if r.pluginDir != nil {
 		ctx = ctx.WithPluginDir(*r.pluginDir)
@@ -284,22 +287,7 @@ FILE_LOOP:
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
-			for _, scn := range scns {
-				ctx = ctx.WithNode(scn.Node)
-				if scn.Retry != nil {
-					// Run scenario with retry policy
-					context.RunWithRetry(ctx, scn.Title, func(ctx *context.Context) {
-						ctx.Reporter().Parallel()
-						_ = RunScenario(ctx, scn)
-					}, scn.Retry)
-				} else {
-					// Run scenario without retry
-					ctx.Run(scn.Title, func(ctx *context.Context) {
-						ctx.Reporter().Parallel()
-						_ = RunScenario(ctx, scn)
-					})
-				}
-			}
+			r.runScenarios(ctx, scns, baseVars, baseSecrets)
 		})
 	}
 	for i, reader := range r.scenarioReaders {
@@ -309,25 +297,49 @@ FILE_LOOP:
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
-			for _, scn := range scns {
-				ctx = ctx.WithNode(scn.Node)
-				if scn.Retry != nil {
-					// Run scenario with retry policy
-					context.RunWithRetry(ctx, scn.Title, func(ctx *context.Context) {
-						ctx.Reporter().Parallel()
-						_ = RunScenario(ctx, scn)
-					}, scn.Retry)
-				} else {
-					// Run scenario without retry
-					ctx.Run(scn.Title, func(ctx *context.Context) {
-						ctx.Reporter().Parallel()
-						_ = RunScenario(ctx, scn)
-					})
-				}
-			}
+			r.runScenarios(ctx, scns, baseVars, baseSecrets)
 		})
 	}
 	teardown(ctx)
+}
+
+func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, baseVars, baseSecrets any) {
+	for _, scn := range scns {
+		localCtx := ctx.WithNode(scn.Node)
+		scenarioCtx := localCtx
+		if baseVars != nil {
+			clonedVars, err := deepcopy.Copy(baseVars)
+			if err != nil {
+				scenarioCtx.Reporter().Fatalf("failed to copy global vars: %s", err)
+				continue
+			}
+			scenarioCtx = scenarioCtx.WithVars(clonedVars)
+		}
+		if baseSecrets != nil {
+			// Ensure each scenario owns its secrets snapshot to avoid template.Execute
+			// mutating shared maps when scenarios run in parallel.
+			clonedSecrets, err := deepcopy.Copy(baseSecrets)
+			if err != nil {
+				scenarioCtx.Reporter().Fatalf("failed to copy global secrets: %s", err)
+				continue
+			}
+			scenarioCtx = scenarioCtx.WithSecrets(clonedSecrets)
+		}
+
+		if scn.Retry != nil {
+			// Run scenario with retry policy
+			context.RunWithRetry(scenarioCtx, scn.Title, func(ctx *context.Context) {
+				ctx.Reporter().Parallel()
+				_ = RunScenario(ctx, scn)
+			}, scn.Retry)
+		} else {
+			// Run scenario without retry
+			scenarioCtx.Run(scn.Title, func(ctx *context.Context) {
+				ctx.Reporter().Parallel()
+				_ = RunScenario(ctx, scn)
+			})
+		}
+	}
 }
 
 // CreateTestReport creates test reports.

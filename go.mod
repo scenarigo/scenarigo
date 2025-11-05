@@ -17,6 +17,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jhump/protoreflect v1.17.0
 	github.com/mattn/go-encoding v0.0.2
+	github.com/mitchellh/copystructure v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/sergi/go-diff v1.4.0
 	github.com/sosedoff/gitkit v0.4.0
@@ -43,6 +44,7 @@ require (
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
