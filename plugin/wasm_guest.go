@@ -316,6 +316,8 @@ func (h *handler) Call(r *wasm.CallCommandRequest) (*wasm.CallCommandResponse, e
 		res.Return = append(res.Return, value)
 		h.nameToValueMap[value.ID] = retValue
 	}
+	// Include TypeRefMap for type reference resolution on host side
+	res.TypeRefMap = wasm.TypeRefMap()
 	return res, nil
 }
 
@@ -440,19 +442,25 @@ func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, erro
 	if !exists {
 		return nil, fmt.Errorf("failed to find value: %s", r.Name)
 	}
+	
+	// Process selectors using reflection with panic recovery
 	for _, sel := range r.Selectors {
 		var err error
-		v, err = getFieldValue(v, sel)
+		v, err = getFieldValueSafely(v, sel)
 		if err != nil {
 			return nil, err
 		}
 	}
+	
 	value, err := wasm.EncodeValue(v)
 	if err != nil {
 		return nil, err
 	}
+	// Store the encoded value in nameToValueMap for future access
+	h.nameToValueMap[value.ID] = v
 	return &wasm.GetCommandResponse{
-		Value: value,
+		TypeRefMap: wasm.TypeRefMap(),
+		Value:      value,
 	}, nil
 }
 
@@ -464,6 +472,55 @@ func getFieldValue(v reflect.Value, sel string) (reflect.Value, error) {
 		return v.FieldByName(sel), nil
 	}
 	return reflect.Value{}, fmt.Errorf("failed to get field %s value from %v", sel, v)
+}
+
+// getFieldValueSafely safely gets field value with panic recovery.
+// This function handles complex selector processing on guest side.
+func getFieldValueSafely(v reflect.Value, sel string) (result reflect.Value, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic occurred while accessing field %s: %v", sel, r)
+		}
+	}()
+	
+	// Handle nil or invalid values
+	if !v.IsValid() {
+		return reflect.Value{}, fmt.Errorf("invalid value when accessing field %s", sel)
+	}
+	
+	switch v.Type().Kind() {
+	case reflect.Pointer:
+		if v.IsNil() {
+			return reflect.Value{}, fmt.Errorf("nil pointer when accessing field %s", sel)
+		}
+		return getFieldValueSafely(v.Elem(), sel)
+	case reflect.Interface:
+		if v.IsNil() {
+			return reflect.Value{}, fmt.Errorf("nil interface when accessing field %s", sel)
+		}
+		return getFieldValueSafely(v.Elem(), sel)
+	case reflect.Struct:
+		field := v.FieldByName(sel)
+		if !field.IsValid() {
+			return reflect.Value{}, fmt.Errorf("field %s not found in struct type %s", sel, v.Type())
+		}
+		if !field.CanInterface() {
+			return reflect.Value{}, fmt.Errorf("field %s is not accessible (unexported)", sel)
+		}
+		return field, nil
+	case reflect.Map:
+		key := reflect.ValueOf(sel)
+		if !key.Type().AssignableTo(v.Type().Key()) {
+			return reflect.Value{}, fmt.Errorf("key %s is not assignable to map key type %s", sel, v.Type().Key())
+		}
+		mapValue := v.MapIndex(key)
+		if !mapValue.IsValid() {
+			return reflect.Value{}, fmt.Errorf("key %s not found in map", sel)
+		}
+		return mapValue, nil
+	default:
+		return reflect.Value{}, fmt.Errorf("cannot access field %s on type %s (kind: %s)", sel, v.Type(), v.Type().Kind())
+	}
 }
 
 func (h *handler) GRPCExistsMethod(r *wasm.GRPCExistsMethodCommandRequest) (*wasm.GRPCExistsMethodCommandResponse, error) {

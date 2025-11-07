@@ -41,6 +41,72 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 	if t.Step || t.StepFunc || t.LeftArrowFunc {
 		return ret, nil
 	}
+
+	// Special handling for function type - prevent YAML encoding errors
+	if t.Kind == FUNC {
+		// For function types, we don't encode the actual function value
+		// The type information is sufficient for Host-Guest communication
+		ret.Value = "null\n"
+		return ret, nil
+	}
+
+	// Special handling for struct type that may contain function fields
+	if t.Kind == STRUCT {
+		// For struct types, we don't encode the actual struct value
+		// to avoid issues with function fields inside the struct
+		ret.Value = "null\n"
+		return ret, nil
+	}
+
+	// Special handling for pointer type that may point to structs with function fields
+	if t.Kind == POINTER {
+		// For pointer types, we don't encode the actual pointer value
+		// to avoid issues with function fields in the pointed-to struct
+		ret.Value = "null\n"
+		return ret, nil
+	}
+
+	// Special handling for uintptr type
+	if t.Kind == UINTPTR {
+		if ptr, ok := v.Interface().(uintptr); ok {
+			// Convert uintptr to uint64 for JSON encoding
+			ret.Value = fmt.Sprintf("%d\n", uint64(ptr))
+			return ret, nil
+		}
+	}
+
+	// Handle interface types by checking the actual value they contain
+	if t.Kind == ANY {
+		if !v.IsNil() {
+			// Get the actual value contained in the interface
+			actualValue := v.Elem()
+			actualKind := actualValue.Kind()
+
+			// If the actual value is a function, handle it specially
+			if actualKind == reflect.Func {
+				ret.Value = "null\n"
+				return ret, nil
+			}
+
+			// If the actual value is uintptr, handle it specially
+			if actualKind == reflect.Uintptr {
+				if ptr, ok := actualValue.Interface().(uintptr); ok {
+					ret.Value = fmt.Sprintf("%d\n", uint64(ptr))
+					return ret, nil
+				}
+			}
+
+			// For complex types, don't try to recursively encode them
+			// Just return null for complex types when they're inside interfaces
+			if actualKind == reflect.Struct || actualKind == reflect.Map ||
+				actualKind == reflect.Slice || actualKind == reflect.Array ||
+				actualKind == reflect.Ptr {
+				ret.Value = "null\n"
+				return ret, nil
+			}
+		}
+	}
+
 	// normalize yaml.MapSlice or yaml.MapItem value.
 	b, err := yaml.Marshal(v.Interface())
 	if err != nil {
@@ -66,6 +132,16 @@ func DecodeValueWithType(t reflect.Type, data []byte) (reflect.Value, error) {
 		}
 		return reflect.ValueOf(ctx), nil
 	}
+
+	// Special handling for uintptr type
+	if t.Kind() == reflect.Uintptr {
+		var val uint64
+		if err := json.Unmarshal(data, &val); err != nil {
+			return reflect.Value{}, fmt.Errorf("failed to decode uintptr value from %q", data)
+		}
+		return reflect.ValueOf(uintptr(val)), nil
+	}
+
 	rv := reflect.New(t)
 	v := rv.Interface()
 	if err := json.Unmarshal(data, v); err != nil {

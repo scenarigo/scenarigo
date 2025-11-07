@@ -360,7 +360,8 @@ type CallCommandRequest struct {
 func (r *CallCommandRequest) isCommandRequest() bool { return true }
 
 type CallCommandResponse struct {
-	Return []*Value `json:"return"`
+	Return     []*Value         `json:"return"`
+	TypeRefMap map[string]*Type `json:"typeRefMap,omitempty"`
 }
 
 func (r *CallCommandResponse) isCommandResponse() bool { return true }
@@ -427,7 +428,8 @@ type GetCommandRequest struct {
 func (r *GetCommandRequest) isCommandRequest() bool { return true }
 
 type GetCommandResponse struct {
-	Value *Value `json:"value"`
+	TypeRefMap map[string]*Type `json:"typeRefMap"`
+	Value      *Value           `json:"value"`
 }
 
 func (r *GetCommandResponse) isCommandResponse() bool { return true }

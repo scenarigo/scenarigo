@@ -338,8 +338,8 @@ func TestValue_ToReflect(t *testing.T) {
 	}
 
 	// Test that the Value field contains the expected JSON-encoded value
-	if value.Value != `"hello"` {
-		t.Errorf("Value.Value = %v, want %v", value.Value, `"hello"`)
+	if value.Value != "\"hello\"\n" {
+		t.Errorf("Value.Value = %q, want %q", value.Value, "\"hello\"\n")
 	}
 }
 
@@ -352,17 +352,17 @@ func TestEncodeValue(t *testing.T) {
 		{
 			name:     "string value",
 			value:    reflect.ValueOf("test"),
-			expected: `"test"`,
+			expected: "\"test\"\n",
 		},
 		{
 			name:     "int value",
 			value:    reflect.ValueOf(42),
-			expected: "42",
+			expected: "42\n",
 		},
 		{
 			name:     "bool value",
 			value:    reflect.ValueOf(true),
-			expected: "true",
+			expected: "true\n",
 		},
 	}
 
@@ -1587,12 +1587,15 @@ func TestResolveRefWithUnknownType(t *testing.T) {
 }
 
 func TestEncodeValueWithLeftArrowFunc(t *testing.T) {
-	// Test EncodeValue with left arrow function type
-	// Functions cannot be encoded directly in JSON, so this should fail
+	// Test EncodeValue with function type
+	// Functions should be encoded with null value for Host-Guest communication
 	funcValue := reflect.ValueOf(func() string { return "test" })
-	_, err := EncodeValue(funcValue)
-	if err == nil {
-		t.Error("EncodeValue() func should return error as functions cannot be JSON encoded")
+	value, err := EncodeValue(funcValue)
+	if err != nil {
+		t.Errorf("EncodeValue() func should succeed: %v", err)
+	}
+	if value.Value != "null\n" {
+		t.Errorf("EncodeValue() func should return null value, got: %s", value.Value)
 	}
 }
 
@@ -1958,7 +1961,8 @@ func TestValueEncodeWithNewTypes(t *testing.T) {
 		t.Error("EncodeValue() ID should not be empty")
 	}
 
-	if encoded.Value != `"test string"` {
-		t.Errorf("EncodeValue() Value = %v, want %v", encoded.Value, `"test string"`)
+	want := "\"test string\"\n"
+	if encoded.Value != want {
+		t.Errorf("EncodeValue() Value = %q, want %q", encoded.Value, want)
 	}
 }

@@ -468,6 +468,47 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 	ret := make([]reflect.Value, 0, len(typ.Return))
 	for idx, retValue := range typ.Return {
 		value := funcRes.Return[idx]
+		
+		// Resolve any REF types using TypeRefMap from guest response
+		finalType, err := wasm.ResolveRef(value.Type, funcRes.TypeRefMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve type reference: %w", err)
+		}
+		
+		// Handle function type returns similar to getValue()
+		if finalType.Kind == wasm.FUNC {
+			if finalType.Step || finalType.StepFunc {
+				ret = append(ret, reflect.ValueOf(&StructValue{
+					typ:    finalType,
+					plugin: p,
+					name:   value.ID,
+				}))
+				continue
+			}
+			funcType, err := finalType.ToReflect()
+			if err != nil {
+				return nil, err
+			}
+			fn := reflect.MakeFunc(replaceStructType(funcType), func(args []reflect.Value) []reflect.Value {
+				fnRet, err := p.callFunc(finalType.Func, value.ID, nil, args)
+				if err != nil {
+					panic(err)
+				}
+				return fnRet
+			})
+			ret = append(ret, fn)
+			continue
+		}
+		
+		if finalType.IsStruct() {
+			ret = append(ret, reflect.ValueOf(&StructValue{
+				typ:    finalType,
+				name:   value.ID,
+				plugin: p,
+			}))
+			continue
+		}
+		
 		v, err := p.decodeValue(retValue, value)
 		if err != nil {
 			return nil, err
@@ -479,45 +520,13 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 
 func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (any, error) {
 	if typ.Kind == wasm.INVALID {
-		fqdn := strings.Join(append([]string{name}, selectors...), ".")
-		return nil, fmt.Errorf("%s: invalid type", fqdn)
+		// For invalid types, try to get the value from guest anyway
+		// This may happen with interface types that have nil values
+		// but can still be accessed
 	}
-	if len(selectors) != 0 {
-		for _, sel := range selectors[:len(selectors)-1] {
-			typ = typ.FieldTypeByName(sel)
-		}
-		lastSel := selectors[len(selectors)-1]
-		if typ.HasMethod(lastSel) {
-			// method call.
-			res, err := p.call(nil, wasm.NewMethodRequest(name, selectors))
-			if err != nil {
-				return nil, err
-			}
-			mtdRes, err := convertCommandResponse[*wasm.MethodCommandResponse](res)
-			if err != nil {
-				return nil, err
-			}
-			mtdType, err := wasm.ResolveRef(mtdRes.Type, mtdRes.TypeRefMap)
-			if err != nil {
-				return nil, err
-			}
-			mtdType.Func.Args = mtdType.Func.Args[1:]
-			funcType, err := mtdType.ToReflect()
-			if err != nil {
-				return nil, err
-			}
-			fn := reflect.MakeFunc(replaceStructType(funcType), func(args []reflect.Value) []reflect.Value {
-				ret, err := p.callFunc(mtdType.Func, name, selectors, args)
-				if err != nil {
-					panic(err)
-				}
-				return ret
-			})
-			return fn.Interface(), nil
-		}
-		typ = typ.FieldTypeByName(lastSel)
-	}
-	if typ.Kind == wasm.FUNC {
+
+	// For function types without selectors, handle directly without Guest call
+	if len(selectors) == 0 && typ.Kind == wasm.FUNC {
 		if typ.Step || typ.StepFunc {
 			return &StructValue{
 				typ:    typ,
@@ -538,14 +547,8 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 		})
 		return fn.Interface(), nil
 	}
-	if typ.IsStruct() {
-		return &StructValue{
-			typ:       typ,
-			name:      name,
-			selectors: selectors,
-			plugin:    p,
-		}, nil
-	}
+
+	// Always delegate selector processing to guest side through NewGetRequest
 	res, err := p.call(nil, wasm.NewGetRequest(name, selectors))
 	if err != nil {
 		return nil, err
@@ -554,7 +557,46 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	if err != nil {
 		return nil, err
 	}
-	v, err := p.decodeValue(typ, valRes.Value)
+
+	// Use the final type information returned from guest
+	// Resolve any REF types using TypeRefMap from guest response
+	finalType, err := wasm.ResolveRef(valRes.Value.Type, valRes.TypeRefMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve type reference: %w", err)
+	}
+
+	// Handle special cases based on the final resolved type
+	if finalType.Kind == wasm.FUNC {
+		if finalType.Step || finalType.StepFunc {
+			return &StructValue{
+				typ:    finalType,
+				plugin: p,
+				name:   valRes.Value.ID,
+			}, nil
+		}
+		funcType, err := finalType.ToReflect()
+		if err != nil {
+			return nil, err
+		}
+		fn := reflect.MakeFunc(replaceStructType(funcType), func(args []reflect.Value) []reflect.Value {
+			ret, err := p.callFunc(finalType.Func, valRes.Value.ID, nil, args)
+			if err != nil {
+				panic(err)
+			}
+			return ret
+		})
+		return fn.Interface(), nil
+	}
+
+	if finalType.IsStruct() {
+		return &StructValue{
+			typ:    finalType,
+			name:   valRes.Value.ID,
+			plugin: p,
+		}, nil
+	}
+
+	v, err := p.decodeValue(finalType, valRes.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -748,8 +790,14 @@ func (v *StructValue) BuildRequestMessage(method string, msg []byte) (proto.Mess
 // Invoke calls a gRPC method on the WASM value with the given request.
 // It returns the response message, status, and any error that occurred.
 func (v *StructValue) Invoke(ctx *context.Context, method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
-	md, ok := metadata.FromOutgoingContext(ctx.RequestContext())
-	if !ok {
+	var md metadata.MD
+	if ctx != nil && ctx.RequestContext() != nil {
+		var ok bool
+		md, ok = metadata.FromOutgoingContext(ctx.RequestContext())
+		if !ok {
+			md = metadata.MD{}
+		}
+	} else {
 		md = metadata.MD{}
 	}
 	reqMsg, err := protojson.Marshal(reqProto)

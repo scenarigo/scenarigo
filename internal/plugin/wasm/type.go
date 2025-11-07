@@ -406,6 +406,7 @@ func (t *MapType) String() string {
 }
 
 // newStructType creates a struct Type from a reflect.Value.
+// Only creates top-level struct information without field type details.
 func newStructType(v reflect.Value) (*Type, error) {
 	t := v.Type()
 	ret := &Type{
@@ -417,13 +418,10 @@ func newStructType(v reflect.Value) (*Type, error) {
 	cacheTypeMap[toTypeID(t)] = ret
 	for i := range t.NumField() {
 		field := t.Field(i)
-		typ, err := NewType(newZeroValue(field.Type))
-		if err != nil {
-			typ = &Type{Kind: INVALID}
-		}
+		// Only store field names, not their detailed types
 		ret.Struct.Fields = append(ret.Struct.Fields, &NameWithType{
 			Name: field.Name,
-			Type: typ,
+			Type: &Type{Kind: INVALID}, // Placeholder, actual type will be resolved on guest side
 		})
 	}
 	return ret, nil
@@ -436,6 +434,10 @@ func (t *StructType) ToReflect() (reflect.Type, error) {
 			continue
 		}
 		if unicode.IsLower(rune(field.Name[0])) {
+			continue
+		}
+		// Skip INVALID field types since they are placeholders
+		if field.Type.Kind == INVALID {
 			continue
 		}
 		typ, err := field.Type.ToReflect()
@@ -453,6 +455,10 @@ func (t *StructType) ToReflect() (reflect.Type, error) {
 func (t *StructType) String() string {
 	fields := make([]string, 0, len(t.Fields))
 	for _, field := range t.Fields {
+		// Skip INVALID field types since they are placeholders
+		if field.Type.Kind == INVALID {
+			continue
+		}
 		fields = append(fields, field.String())
 	}
 	return fmt.Sprintf("struct{%s}", strings.Join(fields, " "))
