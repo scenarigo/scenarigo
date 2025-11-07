@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 
@@ -52,44 +53,40 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 	}
 
 	// Special handling for function type - prevent YAML encoding errors
-	if t.Kind == FUNC {
+	if t.Kind == FUNC || v.Type().Kind() == reflect.Func {
 		// For function types, we don't encode the actual function value
 		// The type information is sufficient for Host-Guest communication
 		ret.Value = "null\n"
 		return ret, nil
 	}
 
-	// Temporarily disable struct/pointer special handling to test if this is causing gRPC client issues
-	// TODO: Re-enable after identifying the root cause
-	/*
-		// Special handling for structs/pointers that might cause YAML encoding errors
-		if t.Kind == STRUCT || t.Kind == POINTER {
-			// Try YAML marshaling first, fallback to null if it fails or results in empty content
-			if b, err := yaml.Marshal(v.Interface()); err == nil {
-				// YAML marshaling succeeded, check if the result is meaningful
-				trimmed := strings.TrimSpace(string(b))
-				if trimmed == "{}" || trimmed == "" || trimmed == "null" {
-					// Empty or meaningless YAML content, treat as reference-only struct
-					ret.Value = "null\n"
-					return ret, nil
-				}
-
-				// YAML to JSON conversion
-				encoded, err := yaml.YAMLToJSON(b)
-				if err != nil {
-					// YAML to JSON conversion failed, use null
-					ret.Value = "null\n"
-					return ret, nil
-				}
-				ret.Value = string(encoded)
-				return ret, nil
-			} else {
-				// YAML marshaling failed, return null to avoid errors
+	// Special handling for structs/pointers that might cause YAML encoding errors
+	if t.Kind == STRUCT || t.Kind == POINTER {
+		// Try YAML marshaling first, fallback to null if it fails or results in empty content
+		if b, err := yaml.Marshal(v.Interface()); err == nil {
+			// YAML marshaling succeeded, check if the result is meaningful
+			trimmed := strings.TrimSpace(string(b))
+			if trimmed == "{}" || trimmed == "" || trimmed == "null" {
+				// Empty or meaningless YAML content, treat as reference-only struct
 				ret.Value = "null\n"
 				return ret, nil
 			}
+
+			// YAML to JSON conversion
+			encoded, err := yaml.YAMLToJSON(b)
+			if err != nil {
+				// YAML to JSON conversion failed, use null
+				ret.Value = "null\n"
+				return ret, nil
+			}
+			ret.Value = string(encoded)
+			return ret, nil
+		} else {
+			// YAML marshaling failed, return null to avoid errors
+			ret.Value = "null\n"
+			return ret, nil
 		}
-	*/
+	}
 
 	// Special handling for uintptr type
 	if t.Kind == UINTPTR {
