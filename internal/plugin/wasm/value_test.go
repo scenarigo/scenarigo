@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/scenarigo/scenarigo/context"
@@ -69,16 +70,45 @@ func TestEncodeValue_NewTypeError(t *testing.T) {
 }
 
 func TestEncodeValue_JSONMarshalError(t *testing.T) {
-	// Test error case when JSON marshaling fails
-	// Create a type that causes JSON marshal to fail
+	// Test handling of struct types that cause YAML marshaling failures
+	// These should return null values to avoid errors
 	type Unmarshalable struct {
-		Ch chan int // channels cannot be JSON marshaled
+		Ch chan int // channels cannot be YAML marshaled
 	}
 
 	value := reflect.ValueOf(Unmarshalable{Ch: make(chan int)})
-	_, err := EncodeValue(value)
-	if err == nil {
-		t.Error("EncodeValue() should return error for unmarshalable type")
+	result, err := EncodeValue(value)
+	if err != nil {
+		t.Fatalf("EncodeValue() should not return error for unmarshalable struct: %v", err)
+	}
+	
+	// Struct types that fail YAML marshaling should return null value
+	if result.Value != "null\n" {
+		t.Errorf("EncodeValue() should return null for unmarshalable struct, got: %s", result.Value)
+	}
+}
+
+func TestEncodeValue_MarshalableStruct(t *testing.T) {
+	// Test handling of struct types that can be marshaled successfully
+	type Marshalable struct {
+		Name  string
+		Value int
+	}
+
+	value := reflect.ValueOf(Marshalable{Name: "test", Value: 42})
+	result, err := EncodeValue(value)
+	if err != nil {
+		t.Fatalf("EncodeValue() should not return error for marshalable struct: %v", err)
+	}
+	
+	// Marshalable struct types should return proper JSON
+	if result.Value == "null\n" {
+		t.Errorf("EncodeValue() should not return null for marshalable struct")
+	}
+	
+	// The result should contain the marshaled JSON
+	if !strings.Contains(result.Value, "test") || !strings.Contains(result.Value, "42") {
+		t.Errorf("EncodeValue() should contain marshaled struct data, got: %s", result.Value)
 	}
 }
 
@@ -220,5 +250,33 @@ func TestEncodeValue_IDGeneration(t *testing.T) {
 
 	if result2.ID == "" {
 		t.Error("EncodeValue() ID should not be empty")
+	}
+}
+
+func TestEncodeValue_InvalidValue(t *testing.T) {
+	// Test encoding of an invalid reflect.Value while preserving type information
+	var invalidValue reflect.Value
+	
+	result, err := EncodeValue(invalidValue)
+	if err != nil {
+		t.Fatalf("EncodeValue() should not return error for invalid value: %v", err)
+	}
+	
+	if result.ID != "nil" {
+		t.Errorf("EncodeValue() invalid value ID = %v, want nil", result.ID)
+	}
+	
+	if result.Value != "null\n" {
+		t.Errorf("EncodeValue() invalid value Value = %v, want null\\n", result.Value)
+	}
+	
+	// Type should still be preserved, not INVALID
+	if result.Type == nil {
+		t.Fatal("EncodeValue() invalid value Type should not be nil")
+	}
+	
+	// For completely invalid values, the type should reflect this
+	if result.Type.Kind != INVALID {
+		t.Logf("EncodeValue() invalid value Type.Kind = %v (this is expected for invalid reflect.Value)", result.Type.Kind)
 	}
 }

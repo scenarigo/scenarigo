@@ -18,6 +18,15 @@ type Value struct {
 }
 
 func EncodeValue(v reflect.Value) (*Value, error) {
+	// Check for zero Value first to prevent panic in NewType
+	if !v.IsValid() {
+		return &Value{
+			ID:    "nil",
+			Value: "null\n",
+			Type:  &Type{Kind: INVALID},
+		}, nil
+	}
+	
 	t, err := NewType(v)
 	if err != nil {
 		return nil, err
@@ -50,21 +59,37 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 		return ret, nil
 	}
 
-	// Special handling for struct type that may contain function fields
-	if t.Kind == STRUCT {
-		// For struct types, we don't encode the actual struct value
-		// to avoid issues with function fields inside the struct
-		ret.Value = "null\n"
-		return ret, nil
+	// Temporarily disable struct/pointer special handling to test if this is causing gRPC client issues
+	// TODO: Re-enable after identifying the root cause
+	/*
+	// Special handling for structs/pointers that might cause YAML encoding errors
+	if t.Kind == STRUCT || t.Kind == POINTER {
+		// Try YAML marshaling first, fallback to null if it fails or results in empty content
+		if b, err := yaml.Marshal(v.Interface()); err == nil {
+			// YAML marshaling succeeded, check if the result is meaningful
+			trimmed := strings.TrimSpace(string(b))
+			if trimmed == "{}" || trimmed == "" || trimmed == "null" {
+				// Empty or meaningless YAML content, treat as reference-only struct
+				ret.Value = "null\n"
+				return ret, nil
+			}
+			
+			// YAML to JSON conversion
+			encoded, err := yaml.YAMLToJSON(b)
+			if err != nil {
+				// YAML to JSON conversion failed, use null
+				ret.Value = "null\n"
+				return ret, nil
+			}
+			ret.Value = string(encoded)
+			return ret, nil
+		} else {
+			// YAML marshaling failed, return null to avoid errors
+			ret.Value = "null\n"
+			return ret, nil
+		}
 	}
-
-	// Special handling for pointer type that may point to structs with function fields
-	if t.Kind == POINTER {
-		// For pointer types, we don't encode the actual pointer value
-		// to avoid issues with function fields in the pointed-to struct
-		ret.Value = "null\n"
-		return ret, nil
-	}
+	*/
 
 	// Special handling for uintptr type
 	if t.Kind == UINTPTR {
@@ -119,6 +144,7 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 	ret.Value = string(encoded)
 	return ret, nil
 }
+
 
 func DecodeValueWithType(t reflect.Type, data []byte) (reflect.Value, error) {
 	if t == ctxType {

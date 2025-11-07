@@ -548,7 +548,17 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 		return fn.Interface(), nil
 	}
 
-	// Always delegate selector processing to guest side through NewGetRequest
+	// For struct types without selectors, create StructValue directly on host side
+	// This maintains compatibility with complex objects like gRPC clients
+	if len(selectors) == 0 && (typ.Kind == wasm.STRUCT || typ.Kind == wasm.POINTER) {
+		return &StructValue{
+			typ:    typ,
+			plugin: p,
+			name:   name,
+		}, nil
+	}
+
+	// Delegate selector processing to guest side through NewGetRequest
 	res, err := p.call(nil, wasm.NewGetRequest(name, selectors))
 	if err != nil {
 		return nil, err
