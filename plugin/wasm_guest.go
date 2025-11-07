@@ -442,7 +442,7 @@ func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, erro
 	if !exists {
 		return nil, fmt.Errorf("failed to find value: %s", r.Name)
 	}
-	
+
 	// Process selectors using reflection with panic recovery
 	for _, sel := range r.Selectors {
 		var err error
@@ -451,7 +451,7 @@ func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, erro
 			return nil, err
 		}
 	}
-	
+
 	value, err := wasm.EncodeValue(v)
 	if err != nil {
 		return nil, err
@@ -482,12 +482,12 @@ func getFieldValueSafely(v reflect.Value, sel string) (result reflect.Value, err
 			err = fmt.Errorf("panic occurred while accessing field %s: %v", sel, r)
 		}
 	}()
-	
+
 	// Handle nil or invalid values
 	if !v.IsValid() {
 		return reflect.Value{}, fmt.Errorf("invalid value when accessing field %s", sel)
 	}
-	
+
 	switch v.Type().Kind() {
 	case reflect.Pointer:
 		if v.IsNil() {

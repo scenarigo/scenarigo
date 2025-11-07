@@ -468,13 +468,13 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 	ret := make([]reflect.Value, 0, len(typ.Return))
 	for idx, retValue := range typ.Return {
 		value := funcRes.Return[idx]
-		
+
 		// Resolve any REF types using TypeRefMap from guest response
 		finalType, err := wasm.ResolveRef(value.Type, funcRes.TypeRefMap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve type reference: %w", err)
 		}
-		
+
 		// Handle function type returns similar to getValue()
 		if finalType.Kind == wasm.FUNC {
 			if finalType.Step || finalType.StepFunc {
@@ -499,7 +499,7 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 			ret = append(ret, fn)
 			continue
 		}
-		
+
 		if finalType.IsStruct() {
 			ret = append(ret, reflect.ValueOf(&StructValue{
 				typ:    finalType,
@@ -508,7 +508,7 @@ func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []strin
 			}))
 			continue
 		}
-		
+
 		v, err := p.decodeValue(retValue, value)
 		if err != nil {
 			return nil, err
