@@ -42,32 +42,33 @@ var ignoreEnvNameMap = map[string]struct{}{
 }
 
 func openWasmPlugin(path string) (Plugin, error) {
-	ctx := gocontext.Background()
+	ctx, cancel := gocontext.WithCancel(gocontext.Background())
 	wasmFile, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	rcfg := wazero.NewRuntimeConfigInterpreter().
-		WithCloseOnContextDone(true)
-
-	r := wazero.NewRuntimeWithConfig(ctx, rcfg)
+	r := wazero.NewRuntimeWithConfig(
+		ctx,
+		wazero.NewRuntimeConfigInterpreter().WithCloseOnContextDone(true),
+	)
 	compiledMod, err := r.CompileModule(ctx, wasmFile)
 	if err != nil {
 		return nil, err
 	}
-	stdinR, stdinW, err := os.Pipe()
+	stdoutR, stdoutW, err := createPipe()
 	if err != nil {
 		return nil, err
 	}
-	stdoutR, stdoutW, err := os.Pipe()
+	stderrR, stderrW, err := createPipe()
 	if err != nil {
 		return nil, err
 	}
-	modCfg := wazero.NewModuleConfig().
-		WithStdin(stdinR).
-		WithStdout(os.Stdout).
-		WithStderr(os.Stderr).
-		WithFSConfig(wazero.NewFSConfig().WithFSMount(os.DirFS("/"), ""))
+	if err := setNonBlocking(stdoutR); err != nil {
+		return nil, err
+	}
+	if err := setNonBlocking(stderrR); err != nil {
+		return nil, err
+	}
 
 	srcEnvs := os.Environ()
 	envs := make([]string, 0, len(srcEnvs))
@@ -77,14 +78,12 @@ func openWasmPlugin(path string) (Plugin, error) {
 		if _, exists := ignoreEnvNameMap[key]; exists {
 			continue
 		}
-		value := kv[i+1:]
-		modCfg = modCfg.WithEnv(key, value)
 		envs = append(envs, kv)
 	}
 	ctx, sys, err := imports.NewBuilder().
 		WithSocketsExtension("wasmedgev2", compiledMod).
 		WithWasiGoExtension().
-		WithStdio(int(stdinR.Fd()), int(os.Stdout.Fd()), int(os.Stderr.Fd())).
+		WithStdio(-1, stdoutW, stderrW).
 		WithEnv(envs...).
 		WithDirs("/").
 		Instantiate(ctx, r)
@@ -96,27 +95,69 @@ func openWasmPlugin(path string) (Plugin, error) {
 	host := r.NewHostModuleBuilder("scenarigo")
 	host.NewFunctionBuilder().WithGoModuleFunction(
 		api.GoModuleFunc(func(ctx gocontext.Context, mod api.Module, stack []uint64) {
-			b, _ := mod.Memory().Read(uint32(stack[0]), uint32(stack[1]))
-			_, _ = stdoutW.Write(b)
+			plg := getPluginFromContext(ctx)
+			if plg == nil {
+				panic("failed to get plugin from context")
+			}
+			req := <-plg.reqCh
+
+			plg.req = req
+			// Since the request needs to be referenced again in the `read` host function, it is stored in plg.req.
+			// These functions are evaluated sequentially, so they are thread-safe.
+			stack[0] = uint64(len(req))
+		}),
+		[]api.ValueType{},
+		[]api.ValueType{api.ValueTypeI32},
+	).Export("read_length")
+	host.NewFunctionBuilder().WithGoModuleFunction(
+		api.GoModuleFunc(func(ctx gocontext.Context, mod api.Module, stack []uint64) {
+			plg := getPluginFromContext(ctx)
+			if plg == nil {
+				panic("failed to get plugin from context")
+			}
+			// plg.req is always initialized with the correct value inside the `read_length` host function.
+			// The `read_length` host function and the `read` host function are always executed sequentially.
+			if ok := mod.Memory().Write(uint32(stack[0]), plg.req); !ok { //nolint:gosec
+				panic("failed to write plugin request content")
+			}
+		}),
+		[]api.ValueType{api.ValueTypeI32},
+		[]api.ValueType{},
+	).Export("read")
+	host.NewFunctionBuilder().WithGoModuleFunction(
+		api.GoModuleFunc(func(ctx gocontext.Context, mod api.Module, stack []uint64) {
+			plg := getPluginFromContext(ctx)
+			if plg == nil {
+				panic("failed to get plugin from context")
+			}
+			//nolint:gosec
+			b, ok := mod.Memory().Read(uint32(stack[0]), uint32(stack[1]))
+			if !ok {
+				panic("failed to read memory from plugin")
+			}
+			plg.resCh <- b
 		}),
 		[]api.ValueType{api.ValueTypeI32, api.ValueTypeI32},
 		[]api.ValueType{},
-	).Export("scenarigo_write")
+	).Export("write")
 	if _, err := host.Instantiate(ctx); err != nil {
 		return nil, err
 	}
 
 	plugin := &WasmPlugin{
 		wasmRuntime: r,
-		stdin:       stdinW,
-		stdout:      stdoutR,
+		reqCh:       make(chan []byte, 1),
+		resCh:       make(chan []byte),
+		stdoutR:     stdoutR,
+		stderrR:     stderrR,
+		cancelFn:    cancel,
 	}
 
 	// setting the buffer size to 1 ensures that the function can exit even if there is no receiver.
 	instanceModErrCh := make(chan error, 1)
 	go func() {
 		_, err := r.InstantiateModule(
-			ctx, compiledMod, modCfg,
+			withPlugin(ctx, plugin), compiledMod, wazero.NewModuleConfig(),
 		)
 		instanceModErrCh <- err
 		plugin.closeResources(err)
@@ -142,9 +183,19 @@ func openWasmPlugin(path string) (Plugin, error) {
 	return plugin, nil
 }
 
-const (
-	exitCommand = "exit\n"
-)
+type pluginKey struct{}
+
+func getPluginFromContext(ctx gocontext.Context) *WasmPlugin {
+	v := ctx.Value(pluginKey{})
+	if v == nil {
+		return nil
+	}
+	return v.(*WasmPlugin)
+}
+
+func withPlugin(ctx gocontext.Context, plg *WasmPlugin) gocontext.Context {
+	return gocontext.WithValue(ctx, pluginKey{}, plg)
+}
 
 // WasmPlugin represents a WASM plugin instance.
 // It manages the WASM runtime and provides communication with the WASM module.
@@ -153,22 +204,24 @@ type WasmPlugin struct {
 	nameToTypeMap        map[string]*wasm.Type
 	setupNum             int
 	setupEachScenarioNum int
-	stdin                *os.File
-	stdout               *os.File
+	req                  []byte
+	reqCh                chan []byte
+	resCh                chan []byte
+	stdoutR              int
+	stderrR              int
 	instanceModErrCh     chan error
 	instanceModErr       error
 	closed               bool
 	mu                   sync.Mutex
+	cancelFn             gocontext.CancelFunc
 }
 
 func (p *WasmPlugin) close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	defer func() { p.closeResources(nil) }()
-	if err := p.write([]byte(exitCommand)); err != nil {
-		return err
+	if p.closed {
+		return nil
 	}
+	defer func() { p.closeResources(nil) }()
+	p.cancelFn()
 	return nil
 }
 
@@ -187,6 +240,10 @@ func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse
 	resBytes, err := p.read()
 	if err != nil {
 		return nil, err
+	}
+	stdout := p.readFromPipe(p.stdoutR)
+	if stdout != "" && ctx != nil && ctx.Reporter() != nil {
+		ctx.Reporter().Log(stdout)
 	}
 	res, err := wasm.DecodeResponse(resBytes)
 	if err != nil {
@@ -220,21 +277,8 @@ func (p *WasmPlugin) write(cmd []byte) error {
 	if p.closed {
 		return p.instanceModErr
 	}
-
-	writeCh := make(chan error)
-	go func() {
-		_, err := p.stdin.Write(cmd)
-		writeCh <- err
-	}()
-	select {
-	case err := <-p.instanceModErrCh:
-		// If the module instance is terminated,
-		// it is considered that the termination process has been completed.
-		p.closeResources(err)
-		return err
-	case err := <-writeCh:
-		return err
-	}
+	p.reqCh <- cmd
+	return nil
 }
 
 func (p *WasmPlugin) read() ([]byte, error) {
@@ -242,40 +286,20 @@ func (p *WasmPlugin) read() ([]byte, error) {
 		return nil, errors.New("plugin has already been closed")
 	}
 
-	type readResult struct {
-		response []byte
-		err      error
-	}
-	readCh := make(chan readResult)
-	go func() {
-		reader := bufio.NewReader(p.stdout)
-		content, err := reader.ReadString('\n')
-		if err != nil {
-			readCh <- readResult{err: fmt.Errorf("failed to receive response from wasm plugin: %w", err)}
-			return
-		}
-		if content == "" {
-			readCh <- readResult{err: errors.New("receive empty response from wasm plugin")}
-			return
-		}
-		readCh <- readResult{response: []byte(content)}
-	}()
 	select {
 	case err := <-p.instanceModErrCh:
 		// If the module instance is terminated,
 		// it is considered that the termination process has been completed.
 		p.closeResources(err)
 		return nil, err
-	case result := <-readCh:
-		return result.response, result.err
+	case res := <-p.resCh:
+		return res, nil
 	}
 }
 
 func (p *WasmPlugin) closeResources(instanceModErr error) {
 	p.instanceModErr = instanceModErr
 	p.closed = true
-	p.stdin.Close()
-	p.stdout.Close()
 }
 
 func (p *WasmPlugin) Lookup(name string) (Symbol, error) {
@@ -463,70 +487,6 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 		fqdn := strings.Join(append([]string{name}, selectors...), ".")
 		return nil, fmt.Errorf("%s: invalid type", fqdn)
 	}
-	if len(selectors) != 0 {
-		for _, sel := range selectors[:len(selectors)-1] {
-			typ = typ.FieldTypeByName(sel)
-		}
-		lastSel := selectors[len(selectors)-1]
-		if typ.HasMethod(lastSel) {
-			// method call.
-			res, err := p.call(nil, wasm.NewMethodRequest(name, selectors))
-			if err != nil {
-				return nil, err
-			}
-			mtdRes, err := convertCommandResponse[*wasm.MethodCommandResponse](res)
-			if err != nil {
-				return nil, err
-			}
-			mtdType, err := wasm.ResolveRef(mtdRes.Type, mtdRes.TypeRefMap)
-			if err != nil {
-				return nil, err
-			}
-			mtdType.Func.Args = mtdType.Func.Args[1:]
-			funcType, err := mtdType.ToReflect()
-			if err != nil {
-				return nil, err
-			}
-			fn := reflect.MakeFunc(replaceStructType(funcType), func(args []reflect.Value) []reflect.Value {
-				ret, err := p.callFunc(mtdType.Func, name, selectors, args)
-				if err != nil {
-					panic(err)
-				}
-				return ret
-			})
-			return fn.Interface(), nil
-		}
-		typ = typ.FieldTypeByName(lastSel)
-	}
-	if typ.Kind == wasm.FUNC {
-		if typ.Step || typ.StepFunc {
-			return &StructValue{
-				typ:    typ,
-				plugin: p,
-				name:   name,
-			}, nil
-		}
-		funcType, err := typ.ToReflect()
-		if err != nil {
-			return nil, err
-		}
-		fn := reflect.MakeFunc(replaceStructType(funcType), func(args []reflect.Value) []reflect.Value {
-			ret, err := p.callFunc(typ.Func, name, selectors, args)
-			if err != nil {
-				panic(err)
-			}
-			return ret
-		})
-		return fn.Interface(), nil
-	}
-	if typ.IsStruct() {
-		return &StructValue{
-			typ:       typ,
-			name:      name,
-			selectors: selectors,
-			plugin:    p,
-		}, nil
-	}
 	res, err := p.call(nil, wasm.NewGetRequest(name, selectors))
 	if err != nil {
 		return nil, err
@@ -535,45 +495,11 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	if err != nil {
 		return nil, err
 	}
-	v, err := p.decodeValue(typ, valRes.Value)
+	v, err := p.decodeValue(valRes.Value.Type, valRes.Value)
 	if err != nil {
 		return nil, err
 	}
 	return v.Interface(), nil
-}
-
-var ctxType = reflect.TypeOf((*Context)(nil))
-
-func replaceStructType(t reflect.Type) reflect.Type {
-	if t == ctxType {
-		return t
-	}
-	if wasm.IsStepFuncType(t) {
-		return reflect.TypeOf(&StructValue{})
-	}
-	switch t.Kind() {
-	case reflect.Pointer:
-		return reflect.New(replaceStructType(t.Elem())).Type()
-	case reflect.Map:
-		return reflect.MapOf(replaceStructType(t.Key()), replaceStructType(t.Elem()))
-	case reflect.Slice:
-		return reflect.SliceOf(replaceStructType(t.Elem()))
-	case reflect.Array:
-		return reflect.ArrayOf(t.Len(), replaceStructType(t.Elem()))
-	case reflect.Func:
-		args := make([]reflect.Type, 0, t.NumIn())
-		for i := range t.NumIn() {
-			args = append(args, replaceStructType(t.In(i)))
-		}
-		ret := make([]reflect.Type, 0, t.NumOut())
-		for i := range t.NumOut() {
-			ret = append(ret, replaceStructType(t.Out(i)))
-		}
-		return reflect.FuncOf(args, ret, false)
-	case reflect.Struct:
-		return reflect.TypeOf(StructValue{})
-	}
-	return t
 }
 
 // StructValue represents a struct type value from a WASM plugin.
@@ -828,6 +754,15 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 	if err != nil {
 		return reflect.Value{}, err
 	}
+	if v.Type.Kind == wasm.FUNC {
+		return reflect.MakeFunc(replaceStructType(rtyp), func(args []reflect.Value) []reflect.Value {
+			ret, err := p.callFunc(v.Type.Func, v.ID, nil, args)
+			if err != nil {
+				panic(err)
+			}
+			return ret
+		}), nil
+	}
 	rv, err := wasm.DecodeValueWithType(rtyp, []byte(v.Value))
 	if err != nil {
 		return reflect.Value{}, fmt.Errorf("failed to convert value %s to %s: %w", v.Value, rtyp.Kind(), err)
@@ -846,6 +781,40 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 		}
 	}
 	return rv, nil
+}
+
+var ctxType = reflect.TypeOf((*Context)(nil))
+
+func replaceStructType(t reflect.Type) reflect.Type {
+	if t == ctxType {
+		return t
+	}
+	if wasm.IsStepFuncType(t) {
+		return reflect.TypeOf(&StructValue{})
+	}
+	switch t.Kind() {
+	case reflect.Pointer:
+		return reflect.New(replaceStructType(t.Elem())).Type()
+	case reflect.Map:
+		return reflect.MapOf(replaceStructType(t.Key()), replaceStructType(t.Elem()))
+	case reflect.Slice:
+		return reflect.SliceOf(replaceStructType(t.Elem()))
+	case reflect.Array:
+		return reflect.ArrayOf(t.Len(), replaceStructType(t.Elem()))
+	case reflect.Func:
+		args := make([]reflect.Type, 0, t.NumIn())
+		for i := range t.NumIn() {
+			args = append(args, replaceStructType(t.In(i)))
+		}
+		ret := make([]reflect.Type, 0, t.NumOut())
+		for i := range t.NumOut() {
+			ret = append(ret, replaceStructType(t.Out(i)))
+		}
+		return reflect.FuncOf(args, ret, false)
+	case reflect.Struct:
+		return reflect.TypeOf(StructValue{})
+	}
+	return t
 }
 
 func captureWasmPluginFatal(ctx *Context, err error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"os"
 
 	"google.golang.org/grpc"
@@ -119,4 +120,8 @@ func createClients(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context))
 	return ctx, func(ctx *plugin.Context) {
 		cc.Close()
 	}
+}
+
+func HTTPClient() *http.Client {
+	return new(http.Client)
 }

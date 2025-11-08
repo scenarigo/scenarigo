@@ -36,7 +36,7 @@ func EncodeValue(v reflect.Value) (*Value, error) {
 			return ret, nil
 		}
 	}
-	if t.Step || t.StepFunc || t.LeftArrowFunc {
+	if t.Kind == FUNC || t.Kind == STRUCT || t.Kind == POINTER || t.Step || t.StepFunc || t.LeftArrowFunc {
 		return ret, nil
 	}
 	b, err := json.Marshal(v.Interface())

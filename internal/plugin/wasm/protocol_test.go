@@ -111,8 +111,7 @@ func (h *mockCommandHandler) LeftArrowFuncUnmarshalArg(*LeftArrowFuncUnmarshalAr
 
 func (h *mockCommandHandler) Method(*MethodCommandRequest) (*MethodCommandResponse, error) {
 	return &MethodCommandResponse{
-		TypeRefMap: map[string]*Type{},
-		Type:       &Type{Kind: BOOL},
+		Type: &Type{Kind: BOOL},
 	}, nil
 }
 

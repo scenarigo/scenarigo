@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -72,23 +71,45 @@ func ToDefinition(name string, value any) *Definition {
 // It is used by WASM plugins to provide their exported functions and variables.
 type DefinitionFunc func() []*Definition
 
+//go:wasmimport scenarigo write
+func scenarigo_write(ptr, size uint32)
+
+//go:wasmimport scenarigo read_length
+func scenarigo_read_length() uint32
+
+//go:wasmimport scenarigo read
+func scenarigo_read(uint32)
+
+func writePluginContent(content []byte) {
+	if content == nil {
+		scenarigo_write(0, 0)
+		return
+	}
+	scenarigo_write(
+		uint32(uintptr(unsafe.Pointer(&content[0]))),
+		uint32(len(content)),
+	)
+}
+
+func readPluginContent() string {
+	length := scenarigo_read_length()
+	if length == 0 {
+		return ""
+	}
+	buf := make([]byte, length)
+	scenarigo_read(
+		uint32(uintptr(unsafe.Pointer(&buf[0]))),
+	)
+	return string(buf)
+}
+
 // Register starts the WASM plugin main loop with initialization and sync functions.
 // This function should be called from the main function of WASM plugins.
 // initFn provides initial definitions, syncFn provides updated definitions during sync.
 func Register(initFn, syncFn DefinitionFunc) {
-	reader := bufio.NewReader(os.Stdin)
 	h := newHandler(initFn, syncFn)
 	for {
-		content, err := reader.ReadString('\n')
-		if err != nil {
-			continue
-		}
-		if content == "" {
-			continue
-		}
-		if content == exitCommand {
-			return
-		}
+		content := readPluginContent()
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
@@ -112,11 +133,7 @@ func Register(initFn, syncFn DefinitionFunc) {
 						Context:     sctx,
 						Error:       errMsg,
 					})
-					out := append(b, '\n')
-					scenarigo_write(
-						uint32(uintptr(unsafe.Pointer(&out[0]))),
-						uint32(len(out)),
-					)
+					writePluginContent(b)
 				}
 				wg.Done()
 			}()
@@ -127,18 +144,11 @@ func Register(initFn, syncFn DefinitionFunc) {
 			}
 			finished = true
 			b, _ := json.Marshal(res)
-			out := append(b, '\n')
-			scenarigo_write(
-				uint32(uintptr(unsafe.Pointer(&out[0]))),
-				uint32(len(out)),
-			)
+			writePluginContent(b)
 		}()
 		wg.Wait()
 	}
 }
-
-//go:wasmimport scenarigo scenarigo_write
-func scenarigo_write(ptr, size uint32)
 
 type handler struct {
 	ctx                *Context
@@ -182,7 +192,6 @@ func (h *handler) Init(r *wasm.InitCommandRequest) (*wasm.InitCommandResponse, e
 	return &wasm.InitCommandResponse{
 		SetupNum:             len(setups),
 		SetupEachScenarioNum: len(setupsEachScenario),
-		TypeRefMap:           wasm.TypeRefMap(),
 		Types:                types,
 	}, nil
 }
@@ -257,7 +266,7 @@ func (h *handler) Sync(r *wasm.SyncCommandRequest) (*wasm.SyncCommandResponse, e
 		})
 	}
 	return &wasm.SyncCommandResponse{
-		TypeRefMap: wasm.TypeRefMap(), Types: types,
+		Types: types,
 	}, nil
 }
 
@@ -331,8 +340,7 @@ func (h *handler) Method(r *wasm.MethodCommandRequest) (*wasm.MethodCommandRespo
 		return nil, fmt.Errorf("failed to create method type: %s", mtdType)
 	}
 	return &wasm.MethodCommandResponse{
-		TypeRefMap: wasm.TypeRefMap(),
-		Type:       mtdType,
+		Type: mtdType,
 	}, nil
 }
 
@@ -438,19 +446,58 @@ func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, erro
 	if err != nil {
 		return nil, err
 	}
+	// Store the encoded value in nameToValueMap for future access
+	h.nameToValueMap[value.ID] = v
 	return &wasm.GetCommandResponse{
 		Value: value,
 	}, nil
 }
 
-func getFieldValue(v reflect.Value, sel string) (reflect.Value, error) {
+func getFieldValue(v reflect.Value, sel string) (ret reflect.Value, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic occurred while accessing field %s: %v", sel, r)
+		}
+	}()
+
+	// Handle nil or invalid values
+	if !v.IsValid() {
+		return reflect.Value{}, fmt.Errorf("invalid value when accessing field %s", sel)
+	}
+
 	switch v.Type().Kind() {
-	case reflect.Pointer, reflect.Interface:
+	case reflect.Pointer:
+		if v.IsNil() {
+			return reflect.Value{}, fmt.Errorf("nil pointer when accessing field %s", sel)
+		}
+		return getFieldValue(v.Elem(), sel)
+	case reflect.Interface:
+		if v.IsNil() {
+			return reflect.Value{}, fmt.Errorf("nil interface when accessing field %s", sel)
+		}
 		return getFieldValue(v.Elem(), sel)
 	case reflect.Struct:
-		return v.FieldByName(sel), nil
+		field := v.FieldByName(sel)
+		if !field.IsValid() {
+			return reflect.Value{}, fmt.Errorf("field %s not found in struct type %s", sel, v.Type())
+		}
+		if !field.CanInterface() {
+			return reflect.Value{}, fmt.Errorf("field %s is not accessible (unexported)", sel)
+		}
+		return field, nil
+	case reflect.Map:
+		key := reflect.ValueOf(sel)
+		if !key.Type().AssignableTo(v.Type().Key()) {
+			return reflect.Value{}, fmt.Errorf("key %s is not assignable to map key type %s", sel, v.Type().Key())
+		}
+		mapValue := v.MapIndex(key)
+		if !mapValue.IsValid() {
+			return reflect.Value{}, fmt.Errorf("key %s not found in map", sel)
+		}
+		return mapValue, nil
+	default:
+		return reflect.Value{}, fmt.Errorf("cannot access field %s on type %s (kind: %s)", sel, v.Type(), v.Type().Kind())
 	}
-	return reflect.Value{}, fmt.Errorf("failed to get field %s value from %v", sel, v)
 }
 
 func (h *handler) GRPCExistsMethod(r *wasm.GRPCExistsMethodCommandRequest) (*wasm.GRPCExistsMethodCommandResponse, error) {

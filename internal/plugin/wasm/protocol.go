@@ -266,21 +266,16 @@ func (r *InitCommandRequest) isCommandRequest() bool { return true }
 
 // InitCommandResponse contains the types available from the WASM plugin.
 type InitCommandResponse struct {
-	SetupNum             int              `json:"setupNum"`
-	SetupEachScenarioNum int              `json:"setupEachScenarioNum"`
-	TypeRefMap           map[string]*Type `json:"typeRefMap"`
-	Types                []*NameWithType  `json:"types"`
+	SetupNum             int             `json:"setupNum"`
+	SetupEachScenarioNum int             `json:"setupEachScenarioNum"`
+	Types                []*NameWithType `json:"types"`
 }
 
 // ToTypeMap converts the response types to a name-to-type mapping.
 func (r *InitCommandResponse) ToTypeMap() (map[string]*Type, error) {
 	nameToTypeMap := make(map[string]*Type)
 	for _, typ := range r.Types {
-		resolvedType, err := ResolveRef(typ.Type, r.TypeRefMap)
-		if err != nil {
-			return nil, err
-		}
-		nameToTypeMap[typ.Name] = resolvedType
+		nameToTypeMap[typ.Name] = typ.Type
 	}
 	return nameToTypeMap, nil
 }
@@ -332,19 +327,14 @@ func (r *SyncCommandRequest) isCommandRequest() bool { return true }
 
 // SyncCommandResponse contains updated types from the WASM plugin.
 type SyncCommandResponse struct {
-	TypeRefMap map[string]*Type `json:"typeRefMap"`
-	Types      []*NameWithType  `json:"types"`
+	Types []*NameWithType `json:"types"`
 }
 
 // ToTypeMap converts the response types to a name-to-type mapping.
 func (r *SyncCommandResponse) ToTypeMap() (map[string]*Type, error) {
 	nameToTypeMap := make(map[string]*Type)
 	for _, typ := range r.Types {
-		resolvedType, err := ResolveRef(typ.Type, r.TypeRefMap)
-		if err != nil {
-			return nil, err
-		}
-		nameToTypeMap[typ.Name] = resolvedType
+		nameToTypeMap[typ.Name] = typ.Type
 	}
 	return nameToTypeMap, nil
 }
@@ -373,8 +363,7 @@ type MethodCommandRequest struct {
 func (r *MethodCommandRequest) isCommandRequest() bool { return true }
 
 type MethodCommandResponse struct {
-	TypeRefMap map[string]*Type `json:"typeRefMap"`
-	Type       *Type            `json:"type"`
+	Type *Type `json:"type"`
 }
 
 func (r *MethodCommandResponse) isCommandResponse() bool { return true }
