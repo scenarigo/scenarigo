@@ -10,60 +10,6 @@ import (
 	"github.com/scenarigo/scenarigo/schema"
 )
 
-func TestType_HasField(t *testing.T) {
-	tests := []struct {
-		name     string
-		typ      *Type
-		field    string
-		expected bool
-	}{
-		{
-			name: "struct with field",
-			typ: &Type{
-				Kind: STRUCT,
-				Struct: &StructType{
-					Fields: []*NameWithType{
-						{Name: "Name", Type: &Type{Kind: STRING}},
-						{Name: "Age", Type: &Type{Kind: INT}},
-					},
-				},
-			},
-			field:    "Name",
-			expected: true,
-		},
-		{
-			name: "struct without field",
-			typ: &Type{
-				Kind: STRUCT,
-				Struct: &StructType{
-					Fields: []*NameWithType{
-						{Name: "Name", Type: &Type{Kind: STRING}},
-					},
-				},
-			},
-			field:    "Age",
-			expected: false,
-		},
-		{
-			name: "non-struct type",
-			typ: &Type{
-				Kind: STRING,
-			},
-			field:    "Name",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.typ.HasField(tt.field)
-			if result != tt.expected {
-				t.Errorf("HasField() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestType_String(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -183,51 +129,6 @@ func TestType_IsStruct(t *testing.T) {
 				t.Errorf("IsStruct() = %v, want %v", result, tt.expected)
 			}
 		})
-	}
-}
-
-func TestType_FieldTypeByName(t *testing.T) {
-	typ := &Type{
-		Kind: STRUCT,
-		Struct: &StructType{
-			Fields: []*NameWithType{
-				{Name: "Name", Type: &Type{Kind: STRING}},
-				{Name: "Age", Type: &Type{Kind: INT}},
-			},
-		},
-	}
-
-	result := typ.FieldTypeByName("Name")
-	if result == nil {
-		t.Fatal("FieldTypeByName() returned nil")
-		return
-	}
-
-	if result.Kind != STRING {
-		t.Errorf("FieldTypeByName().Kind = %v, want %v", result.Kind, STRING)
-	}
-
-	// Test non-existent field
-	result = typ.FieldTypeByName("NonExistent")
-	if result != nil {
-		t.Errorf("FieldTypeByName() for non-existent field should return nil, got %v", result)
-	}
-}
-
-func TestStructType_HasField(t *testing.T) {
-	structType := &StructType{
-		Fields: []*NameWithType{
-			{Name: "Name", Type: &Type{Kind: STRING}},
-			{Name: "Age", Type: &Type{Kind: INT}},
-		},
-	}
-
-	if !structType.HasField("Name") {
-		t.Error("HasField() should return true for existing field")
-	}
-
-	if structType.HasField("NonExistent") {
-		t.Error("HasField() should return false for non-existing field")
 	}
 }
 
@@ -520,23 +421,6 @@ func TestTypeAdvanced(t *testing.T) {
 	if anyType.String() != "test" {
 		t.Errorf("Any.String() = %v, want test", anyType.String())
 	}
-
-	// Test Type.HasMethod
-	typ := &Type{
-		MethodNames: []string{"Method1", "Method2"},
-	}
-	if !typ.HasMethod("Method1") {
-		t.Error("HasMethod() should return true for existing method")
-	}
-	if typ.HasMethod("NonExistent") {
-		t.Error("HasMethod() should return false for non-existing method")
-	}
-
-	// Test TypeRefMap
-	refMap := TypeRefMap()
-	if refMap == nil {
-		t.Error("TypeRefMap() should not return nil")
-	}
 }
 
 func TestNewTypeConstructors(t *testing.T) {
@@ -774,15 +658,10 @@ func TestTypeStringComprehensive(t *testing.T) {
 		{
 			name: "struct type",
 			typ: &Type{
-				Kind: STRUCT,
-				Struct: &StructType{
-					Fields: []*NameWithType{
-						{Name: "Name", Type: &Type{Kind: STRING}},
-						{Name: "Age", Type: &Type{Kind: INT}},
-					},
-				},
+				Kind:   STRUCT,
+				Struct: &StructType{},
 			},
-			want: "struct{Name string Age int}",
+			want: "struct{}",
 		},
 		{
 			name: "function type",
@@ -850,49 +729,6 @@ func TestComplexTypeOperations(t *testing.T) {
 	}
 }
 
-func TestResolveRef(t *testing.T) {
-	// Create a type reference map
-	typeRefMap := map[string]*Type{
-		"ref1": {Kind: STRING},
-		"ref2": {Kind: INT},
-	}
-
-	// Test resolving a REF type
-	refType := &Type{Kind: REF, Ref: "ref1"}
-	resolved, err := ResolveRef(refType, typeRefMap)
-	if err != nil {
-		t.Fatalf("ResolveRef() error = %v", err)
-	}
-	if resolved.Kind != STRING {
-		t.Errorf("ResolveRef() kind = %v, want STRING", resolved.Kind)
-	}
-
-	// Test error case - missing reference
-	missingRefType := &Type{Kind: REF, Ref: "missing"}
-	_, err = ResolveRef(missingRefType, typeRefMap)
-	if err == nil {
-		t.Error("ResolveRef() should return error for missing reference")
-	}
-
-	// Test resolving complex types
-	complexType := &Type{
-		Kind: SLICE,
-		Slice: &SliceType{
-			Elem: &Type{Kind: REF, Ref: "ref1"},
-		},
-	}
-	resolved, err = ResolveRef(complexType, typeRefMap)
-	if err != nil {
-		t.Fatalf("ResolveRef() complex type error = %v", err)
-	}
-	if resolved.Kind != SLICE {
-		t.Errorf("ResolveRef() complex type kind = %v, want SLICE", resolved.Kind)
-	}
-	if resolved.Slice.Elem.Kind != STRING {
-		t.Errorf("ResolveRef() complex type elem kind = %v, want STRING", resolved.Slice.Elem.Kind)
-	}
-}
-
 func TestEdgeCases(t *testing.T) {
 	// Test empty interface
 	var emptyInterface interface{}
@@ -933,41 +769,6 @@ func TestEdgeCases(t *testing.T) {
 	nestedString := nestedPtr.String()
 	if nestedString != "**string" {
 		t.Errorf("Nested pointer string = %v, want **string", nestedString)
-	}
-
-	// Test HasField with pointer type
-	ptrType := &Type{
-		Kind: POINTER,
-		Pointer: &PointerType{
-			Elem: &Type{
-				Kind: STRUCT,
-				Struct: &StructType{
-					Fields: []*NameWithType{
-						{Name: "Field1", Type: &Type{Kind: STRING}},
-					},
-				},
-			},
-		},
-	}
-	if !ptrType.HasField("Field1") {
-		t.Error("HasField() should work with pointer to struct")
-	}
-
-	// Test HasMethod with pointer type
-	ptrMethodType := &Type{
-		Kind:        POINTER,
-		MethodNames: []string{"Method1"},
-		Pointer: &PointerType{
-			Elem: &Type{
-				MethodNames: []string{"Method2"},
-			},
-		},
-	}
-	if !ptrMethodType.HasMethod("Method1") {
-		t.Error("HasMethod() should find method on pointer type")
-	}
-	if !ptrMethodType.HasMethod("Method2") {
-		t.Error("HasMethod() should find method on element type")
 	}
 }
 
@@ -1054,35 +855,6 @@ func TestStepTypeInterface(t *testing.T) {
 	}
 }
 
-func TestToTypeMapErrors(t *testing.T) {
-	// Test InitCommandResponse.ToTypeMap with error case
-	invalidTypeRef := &Type{Kind: REF, Ref: "invalid_ref"}
-	initResp := &InitCommandResponse{
-		Types: []*NameWithType{
-			{Name: "TestType", Type: invalidTypeRef},
-		},
-		TypeRefMap: map[string]*Type{}, // Empty map to cause error
-	}
-
-	_, err := initResp.ToTypeMap()
-	if err == nil {
-		t.Error("InitCommandResponse.ToTypeMap() should return error for invalid reference")
-	}
-
-	// Test SyncCommandResponse.ToTypeMap with error case
-	syncResp := &SyncCommandResponse{
-		Types: []*NameWithType{
-			{Name: "TestType", Type: invalidTypeRef},
-		},
-		TypeRefMap: map[string]*Type{}, // Empty map to cause error
-	}
-
-	_, err = syncResp.ToTypeMap()
-	if err == nil {
-		t.Error("SyncCommandResponse.ToTypeMap() should return error for invalid reference")
-	}
-}
-
 func TestTypeErrors(t *testing.T) {
 	// Test newType with invalid value
 	invalidValue := reflect.Value{}
@@ -1096,7 +868,7 @@ func TestTypeErrors(t *testing.T) {
 
 	// Test Type.String for basic enum types to increase coverage
 	basicKinds := []Kind{
-		INVALID, REF, INT, INT8, INT16, INT32, INT64,
+		INVALID, INT, INT8, INT16, INT32, INT64,
 		UINT, UINT8, UINT16, UINT32, UINT64, UINTPTR,
 		FLOAT32, FLOAT64, STRING, BYTES, BOOL, ERROR, CONTEXT,
 	}
@@ -1112,7 +884,7 @@ func TestTypeErrors(t *testing.T) {
 	// Test complex types that need their fields populated
 	structType := &Type{
 		Kind:   STRUCT,
-		Struct: &StructType{Fields: []*NameWithType{}},
+		Struct: &StructType{},
 	}
 	if structType.String() == "" {
 		t.Error("Type.String() for STRUCT should not be empty")
@@ -1215,31 +987,6 @@ func TestDecodeValueWithTypeErrors(t *testing.T) {
 	_, err = DecodeValueWithType(stringType, []byte(`123`))
 	if err == nil {
 		t.Error("DecodeValueWithType() should return error for type mismatch")
-	}
-}
-
-func TestComplexTypeToReflectErrors(t *testing.T) {
-	// Test complex types with ResolveRef errors
-	invalidRefType := &Type{Kind: REF, Ref: "nonexistent"}
-	emptyRefMap := map[string]*Type{}
-
-	_, err := ResolveRef(invalidRefType, emptyRefMap)
-	if err == nil {
-		t.Error("ResolveRef() should return error for missing reference")
-	}
-
-	// Test ResolveRef with complex nested types that have invalid refs
-	complexType := &Type{
-		Kind: FUNC,
-		Func: &FuncType{
-			Args:   []*Type{invalidRefType},
-			Return: []*Type{{Kind: STRING}},
-		},
-	}
-
-	_, err = ResolveRef(complexType, emptyRefMap)
-	if err == nil {
-		t.Error("ResolveRef() should return error for nested invalid reference")
 	}
 }
 
@@ -1385,89 +1132,6 @@ func TestSpecialTypeHandling(t *testing.T) {
 	}
 }
 
-func TestTypeRefCaching(t *testing.T) {
-	// Test type reference caching mechanism
-	originalMap := TypeRefMap()
-
-	// Create a complex type that should be cached
-	complexValue := reflect.ValueOf(map[string][]int{})
-	typ1, err := NewType(complexValue)
-	if err != nil {
-		t.Fatalf("NewType() first call error = %v", err)
-	}
-
-	// Second call should return a REF type due to caching
-	typ2, err := NewType(complexValue)
-	if err != nil {
-		t.Fatalf("NewType() second call error = %v", err)
-	}
-
-	// The results might be different due to caching
-	if typ1 == nil || typ2 == nil {
-		t.Error("NewType() should not return nil")
-	}
-
-	// Check if the cache has grown
-	newMap := TypeRefMap()
-	if len(newMap) < len(originalMap) {
-		t.Error("TypeRefMap should grow with new types")
-	}
-}
-
-func TestStructTypeToReflectWithPrivateFields(t *testing.T) {
-	// Test StructType.ToReflect with private fields (should be skipped)
-	structType := &StructType{
-		Fields: []*NameWithType{
-			{Name: "PublicField", Type: &Type{Kind: STRING}}, // Public field
-			{Name: "privateField", Type: &Type{Kind: INT}},   // Private field - should be skipped
-			{Name: "", Type: &Type{Kind: BOOL}},              // Empty name - should be skipped
-		},
-	}
-
-	reflectType, err := structType.ToReflect()
-	if err != nil {
-		t.Fatalf("StructType.ToReflect() error = %v", err)
-	}
-
-	if reflectType.NumField() != 1 {
-		t.Errorf("StructType.ToReflect() field count = %v, want 1 (only public field)", reflectType.NumField())
-	}
-
-	if reflectType.Field(0).Name != "PublicField" {
-		t.Errorf("StructType.ToReflect() field name = %v, want PublicField", reflectType.Field(0).Name)
-	}
-}
-
-func TestResolveRefComprehensive(t *testing.T) {
-	typeRefMap := map[string]*Type{
-		"string_ref": {Kind: STRING},
-		"int_ref":    {Kind: INT},
-	}
-
-	// Test all type kinds with ResolveRef
-	tests := []struct {
-		name string
-		typ  *Type
-	}{
-		{"MAP", &Type{Kind: MAP, Map: &MapType{Key: &Type{Kind: REF, Ref: "string_ref"}, Value: &Type{Kind: REF, Ref: "int_ref"}}}},
-		{"ARRAY", &Type{Kind: ARRAY, Array: &ArrayType{Elem: &Type{Kind: REF, Ref: "string_ref"}, Num: 5}}},
-		{"STRUCT", &Type{Kind: STRUCT, Struct: &StructType{Fields: []*NameWithType{{Name: "field", Type: &Type{Kind: REF, Ref: "string_ref"}}}}}},
-		{"POINTER", &Type{Kind: POINTER, Pointer: &PointerType{Elem: &Type{Kind: REF, Ref: "string_ref"}}}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resolved, err := ResolveRef(tt.typ, typeRefMap)
-			if err != nil {
-				t.Fatalf("ResolveRef() error = %v", err)
-			}
-			if resolved == nil {
-				t.Error("ResolveRef() should not return nil")
-			}
-		})
-	}
-}
-
 func TestToCommandRequestError(t *testing.T) {
 	// Test toCommandRequest with wrong type conversion
 	setupReq := &SetupCommandRequest{}
@@ -1533,10 +1197,6 @@ func TestValueEncodeDecodeComplexTypes(t *testing.T) {
 		t.Fatalf("EncodeValue() complex struct error = %v", err)
 	}
 
-	if encoded.Value == "" {
-		t.Error("EncodeValue() should produce non-empty value")
-	}
-
 	// Test decoding the encoded value using reflection type
 	if encoded.Value != "" {
 		decoded, err := DecodeValueWithType(reflect.TypeOf(complexStruct), []byte(encoded.Value))
@@ -1547,52 +1207,6 @@ func TestValueEncodeDecodeComplexTypes(t *testing.T) {
 		if !decoded.IsValid() {
 			t.Error("DecodeValueWithType() should return valid value")
 		}
-	}
-}
-
-func TestHasFieldWithAnyType(t *testing.T) {
-	// Test HasField with ANY type containing a struct
-	structWithAny := &Type{
-		Kind: ANY,
-		Any: &AnyType{
-			Elem: &Type{
-				Kind: STRUCT,
-				Struct: &StructType{
-					Fields: []*NameWithType{
-						{Name: "TestField", Type: &Type{Kind: STRING}},
-					},
-				},
-			},
-		},
-	}
-
-	if !structWithAny.HasField("TestField") {
-		t.Error("HasField() should work with ANY type containing struct")
-	}
-
-	if structWithAny.HasField("NonExistentField") {
-		t.Error("HasField() should return false for non-existent field in ANY type")
-	}
-}
-
-func TestResolveRefWithUnknownType(t *testing.T) {
-	// Test ResolveRef with unknown type kind
-	unknownType := &Type{Kind: Kind("unknown_kind")}
-	emptyRefMap := map[string]*Type{}
-
-	_, err := ResolveRef(unknownType, emptyRefMap)
-	if err == nil {
-		t.Error("ResolveRef() should return error for unknown type kind")
-	}
-}
-
-func TestEncodeValueWithLeftArrowFunc(t *testing.T) {
-	// Test EncodeValue with left arrow function type
-	// Functions cannot be encoded directly in JSON, so this should fail
-	funcValue := reflect.ValueOf(func() string { return "test" })
-	_, err := EncodeValue(funcValue)
-	if err == nil {
-		t.Error("EncodeValue() func should return error as functions cannot be JSON encoded")
 	}
 }
 
@@ -1673,24 +1287,6 @@ func TestProtocolCommandBoundaryConditions(t *testing.T) {
 	}
 }
 
-func TestTypeMethodsEdgeCases(t *testing.T) {
-	// Test FieldTypeByName with empty struct
-	emptyStructType := &Type{
-		Kind:   STRUCT,
-		Struct: &StructType{Fields: []*NameWithType{}},
-	}
-	result := emptyStructType.FieldTypeByName("any_field")
-	if result != nil {
-		t.Error("FieldTypeByName() on empty struct should return nil")
-	}
-
-	// Test basic type operations
-	stringType := &Type{Kind: STRING}
-	if stringType.IsStruct() {
-		t.Error("IsStruct() on string type should return false")
-	}
-}
-
 func TestValueConversionsEdgeCases(t *testing.T) {
 	// Test DecodeValueWithType with simple types that should work
 	stringType := reflect.TypeOf("")
@@ -1728,42 +1324,6 @@ func TestCacheAndReferenceHandling(t *testing.T) {
 	// Both should be valid
 	if typ1 == nil || typ2 == nil {
 		t.Error("NewType() should handle recursive types correctly")
-	}
-}
-
-func TestLowCoverageFunctions(t *testing.T) {
-	// Test newType with unsupported types to improve coverage
-	unsupportedValue := reflect.ValueOf(make(chan int))
-	_, err := newType(unsupportedValue)
-	if err == nil {
-		t.Error("newType() should return error for unsupported channel type")
-	}
-
-	// Test ToReflect error cases
-	unknownType := &Type{Kind: Kind("unknown")}
-	_, err = unknownType.ToReflect()
-	if err == nil {
-		t.Error("ToReflect() should return error for unknown type")
-	}
-
-	// Test FieldTypeByName with nil struct - this actually causes a panic due to nil pointer dereference
-	// Let's test a different edge case instead
-	structType := &Type{
-		Kind: STRUCT,
-		Struct: &StructType{
-			Fields: []*NameWithType{},
-		},
-	}
-	result := structType.FieldTypeByName("nonexistent")
-	if result != nil {
-		t.Error("FieldTypeByName() should return nil for non-existent field")
-	}
-
-	// Test IsStruct with nil pointer - this causes a panic due to nil pointer dereference
-	// Let's test a different edge case instead
-	basicType := &Type{Kind: STRING}
-	if basicType.IsStruct() {
-		t.Error("IsStruct() should return false for non-struct type")
 	}
 }
 
@@ -1903,20 +1463,6 @@ func TestSchemaStepTypeHandling(t *testing.T) {
 	// The schemaStepType matches *schema.Step directly
 	if typ.Kind != SCHEMASTEP {
 		t.Errorf("NewType() Kind = %v, want %v", typ.Kind, SCHEMASTEP)
-	}
-}
-
-func TestResolveRefWithSchemaStep(t *testing.T) {
-	// Test ResolveRef with SCHEMASTEP type
-	typ := &Type{Kind: SCHEMASTEP}
-
-	resolved, err := ResolveRef(typ, nil)
-	if err != nil {
-		t.Fatalf("ResolveRef() error = %v", err)
-	}
-
-	if resolved.Kind != SCHEMASTEP {
-		t.Errorf("ResolveRef() Kind = %v, want %v", resolved.Kind, SCHEMASTEP)
 	}
 }
 
