@@ -41,12 +41,19 @@ var ignoreEnvNameMap = map[string]struct{}{
 	"GOMAXPROCS": {},
 }
 
+// A false positive error occurs indicating that the cancel function is not being used, so we will disable it.
+//
+//nolint:govet
 func openWasmPlugin(path string) (Plugin, error) {
-	ctx, cancel := gocontext.WithCancel(gocontext.Background())
 	wasmFile, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+
+	// This cancel function is used to safely stop the plugin instance.
+	// Therefore, it keeps the plugin retained until it is closed.
+	ctx, cancel := gocontext.WithCancel(gocontext.Background())
+
 	r := wazero.NewRuntimeWithConfig(
 		ctx,
 		wazero.NewRuntimeConfigInterpreter().WithCloseOnContextDone(true),
@@ -117,7 +124,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 			}
 			// plg.req is always initialized with the correct value inside the `read_length` host function.
 			// The `read_length` host function and the `read` host function are always executed sequentially.
-			if ok := mod.Memory().Write(uint32(stack[0]), plg.req); !ok { //nolint:gosec
+			if ok := mod.Memory().Write(uint32(stack[0]), plg.req); !ok {
 				panic("failed to write plugin request content")
 			}
 		}),
@@ -130,7 +137,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 			if plg == nil {
 				panic("failed to get plugin from context")
 			}
-			//nolint:gosec
+
 			b, ok := mod.Memory().Read(uint32(stack[0]), uint32(stack[1]))
 			if !ok {
 				panic("failed to read memory from plugin")
@@ -190,7 +197,11 @@ func getPluginFromContext(ctx gocontext.Context) *WasmPlugin {
 	if v == nil {
 		return nil
 	}
-	return v.(*WasmPlugin)
+	plg, ok := v.(*WasmPlugin)
+	if !ok {
+		return nil
+	}
+	return plg
 }
 
 func withPlugin(ctx gocontext.Context, plg *WasmPlugin) gocontext.Context {

@@ -3,7 +3,6 @@
 package plugin
 
 import (
-	"os"
 	"syscall"
 )
 
@@ -22,21 +21,10 @@ func (p *WasmPlugin) readFromPipe(fd int) string {
 	var out []byte
 	for {
 		n, err := syscall.Read(fd, buf)
-		if n > 0 {
-			out = append(out, buf[:n]...)
-		}
-		if err != nil {
-			if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
-				break
-			}
-			if err == os.ErrClosed {
-				break
-			}
-			return string(out)
-		}
-		if n == 0 {
+		if n <= 0 || err != nil {
 			break
 		}
+		out = append(out, buf[:n]...)
 	}
 	return string(out)
 }

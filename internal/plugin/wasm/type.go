@@ -104,8 +104,7 @@ type ArrayType struct {
 }
 
 // StructType represents struct type information from a WASM plugin.
-type StructType struct {
-}
+type StructType struct{}
 
 // MapType represents map type information from a WASM plugin.
 type MapType struct {
@@ -128,10 +127,6 @@ func (a *Any) UnmarshalJSON(b []byte) error {
 
 func (a *Any) String() string {
 	return fmt.Sprint(a.Elem)
-}
-
-func toTypeID(t reflect.Type) string {
-	return fmt.Sprintf("%p", t)
 }
 
 // NewType creates a Type from a reflect.Value.
