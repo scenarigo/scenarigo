@@ -96,7 +96,10 @@ func run(cmd *cobra.Command, args []string) error {
 		func(rptr reporter.Reporter) {
 			ctx := context.New(rptr)
 			r.Run(ctx)
-			reportErr = r.CreateTestReport(rptr)
+			// Generate report in Cleanup to ensure all parallel tests complete
+			rptr.Cleanup(func() {
+				reportErr = r.CreateTestReport(rptr)
+			})
 		},
 		reporterOpts...,
 	)

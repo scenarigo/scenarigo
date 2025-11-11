@@ -1,0 +1,21 @@
+schemaVersion: config/v1
+
+# Test scenario files
+scenarios:
+  - scenarios/
+
+# Plugin configuration
+pluginDirectory: ./gen
+plugins:
+  server.so:
+    src: ./plugin
+
+# Output configuration
+output:
+  verbose: true   # Enable verbose output to see all logs
+  summary: true   # Show test summary at the end
+  report:
+    json:
+      filename: ./report.json    # JSON format test report
+    junit:
+      filename: ./junit.xml      # JUnit XML format test report (for CI/CD)
