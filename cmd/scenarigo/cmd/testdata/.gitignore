@@ -1,2 +1,2 @@
-report.json
-junit.xml
+*.json
+*.xml

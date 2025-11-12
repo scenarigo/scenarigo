@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,6 +34,7 @@ func TestRun(t *testing.T) {
 	tests := map[string]struct {
 		args          []string
 		config        string
+		setupFlags    func(*testing.T, *cobra.Command)
 		expectError   string
 		expectOutput  string
 		expectReports []string
@@ -205,19 +205,109 @@ FAIL
 ok  	scenarios/pass.yaml	0.000s
 `, "\n"),
 		},
+		"create reports with CLI flags": {
+			args:   []string{"testdata/scenarios/pass.yaml"},
+			config: "./testdata/scenarigo-no-report.yaml",
+			setupFlags: func(t *testing.T, cmd *cobra.Command) {
+				cmd.Flags().StringVar(&reportJSON, "report-json", "", "")
+				cmd.Flags().StringVar(&reportJUnit, "report-junit", "", "")
+				cmd.Flags().Set("report-json", "./report-cli.json")
+				cmd.Flags().Set("report-junit", "./junit-cli.xml")
+			},
+			expectOutput: strings.TrimPrefix(`
+ok  	scenarios/pass.yaml	0.000s
+`, "\n"),
+			expectReports: []string{
+				"./testdata/report-cli.json",
+				"./testdata/junit-cli.xml",
+			},
+		},
+		"CLI flags override config file": {
+			args:   []string{},
+			config: "./testdata/scenarigo-report.yaml",
+			setupFlags: func(t *testing.T, cmd *cobra.Command) {
+				cmd.Flags().StringVar(&reportJSON, "report-json", "", "")
+				cmd.Flags().StringVar(&reportJUnit, "report-junit", "", "")
+				cmd.Flags().Set("report-json", "./report-override.json")
+				cmd.Flags().Set("report-junit", "./junit-override.xml")
+			},
+			expectOutput: strings.TrimPrefix(`
+--- FAIL: scenarios/fail.yaml (0.00s)
+    --- FAIL: scenarios/fail.yaml//echo (0.00s)
+        --- FAIL: scenarios/fail.yaml//echo/POST_/echo (0.00s)
+                request:
+                  method: POST
+                  url: http://127.0.0.1:12345/echo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                  body:
+                    message: request
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "23"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    message: request
+                elapsed time: 0.000000 sec
+                expected "response" but got "request"
+                      12 |   expect:
+                      13 |     code: 200
+                      14 |     body:
+                    > 15 |       message: "response"
+                                          ^
+FAIL
+FAIL	scenarios/fail.yaml	0.000s
+FAIL
+`, "\n"),
+			expectError: ErrTestFailed.Error(),
+			expectReports: []string{
+				"./testdata/report-override.json",
+				"./testdata/junit-override.xml",
+			},
+		},
+		"CLI flag for JSON only": {
+			args:   []string{"testdata/scenarios/pass.yaml"},
+			config: "./testdata/scenarigo-report.yaml",
+			setupFlags: func(t *testing.T, cmd *cobra.Command) {
+				cmd.Flags().StringVar(&reportJSON, "report-json", "", "")
+				cmd.Flags().StringVar(&reportJUnit, "report-junit", "", "")
+				cmd.Flags().Set("report-json", "./report-json-only.json")
+			},
+			expectOutput: strings.TrimPrefix(`
+ok  	scenarios/pass.yaml	0.000s
+`, "\n"),
+			expectReports: []string{
+				"./testdata/report-json-only.json",
+				"./testdata/junit.xml", // junit from config file
+			},
+		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			for _, file := range test.expectReports {
-				if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
-					t.Fatalf("failed to remove: %s", err)
+			t.Cleanup(func() {
+				// Clean up report files after test
+				for _, file := range test.expectReports {
+					os.Remove(file)
 				}
-			}
+			})
 
 			cmd := &cobra.Command{}
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			config.ConfigPath = test.config
+
+			// Setup CLI flags if needed
+			if test.setupFlags != nil {
+				test.setupFlags(t, cmd)
+			}
+
 			err := run(cmd, test.args)
 			if test.expectError != "" {
 				if err == nil {

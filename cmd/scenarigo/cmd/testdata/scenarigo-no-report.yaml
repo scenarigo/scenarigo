@@ -1,0 +1,9 @@
+schemaVersion: config/v1
+
+scenarios:
+  - ./scenarios/pass.yaml
+pluginDirectory: ./ # Specify the root directory of plugins.
+
+output:
+  verbose: false # Enable verbose output.
+  colored: false # Disable colored output for test stability.
