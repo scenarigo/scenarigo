@@ -311,6 +311,39 @@ func TestWasmHost(t *testing.T) {
 				t.Fatalf("failed to get x: %+v", y)
 			}
 		})
+		t.Run("structchain", func(t *testing.T) {
+			chain, ok := wasmPlugin.ExtractByKey("StructChain")
+			if !ok {
+				t.Fatalf("failed to get value")
+			}
+			stchain, ok := chain.(*StructValue)
+			if !ok {
+				t.Fatalf("failed to get bytes value: %T", chain)
+			}
+			x, ok := stchain.ExtractByKey("X")
+			if !ok {
+				t.Fatalf("failed to get x field value")
+			}
+			xst, ok := x.(*StructValue)
+			if !ok {
+				t.Fatalf("failed to get bytes value: %T", x)
+			}
+			y, ok := xst.ExtractByKey("Y")
+			if !ok {
+				t.Fatalf("failed to get x field value")
+			}
+			yst, ok := y.(*StructValue)
+			if !ok {
+				t.Fatalf("failed to get bytes value: %T", y)
+			}
+			z, ok := yst.ExtractByKey("Z")
+			if !ok {
+				t.Fatalf("failed to get x field value")
+			}
+			if z != 10 {
+				t.Fatalf("failed to get z: %+v", z)
+			}
+		})
 		t.Run("any", func(t *testing.T) {
 			v, ok := wasmPlugin.ExtractByKey("Any")
 			if !ok {
