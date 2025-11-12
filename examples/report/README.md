@@ -30,20 +30,15 @@ examples/report/
 
 ## Usage
 
-### 1. Build plugins
-
 ```bash
 cd examples/report
-scenarigo plugin build
+make run-with-fail
 ```
 
-### 2. Run tests
-
-```bash
-scenarigo run
-```
-
+This will generate comprehensive reports including success, failure, and skip examples.
 After execution, `report.json` and `junit.xml` will be generated in the current directory.
+
+> **Note**: The default configuration (`scenarigo run` without make) excludes `failed.yaml` to prevent CI failures.
 
 ## Report Formats
 
