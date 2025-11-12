@@ -52,16 +52,17 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Apply CLI flags for report options (overrides config file settings)
-	if cmd.Flags().Changed("report-json") || cmd.Flags().Changed("report-junit") {
+	if cmd.Flags().Changed("report-json") {
 		if cfg == nil {
 			cfg = &schema.Config{}
 		}
-		if cmd.Flags().Changed("report-json") {
-			cfg.Output.Report.JSON.Filename = reportJSON
+		cfg.Output.Report.JSON.Filename = reportJSON
+	}
+	if cmd.Flags().Changed("report-junit") {
+		if cfg == nil {
+			cfg = &schema.Config{}
 		}
-		if cmd.Flags().Changed("report-junit") {
-			cfg.Output.Report.JUnit.Filename = reportJUnit
-		}
+		cfg.Output.Report.JUnit.Filename = reportJUnit
 	}
 
 	if cfg != nil {
