@@ -1,8 +1,9 @@
 schemaVersion: config/v1
 
-# Test scenario files
+# Test scenario files (excluding failed.yaml for automated tests)
 scenarios:
-  - scenarios/
+  - scenarios/success.yaml
+  - scenarios/conditional.yaml
 
 # Plugin configuration
 pluginDirectory: ./gen
