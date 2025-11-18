@@ -59,18 +59,7 @@ func TestLoad(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			if test.cd != "" {
-				wd, err := os.Getwd()
-				if err != nil {
-					t.Fatal(err)
-				}
-				t.Cleanup(func() {
-					if err := os.Chdir(wd); err != nil {
-						t.Fatal(err)
-					}
-				})
-				if err := os.Chdir(test.cd); err != nil {
-					t.Fatal(err)
-				}
+				t.Chdir(test.cd)
 			}
 
 			ConfigPath = test.filename

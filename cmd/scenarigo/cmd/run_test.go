@@ -209,10 +209,15 @@ ok  	scenarios/pass.yaml	0.000s
 			args:   []string{"testdata/scenarios/pass.yaml"},
 			config: "./testdata/scenarigo-no-report.yaml",
 			setupFlags: func(t *testing.T, cmd *cobra.Command) {
+				t.Helper()
 				cmd.Flags().StringVar(&reportJSON, "report-json", "", "")
 				cmd.Flags().StringVar(&reportJUnit, "report-junit", "", "")
-				cmd.Flags().Set("report-json", "./report-cli.json")
-				cmd.Flags().Set("report-junit", "./junit-cli.xml")
+				if err := cmd.Flags().Set("report-json", "./report-cli.json"); err != nil {
+					t.Fatal(err)
+				}
+				if err := cmd.Flags().Set("report-junit", "./junit-cli.xml"); err != nil {
+					t.Fatal(err)
+				}
 			},
 			expectOutput: strings.TrimPrefix(`
 ok  	scenarios/pass.yaml	0.000s
@@ -226,10 +231,15 @@ ok  	scenarios/pass.yaml	0.000s
 			args:   []string{},
 			config: "./testdata/scenarigo-report.yaml",
 			setupFlags: func(t *testing.T, cmd *cobra.Command) {
+				t.Helper()
 				cmd.Flags().StringVar(&reportJSON, "report-json", "", "")
 				cmd.Flags().StringVar(&reportJUnit, "report-junit", "", "")
-				cmd.Flags().Set("report-json", "./report-override.json")
-				cmd.Flags().Set("report-junit", "./junit-override.xml")
+				if err := cmd.Flags().Set("report-json", "./report-override.json"); err != nil {
+					t.Fatal(err)
+				}
+				if err := cmd.Flags().Set("report-junit", "./junit-override.xml"); err != nil {
+					t.Fatal(err)
+				}
 			},
 			expectOutput: strings.TrimPrefix(`
 --- FAIL: scenarios/fail.yaml (0.00s)
@@ -276,9 +286,12 @@ FAIL
 			args:   []string{"testdata/scenarios/pass.yaml"},
 			config: "./testdata/scenarigo-report.yaml",
 			setupFlags: func(t *testing.T, cmd *cobra.Command) {
+				t.Helper()
 				cmd.Flags().StringVar(&reportJSON, "report-json", "", "")
 				cmd.Flags().StringVar(&reportJUnit, "report-junit", "", "")
-				cmd.Flags().Set("report-json", "./report-json-only.json")
+				if err := cmd.Flags().Set("report-json", "./report-json-only.json"); err != nil {
+					t.Fatal(err)
+				}
 			},
 			expectOutput: strings.TrimPrefix(`
 ok  	scenarios/pass.yaml	0.000s

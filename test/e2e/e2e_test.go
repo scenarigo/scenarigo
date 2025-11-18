@@ -147,15 +147,7 @@ func TestE2E(t *testing.T) {
 								}
 
 								// Change to the temporary directory to ensure relative paths work correctly
-								originalWd, err := os.Getwd()
-								if err != nil {
-									t.Fatal(err)
-								}
-								defer func() { _ = os.Chdir(originalWd) }()
-
-								if err := os.Chdir(tmpDir); err != nil {
-									t.Fatal(err)
-								}
+								t.Chdir(tmpDir)
 
 								// Use the relative path that matches the original structure
 								relativePath := filepath.Join("testdata", "testcases", "scenarios", scenario.Filename)
