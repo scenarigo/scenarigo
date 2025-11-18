@@ -34,6 +34,8 @@ type Reporter interface {
 	Fail()
 	Failed() bool
 	FailNow()
+	Print(args ...any)
+	Printf(format string, args ...any)
 	Log(args ...any)
 	Logf(format string, args ...any)
 	Error(args ...any)
@@ -165,6 +167,17 @@ func (r *reporter) Failed() bool {
 func (r *reporter) FailNow() {
 	r.Fail()
 	runtime.Goexit()
+}
+
+// Print always writes to the output, regardless of test result or verbosity.
+func (r *reporter) Print(args ...any) {
+	r.logs.print(fmt.Sprint(args...))
+}
+
+// Printf always writes to the output, regardless of test result or verbosity.
+// It formats its arguments according to the format, analogous to fmt.Printf.
+func (r *reporter) Printf(format string, args ...any) {
+	r.logs.print(fmt.Sprintf(format, args...))
 }
 
 // Log formats its arguments using default formatting, analogous to fmt.Print,
@@ -524,8 +537,8 @@ func collectOutput(r *reporter) []string {
 	var results []string
 	// For parallel tests, always show logs in verbose mode, regardless of failure status
 	shouldShowLogs := (r.Failed() && !r.noFailurePropagation) || r.context.verbose
+	prefix := strings.Repeat("    ", r.depth-1)
 	if shouldShowLogs {
-		prefix := strings.Repeat("    ", r.depth-1)
 		status := "PASS"
 		c := r.passColor()
 		if r.Failed() {
@@ -539,6 +552,12 @@ func collectOutput(r *reporter) []string {
 			c.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.goTestName, r.durationMeasurer.getDuration().Seconds()),
 		}
 		for _, l := range r.logs.all() {
+			padding := fmt.Sprintf("%s    ", prefix)
+			results = append(results, pad(l, padding))
+		}
+	} else {
+		// Print() messages should be shown at all times.
+		for _, l := range r.logs.printLogs() {
 			padding := fmt.Sprintf("%s    ", prefix)
 			results = append(results, pad(l, padding))
 		}
