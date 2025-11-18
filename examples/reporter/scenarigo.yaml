@@ -1,0 +1,9 @@
+schemaVersion: config/v1
+
+scenarios:
+- scenarios
+
+pluginDirectory: ./plugin/gen
+plugins:
+  plugin.so:
+    src: ./plugin/src
