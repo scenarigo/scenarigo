@@ -10,6 +10,7 @@ import (
 	"github.com/scenarigo/scenarigo/color"
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -17,13 +18,17 @@ import (
 var ErrTestFailed = errors.New("test failed")
 
 var (
-	verbose  bool
-	parallel int
+	verbose     bool
+	parallel    int
+	reportJSON  string
+	reportJUnit string
 )
 
 func init() {
 	runCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
 	runCmd.Flags().IntVarP(&parallel, "parallel", "", 0, "specify the number of workers to run tests in parallel (the default value is the number of logical CPUs usable by the current process)")
+	runCmd.Flags().StringVar(&reportJSON, "report-json", "", "output JSON test report to specified file")
+	runCmd.Flags().StringVar(&reportJUnit, "report-junit", "", "output JUnit XML test report to specified file")
 	rootCmd.AddCommand(runCmd)
 }
 
@@ -45,6 +50,21 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+
+	// Apply CLI flags for report options (overrides config file settings)
+	if cmd.Flags().Changed("report-json") {
+		if cfg == nil {
+			cfg = &schema.Config{}
+		}
+		cfg.Output.Report.JSON.Filename = reportJSON
+	}
+	if cmd.Flags().Changed("report-junit") {
+		if cfg == nil {
+			cfg = &schema.Config{}
+		}
+		cfg.Output.Report.JUnit.Filename = reportJUnit
+	}
+
 	if cfg != nil {
 		if len(args) > 0 {
 			cfg.Scenarios = nil
@@ -96,7 +116,10 @@ func run(cmd *cobra.Command, args []string) error {
 		func(rptr reporter.Reporter) {
 			ctx := context.New(rptr)
 			r.Run(ctx)
-			reportErr = r.CreateTestReport(rptr)
+			// Generate report in Cleanup to ensure all parallel tests complete
+			rptr.Cleanup(func() {
+				reportErr = r.CreateTestReport(rptr)
+			})
 		},
 		reporterOpts...,
 	)
