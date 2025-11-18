@@ -1,0 +1,17 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+title: echo
+steps:
+- title: POST /echo
+  protocol: http
+  request:
+    method: POST
+    url: 'http://{{plugins.plugin.ServerAddr}}/echo'
+    header:
+      Content-Type: application/json
+    body:
+      message: '{{string(plugins.plugin.Increment())}}'
+  expect:
+    body:
+      message: '{{request.body.message}}'
