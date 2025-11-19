@@ -157,6 +157,8 @@ func openWasmPlugin(path string) (Plugin, error) {
 		resCh:       make(chan []byte),
 		stdoutR:     stdoutR,
 		stderrR:     stderrR,
+		stdoutW:     stdoutW,
+		stderrW:     stderrW,
 		cancelFn:    cancel,
 	}
 
@@ -219,7 +221,9 @@ type WasmPlugin struct {
 	reqCh                chan []byte
 	resCh                chan []byte
 	stdoutR              int
+	stdoutW              int
 	stderrR              int
+	stderrW              int
 	instanceModErrCh     chan error
 	instanceModErr       error
 	closed               bool
@@ -252,10 +256,15 @@ func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: stderr should also be captured and output,
+	// but since there is currently no way to output to stderr via the reporter, it will be ignored.
+	// Also, in the current implementation, ctx.Reporter() never exists, so in practice, stdout is not correctly output either.
 	stdout := p.readFromPipe(p.stdoutR)
 	if stdout != "" && ctx != nil && ctx.Reporter() != nil {
 		ctx.Reporter().Log(stdout)
 	}
+
 	res, err := wasm.DecodeResponse(resBytes)
 	if err != nil {
 		return nil, err
@@ -311,6 +320,8 @@ func (p *WasmPlugin) read() ([]byte, error) {
 func (p *WasmPlugin) closeResources(instanceModErr error) {
 	p.instanceModErr = instanceModErr
 	p.closed = true
+	closePipe(p.stdoutR, p.stdoutW)
+	closePipe(p.stderrR, p.stderrW)
 }
 
 func (p *WasmPlugin) Lookup(name string) (Symbol, error) {

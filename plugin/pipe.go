@@ -16,6 +16,11 @@ func setNonBlocking(fd int) error {
 	return syscall.SetNonblock(fd, true)
 }
 
+func closePipe(r, w int) {
+	syscall.Close(r)
+	syscall.Close(w)
+}
+
 func (p *WasmPlugin) readFromPipe(fd int) string {
 	buf := make([]byte, 4096)
 	var out []byte

@@ -16,6 +16,11 @@ func setNonBlocking(_ int) error {
 	return nil
 }
 
+func closePipe(r, w int) {
+	syscall.Close(r)
+	syscall.Close(w)
+}
+
 func (p *WasmPlugin) readFromPipe(_ int) string {
 	return ""
 }
