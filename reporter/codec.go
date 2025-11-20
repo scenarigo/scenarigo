@@ -2,7 +2,6 @@ package reporter
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/scenarigo/scenarigo/color"
 )
@@ -18,7 +17,7 @@ type SerializableReporter struct {
 	Skipped              bool                     `json:"skipped"`
 	IsParallel           bool                     `json:"isParallel"`
 	Logs                 []string                 `json:"logs,omitempty"`
-	Duration             time.Duration            `json:"duration"`
+	Duration             int64                    `json:"duration"`
 	Parent               string                   `json:"parent,omitempty"`
 	Children             []string                 `json:"children,omitempty"`
 	Testing              bool                     `json:"testing"`
@@ -65,7 +64,7 @@ func (r *reporter) ToSerializable(reporterMap map[string]*SerializableReporter) 
 	}
 
 	// Convert duration
-	sr.Duration = r.getDuration()
+	sr.Duration = int64(r.getDuration())
 
 	if r.parent != nil {
 		sr.Parent = r.parent.ToSerializable(reporterMap)

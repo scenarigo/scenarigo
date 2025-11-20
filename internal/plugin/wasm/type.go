@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"unicode"
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/schema"
 	"github.com/scenarigo/scenarigo/template"
 )
-
-var cacheTypeMap = map[string]*Type{}
 
 // NameWithType represents a named type from a WASM plugin.
 type NameWithType struct {
@@ -23,11 +20,9 @@ type NameWithType struct {
 // Type represents a type information from a WASM plugin.
 type Type struct {
 	Kind          Kind         `json:"kind"`
-	MethodNames   []string     `json:"methodNames"`
 	Step          bool         `json:"step"`
 	StepFunc      bool         `json:"stepFunc"`
 	LeftArrowFunc bool         `json:"leftArrowFunc"`
-	Ref           string       `json:"ref"`
 	Any           *AnyType     `json:"any"`
 	Pointer       *PointerType `json:"pointer"`
 	Struct        *StructType  `json:"struct"`
@@ -41,7 +36,6 @@ type Kind string
 
 const (
 	INVALID    Kind = "invalid"
-	REF        Kind = "ref"
 	INT        Kind = "int"
 	INT8       Kind = "int8"
 	INT16      Kind = "int16"
@@ -110,18 +104,7 @@ type ArrayType struct {
 }
 
 // StructType represents struct type information from a WASM plugin.
-type StructType struct {
-	Fields []*NameWithType `json:"fields"`
-}
-
-func (t *StructType) HasField(name string) bool {
-	for _, field := range t.Fields {
-		if field.Name == name {
-			return true
-		}
-	}
-	return false
-}
+type StructType struct{}
 
 // MapType represents map type information from a WASM plugin.
 type MapType struct {
@@ -146,28 +129,13 @@ func (a *Any) String() string {
 	return fmt.Sprint(a.Elem)
 }
 
-func toTypeID(t reflect.Type) string {
-	return fmt.Sprintf("%p", t)
-}
-
 // NewType creates a Type from a reflect.Value.
 func NewType(v reflect.Value) (*Type, error) {
-	t := v.Type()
-	if _, exists := cacheTypeMap[toTypeID(t)]; exists {
-		typ := &Type{Kind: REF, Ref: toTypeID(t)}
-		setAttribute(v, typ)
-		return typ, nil
-	}
 	typ, err := newType(v)
 	if err != nil {
 		return nil, err
 	}
 	setAttribute(v, typ)
-	mtdNames := make([]string, 0, t.NumMethod())
-	for i := range t.NumMethod() {
-		mtdNames = append(mtdNames, t.Method(i).Name)
-	}
-	typ.MethodNames = mtdNames
 	return typ, nil
 }
 
@@ -317,7 +285,6 @@ func newSliceType(v reflect.Value) (*Type, error) {
 		Kind:  SLICE,
 		Slice: &SliceType{},
 	}
-	cacheTypeMap[toTypeID(t)] = ret
 	elem, err := NewType(newZeroValue(t.Elem()))
 	if err != nil {
 		return nil, err
@@ -347,7 +314,6 @@ func newArrayType(v reflect.Value) (*Type, error) {
 			Num: t.Len(),
 		},
 	}
-	cacheTypeMap[toTypeID(t)] = ret
 	elem, err := NewType(newZeroValue(t.Elem()))
 	if err != nil {
 		return nil, err
@@ -375,7 +341,6 @@ func newMapType(v reflect.Value) (*Type, error) {
 		Kind: MAP,
 		Map:  &MapType{},
 	}
-	cacheTypeMap[toTypeID(t)] = ret
 	key, err := NewType(newZeroValue(t.Key()))
 	if err != nil {
 		return nil, err
@@ -406,63 +371,26 @@ func (t *MapType) String() string {
 }
 
 // newStructType creates a struct Type from a reflect.Value.
+// Only creates top-level struct information without field type details.
 func newStructType(v reflect.Value) (*Type, error) {
-	t := v.Type()
-	ret := &Type{
-		Kind: STRUCT,
-		Struct: &StructType{
-			Fields: make([]*NameWithType, 0, t.NumField()),
-		},
-	}
-	cacheTypeMap[toTypeID(t)] = ret
-	for i := range t.NumField() {
-		field := t.Field(i)
-		typ, err := NewType(newZeroValue(field.Type))
-		if err != nil {
-			typ = &Type{Kind: INVALID}
-		}
-		ret.Struct.Fields = append(ret.Struct.Fields, &NameWithType{
-			Name: field.Name,
-			Type: typ,
-		})
-	}
-	return ret, nil
+	return &Type{
+		Kind:   STRUCT,
+		Struct: &StructType{},
+	}, nil
 }
 
 func (t *StructType) ToReflect() (reflect.Type, error) {
-	fields := make([]reflect.StructField, 0, len(t.Fields))
-	for _, field := range t.Fields {
-		if len(field.Name) == 0 {
-			continue
-		}
-		if unicode.IsLower(rune(field.Name[0])) {
-			continue
-		}
-		typ, err := field.Type.ToReflect()
-		if err != nil {
-			return nil, err
-		}
-		fields = append(fields, reflect.StructField{
-			Name: field.Name,
-			Type: typ,
-		})
-	}
-	return reflect.StructOf(fields), nil
+	return reflect.StructOf([]reflect.StructField{}), nil
 }
 
 func (t *StructType) String() string {
-	fields := make([]string, 0, len(t.Fields))
-	for _, field := range t.Fields {
-		fields = append(fields, field.String())
-	}
-	return fmt.Sprintf("struct{%s}", strings.Join(fields, " "))
+	return "struct{}"
 }
 
 // newFuncType creates a function Type from a reflect.Value.
 func newFuncType(v reflect.Value) (*Type, error) {
 	t := v.Type()
 	ret := &Type{Kind: FUNC, Func: &FuncType{}}
-	cacheTypeMap[toTypeID(t)] = ret
 	for i := range t.NumIn() {
 		typ, err := NewType(newZeroValue(t.In(i)))
 		if err != nil {
@@ -579,43 +507,6 @@ func (t *Type) ToReflect() (reflect.Type, error) {
 	return nil, fmt.Errorf("failed to get reflect.Type from %s", t)
 }
 
-func (t *Type) FieldTypeByName(name string) *Type {
-	if t.Kind == POINTER {
-		return t.Pointer.Elem.FieldTypeByName(name)
-	}
-	for _, field := range t.Struct.Fields {
-		if field.Name == name {
-			return field.Type
-		}
-	}
-	return nil
-}
-
-func (t *Type) HasField(name string) bool {
-	if t.Kind == POINTER {
-		return t.Pointer.Elem.HasField(name)
-	}
-	if t.Kind == ANY {
-		return t.Any.Elem.HasField(name)
-	}
-	if t.Kind != STRUCT {
-		return false
-	}
-	return t.Struct.HasField(name)
-}
-
-func (t *Type) HasMethod(name string) bool {
-	for _, mtdName := range t.MethodNames {
-		if mtdName == name {
-			return true
-		}
-	}
-	if t.Kind == POINTER {
-		return t.Pointer.Elem.HasMethod(name)
-	}
-	return false
-}
-
 func (t *Type) IsStruct() bool {
 	if t.Kind == POINTER {
 		return t.Pointer.Elem.IsStruct()
@@ -644,116 +535,6 @@ func (t *Type) String() string {
 		return t.Pointer.String()
 	}
 	return string(t.Kind)
-}
-
-func TypeRefMap() map[string]*Type {
-	return cacheTypeMap
-}
-
-func ResolveRef(t *Type, typeRefMap map[string]*Type) (*Type, error) {
-	return resolveRef(t, typeRefMap, make(map[*Type]*Type))
-}
-
-func resolveRef(t *Type, typeRefMap map[string]*Type, resolvedMap map[*Type]*Type) (*Type, error) {
-	if resolved, exists := resolvedMap[t]; exists {
-		return resolved, nil
-	}
-	ret := &Type{
-		MethodNames:   t.MethodNames,
-		Step:          t.Step,
-		StepFunc:      t.StepFunc,
-		LeftArrowFunc: t.LeftArrowFunc,
-	}
-	switch t.Kind {
-	case INVALID, INT, INT8, INT16, INT32, INT64,
-		UINT, UINT8, UINT16, UINT32, UINT64, UINTPTR,
-		FLOAT32, FLOAT64, BOOL, STRING, BYTES, ANY, ERROR, CONTEXT, SCHEMASTEP:
-		return t, nil
-	case FUNC:
-		ret.Kind = FUNC
-		resolvedMap[t] = ret
-		args := make([]*Type, 0, len(t.Func.Args))
-		for _, arg := range t.Func.Args {
-			typ, err := resolveRef(arg, typeRefMap, resolvedMap)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, typ)
-		}
-		rets := make([]*Type, 0, len(t.Func.Return))
-		for _, ret := range t.Func.Return {
-			typ, err := resolveRef(ret, typeRefMap, resolvedMap)
-			if err != nil {
-				return nil, err
-			}
-			rets = append(rets, typ)
-		}
-		ret.Func = &FuncType{Args: args, Return: rets}
-		return ret, nil
-	case MAP:
-		ret.Kind = MAP
-		resolvedMap[t] = ret
-		key, err := resolveRef(t.Map.Key, typeRefMap, resolvedMap)
-		if err != nil {
-			return nil, err
-		}
-		value, err := resolveRef(t.Map.Value, typeRefMap, resolvedMap)
-		if err != nil {
-			return nil, err
-		}
-		ret.Map = &MapType{Key: key, Value: value}
-		return ret, nil
-	case SLICE:
-		ret.Kind = SLICE
-		resolvedMap[t] = ret
-		elem, err := resolveRef(t.Slice.Elem, typeRefMap, resolvedMap)
-		if err != nil {
-			return nil, err
-		}
-		ret.Slice = &SliceType{Elem: elem}
-		return ret, nil
-	case ARRAY:
-		ret.Kind = ARRAY
-		resolvedMap[t] = ret
-		elem, err := resolveRef(t.Array.Elem, typeRefMap, resolvedMap)
-		if err != nil {
-			return nil, err
-		}
-		ret.Array = &ArrayType{Num: t.Array.Num, Elem: elem}
-		return ret, nil
-	case STRUCT:
-		ret.Kind = STRUCT
-		resolvedMap[t] = ret
-		fields := make([]*NameWithType, 0, len(t.Struct.Fields))
-		for _, field := range t.Struct.Fields {
-			typ, err := resolveRef(field.Type, typeRefMap, resolvedMap)
-			if err != nil {
-				return nil, err
-			}
-			fields = append(fields, &NameWithType{
-				Name: field.Name,
-				Type: typ,
-			})
-		}
-		ret.Struct = &StructType{Fields: fields}
-		return ret, nil
-	case POINTER:
-		ret.Kind = POINTER
-		resolvedMap[t] = ret
-		elem, err := resolveRef(t.Pointer.Elem, typeRefMap, resolvedMap)
-		if err != nil {
-			return nil, err
-		}
-		ret.Pointer = &PointerType{Elem: elem}
-		return ret, nil
-	case REF:
-		refType, exists := typeRefMap[t.Ref]
-		if !exists {
-			return nil, fmt.Errorf("failed to find type from %s type-id", t.Ref)
-		}
-		return resolveRef(refType, typeRefMap, resolvedMap)
-	}
-	return nil, fmt.Errorf("unexpected type: %s", t)
 }
 
 func newZeroValue(t reflect.Type) reflect.Value {

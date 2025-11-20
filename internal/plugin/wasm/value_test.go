@@ -68,20 +68,6 @@ func TestEncodeValue_NewTypeError(t *testing.T) {
 	}
 }
 
-func TestEncodeValue_JSONMarshalError(t *testing.T) {
-	// Test error case when JSON marshaling fails
-	// Create a type that causes JSON marshal to fail
-	type Unmarshalable struct {
-		Ch chan int // channels cannot be JSON marshaled
-	}
-
-	value := reflect.ValueOf(Unmarshalable{Ch: make(chan int)})
-	_, err := EncodeValue(value)
-	if err == nil {
-		t.Error("EncodeValue() should return error for unmarshalable type")
-	}
-}
-
 func TestDecodeValueWithType_ContextErrors(t *testing.T) {
 	ctxType := reflect.TypeOf((*context.Context)(nil))
 

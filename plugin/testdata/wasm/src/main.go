@@ -108,6 +108,25 @@ var (
 		X: 1,
 		Y: "hello",
 	}
+	StructChain = struct {
+		X struct {
+			Y struct {
+				Z int
+			}
+		}
+	}{
+		X: struct {
+			Y struct {
+				Z int
+			}
+		}{
+			Y: struct {
+				Z int
+			}{
+				Z: 10,
+			},
+		},
+	}
 	Any any = 1
 )
 
@@ -142,6 +161,7 @@ func main() {
 				plugin.ToDefinition("Array", Array),
 				plugin.ToDefinition("Struct", Struct),
 				plugin.ToDefinition("StructPtr", StructPtr),
+				plugin.ToDefinition("StructChain", StructChain),
 				plugin.ToDefinition("Any", Any),
 				plugin.ToDefinition("ServerAddr", ServerAddr),
 			}
@@ -171,6 +191,7 @@ func main() {
 				plugin.ToDefinition("Array", Array),
 				plugin.ToDefinition("Struct", Struct),
 				plugin.ToDefinition("StructPtr", StructPtr),
+				plugin.ToDefinition("StructChain", StructChain),
 				plugin.ToDefinition("Any", Any),
 				plugin.ToDefinition("ServerAddr", ServerAddr),
 			}
