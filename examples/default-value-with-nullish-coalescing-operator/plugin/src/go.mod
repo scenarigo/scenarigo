@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/default-value-with-nullish-coales
 
 go 1.24.0
 
-toolchain go1.25.3
+toolchain go1.25.4
 
 require github.com/stretchr/testify v1.9.0 // indirect
 
@@ -26,7 +26,7 @@ require (
 	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
-	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
