@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -688,5 +689,23 @@ func TestReporter_PrivateMethods(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func TestRunCapturesStdout(t *testing.T) {
+	var b bytes.Buffer
+	ok := Run(func(r Reporter) {
+		fmt.Fprintln(os.Stdout, "plugin output")
+		r.Log("normal log")
+	}, WithWriter(&b))
+	if !ok {
+		t.Fatal("reporter run failed")
+	}
+	out := b.String()
+	if !strings.Contains(out, "WARN: detected output written directly to os.Stdout") {
+		t.Fatalf("warning not found in output:\n%s", out)
+	}
+	if !strings.Contains(out, "plugin output") {
+		t.Fatalf("captured stdout not printed:\n%s", out)
 	}
 }

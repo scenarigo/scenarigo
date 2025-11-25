@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"sync/atomic"
 
 	"github.com/scenarigo/scenarigo/plugin"
@@ -17,6 +19,9 @@ func Increment(ctx *plugin.Context) uint64 {
 
 	// This log is emitted only when a test scenario fails or when the verbose log option is enabled.
 	ctx.Reporter().Log("hidden log")
+
+	// Avoid writing directly to stdout/stderr; use Reporter().Print* to keep test output stable.
+	fmt.Fprintln(os.Stdout, "stdout log")
 
 	return c
 }

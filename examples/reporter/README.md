@@ -6,6 +6,7 @@ This example demonstrates how a Go plugin can interact with scenarigo's `Reporte
 
 - `plugin/src/main.go` provides an `Increment` helper that writes the current counter value using both `Reporter.Printf` (always shown) and `Reporter.Log` (shown only when tests fail or verbose output is enabled). Functions that take `*plugin.Context` as the first argument automatically receive the current context. Test scenarios can call them without explicitly passing `ctx`.
 - The scenario at `scenarios/echo.yaml` loads the plugin, calls `Increment`, and sends a request to the plugin-managed server.
+- Avoid writing directly to `os.Stdout`/`os.Stderr` inside plugins; use `Reporter().Print*`/`Log*` instead so scenarigo can manage and display logs consistently.
 
 ## How to run
 
