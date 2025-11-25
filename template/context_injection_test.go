@@ -33,7 +33,7 @@ func TestExecuteFuncCallAutoContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute template: %s", err)
 	}
-	if got.(string) != "ctx:value" { //nolint:forcetypeassert
+	if got.(string) != "ctx:value" {
 		t.Fatalf("unexpected result: %v", got)
 	}
 }
@@ -60,7 +60,7 @@ func TestExecuteFuncCallExplicitContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute template: %s", err)
 	}
-	if got.(string) != "explicit:value" { //nolint:forcetypeassert
+	if got.(string) != "explicit:value" {
 		t.Fatalf("unexpected result: %v", got)
 	}
 }

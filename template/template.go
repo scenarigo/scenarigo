@@ -435,20 +435,6 @@ func (t *Template) addIndent(str, preStr string) (string, error) {
 	return str, nil
 }
 
-func (t *Template) requiredFuncArgType(funcType reflect.Type, argIdx int) reflect.Type {
-	if !funcType.IsVariadic() {
-		return funcType.In(argIdx)
-	}
-
-	argNum := funcType.NumIn()
-	lastArgIdx := argNum - 1
-	if argIdx < lastArgIdx {
-		return funcType.In(argIdx)
-	}
-
-	return funcType.In(lastArgIdx).Elem()
-}
-
 func (t *Template) executeFuncCall(ctx context.Context, call *ast.CallExpr, data any) (any, error) {
 	var fn reflect.Value
 	fnName := "function"

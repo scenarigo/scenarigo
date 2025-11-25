@@ -191,13 +191,13 @@ func (r *reporter) FailNow() {
 
 // Print always writes to the output, regardless of test result or verbosity.
 func (r *reporter) Print(args ...any) {
-	r.logs.print(fmt.Sprint(args...))
+	r.logs.print(fmt.Sprint(args...)) //nolint:forbidigo
 }
 
 // Printf always writes to the output, regardless of test result or verbosity.
 // It formats its arguments according to the format, analogous to fmt.Printf.
 func (r *reporter) Printf(format string, args ...any) {
-	r.logs.print(fmt.Sprintf(format, args...))
+	r.logs.print(fmt.Sprintf(format, args...)) //nolint:forbidigo
 }
 
 // Log formats its arguments using default formatting, analogous to fmt.Print,
