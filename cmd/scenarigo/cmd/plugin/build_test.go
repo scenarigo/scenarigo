@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
+	"golang.org/x/mod/semver"
 
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
@@ -95,11 +96,16 @@ func Greet() string {
 	return "Hello, world!"
 }
 `
+	// for tip version
+	gomodVer := "1.24.0"
+	if semver.Compare(fmt.Sprintf("v%s", goVersion), "v1.26.0") < 0 {
+		gomodVer = goVersion
+	}
 	gomod := func(m string) string {
 		return fmt.Sprintf(`module %s
 
 go %s
-`, m, goVersion)
+`, m, gomodVer)
 	}
 
 	tmpl, err := template.ParseFiles("testdata/go.mod.tmpl")
