@@ -19,9 +19,38 @@ updates:
       - "*"
 
 - package-ecosystem: "gomod"
-  directories:
-  - "/"
-  - "/plugin/testdata/wasm/src"
+  directory: "/"
+  schedule:
+    interval: "daily"
+    time: "12:00"
+    timezone: "Asia/Tokyo"
+  commit-message:
+    prefix: "chore"
+    include: "scope"
+  open-pull-requests-limit: 10
+  assignees:
+  - "zoncoen"
+  ignore:
+  - dependency-name: "carvel.dev/ytt"
+  groups:
+    go-major:
+      update-types:
+      - "major"
+      patterns:
+      - "*"
+    go-minor:
+      update-types:
+      - "minor"
+      patterns:
+      - "*"
+    go-patch:
+      update-types:
+      - "patch"
+      patterns:
+      - "*"
+
+- package-ecosystem: "gomod"
+  directory: "/plugin/testdata/wasm/src"
   schedule:
     interval: "daily"
     time: "12:00"
