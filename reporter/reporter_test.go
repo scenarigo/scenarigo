@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,6 +79,82 @@ func TestReporter_FailNow(t *testing.T) {
 	if expect, got := false, reached; got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
+}
+
+func TestReporter_Print(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Print("always shown")
+				r.Log("hidden log")
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+        always shown
+ok  	test	0.000s
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+	t.Run("failure", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Print("always shown")
+				r.Log("hidden log")
+				r.FailNow()
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+--- FAIL: test (0.00s)
+        always shown
+        hidden log
+FAIL
+FAIL	test	0.000s
+FAIL
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+}
+
+func TestReporter_Printf(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Printf("always %s", "shown")
+				r.Log("hidden log")
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+        always shown
+ok  	test	0.000s
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+	t.Run("failure", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Printf("always %s", "shown")
+				r.Log("hidden log")
+				r.FailNow()
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+--- FAIL: test (0.00s)
+        always shown
+        hidden log
+FAIL
+FAIL	test	0.000s
+FAIL
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
 }
 
 func TestReporter_Log(t *testing.T) {
@@ -611,5 +689,23 @@ func TestReporter_PrivateMethods(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func TestRunCapturesStdout(t *testing.T) {
+	var b bytes.Buffer
+	ok := Run(func(r Reporter) {
+		fmt.Fprintln(os.Stdout, "plugin output")
+		r.Log("normal log")
+	}, WithWriter(&b))
+	if !ok {
+		t.Fatal("reporter run failed")
+	}
+	out := b.String()
+	if !strings.Contains(out, "WARN: detected output written directly to os.Stdout") {
+		t.Fatalf("warning not found in output:\n%s", out)
+	}
+	if !strings.Contains(out, "plugin output") {
+		t.Fatalf("captured stdout not printed:\n%s", out)
 	}
 }

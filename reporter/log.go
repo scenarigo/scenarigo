@@ -8,6 +8,7 @@ import (
 type logRecorder struct {
 	m         sync.Mutex
 	strs      []string
+	printIdxs []int
 	infoIdxs  []int
 	errorIdxs []int
 	skipIdx   *int
@@ -29,6 +30,16 @@ func (r *logRecorder) setReplacer(rep LogReplacer) {
 	for i, s := range r.strs {
 		r.strs[i] = r.replacer.ReplaceAll(s)
 	}
+}
+
+func (r *logRecorder) print(s string) {
+	if r.replacer != nil {
+		s = r.replacer.ReplaceAll(s)
+	}
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.strs = append(r.strs, s)
+	r.printIdxs = append(r.printIdxs, len(r.strs)-1)
 }
 
 func (r *logRecorder) log(s string) {
@@ -67,6 +78,19 @@ func (r *logRecorder) all() []string {
 	defer r.m.Unlock()
 	strs := make([]string, len(r.strs))
 	copy(strs, r.strs)
+	return strs
+}
+
+func (r *logRecorder) printLogs() []string {
+	r.m.Lock()
+	defer r.m.Unlock()
+	strs := make([]string, len(r.printIdxs))
+	for i, j := range r.printIdxs {
+		strs[i] = r.strs[j]
+	}
+	if len(strs) == 0 {
+		return nil
+	}
 	return strs
 }
 
@@ -127,6 +151,9 @@ func (r *logRecorder) append(s *logRecorder) {
 	}
 	for _, idx := range s.errorIdxs {
 		r.errorIdxs = append(r.errorIdxs, idx+cc)
+	}
+	for _, idx := range s.printIdxs {
+		r.printIdxs = append(r.printIdxs, idx+cc)
 	}
 	if s.skipIdx != nil {
 		if r.skipIdx == nil {

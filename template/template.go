@@ -435,20 +435,6 @@ func (t *Template) addIndent(str, preStr string) (string, error) {
 	return str, nil
 }
 
-func (t *Template) requiredFuncArgType(funcType reflect.Type, argIdx int) reflect.Type {
-	if !funcType.IsVariadic() {
-		return funcType.In(argIdx)
-	}
-
-	argNum := funcType.NumIn()
-	lastArgIdx := argNum - 1
-	if argIdx < lastArgIdx {
-		return funcType.In(argIdx)
-	}
-
-	return funcType.In(lastArgIdx).Elem()
-}
-
 func (t *Template) executeFuncCall(ctx context.Context, call *ast.CallExpr, data any) (any, error) {
 	var fn reflect.Value
 	fnName := "function"
@@ -490,23 +476,7 @@ func (t *Template) executeFuncCall(ctx context.Context, call *ast.CallExpr, data
 		}
 	}
 	fnType := fn.Type()
-	argNum := len(args) + len(call.Args)
-	if fnType.IsVariadic() {
-		minArgNum := fnType.NumIn() - 1
-		if argNum < minArgNum {
-			return nil, errors.Errorf(
-				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
-				minArgNum, argNum,
-			)
-		}
-	} else if fnType.NumIn() != argNum {
-		return nil, errors.Errorf(
-			"expected function argument number is %d but specified %d arguments",
-			fn.Type().NumIn(), argNum,
-		)
-	}
-
-	args, err := t.executeArgs(ctx, fnName, fnType, args, call.Args, data)
+	args, err := t.buildFuncCallArgs(ctx, data, fnName, fnType, args, call.Args)
 	if err != nil {
 		return nil, err
 	}
@@ -559,27 +529,169 @@ func getMethod(in reflect.Value, name string) (reflect.Value, *reflect.Method, b
 	return reflect.Value{}, nil, false
 }
 
-func (t *Template) executeArgs(ctx context.Context, fnName string, fnType reflect.Type, vs []reflect.Value, args []ast.Expr, data any) ([]reflect.Value, error) {
-	for i, arg := range args {
+func (t *Template) buildFuncCallArgs(
+	ctx context.Context,
+	data any,
+	fnName string,
+	fnType reflect.Type,
+	baseArgs []reflect.Value,
+	callArgs []ast.Expr,
+) ([]reflect.Value, error) {
+	values := make([]reflect.Value, len(callArgs))
+	for i, arg := range callArgs {
 		a, err := t.executeExpr(ctx, arg, data)
 		if err != nil {
 			return nil, err
 		}
-		requiredType := t.requiredFuncArgType(fnType, len(vs))
-		v := reflect.ValueOf(a)
-		vv, ok, _ := reflectutil.Convert(requiredType, v)
-		if ok {
-			v = vv
+		if a == nil {
+			values[i] = reflect.Value{}
+			continue
 		}
-		if !v.IsValid() {
-			return nil, errors.Errorf("can't use nil as %s in arguments[%d] to %s", requiredType, i, fnName)
-		}
-		if typ := v.Type(); typ != requiredType {
-			return nil, errors.Errorf("can't use %s as %s in arguments[%d] to %s", typ, requiredType, i, fnName)
-		}
-		vs = append(vs, v)
+		values[i] = reflect.ValueOf(a)
 	}
-	return vs, nil
+
+	// Pull scenarigo context from template execution context so we can inject it
+	// into plugin helpers transparently.
+	ctxVal, hasCtx := contextValueFromExecutionContext(ctx)
+	minArgs := minRequiredArgs(fnType, len(baseArgs), ctxVal)
+	if fnType.IsVariadic() {
+		if len(values) < minArgs {
+			return nil, errors.Errorf(
+				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
+				minArgs, len(values),
+			)
+		}
+	} else {
+		maxArgs := fnType.NumIn() - len(baseArgs)
+		if len(values) < minArgs {
+			return nil, errors.Errorf(
+				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
+				minArgs, len(values),
+			)
+		}
+		if len(values) > maxArgs {
+			return nil, errors.Errorf(
+				"expected function argument number is %d but specified %d arguments",
+				maxArgs, len(values),
+			)
+		}
+	}
+
+	args := append([]reflect.Value{}, baseArgs...)
+	userIdx := 0
+	fixedParamTotal := fnType.NumIn()
+	isVariadic := fnType.IsVariadic()
+	if isVariadic {
+		fixedParamTotal--
+	}
+	for paramPos := len(baseArgs); paramPos < fixedParamTotal; paramPos++ {
+		paramType := fnType.In(paramPos)
+		if hasCtx && shouldInjectContext(paramType, ctxVal, values, userIdx) {
+			args = append(args, ctxVal)
+			continue
+		}
+		if userIdx >= len(values) {
+			return nil, errors.Errorf(
+				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
+				minArgs, len(values),
+			)
+		}
+		v, err := convertArgument(fnName, paramType, values[userIdx], userIdx)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, v)
+		userIdx++
+	}
+
+	if isVariadic {
+		elemType := fnType.In(fnType.NumIn() - 1).Elem()
+		// Remaining user arguments populate the variadic tail.
+		for ; userIdx < len(values); userIdx++ {
+			v, err := convertArgument(fnName, elemType, values[userIdx], userIdx)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, v)
+		}
+		return args, nil
+	}
+
+	return args, nil
+}
+
+func shouldInjectContext(paramType reflect.Type, ctxVal reflect.Value, values []reflect.Value, userIdx int) bool {
+	if !ctxVal.IsValid() || !ctxVal.Type().AssignableTo(paramType) {
+		return false
+	}
+	if userIdx < len(values) && isAssignable(values[userIdx], paramType) {
+		return false
+	}
+	return true
+}
+
+func contextValueFromExecutionContext(ctx context.Context) (reflect.Value, bool) {
+	v := getExecutionContextValue(ctx)
+	if v == nil {
+		return reflect.Value{}, false
+	}
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() {
+		return reflect.Value{}, false
+	}
+	return rv, true
+}
+
+func convertArgument(fnName string, requiredType reflect.Type, v reflect.Value, argIdx int) (reflect.Value, error) {
+	if !v.IsValid() {
+		if isNilable(requiredType) {
+			return reflect.Zero(requiredType), nil
+		}
+		return reflect.Value{}, errors.Errorf("can't use nil as %s in arguments[%d] to %s", requiredType, argIdx, fnName)
+	}
+	vv, ok, _ := reflectutil.Convert(requiredType, v)
+	if ok {
+		v = vv
+	}
+	if !v.IsValid() {
+		return reflect.Value{}, errors.Errorf("can't use nil as %s in arguments[%d] to %s", requiredType, argIdx, fnName)
+	}
+	if v.Type() != requiredType {
+		return reflect.Value{}, errors.Errorf("can't use %s as %s in arguments[%d] to %s", v.Type(), requiredType, argIdx, fnName)
+	}
+	return v, nil
+}
+
+func minRequiredArgs(fnType reflect.Type, baseArgs int, ctxVal reflect.Value) int {
+	total := 0
+	fixedParamTotal := fnType.NumIn()
+	if fnType.IsVariadic() {
+		fixedParamTotal--
+	}
+	for paramPos := baseArgs; paramPos < fixedParamTotal; paramPos++ {
+		paramType := fnType.In(paramPos)
+		if ctxVal.IsValid() && ctxVal.Type().AssignableTo(paramType) {
+			continue
+		}
+		total++
+	}
+	return total
+}
+
+func isNilable(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return true
+	default:
+		return false
+	}
+}
+
+func isAssignable(v reflect.Value, t reflect.Type) bool {
+	if !v.IsValid() {
+		return false
+	}
+	return v.Type().AssignableTo(t)
 }
 
 func (t *Template) executeLeftArrowExpr(ctx context.Context, e *ast.LeftArrowExpr, data any) (any, error) {
