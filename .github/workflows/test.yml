@@ -22,6 +22,7 @@ jobs:
         check-latest: true
         cache: false
     - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      if: matrix.os != 'macos-latest'
       id: go-cache
       with:
         path: |
@@ -37,7 +38,7 @@ jobs:
         SCENARIGO_GO_MOD_TIDY_RETRY: 1
       run: make test/ci
     - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      if: github.ref_name == 'main'
+      if: github.ref_name == 'main' && matrix.os != 'macos-latest'
       with:
         path: |
           ~/.cache/go-build
