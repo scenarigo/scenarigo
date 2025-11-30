@@ -363,6 +363,11 @@ Scenarigo provides the `assert` variable with built-in assertion functions for c
   </thead>
   <tbody>
     <tr>
+      <td>any</td>
+      <td><code>'{{assert.any}}'</code></td>
+      <td>Always passes without validating the actual value</td>
+    </tr>
+    <tr>
       <td>notZero</td>
       <td><code>'{{assert.notZero}}'</code></td>
       <td>Ensures the value is not a zero value</td>
@@ -1662,7 +1667,9 @@ The template feature provides functions to convert types.
 
 |Variables|Description|
 |---|---|
+|ctx|scenarigo context|
 |vars|user-defined variables|
+|secrets|user-defined secrets|
 |plugins|loaded plugins|
 |env|environment variables|
 |request|request data|
