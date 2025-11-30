@@ -1,5 +1,40 @@
 # CHANGELOG
 
+## [v0.24.0](https://github.com/scenarigo/scenarigo/compare/v0.23.0...v0.24.0) - 2025-11-30
+### New Features
+- Fix wasm plugin system by @goccy in https://github.com/scenarigo/scenarigo/pull/621
+- Add CLI flags to override report output paths by @utahta in https://github.com/scenarigo/scenarigo/pull/652
+- Buffer plugin stdout for parallel runs, add `Reporter.Print`, and auto-inject scenarigo context by @zoncoen in https://github.com/scenarigo/scenarigo/pull/653
+- reset scenarios and steps on retries to re-evaluate templates by @zoncoen in https://github.com/scenarigo/scenarigo/pull/664
+- add assert.any by @zoncoen in https://github.com/scenarigo/scenarigo/pull/665
+### Bug Fixes
+- copy global vars/secrets to avoid race conditions by @zoncoen in https://github.com/scenarigo/scenarigo/pull/645
+- Fix wasm plugin system by @goccy in https://github.com/scenarigo/scenarigo/pull/646
+### Dependency Upgrades
+- chore(deps): bump Songmu/tagpr from 1.8.4 to 1.9.0 in the github-actions group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/614
+- chore(deps): bump the go-minor group across 2 directories with 2 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/615
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/616
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/619
+- chore(deps): bump google.golang.org/grpc from 1.75.0 to 1.75.1 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/624
+- chore(deps): bump google.golang.org/grpc from 1.75.0 to 1.75.1 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/625
+- chore(deps): bump actions/cache from 4.2.4 to 4.3.0 in the github-actions group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/627
+- chore(deps): bump google.golang.org/protobuf from 1.36.8 to 1.36.9 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/623
+- chore(deps): bump google.golang.org/protobuf from 1.36.8 to 1.36.9 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/626
+- chore(deps): bump google.golang.org/protobuf from 1.36.9 to 1.36.10 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/628
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/630
+- chore(deps): bump google.golang.org/grpc from 1.75.1 to 1.76.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/631
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/635
+- chore(deps): bump golang.org/x/mod from 0.28.0 to 0.29.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/633
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/637
+- chore(deps): bump the github-actions group with 2 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/641
+- chore(deps): bump github.com/goccy/wasi-go from 0.3.0 to 0.3.1 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/640
+- chore(deps): bump github.com/goccy/wasi-go from 0.3.1 to 0.3.2 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/642
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/643
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/644
+- chore(deps): bump golang.org/x/sync from 0.17.0 to 0.18.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/648
+- chore(deps): bump golang.org/x/crypto from 0.43.0 to 0.45.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/662
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/647
+
 ## [v0.23.0](https://github.com/scenarigo/scenarigo/compare/v0.22.1...v0.23.0) - 2025-09-08
 ### New Features
 - Support WebAssembly Plugin System ( PoC ) by @goccy in https://github.com/scenarigo/scenarigo/pull/574
