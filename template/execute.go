@@ -225,7 +225,6 @@ func executeLeftArrowFunction(ctx context.Context, f Func, v reflect.Value, data
 	return reflect.ValueOf(res), nil
 }
 
-// NOTE: This function must return a copy to avoid the not found error when retrying.
 func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 	v := reflectutil.Elem(in)
 

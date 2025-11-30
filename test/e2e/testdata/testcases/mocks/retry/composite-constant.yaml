@@ -1,0 +1,38 @@
+mocks:
+- protocol: http
+  expect:
+    body:
+      count: 1
+  response:
+    code: 200
+    body:
+      count: 1
+
+# step retry
+- protocol: http
+  expect:
+    body:
+      count: 2
+  response:
+    code: 200
+    body:
+      count: 2
+
+# scenario retry
+- protocol: http
+  expect:
+    body:
+      count: 3
+  response:
+    code: 200
+    body:
+      count: 3
+# step retry
+- protocol: http
+  expect:
+    body:
+      count: 4
+  response:
+    code: 200
+    body:
+      count: 4

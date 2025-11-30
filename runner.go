@@ -326,19 +326,26 @@ func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, bas
 			scenarioCtx = scenarioCtx.WithSecrets(clonedSecrets)
 		}
 
-		if scn.Retry != nil {
-			// Run scenario with retry policy
-			context.RunWithRetry(scenarioCtx, scn.Title, func(ctx *context.Context) {
-				ctx.Reporter().Parallel()
-				_ = RunScenario(ctx, scn)
-			}, scn.Retry)
-		} else {
-			// Run scenario without retry
-			scenarioCtx.Run(scn.Title, func(ctx *context.Context) {
-				ctx.Reporter().Parallel()
-				_ = RunScenario(ctx, scn)
-			})
-		}
+		// Run scenario with retry policy
+		var attempts int
+		context.RunWithRetry(scenarioCtx, scn.Title, func(ctx *context.Context) {
+			ctx.Reporter().Parallel()
+
+			attempts++
+			if attempts > 1 {
+				if err := scn.Reset(); err != nil {
+					ctx.Reporter().Fatal(
+						errors.WithNodeAndColored(
+							errors.WithPath(err, ""),
+							ctx.Node(),
+							ctx.ColorConfig().IsEnabled(),
+						),
+					)
+				}
+			}
+
+			_ = RunScenario(ctx, scn)
+		}, scn.Retry)
 	}
 }
 

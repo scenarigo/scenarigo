@@ -14,6 +14,8 @@ import (
 )
 
 // RunScenario runs a test scenario s.
+//
+//nolint:cyclop
 func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	ctx = ctx.WithScenarioFilepath(s.Filepath())
 	steps := context.NewSteps()
@@ -65,8 +67,26 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	var failed bool
 	for idx, step := range s.Steps {
 		var stepCtx *context.Context
+		var attempts int
 		ok := context.RunWithRetry(scnCtx, step.Title, func(ctx *context.Context) {
 			stepCtx = ctx
+			attempts++
+
+			if attempts > 1 {
+				// reset templates
+				if err := step.Reset(); err != nil {
+					stepCtx.Reporter().Fatal(
+						errors.WithNodeAndColored(
+							errors.WithPath(
+								err,
+								fmt.Sprintf("steps[%d]", idx),
+							),
+							stepCtx.Node(),
+							stepCtx.ColorConfig().IsEnabled(),
+						),
+					)
+				}
+			}
 
 			// following steps are skipped if the previous step failed
 			if failed {

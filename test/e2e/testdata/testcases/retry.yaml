@@ -48,3 +48,12 @@ scenarios:
   success: false
   output:
     stdout: retry/laf.txt
+
+# composite
+- filename: retry/composite-constant.yaml
+  mocks: retry/composite-constant.yaml
+  success: true
+  output:
+    stdout: retry/composite-constant.txt
+  plugins:
+  - counter.so
