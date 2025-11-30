@@ -338,6 +338,7 @@ func TestLoadScenarios(t *testing.T) {
 				if diff := cmp.Diff(test.scenarios, got,
 					cmp.AllowUnexported(
 						Scenario{},
+						Step{},
 					),
 					cmp.FilterPath(func(path cmp.Path) bool {
 						s := path.String()
@@ -366,7 +367,7 @@ func TestLoadScenarios(t *testing.T) {
 		}{
 			"invalid": {
 				path: "testdata/invalid.yaml",
-				expect: `failed to decode YAML: [1:8] cannot unmarshal yaml.MapSlice into Go struct field Scenario.Title of type string
+				expect: `failed to decode YAML: [1:8] cannot unmarshal yaml.MapSlice into Go struct field scenarioUnmarshaler.Title of type string
 >  1 | title: {}
               ^
 `,
@@ -560,6 +561,7 @@ steps:
 				if diff := cmp.Diff(test.scenarios, got,
 					cmp.AllowUnexported(
 						Scenario{},
+						Step{},
 					),
 					cmp.FilterPath(func(path cmp.Path) bool {
 						s := path.String()

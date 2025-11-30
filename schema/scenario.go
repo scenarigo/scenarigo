@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 
 	"github.com/scenarigo/scenarigo/color"
@@ -35,6 +36,26 @@ type Scenario struct {
 	filepath    string        // YAML filepath
 	Node        ast.Node      `yaml:"-"`
 	colorConfig *color.Config // Color configuration for error reporting
+
+	yamlBytes []byte
+}
+
+type scenarioUnmarshaler Scenario
+
+func (s *Scenario) UnmarshalYAML(b []byte) error {
+	var unm scenarioUnmarshaler
+	if err := yaml.UnmarshalWithOptions(b, &unm, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
+		return err
+	}
+	*s = Scenario(unm)
+	if s.Retry != nil {
+		s.yamlBytes = b
+	}
+	return nil
+}
+
+func (s *Scenario) Reset() error {
+	return yaml.UnmarshalWithOptions(s.yamlBytes, s, yaml.UseOrderedMap(), yaml.Strict())
 }
 
 // Filepath returns YAML filepath of s.
@@ -114,6 +135,8 @@ type Step struct {
 	Timeout                 *Duration                 `yaml:"timeout,omitempty"`
 	PostTimeoutWaitingLimit *Duration                 `yaml:"postTimeoutWaitingLimit,omitempty"`
 	Retry                   *RetryPolicy              `yaml:"retry,omitempty"`
+
+	yamlBytes []byte
 }
 
 // RawMessage is a raw encoded YAML value.
@@ -151,10 +174,10 @@ type stepUnmarshaller struct {
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (s *Step) UnmarshalYAML(unmarshal func(any) error) error {
+func (s *Step) UnmarshalYAML(b []byte) error {
 	// unmarshal into stepUnmarshaller instead of Step for dynamic unmarshalling Request/Expect
 	var unmarshaled stepUnmarshaller
-	if err := unmarshal(&unmarshaled); err != nil {
+	if err := yaml.UnmarshalWithOptions(b, &unmarshaled, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
 		return err
 	}
 
@@ -172,6 +195,10 @@ func (s *Step) UnmarshalYAML(unmarshal func(any) error) error {
 	s.Timeout = unmarshaled.Timeout
 	s.PostTimeoutWaitingLimit = unmarshaled.PostTimeoutWaitingLimit
 	s.Retry = unmarshaled.Retry
+
+	if s.Retry != nil {
+		s.yamlBytes = b
+	}
 
 	p := protocol.Get(s.Protocol)
 	if p == nil {
@@ -194,6 +221,10 @@ func (s *Step) UnmarshalYAML(unmarshal func(any) error) error {
 	s.Expect = builder
 
 	return nil
+}
+
+func (s *Step) Reset() error {
+	return yaml.UnmarshalWithOptions(s.yamlBytes, s, yaml.UseOrderedMap(), yaml.Strict())
 }
 
 // Bind represents bindings of variables.

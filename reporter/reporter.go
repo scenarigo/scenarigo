@@ -559,31 +559,25 @@ func collectOutput(r *reporter) []string {
 	shouldShowLogs := (r.Failed() && !r.noFailurePropagation) || r.context.verbose
 	prefix := strings.Repeat("    ", r.depth-1)
 	if shouldShowLogs {
-		status := "PASS"
-		c := r.passColor()
-		if r.Failed() {
-			status = "FAIL"
-			c = r.failColor()
-		} else if r.Skipped() {
-			status = "SKIP"
-			c = r.skipColor()
-		}
-		results = []string{
-			c.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.goTestName, r.durationMeasurer.getDuration().Seconds()),
-		}
 		for _, l := range r.logs.all() {
 			padding := fmt.Sprintf("%s    ", prefix)
 			results = append(results, pad(l, padding))
 		}
 	} else {
 		// Print() messages should be shown at all times.
-		for _, l := range r.logs.printLogs() {
-			padding := fmt.Sprintf("%s    ", prefix)
-			results = append(results, pad(l, padding))
+		logs := r.logs.printLogs()
+		if len(logs) > 0 {
+			for _, l := range logs {
+				padding := fmt.Sprintf("%s    ", prefix)
+				results = append(results, pad(l, padding))
+			}
 		}
 	}
 	for _, child := range r.children {
 		results = append(results, collectOutput(child)...)
+	}
+	if shouldShowLogs || len(results) > 0 {
+		results = append([]string{r.buildStatusLine(prefix)}, results...)
 	}
 	if r.depth == 1 && !r.testing {
 		if r.Failed() {
@@ -601,6 +595,19 @@ func collectOutput(r *reporter) []string {
 		}
 	}
 	return results
+}
+
+func (r *reporter) buildStatusLine(prefix string) string {
+	status := "PASS"
+	c := r.passColor()
+	if r.Failed() {
+		status = "FAIL"
+		c = r.failColor()
+	} else if r.Skipped() {
+		status = "SKIP"
+		c = r.skipColor()
+	}
+	return c.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.goTestName, r.durationMeasurer.getDuration().Seconds())
 }
 
 func pad(s string, padding string) string {

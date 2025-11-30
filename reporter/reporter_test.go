@@ -91,6 +91,7 @@ func TestReporter_Print(t *testing.T) {
 			})
 		}, WithWriter(&b))
 		if got, expect := b.String(), strings.TrimPrefix(`
+--- PASS: test (0.00s)
         always shown
 ok  	test	0.000s
 `, "\n"); got != expect {
@@ -129,6 +130,7 @@ func TestReporter_Printf(t *testing.T) {
 			})
 		}, WithWriter(&b))
 		if got, expect := b.String(), strings.TrimPrefix(`
+--- PASS: test (0.00s)
         always shown
 ok  	test	0.000s
 `, "\n"); got != expect {
