@@ -27,6 +27,7 @@ func TestAssertions(t *testing.T) {
 	}
 	testutil.RunParameterizedTests(
 		t, executor,
+		"testdata/assertion/simple.yaml",
 		"testdata/assertion/and.yaml",
 		"testdata/assertion/or.yaml",
 		"testdata/assertion/contains.yaml",

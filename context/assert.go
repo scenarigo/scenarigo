@@ -29,6 +29,8 @@ func (a *assertions) ExtractByKey(key string) (any, bool) {
 			ctx: a.ctx,
 			f:   buildArg(a.ctx, assert.NotContains),
 		}, true
+	case "any":
+		return assert.Nop(), true
 	case "notZero":
 		return assert.NotZero(), true
 	case "regexp":
