@@ -1,3 +1,6 @@
 ok  	setup	0.000s
+--- PASS: testdata/testcases/scenarios/retry/composite-constant.yaml (0.00s)
+    --- PASS: testdata/testcases/scenarios/retry/composite-constant.yaml/constant_retry_scenario (0.00s)
+        --- PASS: testdata/testcases/scenarios/retry/composite-constant.yaml/constant_retry_scenario/ (0.00s)
                 count: 4
 ok  	testdata/testcases/scenarios/retry/composite-constant.yaml	0.000s
