@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
-	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/spf13/cobra"
 )
 
@@ -46,25 +44,17 @@ func list(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	for _, arg := range args {
-		opts = append(opts, scenarigo.WithScenarios(arg))
-	}
 	r, err := scenarigo.NewRunner(opts...)
 	if err != nil {
 		return err
 	}
 
-	var retErr error
-	reporterOpts := []reporter.Option{reporter.WithWriter(io.Discard)}
-	reporter.Run(func(rptr reporter.Reporter) {
-		for _, file := range r.ScenarioFiles() {
-			rel, err := filepath.Rel(wd, file)
-			if err != nil {
-				retErr = fmt.Errorf("failed to get releative path: %w", err)
-				break
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), rel)
+	for _, file := range r.ScenarioFiles() {
+		rel, err := filepath.Rel(wd, file)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path: %w", err)
 		}
-	}, reporterOpts...)
-	return retErr
+		fmt.Fprintln(cmd.OutOrStdout(), rel)
+	}
+	return nil
 }
