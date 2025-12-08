@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [v0.24.1](https://github.com/scenarigo/scenarigo/compare/v0.24.0...v0.24.1) - 2025-12-08
+### Bug Fixes
+- fix(cmd): fix list command not displaying output by @utahta in https://github.com/scenarigo/scenarigo/pull/674
+### Dependency Upgrades
+- chore(deps): bump github.com/goccy/go-yaml from 1.18.0 to 1.19.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/666
+- chore(deps): bump golang.org/x/mod from 0.29.0 to 0.30.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/667
+- chore(deps): bump google.golang.org/grpc from 1.76.0 to 1.77.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/668
+- chore(deps): bump google.golang.org/grpc from 1.76.0 to 1.77.0 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/669
+- chore(deps): bump github.com/spf13/cobra from 1.10.1 to 1.10.2 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/673
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/671
+
 ## [v0.24.0](https://github.com/scenarigo/scenarigo/compare/v0.23.0...v0.24.0) - 2025-11-30
 ### New Features
 - Fix wasm plugin system by @goccy in https://github.com/scenarigo/scenarigo/pull/621
