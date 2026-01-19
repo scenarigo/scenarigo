@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/default-value-with-nullish-coales
 
 go 1.24.0
 
-toolchain go1.25.5
+toolchain go1.25.6
 
 require github.com/stretchr/testify v1.9.0 // indirect
 
