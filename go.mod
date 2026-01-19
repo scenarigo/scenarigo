@@ -10,7 +10,7 @@ require (
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/fatih/color v1.18.0
-	github.com/goccy/go-yaml v1.19.0
+	github.com/goccy/go-yaml v1.19.2
 	github.com/goccy/wasi-go v0.3.2
 	github.com/golang/mock v1.7.0-rc.1
 	github.com/google/go-cmp v0.7.0
@@ -22,16 +22,16 @@ require (
 	github.com/sergi/go-diff v1.4.0
 	github.com/sosedoff/gitkit v0.4.0
 	github.com/spf13/cobra v1.10.2
-	github.com/tetratelabs/wazero v1.10.1
+	github.com/tetratelabs/wazero v1.11.0
 	github.com/zoncoen/query-go v1.3.2
 	github.com/zoncoen/query-go/extractor/protobuf v0.1.4
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2
-	golang.org/x/mod v0.30.0
+	golang.org/x/mod v0.32.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/text v0.32.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8
-	google.golang.org/grpc v1.77.0
-	google.golang.org/protobuf v1.36.10
+	golang.org/x/text v0.33.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda
+	google.golang.org/grpc v1.78.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -47,7 +47,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 )
