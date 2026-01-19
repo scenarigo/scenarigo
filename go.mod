@@ -26,9 +26,9 @@ require (
 	github.com/zoncoen/query-go v1.3.2
 	github.com/zoncoen/query-go/extractor/protobuf v0.1.4
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2
-	golang.org/x/mod v0.30.0
+	golang.org/x/mod v0.32.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/text v0.32.0
+	golang.org/x/text v0.33.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8
 	google.golang.org/grpc v1.77.0
 	google.golang.org/protobuf v1.36.10
@@ -47,7 +47,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 )
