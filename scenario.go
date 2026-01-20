@@ -17,7 +17,6 @@ import (
 //
 //nolint:cyclop
 func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
-	ctx = ctx.WithScenarioFilepath(s.Filepath())
 	steps := context.NewSteps()
 	ctx = ctx.WithSteps(steps)
 
