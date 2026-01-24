@@ -247,7 +247,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 		},
 		{
 			name: "GRPCBuildRequestRequest",
-			req:  NewGRPCBuildRequestRequest("TestClient", "BuildMethod", []byte(`{"test": "data"}`)),
+			req:  NewGRPCBuildRequestRequest("TestClient", "BuildMethod", []byte(`{"test": "data"}`), false, ""),
 			validateFunc: func(t *testing.T, resp *Response) {
 				t.Helper()
 				if resp.CommandType != GRPCBuildRequestCommand {
@@ -305,7 +305,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 		},
 		{
 			name: "GRPCInvokeRequest",
-			req:  NewGRPCInvokeRequest("TestClient", "InvokeMethod", []byte(`{"request": "payload"}`), nil),
+			req:  NewGRPCInvokeRequest("TestClient", "InvokeMethod", []byte(`{"request": "payload"}`), nil, false, ""),
 			validateFunc: func(t *testing.T, resp *Response) {
 				t.Helper()
 				if resp.CommandType != GRPCInvokeCommand {

@@ -1,0 +1,46 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.wasm
+title: custom client with reflection API
+steps:
+- title: Ping
+  protocol: grpc
+  request:
+    client: '{{plugins.plugin.PingClient}}'
+    service: scenarigo.examples.wasm.service.Ping
+    method: Ping
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    header:
+      x-custom-client-verified:
+      - "true"
+    message: {}
+- title: Echo
+  protocol: grpc
+  request:
+    client: '{{plugins.plugin.EchoClient}}'
+    service: scenarigo.examples.wasm.service.Echo
+    method: Echo
+    message:
+      messageId: aaa
+      messageBody: hello
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    header:
+      x-custom-client-verified:
+      - "true"
+    message:
+      messageId: '{{request.message.messageId}}'
+      messageBody: '{{request.message.messageBody}}'

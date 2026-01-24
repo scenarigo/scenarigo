@@ -25,6 +25,7 @@ import (
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/internal/plugin"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/internal/reflectutil"
 	"github.com/scenarigo/scenarigo/internal/yamlutil"
@@ -368,6 +369,23 @@ func (r *Request) buildClient(ctx *context.Context, opts *RequestOptions) (servi
 		if err != nil {
 			return nil, errors.WrapPath(err, "client", "failed to get client")
 		}
+
+		// If CustomGRPCClient, set reflection context (for WASM plugins)
+		// Only enable reflection when both reflection option is enabled and service is specified
+		if cli, ok := x.(plugin.CustomGRPCClient); ok {
+			cli.SetReflectionContext(opts.Reflection.IsEnabled() && r.Service != "", r.Service)
+		}
+
+		// If reflection is enabled, service is specified, and connection is available, use protoClient
+		if opts.Reflection.IsEnabled() && r.Service != "" {
+			if provider, ok := x.(plugin.ClientConnProvider); ok {
+				if conn := provider.ClientConn(); conn != nil {
+					return newProtoClientWithConn(ctx, r, conn)
+				}
+			}
+		}
+
+		// Standard custom client processing (including WASM plugins)
 		client, err := newCustomServiceClient(r, x)
 		if err != nil {
 			return nil, err

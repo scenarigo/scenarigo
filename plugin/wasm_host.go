@@ -20,6 +20,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	stpb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -527,12 +528,21 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 // StructValue represents a struct type value from a WASM plugin.
 // It provides methods to interact with WASM plugin values, especially for gRPC clients.
 type StructValue struct {
-	typ       *wasm.Type
-	plugin    *WasmPlugin
-	name      string
-	selectors []string
-	value     any
-	argID     string
+	typ           *wasm.Type
+	plugin        *WasmPlugin
+	name          string
+	selectors     []string
+	value         any
+	argID         string
+	useReflection bool
+	service       string
+}
+
+// SetReflectionContext sets the reflection context for WASM plugins.
+// This is called before BuildRequestMessage and Invoke when reflection is enabled.
+func (v *StructValue) SetReflectionContext(useReflection bool, service string) {
+	v.useReflection = useReflection
+	v.service = service
 }
 
 func (v *StructValue) Exec(arg any) (any, error) {
@@ -640,7 +650,7 @@ func (v *StructValue) ExistsMethod(method string) bool {
 // BuildRequestMessage builds a protobuf request message for a gRPC method.
 // This is used to construct request messages for gRPC calls in WASM plugins.
 func (v *StructValue) BuildRequestMessage(method string, msg []byte) (proto.Message, error) {
-	res, err := v.plugin.call(nil, wasm.NewGRPCBuildRequestRequest(v.name, method, msg))
+	res, err := v.plugin.call(nil, wasm.NewGRPCBuildRequestRequest(v.name, method, msg, v.useReflection, v.service))
 	if err != nil {
 		return nil, err
 	}
@@ -676,7 +686,7 @@ func (v *StructValue) BuildRequestMessage(method string, msg []byte) (proto.Mess
 
 // Invoke calls a gRPC method on the WASM value with the given request.
 // It returns the response message, status, and any error that occurred.
-func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto proto.Message) (proto.Message, *status.Status, error) {
+func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error) {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		md = metadata.MD{}
@@ -685,13 +695,23 @@ func (v *StructValue) Invoke(ctx gocontext.Context, method string, reqProto prot
 	if err != nil {
 		return nil, nil, err
 	}
-	res, err := v.plugin.call(nil, wasm.NewGRPCInvokeRequest(v.name, method, reqMsg, md))
+	res, err := v.plugin.call(nil, wasm.NewGRPCInvokeRequest(v.name, method, reqMsg, md, v.useReflection, v.service))
 	if err != nil {
 		return nil, nil, err
 	}
 	invokeRes, err := convertCommandResponse[*wasm.GRPCInvokeCommandResponse](res)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Populate header/trailer from response via call options
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case grpc.HeaderCallOption:
+			*o.HeaderAddr = invokeRes.Header
+		case grpc.TrailerCallOption:
+			*o.TrailerAddr = invokeRes.Trailer
+		}
 	}
 
 	var fdset descriptorpb.FileDescriptorSet

@@ -225,26 +225,30 @@ func NewGRPCExistsMethodRequest(client, method string) *Request {
 }
 
 // NewGRPCBuildRequestRequest creates a request to build a gRPC request message.
-func NewGRPCBuildRequestRequest(client, method string, msg []byte) *Request {
+func NewGRPCBuildRequestRequest(client, method string, msg []byte, useReflection bool, service string) *Request {
 	return &Request{
 		CommandType: GRPCBuildRequestCommand,
 		Command: &GRPCBuildRequestCommandRequest{
-			Client:  client,
-			Method:  method,
-			Message: msg,
+			Client:        client,
+			Method:        method,
+			Message:       msg,
+			UseReflection: useReflection,
+			Service:       service,
 		},
 	}
 }
 
 // NewGRPCInvokeRequest creates a request to invoke a gRPC method.
-func NewGRPCInvokeRequest(client, method string, reqMsg []byte, md metadata.MD) *Request {
+func NewGRPCInvokeRequest(client, method string, reqMsg []byte, md metadata.MD, useReflection bool, service string) *Request {
 	return &Request{
 		CommandType: GRPCInvokeCommand,
 		Command: &GRPCInvokeCommandRequest{
-			Client:   client,
-			Method:   method,
-			Request:  reqMsg,
-			Metadata: md,
+			Client:        client,
+			Method:        method,
+			Request:       reqMsg,
+			Metadata:      md,
+			UseReflection: useReflection,
+			Service:       service,
 		},
 	}
 }
@@ -435,9 +439,11 @@ type GRPCExistsMethodCommandResponse struct {
 func (r *GRPCExistsMethodCommandResponse) isCommandResponse() bool { return true }
 
 type GRPCBuildRequestCommandRequest struct {
-	Client  string `json:"client"`
-	Method  string `json:"method"`
-	Message []byte `json:"message"`
+	Client        string `json:"client"`
+	Method        string `json:"method"`
+	Message       []byte `json:"message"`
+	UseReflection bool   `json:"useReflection"`
+	Service       string `json:"service"`
 }
 
 func (r *GRPCBuildRequestCommandRequest) isCommandRequest() bool { return true }
@@ -450,19 +456,23 @@ type GRPCBuildRequestCommandResponse struct {
 func (r *GRPCBuildRequestCommandResponse) isCommandResponse() bool { return true }
 
 type GRPCInvokeCommandRequest struct {
-	Client   string      `json:"client"`
-	Method   string      `json:"method"`
-	Request  []byte      `json:"request"`
-	Metadata metadata.MD `json:"metadata"`
+	Client        string      `json:"client"`
+	Method        string      `json:"method"`
+	Request       []byte      `json:"request"`
+	Metadata      metadata.MD `json:"metadata"`
+	UseReflection bool        `json:"useReflection"`
+	Service       string      `json:"service"`
 }
 
 func (r *GRPCInvokeCommandRequest) isCommandRequest() bool { return true }
 
 type GRPCInvokeCommandResponse struct {
-	FDSet         []byte `json:"fdset"`
-	ResponseFQDN  string `json:"responseFQDN"` //nolint:tagliatelle
-	ResponseBytes []byte `json:"responseBytes"`
-	StatusProto   []byte `json:"statusProto"`
+	FDSet         []byte      `json:"fdset"`
+	ResponseFQDN  string      `json:"responseFQDN"` //nolint:tagliatelle
+	ResponseBytes []byte      `json:"responseBytes"`
+	StatusProto   []byte      `json:"statusProto"`
+	Header        metadata.MD `json:"header"`
+	Trailer       metadata.MD `json:"trailer"`
 }
 
 func (r *GRPCInvokeCommandResponse) isCommandResponse() bool { return true }
