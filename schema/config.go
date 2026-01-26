@@ -37,7 +37,8 @@ type Config struct {
 
 // PluginConfig represents a plugin configuration.
 type PluginConfig struct {
-	Src string `yaml:"src,omitempty"`
+	Src      string `yaml:"src,omitempty"`
+	Insecure bool   `yaml:"insecure,omitempty"` // Allow HTTP registry for OCI images
 }
 
 // ProtocolOptions represents options for each protocol.
@@ -215,6 +216,10 @@ func validate(c *Config, opt *loadOption) error {
 		}
 	}
 	for _, item := range c.Plugins.ToSlice() {
+		// Skip validation for OCI image references
+		if strings.HasPrefix(item.Value.Src, "oci://") {
+			continue
+		}
 		if err := stat(c, item.Value.Src, (&yaml.PathBuilder{}).Root().Child("plugins").Child(item.Key).Child("src").Build(), opt); err != nil {
 			var neErr notExist
 			if errors.As(err, &neErr) {

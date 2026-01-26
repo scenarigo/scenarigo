@@ -33,9 +33,12 @@ import (
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/semver"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/internal/plugin/wasm/image"
 	"github.com/scenarigo/scenarigo/schema"
 	"github.com/scenarigo/scenarigo/version"
 )
@@ -187,6 +190,14 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 	pluginModules := map[string]*overrideModule{}
 	pluginDir := filepathutil.From(cfg.Root, cfg.PluginDirectory)
 	for _, item := range cfg.Plugins.ToSlice() {
+		// Handle OCI image sources
+		if strings.HasPrefix(item.Value.Src, "oci://") {
+			if err := pullOCIPlugin(ctx(cmd), pluginDir, item.Key, item.Value); err != nil {
+				return fmt.Errorf("failed to pull OCI plugin %s: %w", item.Key, err)
+			}
+			continue
+		}
+
 		pb, clean, err := createPluginBuilder(cmd, goCmd, pluginModules, cfg.Root, pluginDir, item, opts)
 		defer clean()
 		if err != nil {
@@ -1279,6 +1290,38 @@ func selectWasmPluginScenarigoVersion(currentVersion, pluginVersion string) stri
 	}
 
 	return pluginVersion
+}
+
+// pullOCIPlugin pulls a WASM plugin from an OCI registry and places it in pluginDir.
+func pullOCIPlugin(ctx context.Context, pluginDir, name string, pluginCfg schema.PluginConfig) error {
+	ref := strings.TrimPrefix(pluginCfg.Src, "oci://")
+
+	var opts []image.PullOption
+	if pluginCfg.Insecure {
+		opts = append(opts, image.WithPullInsecure(true))
+	}
+	opts = append(opts, image.WithPullKeychain(authn.DefaultKeychain))
+
+	img, err := image.Pull(ctx, ref, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to pull image %s: %w", ref, err)
+	}
+
+	wasmBytes, err := image.ExtractWASM(img)
+	if err != nil {
+		return fmt.Errorf("failed to extract WASM from image %s: %w", ref, err)
+	}
+
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create plugin directory: %w", err)
+	}
+
+	outPath := filepath.Join(pluginDir, name)
+	if err := os.WriteFile(outPath, wasmBytes, 0o644); err != nil {
+		return fmt.Errorf("failed to write plugin file: %w", err)
+	}
+
+	return nil
 }
 
 type exportedSymbols struct {

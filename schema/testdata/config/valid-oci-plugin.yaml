@@ -1,0 +1,8 @@
+schemaVersion: config/v1
+pluginDirectory: gen
+plugins:
+  myplugin.wasm:
+    src: oci://ghcr.io/myorg/myplugin:v1.0.0
+  devplugin.wasm:
+    src: oci://localhost:5000/devplugin:latest
+    insecure: true

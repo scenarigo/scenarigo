@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/sosedoff/gitkit"
 	"github.com/spf13/cobra"
@@ -27,6 +29,7 @@ import (
 
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo/internal/plugin/wasm/image"
 	"github.com/scenarigo/scenarigo/schema"
 )
 
@@ -3081,5 +3084,164 @@ func TestGetCurrentScenarigoVersion(t *testing.T) {
 		if len(result) == 0 || (result[0] != 'v' && result[0] != '(') {
 			t.Errorf("getCurrentScenarigoVersion() returned invalid version format: %q", result)
 		}
+	}
+}
+
+func TestPullOCIPlugin(t *testing.T) {
+	// Start in-memory registry
+	reg := registry.New()
+	server := httptest.NewServer(reg)
+	defer server.Close()
+
+	wasmBytes := []byte{
+		0x00, 0x61, 0x73, 0x6d, // WASM magic number
+		0x01, 0x00, 0x00, 0x00, // WASM version 1
+	}
+
+	// Push a test image
+	img, err := image.BuildFromBytes(wasmBytes)
+	if err != nil {
+		t.Fatalf("failed to build image: %v", err)
+	}
+
+	ref := strings.TrimPrefix(server.URL, "http://") + "/test/plugin:v1"
+	ctx := context.Background()
+	if _, err := image.Push(ctx, img, ref, image.WithInsecure(true)); err != nil {
+		t.Fatalf("failed to push image: %v", err)
+	}
+
+	// Test pullOCIPlugin
+	pluginDir := t.TempDir()
+	pluginCfg := schema.PluginConfig{
+		Src:      "oci://" + ref,
+		Insecure: true,
+	}
+
+	if err := pullOCIPlugin(ctx, pluginDir, "test.wasm", pluginCfg); err != nil {
+		t.Fatalf("pullOCIPlugin() error = %v", err)
+	}
+
+	// Verify the plugin was written
+	pluginPath := filepath.Join(pluginDir, "test.wasm")
+	extractedWASM, err := os.ReadFile(pluginPath)
+	if err != nil {
+		t.Fatalf("failed to read plugin file: %v", err)
+	}
+
+	if !bytes.Equal(extractedWASM, wasmBytes) {
+		t.Errorf("extracted WASM bytes don't match: got %v, want %v", extractedWASM, wasmBytes)
+	}
+}
+
+func TestPullOCIPlugin_InvalidRef(t *testing.T) {
+	ctx := context.Background()
+	pluginDir := t.TempDir()
+	pluginCfg := schema.PluginConfig{
+		Src:      "oci://INVALID:ref::",
+		Insecure: true,
+	}
+
+	err := pullOCIPlugin(ctx, pluginDir, "test.wasm", pluginCfg)
+	if err == nil {
+		t.Fatal("expected error for invalid reference")
+	}
+}
+
+func TestPullOCIPlugin_NonExistentImage(t *testing.T) {
+	reg := registry.New()
+	server := httptest.NewServer(reg)
+	defer server.Close()
+
+	ref := strings.TrimPrefix(server.URL, "http://") + "/nonexistent/image:latest"
+	ctx := context.Background()
+	pluginDir := t.TempDir()
+	pluginCfg := schema.PluginConfig{
+		Src:      "oci://" + ref,
+		Insecure: true,
+	}
+
+	err := pullOCIPlugin(ctx, pluginDir, "test.wasm", pluginCfg)
+	if err == nil {
+		t.Fatal("expected error for non-existent image")
+	}
+}
+
+func TestBuildWithOCISource(t *testing.T) {
+	// Start in-memory registry
+	reg := registry.New()
+	server := httptest.NewServer(reg)
+	defer server.Close()
+
+	wasmBytes := []byte{
+		0x00, 0x61, 0x73, 0x6d, // WASM magic number
+		0x01, 0x00, 0x00, 0x00, // WASM version 1
+	}
+
+	// Push a test image
+	img, err := image.BuildFromBytes(wasmBytes)
+	if err != nil {
+		t.Fatalf("failed to build image: %v", err)
+	}
+
+	ref := strings.TrimPrefix(server.URL, "http://") + "/test/plugin:v1"
+	ctx := context.Background()
+	if _, err := image.Push(ctx, img, ref, image.WithInsecure(true)); err != nil {
+		t.Fatalf("failed to push image: %v", err)
+	}
+
+	// Create a temporary directory with config
+	tmpDir := t.TempDir()
+	pluginDir := filepath.Join(tmpDir, "gen")
+
+	// Write config file with OCI source
+	configContent := fmt.Sprintf(`schemaVersion: config/v1
+pluginDirectory: ./gen
+plugins:
+  test.wasm:
+    src: oci://%s
+    insecure: true
+`, ref)
+	if err := os.WriteFile(filepath.Join(tmpDir, "scenarigo.yaml"), []byte(configContent), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Change to temp directory and reset config globals
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	origConfigPath := config.ConfigPath
+	origRoot := config.Root
+	defer func() {
+		os.Chdir(origDir)
+		config.ConfigPath = origConfigPath
+		config.Root = origRoot
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+	config.ConfigPath = ""
+	config.Root = ""
+
+	// Run build command
+	cmd := newBuildCmd()
+	cmd.SetContext(ctx)
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stdout)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("build command failed: %v", err)
+	}
+
+	// Verify the plugin was created
+	pluginPath := filepath.Join(pluginDir, "test.wasm")
+	extractedWASM, err := os.ReadFile(pluginPath)
+	if err != nil {
+		t.Fatalf("failed to read plugin file: %v", err)
+	}
+
+	if !bytes.Equal(extractedWASM, wasmBytes) {
+		t.Errorf("extracted WASM bytes don't match: got %v, want %v", extractedWASM, wasmBytes)
 	}
 }

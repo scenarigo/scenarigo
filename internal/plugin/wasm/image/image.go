@@ -69,6 +69,7 @@ func WithAnnotations(annotations map[string]string) BuildOption {
 type pushOptions struct {
 	transport http.RoundTripper
 	auth      authn.Authenticator
+	keychain  authn.Keychain
 	insecure  bool
 }
 
@@ -79,6 +80,9 @@ func (o *pushOptions) toRemoteOptions() []remote.Option {
 	}
 	if o.auth != nil {
 		opts = append(opts, remote.WithAuth(o.auth))
+	}
+	if o.keychain != nil {
+		opts = append(opts, remote.WithAuthFromKeychain(o.keychain))
 	}
 	return opts
 }
@@ -110,10 +114,18 @@ func WithInsecure(insecure bool) PushOption {
 	}
 }
 
+// WithKeychain sets the keychain for authentication.
+func WithKeychain(keychain authn.Keychain) PushOption {
+	return func(o *pushOptions) {
+		o.keychain = keychain
+	}
+}
+
 // pullOptions holds options for Pull operations.
 type pullOptions struct {
 	transport http.RoundTripper
 	auth      authn.Authenticator
+	keychain  authn.Keychain
 	insecure  bool
 }
 
@@ -124,6 +136,9 @@ func (o *pullOptions) toRemoteOptions() []remote.Option {
 	}
 	if o.auth != nil {
 		opts = append(opts, remote.WithAuth(o.auth))
+	}
+	if o.keychain != nil {
+		opts = append(opts, remote.WithAuthFromKeychain(o.keychain))
 	}
 	return opts
 }
@@ -152,6 +167,13 @@ func WithPullAuth(username, password string) PullOption {
 func WithPullInsecure(insecure bool) PullOption {
 	return func(o *pullOptions) {
 		o.insecure = insecure
+	}
+}
+
+// WithPullKeychain sets the keychain for authentication.
+func WithPullKeychain(keychain authn.Keychain) PullOption {
+	return func(o *pullOptions) {
+		o.keychain = keychain
 	}
 }
 

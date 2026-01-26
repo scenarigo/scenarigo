@@ -310,3 +310,47 @@ func TestProtocolOptions_Set(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfig_OCIPlugin(t *testing.T) {
+	// Test that OCI source plugins skip local file validation
+	cfg, err := LoadConfig("testdata/config/valid-oci-plugin.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error loading OCI plugin config: %v", err)
+	}
+
+	// Verify config was loaded correctly
+	if cfg.SchemaVersion != "config/v1" {
+		t.Errorf("expected schemaVersion 'config/v1', got %q", cfg.SchemaVersion)
+	}
+	if cfg.PluginDirectory != "gen" {
+		t.Errorf("expected pluginDirectory 'gen', got %q", cfg.PluginDirectory)
+	}
+
+	// Check plugins are loaded
+	plugins := cfg.Plugins.ToSlice()
+	if len(plugins) != 2 {
+		t.Fatalf("expected 2 plugins, got %d", len(plugins))
+	}
+
+	// Verify first plugin (OCI source)
+	if plugins[0].Key != "myplugin.wasm" {
+		t.Errorf("expected plugin key 'myplugin.wasm', got %q", plugins[0].Key)
+	}
+	if plugins[0].Value.Src != "oci://ghcr.io/myorg/myplugin:v1.0.0" {
+		t.Errorf("expected src 'oci://ghcr.io/myorg/myplugin:v1.0.0', got %q", plugins[0].Value.Src)
+	}
+	if plugins[0].Value.Insecure {
+		t.Error("expected Insecure to be false for first plugin")
+	}
+
+	// Verify second plugin (OCI source with insecure)
+	if plugins[1].Key != "devplugin.wasm" {
+		t.Errorf("expected plugin key 'devplugin.wasm', got %q", plugins[1].Key)
+	}
+	if plugins[1].Value.Src != "oci://localhost:5000/devplugin:latest" {
+		t.Errorf("expected src 'oci://localhost:5000/devplugin:latest', got %q", plugins[1].Value.Src)
+	}
+	if !plugins[1].Value.Insecure {
+		t.Error("expected Insecure to be true for second plugin")
+	}
+}
