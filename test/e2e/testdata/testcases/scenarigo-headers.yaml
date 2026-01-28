@@ -1,0 +1,20 @@
+title: scenarigo headers
+scenarios:
+- filename: scenarigo-headers/http.yaml
+  mocks: scenarigo-headers/http.yaml
+  success: true
+  verbose: true
+  keepScenarigoHeaders: true
+  output:
+    stdout: scenarigo-headers/http.txt
+- filename: scenarigo-headers/grpc.yaml
+  success: true
+  verbose: true
+  keepScenarigoHeaders: true
+  plugins:
+  - grpc.so
+  output:
+    stdout: scenarigo-headers/grpc.txt
+  # TODO: wasm plugin does not output response.header section in gRPC responses,
+  # while so plugin does. This causes test failures when comparing verbose output.
+  skipWasm: true

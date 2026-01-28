@@ -1,0 +1,8 @@
+mocks:
+- protocol: http
+  expect:
+    path: /echo
+  response:
+    code: 200
+    body:
+      message: hello

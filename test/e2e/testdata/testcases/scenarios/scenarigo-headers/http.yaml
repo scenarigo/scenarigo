@@ -1,0 +1,9 @@
+title: scenarigo headers
+steps:
+- title: GET /echo
+  protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+  expect:
+    code: 200
