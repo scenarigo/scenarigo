@@ -17,6 +17,7 @@ import (
 	"golang.org/x/text/encoding/japanese"
 
 	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/protocolmeta"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	"github.com/scenarigo/scenarigo/reporter"
@@ -450,6 +451,17 @@ func TestRequest_Invoke(t *testing.T) {
 			if test.vars != nil {
 				ctx = ctx.WithVars(test.vars)
 			}
+			if test.requestDump != nil {
+				if test.requestDump.Header == nil {
+					test.requestDump.Header = http.Header{}
+				}
+				header, ok := test.requestDump.Header.(http.Header)
+				if !ok {
+					t.Fatalf("unexpected header type: %T", test.requestDump.Header)
+				}
+				header.Set(protocolmeta.ScenarigoStepFullNameKey, url.PathEscape(t.Name()))
+				test.requestDump.Header = header
+			}
 
 			ctx, res, err := test.request.Invoke(ctx)
 			if err != nil {
@@ -641,6 +653,7 @@ func TestRequest_buildRequest(t *testing.T) {
 					t.Fatalf("unexpected error: %s", err)
 				}
 				req.Header.Set("User-Agent", defaultUserAgent)
+				req.Header.Set(protocolmeta.ScenarigoStepFullNameKey, url.PathEscape(t.Name()))
 				return req
 			},
 		},
@@ -655,6 +668,7 @@ func TestRequest_buildRequest(t *testing.T) {
 					t.Fatalf("unexpected error: %s", err)
 				}
 				req.Header.Set("User-Agent", "custom/0.0.1")
+				req.Header.Set(protocolmeta.ScenarigoStepFullNameKey, url.PathEscape(t.Name()))
 				return req
 			},
 		},
@@ -676,4 +690,25 @@ func TestRequest_buildRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRequest_buildRequest_ScenarigoHeaderEncoding(t *testing.T) {
+	t.Run("non-ascii", func(t *testing.T) {
+		ctx := context.FromT(t).
+			WithScenarioTitle("シナリオ").
+			WithScenarioFilepath("テスト/シナリオ.yaml")
+		req, _, err := (&Request{}).buildRequest(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if got, expect := req.Header.Get(protocolmeta.ScenarigoScenarioFilepathKey), url.PathEscape("テスト/シナリオ.yaml"); got != expect {
+			t.Fatalf("scenario filepath differs: want %q got %q", expect, got)
+		}
+		if got, expect := req.Header.Get(protocolmeta.ScenarigoScenarioTitleKey), url.PathEscape("シナリオ"); got != expect {
+			t.Fatalf("scenario title differs: want %q got %q", expect, got)
+		}
+		if got, expect := req.Header.Get(protocolmeta.ScenarigoStepFullNameKey), url.PathEscape(t.Name()); got != expect {
+			t.Fatalf("step full name differs: want %q got %q", expect, got)
+		}
+	})
 }

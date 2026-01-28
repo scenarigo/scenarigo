@@ -12,6 +12,13 @@ import (
 )
 
 func TestContext(t *testing.T) {
+	t.Run("ScenarioTitle", func(t *testing.T) {
+		title := "test"
+		ctx := context.FromT(t).WithScenarioTitle(title)
+		if got := ctx.ScenarioTitle(); got != title {
+			t.Errorf("expect %q but got %q", title, got)
+		}
+	})
 	t.Run("ScenarioFilepath", func(t *testing.T) {
 		path := "test.yaml"
 		ctx := context.FromT(t).WithScenarioFilepath(path)

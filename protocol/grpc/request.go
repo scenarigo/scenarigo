@@ -25,6 +25,7 @@ import (
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/internal/protocolmeta"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/internal/reflectutil"
 	"github.com/scenarigo/scenarigo/internal/yamlutil"
@@ -378,26 +379,39 @@ func (r *Request) buildClient(ctx *context.Context, opts *RequestOptions) (servi
 }
 
 func (r *Request) appendMetadata(ctx *context.Context) (*context.Context, error) {
-	if r.Metadata == nil {
-		return ctx, nil
-	}
-	x, err := ctx.ExecuteTemplate(r.Metadata)
-	if err != nil {
-		return ctx, errors.WrapPathf(err, "metadata", "failed to set metadata")
-	}
-	md, err := reflectutil.ConvertStringsMap(reflect.ValueOf(x))
-	if err != nil {
-		return nil, errors.WrapPathf(err, "metadata", "failed to set metadata")
-	}
 	pairs := []string{}
-	for k, vs := range md {
-		for _, v := range vs {
-			pairs = append(pairs, k, v)
+	if r.Metadata != nil {
+		x, err := ctx.ExecuteTemplate(r.Metadata)
+		if err != nil {
+			return ctx, errors.WrapPathf(err, "metadata", "failed to set metadata")
 		}
+		md, err := reflectutil.ConvertStringsMap(reflect.ValueOf(x))
+		if err != nil {
+			return nil, errors.WrapPathf(err, "metadata", "failed to set metadata")
+		}
+		for k, vs := range md {
+			for _, v := range vs {
+				pairs = append(pairs, k, v)
+			}
+		}
+	}
+	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioFilepathBinKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
+	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioTitleBinKey, ctx.ScenarioTitle())
+	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoStepFullNameBinKey, ctx.Reporter().Name())
+	if len(pairs) == 0 {
+		return ctx, nil
 	}
 	return ctx.WithRequestContext(
 		metadata.AppendToOutgoingContext(ctx.RequestContext(), pairs...),
 	), nil
+}
+
+func appendScenarigoMetadata(pairs []string, key string, value string) []string {
+	if value == "" {
+		return pairs
+	}
+	// -bin suffixed keys are automatically base64 encoded/decoded by gRPC-Go
+	return append(pairs, key, value)
 }
 
 func (r *Request) dumpRequest(ctx *context.Context, reqMsg proto.Message) *context.Context {

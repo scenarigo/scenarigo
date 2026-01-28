@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
 )
@@ -82,6 +84,50 @@ func TestProtoClient(t *testing.T) {
 					yaml.MapItem{Key: "messageBody", Value: "hello"},
 				},
 				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponse: &testpb.EchoResponse{
+				MessageId:   "1",
+				MessageBody: "hello",
+			},
+		},
+		"check User-Agent": {
+			handler: func(ctx gocontext.Context, req *testpb.EchoRequest) (*testpb.EchoResponse, error) {
+				md, ok := metadata.FromIncomingContext(ctx)
+				if !ok {
+					return nil, status.Error(codes.Internal, "failed to get metadata")
+				}
+				vs := md.Get("user-agent")
+				if len(vs) == 0 {
+					return nil, status.Error(codes.Internal, "user-agent not found")
+				}
+				hs := strings.Split(vs[0], " ")
+				if hs[0] != defaultUserAgent || !strings.HasPrefix(hs[1], "grpc-go/") {
+					return nil, status.Error(codes.Internal, fmt.Sprintf("expect %q but got %q", vs[0], fmt.Sprintf("%s grpc-go/x.y.z", defaultUserAgent)))
+				}
+				return &testpb.EchoResponse{
+					MessageId:   req.GetMessageId(),
+					MessageBody: req.GetMessageBody(),
+				}, nil
+			},
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "Echo",
+				Message: yaml.MapSlice{
+					yaml.MapItem{Key: "messageId", Value: "1"},
+					yaml.MapItem{Key: "messageBody", Value: "hello"},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
 					Auth: &AuthOption{
 						Insecure: ptr.To(true),
 					},

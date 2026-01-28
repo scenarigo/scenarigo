@@ -2,11 +2,13 @@ package testutil
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/scenarigo/scenarigo/internal/protocolmeta"
 	"github.com/scenarigo/scenarigo/version"
 )
 
@@ -20,16 +22,40 @@ var (
 	dateHeaderPattern  = regexp.MustCompile(`Date:\n\s*- (.+)`)
 )
 
+// ReplaceOption is an option for ReplaceOutput.
+type ReplaceOption func(*replaceConfig)
+
+type replaceConfig struct {
+	keepScenarigoHeaders bool
+}
+
+// KeepScenarigoHeaders keeps scenarigo headers in the output.
+func KeepScenarigoHeaders() ReplaceOption {
+	return func(c *replaceConfig) {
+		c.keepScenarigoHeaders = true
+	}
+}
+
 // ReplaceOutput replaces result output.
-func ReplaceOutput(s string) string {
-	for _, f := range []func(string) string{
+func ReplaceOutput(s string, opts ...ReplaceOption) string {
+	cfg := &replaceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	funcs := []func(string) string{
 		ResetDuration,
 		ReplaceAddr,
 		ReplaceUserAgent,
 		ReplaceDateHeader,
 		ReplaceFilepath,
 		ReplacePluginOpen,
-	} {
+	}
+	if !cfg.keepScenarigoHeaders {
+		funcs = append(funcs, RemoveScenarigoHeaders)
+	}
+
+	for _, f := range funcs {
 		s = f(s)
 	}
 	return s
@@ -94,4 +120,33 @@ func ReplacePluginOpen(s string) string {
 	// Only replace plugin.Open errors for WASM files, not .so files
 	wasmPluginOpenPattern := regexp.MustCompile(`plugin\.Open\("([^"]*\.wasm)"\): realpath failed`)
 	return wasmPluginOpenPattern.ReplaceAllString(s, "open ${1}: no such file or directory")
+}
+
+var scenarigoHeaderKeys = map[string]struct{}{
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioFilepathKey) + ":": {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioTitleKey) + ":":    {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoStepFullNameKey) + ":":     {},
+}
+
+// RemoveScenarigoHeaders drops scenarigo-specific request headers from output.
+func RemoveScenarigoHeaders(s string) string {
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	skipValue := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if skipValue {
+			if strings.HasPrefix(trimmed, "- ") {
+				skipValue = false
+				continue
+			}
+			skipValue = false
+		}
+		if _, ok := scenarigoHeaderKeys[trimmed]; ok {
+			skipValue = true
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }

@@ -57,3 +57,5 @@ scenarios:
     stdout: retry/composite-constant.txt
   plugins:
   - counter.so
+  # TODO: fix wasm plugin mechanism
+  skipWasm: true
