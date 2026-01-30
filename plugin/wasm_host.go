@@ -350,7 +350,13 @@ func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*
 			if err != nil {
 				captureWasmPluginFatal(ctx, err)
 			}
-			return ctx, teardown
+			if teardown == nil {
+				return ctx, nil
+			}
+			return ctx, func(ctx *Context) {
+				defer p.close()
+				teardown(ctx)
+			}
 		}
 	}
 	return func(ctx *Context) (*Context, func(*Context)) {
