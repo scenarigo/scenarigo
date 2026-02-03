@@ -1,0 +1,20 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+
+title: ScenarioFilepath Check with Retry
+
+# Scenario-level retry configuration
+retry:
+  constant:
+    interval: 10ms
+    maxRetries: 1
+
+steps:
+  - title: Check ScenarioFilepath
+    ref: '{{plugins.plugin.Nop}}'
+    vars:
+      filepath: '{{plugins.plugin.CheckFilepath()}}'
+
+  - title: Always fail
+    ref: '{{plugins.plugin.FailStep}}'
