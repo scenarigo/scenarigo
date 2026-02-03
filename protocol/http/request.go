@@ -14,6 +14,7 @@ import (
 	"github.com/mattn/go-encoding"
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/protocolmeta"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/internal/reflectutil"
 	"github.com/scenarigo/scenarigo/protocol/http/marshaler"
@@ -241,6 +242,9 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, any, error)
 	if header.Get("User-Agent") == "" {
 		header.Set("User-Agent", defaultUserAgent)
 	}
+	setScenarigoHeader(header, protocolmeta.ScenarigoScenarioFilepathKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
+	setScenarigoHeader(header, protocolmeta.ScenarigoScenarioTitleKey, ctx.ScenarioTitle())
+	setScenarigoHeader(header, protocolmeta.ScenarigoStepFullNameKey, ctx.Reporter().Name())
 
 	var reader io.Reader
 	var body any
@@ -310,4 +314,11 @@ func (r *Request) buildURL(ctx *context.Context) (string, error) {
 	}
 
 	return urlStr, nil
+}
+
+func setScenarigoHeader(header http.Header, key string, value string) {
+	if value == "" {
+		return
+	}
+	header.Set(key, protocolmeta.EncodeHTTPValue(value))
 }

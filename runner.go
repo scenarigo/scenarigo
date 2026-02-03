@@ -307,6 +307,8 @@ func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, bas
 	for _, scn := range scns {
 		localCtx := ctx.WithNode(scn.Node)
 		scenarioCtx := localCtx
+		scenarioCtx = scenarioCtx.WithScenarioFilepath(scn.Filepath())
+		scenarioCtx = scenarioCtx.WithScenarioTitle(scn.Title)
 		if baseVars != nil {
 			clonedVars, err := deepcopy.Copy(baseVars)
 			if err != nil {

@@ -861,6 +861,32 @@ request:
 
 The following features are available for both HTTP and gRPC testing.
 
+### Request Debugging Metadata
+
+Scenarigo automatically adds metadata to each request for debugging and tracing purposes. This helps identify which test scenario and step generated a particular request when analyzing server logs or debugging test failures.
+
+**HTTP Headers:**
+
+For HTTP requests, Scenarigo adds the following headers. Since HTTP headers can only contain ASCII characters (per RFC 7230), values are URL-encoded to support non-ASCII characters such as Japanese file paths or titles:
+
+| Header | Description |
+|--------|-------------|
+| `Scenarigo-Scenario-Filepath` | Relative path to the scenario file |
+| `Scenarigo-Scenario-Title` | Title of the scenario |
+| `Scenarigo-Step-Full-Name` | Full name of the step (filepath/scenario_title/step_title) |
+
+**gRPC Metadata:**
+
+For gRPC requests, Scenarigo adds the following metadata keys. The `-bin` suffix indicates binary metadata, which gRPC automatically base64-encodes during transmission. This allows non-ASCII characters (such as Japanese text) to be transmitted safely:
+
+| Metadata Key | Description |
+|--------------|-------------|
+| `scenarigo-scenario-filepath-bin` | Relative path to the scenario file |
+| `scenarigo-scenario-title-bin` | Title of the scenario |
+| `scenarigo-step-full-name-bin` | Full name of the step (filepath/scenario_title/step_title) |
+
+These headers/metadata are added automatically and cannot be disabled. The scenario filepath is normalized to a stable relative path when possible (relative to the current working directory).
+
 ### Variables
 
 The `vars` field defines variables that can be referred by [template string](#template-string) like `'{{vars.id}}'`.
