@@ -350,7 +350,13 @@ func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*
 			if err != nil {
 				captureWasmPluginFatal(ctx, err)
 			}
-			return ctx, teardown
+			if teardown == nil {
+				return ctx, nil
+			}
+			return ctx, func(ctx *Context) {
+				defer p.close()
+				teardown(ctx)
+			}
 		}
 	}
 	return func(ctx *Context) (*Context, func(*Context)) {
@@ -376,9 +382,13 @@ func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*
 			return ctx, nil
 		}
 		if len(teardowns) == 1 {
-			return ctx, teardowns[0]
+			return ctx, func(ctx *Context) {
+				defer p.close()
+				teardowns[0](ctx)
+			}
 		}
 		return ctx, func(ctx *Context) {
+			defer p.close()
 			for i, teardown := range teardowns {
 				ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
 					teardown(ctx)
@@ -419,7 +429,6 @@ func (p *WasmPlugin) setup(sctx *Context, idx int) (*Context, func(*Context), er
 	return sctx, func(sctx *Context) {
 		// ignore teardown process's error.
 		_, _ = p.call(sctx, wasm.NewTeardownRequest(id, sctx.ToSerializable()))
-		_ = p.close()
 	}, nil
 }
 
