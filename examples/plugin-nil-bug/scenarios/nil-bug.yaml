@@ -1,0 +1,32 @@
+schemaVersion: scenario/v1
+plugins:
+  main: plugin.so
+title: Demonstrate nil argument bug in plugin functions
+vars:
+  nil: null
+  notNil: "hello"
+steps:
+- ref: '{{ plugins.main.Print("UnaryFun(vars.nil)") }}'
+- vars:
+    result: '{{ plugins.main.UnaryFun(vars.nil) }}'
+  ref: '{{ plugins.main.Nop }}'
+
+- ref: '{{ plugins.main.Print("UnaryFun(vars.notNil)") }}'
+- vars:
+    result: '{{ plugins.main.UnaryFun(vars.notNil) }}'
+  ref: '{{ plugins.main.Nop }}'
+
+- ref: '{{ plugins.main.Print("BinaryFun(vars.nil, vars.nil)") }}'
+- vars:
+    result: '{{ plugins.main.BinaryFun(vars.nil, vars.nil) }}'
+  ref: '{{ plugins.main.Nop }}'
+
+- ref: '{{ plugins.main.Print("BinaryFun(vars.nil, vars.notNil)") }}'
+- vars:
+    result: '{{ plugins.main.BinaryFun(vars.nil, vars.notNil) }}'
+  ref: '{{ plugins.main.Nop }}'
+
+- ref: '{{ plugins.main.Print("BinaryFun(vars.notNil, vars.nil)") }}'
+- vars:
+    result: '{{ plugins.main.BinaryFun(vars.notNil, vars.nil) }}'
+  ref: '{{ plugins.main.Nop }}'
