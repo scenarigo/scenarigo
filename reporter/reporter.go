@@ -70,12 +70,23 @@ type Reporter interface {
 // Run runs f with new Reporter which applied opts.
 // It reports whether f succeeded.
 func Run(f func(r Reporter), opts ...Option) bool {
-	stopCapture, err := globalStdoutCapturer.start()
-	if err != nil {
-		panic(fmt.Sprintf("failed to start stdout capture: %v", err))
+	ctx := newTestContext(opts...)
+
+	var stopCapture func() (string, error)
+	if !ctx.skipStdoutCapture {
+		var err error
+		stopCapture, err = globalStdoutCapturer.start()
+		if err != nil {
+			panic(fmt.Sprintf("failed to start stdout capture: %v", err))
+		}
 	}
+
 	var r *reporter
 	defer func() {
+		if stopCapture == nil {
+			return
+		}
+
 		captured, stopErr := stopCapture()
 		if stopErr != nil {
 			panic(fmt.Sprintf("failed to stop stdout capture: %v", stopErr))
@@ -84,7 +95,8 @@ func Run(f func(r Reporter), opts ...Option) bool {
 			printCapturedStdoutWarning(r, captured)
 		}
 	}()
-	r = run(f, opts...)
+
+	r = runWithTestContext(f, ctx)
 
 	// print global errors (e.g., invalid config)
 	if (r.Failed() && !r.noFailurePropagation) || r.context.verbose {
@@ -104,8 +116,13 @@ func Run(f func(r Reporter), opts ...Option) bool {
 }
 
 func run(f func(r Reporter), opts ...Option) *reporter {
+	ctx := newTestContext(opts...)
+	return runWithTestContext(f, ctx)
+}
+
+func runWithTestContext(f func(r Reporter), ctx *testContext) *reporter {
 	r := newReporter()
-	r.context = newTestContext(opts...)
+	r.context = ctx
 	go r.run(f)
 	<-r.done
 	return r
