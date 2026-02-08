@@ -130,6 +130,8 @@ func (t *Template) executeBasicLit(lit *ast.BasicLit) (any, error) {
 		default:
 			return nil, errors.Errorf(`invalid bool literal "%s"`, lit.Value)
 		}
+	case token.NIL:
+		return nil, nil //nolint:nilnil
 	default:
 		return nil, errors.Errorf(`unknown basic literal "%s"`, lit.Kind.String())
 	}
@@ -652,7 +654,7 @@ func buildArgs(
 	args = append(args, baseArgs...)
 
 	userIdx := 0
-	for i := 0; i < fixedParamCount; i++ {
+	for i := range fixedParamCount {
 		paramType := fnType.In(len(baseArgs) + i)
 
 		if i == 0 && injectContext {

@@ -83,6 +83,14 @@ func TestTemplate_Execute(t *testing.T) {
 			str:    "{{false}}",
 			expect: false,
 		},
+		"nil": {
+			str:    "{{nil}}",
+			expect: nil,
+		},
+		"null": {
+			str:    "{{null}}",
+			expect: nil,
+		},
 		"query from data": {
 			str: "{{a.b[1]}}",
 			data: map[string]map[string][]string{

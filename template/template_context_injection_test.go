@@ -26,6 +26,7 @@ func TestContextInjection(t *testing.T) {
 			name:     "ctx param with auto injection",
 			template: `{{vars.fn(vars.value)}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, v string) string {
 						if c == nil {
@@ -42,6 +43,7 @@ func TestContextInjection(t *testing.T) {
 			name:     "ctx param with explicit context",
 			template: `{{vars.fn(ctx, vars.value)}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, v string) string {
 						if c == nil {
@@ -59,6 +61,7 @@ func TestContextInjection(t *testing.T) {
 			name:     "no ctx param",
 			template: `{{vars.fn("a", "b")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(a, b string) string {
 						return a + "+" + b
@@ -71,6 +74,7 @@ func TestContextInjection(t *testing.T) {
 			name:     "no ctx param single arg",
 			template: `{{vars.fn("only")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(v string) string {
 						return "got:" + v
@@ -114,8 +118,9 @@ func TestContextInjectionWithNilArgs(t *testing.T) {
 	}{
 		{
 			name:     "nil arg to single param function",
-			template: `{{vars.fn(vars.nilValue)}}`,
+			template: `{{vars.fn(nil)}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(v any) string {
 						if v != nil {
@@ -123,15 +128,31 @@ func TestContextInjectionWithNilArgs(t *testing.T) {
 						}
 						return "got nil"
 					},
-					"nilValue": nil,
+				}
+			},
+			expected: "got nil",
+		},
+		{
+			name:     "null arg to single param function",
+			template: `{{vars.fn(null)}}`,
+			vars: func(t *testing.T) map[string]any {
+				t.Helper()
+				return map[string]any{
+					"fn": func(v any) string {
+						if v != nil {
+							t.Fatalf("expected nil but got %T: %v", v, v)
+						}
+						return "got nil"
+					},
 				}
 			},
 			expected: "got nil",
 		},
 		{
 			name:     "nil arg does not shift subsequent args",
-			template: `{{vars.fn(vars.nilValue, "second")}}`,
+			template: `{{vars.fn(nil, "second")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(a, b any) string {
 						if a != nil {
@@ -142,15 +163,15 @@ func TestContextInjectionWithNilArgs(t *testing.T) {
 						}
 						return "ok"
 					},
-					"nilValue": nil,
 				}
 			},
 			expected: "ok",
 		},
 		{
 			name:     "nil arg with context param injects context",
-			template: `{{vars.fn(vars.nilValue)}}`,
+			template: `{{vars.fn(nil)}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, v any) string {
 						if c == nil {
@@ -161,7 +182,6 @@ func TestContextInjectionWithNilArgs(t *testing.T) {
 						}
 						return "ctx+nil"
 					},
-					"nilValue": nil,
 				}
 			},
 			expected: "ctx+nil",
@@ -207,6 +227,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "ctx param auto injection with 0 variadic args",
 			template: `{{vars.fn()}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, args ...any) string {
 						if c == nil {
@@ -222,6 +243,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "ctx param auto injection with 1 variadic arg",
 			template: `{{vars.fn("a")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, args ...any) string {
 						if c == nil {
@@ -240,6 +262,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "ctx param auto injection with 2+ variadic args",
 			template: `{{vars.fn("a", "b", "c")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, args ...any) string {
 						if c == nil {
@@ -259,6 +282,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "ctx param explicit with 0 variadic args",
 			template: `{{vars.fn(ctx)}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, args ...any) string {
 						if c == nil {
@@ -274,6 +298,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "ctx param explicit with 1 variadic arg",
 			template: `{{vars.fn(ctx, "a")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, args ...any) string {
 						if c == nil {
@@ -292,6 +317,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "ctx param explicit with 2+ variadic args",
 			template: `{{vars.fn(ctx, "a", "b")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(c *sccontext.Context, args ...any) string {
 						if c == nil {
@@ -311,6 +337,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "no ctx param with 0 variadic args",
 			template: `{{vars.fn()}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(args ...string) string {
 						return fmt.Sprintf("no-ctx:%d", len(args))
@@ -323,6 +350,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "no ctx param with 1 variadic arg",
 			template: `{{vars.fn("a")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(args ...string) string {
 						if len(args) != 1 || args[0] != "a" {
@@ -338,6 +366,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "no ctx param with 2+ variadic args",
 			template: `{{vars.fn("a", "b", "c")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(args ...string) string {
 						if len(args) != 3 {
@@ -354,6 +383,7 @@ func TestContextInjectionWithVariadicFunctions(t *testing.T) {
 			name:     "fixed non-ctx param with variadic args",
 			template: `{{vars.fn("prefix", "a", "b")}}`,
 			vars: func(t *testing.T) map[string]any {
+				t.Helper()
 				return map[string]any{
 					"fn": func(prefix string, args ...string) string {
 						return prefix + ":" + strings.Join(args, ",")
@@ -422,7 +452,7 @@ func TestContextInjectionArgumentErrors(t *testing.T) {
 			vars: map[string]any{
 				"fn": func(c *sccontext.Context, required string, args ...string) string { return required },
 			},
-			expectError: "too few arguments to function: expected minimum argument number is 1. but specified 0 arguments",
+			expectError: "expected minimum argument number is 1. but specified 0 arguments",
 		},
 	}
 
