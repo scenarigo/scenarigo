@@ -186,6 +186,85 @@ func TestContextInjectionWithNilArgs(t *testing.T) {
 			},
 			expected: "ctx+nil",
 		},
+		{
+			name:     "nil arg with context param and variadic",
+			template: `{{vars.fn(nil, "a", "b")}}`,
+			vars: func(t *testing.T) map[string]any {
+				t.Helper()
+				return map[string]any{
+					"fn": func(c *sccontext.Context, v any, args ...string) string {
+						if c == nil {
+							t.Fatal("context must not be nil")
+						}
+						if v != nil {
+							t.Fatalf("expected second arg to be nil but got %T: %v", v, v)
+						}
+						return fmt.Sprintf("ctx+nil+%d", len(args))
+					},
+				}
+			},
+			expected: "ctx+nil+2",
+		},
+		{
+			name:     "explicit context with nil arg",
+			template: `{{vars.fn(ctx, nil)}}`,
+			vars: func(t *testing.T) map[string]any {
+				t.Helper()
+				return map[string]any{
+					"fn": func(c *sccontext.Context, v any) string {
+						if c == nil {
+							t.Fatal("context must not be nil")
+						}
+						if v != nil {
+							t.Fatalf("expected second arg to be nil but got %T: %v", v, v)
+						}
+						return "explicit-ctx+nil"
+					},
+				}
+			},
+			expected: "explicit-ctx+nil",
+		},
+		{
+			name:     "nil arg to variadic without context param",
+			template: `{{vars.fn(nil)}}`,
+			vars: func(t *testing.T) map[string]any {
+				t.Helper()
+				return map[string]any{
+					"fn": func(args ...any) string {
+						if len(args) != 1 {
+							t.Fatalf("expected 1 arg but got %d", len(args))
+						}
+						if args[0] != nil {
+							t.Fatalf("expected nil but got %T: %v", args[0], args[0])
+						}
+						return "variadic-nil"
+					},
+				}
+			},
+			expected: "variadic-nil",
+		},
+		{
+			name:     "nil in variadic part with context param",
+			template: `{{vars.fn(nil)}}`,
+			vars: func(t *testing.T) map[string]any {
+				t.Helper()
+				return map[string]any{
+					"fn": func(c *sccontext.Context, args ...any) string {
+						if c == nil {
+							t.Fatal("context must not be nil")
+						}
+						if len(args) != 1 {
+							t.Fatalf("expected 1 variadic arg but got %d", len(args))
+						}
+						if args[0] != nil {
+							t.Fatalf("expected nil in args[0] but got %T: %v", args[0], args[0])
+						}
+						return "ctx+variadic-nil"
+					},
+				}
+			},
+			expected: "ctx+variadic-nil",
+		},
 	}
 
 	for _, tt := range tests {
