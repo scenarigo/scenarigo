@@ -1800,6 +1800,26 @@ func TodayIn(s string) (string, error) {
 - `{{plugins.date.TodayIn("UTC")}}` => `"2022-02-22"`
 - `{{plugins.date.TodayIn("INVALID")}}` => `failed to execute: {{plugins.date.TodayIn("INVALID")}}: unknown time zone INVALID`
 
+#### Context Auto-Injection
+
+If a plugin function's first parameter is `*plugin.Context`, Scenarigo automatically injects the current context when calling the function from a template. This allows your plugin functions to access the test context (e.g., for logging or accessing variables) without requiring users to pass it explicitly.
+
+```go main.go
+package main
+
+import (
+	"github.com/scenarigo/scenarigo/plugin"
+)
+
+func Greet(ctx *plugin.Context, name string) string {
+	ctx.Reporter().Log("greeting " + name)
+	return "Hello, " + name
+}
+```
+
+- `{{plugins.greet.Greet("World")}}` => `"Hello, World"` (context is auto-injected)
+- `{{plugins.greet.Greet(ctx, "World")}}` => `"Hello, World"` (explicit context also works)
+
 ### How to build plugins
 
 Go plugin can be built with `go build -buildmode=plugin`, but we recommend you use `scenarigo plugin build` instead. The wrapper command requires `go` command installed in your machine. Scenarigo always builds plugins with the same go version that is used to build its own. Because of that, scenarigo add `toolchain` directive to the `go.mod` files of plugins.

@@ -529,6 +529,16 @@ func getMethod(in reflect.Value, name string) (reflect.Value, *reflect.Method, b
 	return reflect.Value{}, nil, false
 }
 
+// buildFuncCallArgs builds the argument slice for a function call.
+//
+// Parameters:
+//   - baseArgs: Arguments already bound before this call, such as a method receiver.
+//     These are prepended to the final argument list and are not specified in the template.
+//   - callArgs: Argument expressions from the template's function call syntax (e.g., fn(a, b)).
+//     These are evaluated and appended after baseArgs.
+//
+// The function also handles automatic *Context injection when the user provides
+// fewer arguments than required and the parameter type is compatible with *Context.
 func (t *Template) buildFuncCallArgs(
 	ctx context.Context,
 	data any,
@@ -537,66 +547,120 @@ func (t *Template) buildFuncCallArgs(
 	baseArgs []reflect.Value,
 	callArgs []ast.Expr,
 ) ([]reflect.Value, error) {
-	values := make([]reflect.Value, len(callArgs))
+	userValues := make([]reflect.Value, len(callArgs))
 	for i, arg := range callArgs {
 		a, err := t.executeExpr(ctx, arg, data)
 		if err != nil {
 			return nil, err
 		}
 		if a == nil {
-			values[i] = reflect.Value{}
+			userValues[i] = reflect.Value{}
 			continue
 		}
-		values[i] = reflect.ValueOf(a)
+		userValues[i] = reflect.ValueOf(a)
 	}
 
 	// Pull scenarigo context from template execution context so we can inject it
 	// into plugin helpers transparently.
-	ctxVal, hasCtx := contextValueFromExecutionContext(ctx)
-	minArgs := minRequiredArgs(fnType, len(baseArgs), ctxVal)
-	if fnType.IsVariadic() {
-		if len(values) < minArgs {
+	ctxVal, _ := contextValueFromExecutionContext(ctx)
+
+	fixedParamCount := fnType.NumIn() - len(baseArgs)
+	isVariadic := fnType.IsVariadic()
+	if isVariadic {
+		fixedParamCount--
+	}
+
+	// Check if context injection is possible. Injection only applies when:
+	// - There are fixed parameters to fill
+	// - A valid context value is available
+	// - The first parameter can accept *Context
+	firstParamType := reflect.Type(nil)
+	if fixedParamCount > 0 {
+		firstParamType = fnType.In(len(baseArgs))
+	}
+	canInject := firstParamType != nil &&
+		ctxVal.IsValid() &&
+		ctxVal.Type().AssignableTo(firstParamType)
+
+	// Determine if we should inject context at the first parameter.
+	// Inject only if:
+	// - Injection is possible (canInject), AND
+	// - User did not provide enough arguments (for non-variadic), OR
+	// - User's first arg is not assignable to *Context (for variadic)
+	var shouldInject bool
+	if canInject {
+		if isVariadic {
+			// For variadic functions, check if the first user arg can be assigned to the first param.
+			// If not, we inject context (extra args go to variadic tail).
+			shouldInject = !isAssignable(firstUserValue(userValues), firstParamType)
+		} else {
+			// For non-variadic functions, inject only if user provided fewer args than params.
+			// This prevents injection when user passes nil explicitly (issue #690).
+			shouldInject = len(userValues) < fixedParamCount
+		}
+	}
+
+	return buildArgs(fnName, fnType, baseArgs, userValues, ctxVal, fixedParamCount, isVariadic, shouldInject)
+}
+
+func firstUserValue(userValues []reflect.Value) reflect.Value {
+	if len(userValues) == 0 {
+		return reflect.Value{}
+	}
+	return userValues[0]
+}
+
+func buildArgs(
+	fnName string,
+	fnType reflect.Type,
+	baseArgs, userValues []reflect.Value,
+	ctxVal reflect.Value,
+	fixedParamCount int,
+	isVariadic, injectContext bool,
+) ([]reflect.Value, error) {
+	// Calculate required user args: all fixed params minus 1 if we inject context.
+	requiredUserArgs := fixedParamCount
+	if injectContext {
+		requiredUserArgs--
+	}
+
+	// Validate argument count.
+	if isVariadic {
+		if len(userValues) < requiredUserArgs {
 			return nil, errors.Errorf(
 				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
-				minArgs, len(values),
+				requiredUserArgs, len(userValues),
 			)
 		}
 	} else {
-		maxArgs := fnType.NumIn() - len(baseArgs)
-		if len(values) < minArgs {
+		if len(userValues) < requiredUserArgs {
 			return nil, errors.Errorf(
 				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
-				minArgs, len(values),
+				requiredUserArgs, len(userValues),
 			)
 		}
-		if len(values) > maxArgs {
+		if len(userValues) > requiredUserArgs {
 			return nil, errors.Errorf(
 				"expected function argument number is %d but specified %d arguments",
-				maxArgs, len(values),
+				requiredUserArgs, len(userValues),
 			)
 		}
 	}
 
-	args := append([]reflect.Value{}, baseArgs...)
+	// Build the argument list.
+	args := make([]reflect.Value, 0, fnType.NumIn())
+	args = append(args, baseArgs...)
+
 	userIdx := 0
-	fixedParamTotal := fnType.NumIn()
-	isVariadic := fnType.IsVariadic()
-	if isVariadic {
-		fixedParamTotal--
-	}
-	for paramPos := len(baseArgs); paramPos < fixedParamTotal; paramPos++ {
-		paramType := fnType.In(paramPos)
-		if hasCtx && shouldInjectContext(paramType, ctxVal, values, userIdx) {
+	for i := 0; i < fixedParamCount; i++ {
+		paramType := fnType.In(len(baseArgs) + i)
+
+		if i == 0 && injectContext {
 			args = append(args, ctxVal)
 			continue
 		}
-		if userIdx >= len(values) {
-			return nil, errors.Errorf(
-				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
-				minArgs, len(values),
-			)
-		}
-		v, err := convertArgument(fnName, paramType, values[userIdx], userIdx)
+
+		v, err := convertArgument(fnName, paramType, userValues[userIdx], userIdx)
 		if err != nil {
 			return nil, err
 		}
@@ -604,34 +668,23 @@ func (t *Template) buildFuncCallArgs(
 		userIdx++
 	}
 
+	// Handle variadic tail.
 	if isVariadic {
 		elemType := fnType.In(fnType.NumIn() - 1).Elem()
-		// Remaining user arguments populate the variadic tail.
-		for ; userIdx < len(values); userIdx++ {
-			v, err := convertArgument(fnName, elemType, values[userIdx], userIdx)
+		for ; userIdx < len(userValues); userIdx++ {
+			v, err := convertArgument(fnName, elemType, userValues[userIdx], userIdx)
 			if err != nil {
 				return nil, err
 			}
 			args = append(args, v)
 		}
-		return args, nil
 	}
 
 	return args, nil
 }
 
-func shouldInjectContext(paramType reflect.Type, ctxVal reflect.Value, values []reflect.Value, userIdx int) bool {
-	if !ctxVal.IsValid() || !ctxVal.Type().AssignableTo(paramType) {
-		return false
-	}
-	if userIdx < len(values) && isAssignable(values[userIdx], paramType) {
-		return false
-	}
-	return true
-}
-
 func contextValueFromExecutionContext(ctx context.Context) (reflect.Value, bool) {
-	v := getExecutionContextValue(ctx)
+	v := ExecutionContext(ctx)
 	if v == nil {
 		return reflect.Value{}, false
 	}
@@ -660,22 +713,6 @@ func convertArgument(fnName string, requiredType reflect.Type, v reflect.Value, 
 		return reflect.Value{}, errors.Errorf("can't use %s as %s in arguments[%d] to %s", v.Type(), requiredType, argIdx, fnName)
 	}
 	return v, nil
-}
-
-func minRequiredArgs(fnType reflect.Type, baseArgs int, ctxVal reflect.Value) int {
-	total := 0
-	fixedParamTotal := fnType.NumIn()
-	if fnType.IsVariadic() {
-		fixedParamTotal--
-	}
-	for paramPos := baseArgs; paramPos < fixedParamTotal; paramPos++ {
-		paramType := fnType.In(paramPos)
-		if ctxVal.IsValid() && ctxVal.Type().AssignableTo(paramType) {
-			continue
-		}
-		total++
-	}
-	return total
 }
 
 func isNilable(t reflect.Type) bool {
