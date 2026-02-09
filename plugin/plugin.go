@@ -3,7 +3,6 @@
 package plugin
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"plugin"
@@ -142,9 +141,7 @@ func (p *openedPlugin) getSetup(setups []SetupFunc) SetupFunc {
 
 // Close implements Plugin interface.
 // Native Go plugins cannot be closed once opened, so this is a no-op.
-func (p *openedPlugin) Close() error {
-	return nil
-}
+func (p *openedPlugin) Close() {}
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (p *openedPlugin) ExtractByKey(key string) (any, bool) {
@@ -161,18 +158,11 @@ func (p *openedPlugin) ExtractByKey(key string) (any, bool) {
 
 // CloseAll closes all cached plugins and clears the cache.
 // It should be called when all tests are complete.
-func CloseAll() error {
+func CloseAll() {
 	m.Lock()
 	defer m.Unlock()
-	var errs []error
-	for path, p := range cache {
-		if err := p.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("failed to close plugin %s: %w", path, err))
-		}
+	for _, p := range cache {
+		p.Close()
 	}
-	cache = map[string]Plugin{}
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	return nil
+	clear(cache)
 }

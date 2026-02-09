@@ -192,7 +192,9 @@ func (r *Runner) ScenarioFiles() []string {
 
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
-	defer func() { _ = plugin.CloseAll() }()
+	// Register cleanup to close all plugins after all teardowns complete.
+	// Using Cleanup instead of defer ensures plugins remain open during teardown execution.
+	ctx.Reporter().Cleanup(func() { plugin.CloseAll() })
 	// setup context
 	ctx = ctx.WithColorConfig(r.colorConfig)
 	var baseVars any
