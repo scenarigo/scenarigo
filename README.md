@@ -1230,7 +1230,7 @@ ParameterExpr   = "{{" Expr "}}"
 Expr            = UnaryExpr | BinaryExpr | ConditionalExpr
 UnaryExpr       = [UnaryOp] (
                     ParenExpr | SelectorExpr | IndexExpr | CallExpr |
-                    INT | FLOAT | BOOL | STRING | IDENT
+                    INT | FLOAT | BOOL | NIL | STRING | IDENT
                   )
 UnaryOp         = "!" | "-"
 ParenExpr       = "(" Expr ")"
@@ -1250,6 +1250,7 @@ The lexis is defined below.
 INT           = "0" | ("1"..."9" {DECIMAL_DIGIT})
 FLOAT         = INT "." DECIMAL_DIGIT {DECIMAL_DIGIT}
 BOOL          = "true" | "false"
+NIL           = "nil" | "null"
 STRING        = `"` {UNICODE_VALUE} `"`
 IDENT         = (LETTER {LETTER | DECIMAL_DIGIT | "-" | "_"} | "$") - RESERVED
 
@@ -1260,7 +1261,7 @@ ESCAPED_CHAR  = "\" `"`
 LETTER        = "a"..."Z"
 TYPES         = "int" | "uint" | "float" | "bool" | "string" |
                 "bytes" | "time" | "duration" | "any"
-RESERVED      = BOOL | TYPES | "type" | "defined" | "size"
+RESERVED      = BOOL | NIL | TYPES | "type" | "defined" | "size"
 ```
 
 ### Types
@@ -1273,6 +1274,7 @@ The template feature has abstract types for operations.
 |uint|64-bit unsigned integers|uint, uint8, uint16, uint32, uint64|
 |float|IEEE-754 64-bit floating-point numbers|float32, float64|
 |bool|booleans|bool|
+|nil|nil value|nil pointer, nil slice, nil map, etc.|
 |string|UTF-8 strings|string|
 |bytes|byte sequence|[]byte|
 |time|time with nanosecond precision|[time.Time](https://pkg.go.dev/time#Time)|
@@ -1799,6 +1801,26 @@ func TodayIn(s string) (string, error) {
 
 - `{{plugins.date.TodayIn("UTC")}}` => `"2022-02-22"`
 - `{{plugins.date.TodayIn("INVALID")}}` => `failed to execute: {{plugins.date.TodayIn("INVALID")}}: unknown time zone INVALID`
+
+#### Context Auto-Injection
+
+If a plugin function's first parameter is `*plugin.Context`, Scenarigo automatically injects the current context when calling the function from a template. This allows your plugin functions to access the test context (e.g., for logging or accessing variables) without requiring users to pass it explicitly.
+
+```go main.go
+package main
+
+import (
+	"github.com/scenarigo/scenarigo/plugin"
+)
+
+func Greet(ctx *plugin.Context, name string) string {
+	ctx.Reporter().Log("greeting " + name)
+	return "Hello, " + name
+}
+```
+
+- `{{plugins.greet.Greet("World")}}` => `"Hello, World"` (context is auto-injected)
+- `{{plugins.greet.Greet(ctx, "World")}}` => `"Hello, World"` (explicit context also works)
 
 ### How to build plugins
 

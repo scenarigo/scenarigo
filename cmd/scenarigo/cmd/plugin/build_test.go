@@ -12,7 +12,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"text/template"
@@ -23,7 +25,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
-	"golang.org/x/mod/semver"
 
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
@@ -90,22 +91,28 @@ func TestParseGoVersion(t *testing.T) {
 
 func TestBuild(t *testing.T) {
 	goVersion := strings.TrimPrefix(goVer, "go")
+	// for tip version (e.g., go1.27-devel -> 1.25.0)
+	// tip is 2 minor versions ahead of the current stable release
+	if idx := strings.Index(runtime.Version(), "-devel"); idx != -1 {
+		tipVer := strings.TrimPrefix(runtime.Version()[:idx], "go") // "1.27"
+		parts := strings.Split(tipVer, ".")
+		if len(parts) >= 2 {
+			if minor, err := strconv.Atoi(parts[1]); err == nil {
+				goVersion = fmt.Sprintf("%s.%d.0", parts[0], minor-2) // "1.25.0"
+			}
+		}
+	}
 	pluginCode := `package main
 
 func Greet() string {
 	return "Hello, world!"
 }
 `
-	// for tip version
-	gomodVer := "1.24.0"
-	if semver.Compare(fmt.Sprintf("v%s", goVersion), "v1.26.0") < 0 {
-		gomodVer = goVersion
-	}
 	gomod := func(m string) string {
 		return fmt.Sprintf(`module %s
 
 go %s
-`, m, gomodVer)
+`, m, goVersion)
 	}
 
 	tmpl, err := template.ParseFiles("testdata/go.mod.tmpl")
