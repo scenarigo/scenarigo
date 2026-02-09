@@ -11,4 +11,5 @@ type Plugin interface {
 	Lookup(name string) (Symbol, error)
 	GetSetup() SetupFunc
 	GetSetupEachScenario() SetupFunc
+	Close() error
 }

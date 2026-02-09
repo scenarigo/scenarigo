@@ -231,7 +231,11 @@ type WasmPlugin struct {
 	cancelFn             gocontext.CancelFunc
 }
 
-func (p *WasmPlugin) close() error {
+// Close implements Plugin interface.
+// It cancels the plugin context and releases associated resources.
+func (p *WasmPlugin) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.closed {
 		return nil
 	}
@@ -376,13 +380,9 @@ func (p *WasmPlugin) getSetup(setupNum int, setupCallback func(*Context, int) (*
 			return ctx, nil
 		}
 		if len(teardowns) == 1 {
-			return ctx, func(ctx *Context) {
-				defer p.close()
-				teardowns[0](ctx)
-			}
+			return ctx, teardowns[0]
 		}
 		return ctx, func(ctx *Context) {
-			defer p.close()
 			for i, teardown := range teardowns {
 				ctx.Run(strconv.Itoa(i+1), func(ctx *Context) {
 					teardown(ctx)

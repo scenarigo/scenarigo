@@ -192,6 +192,7 @@ func (r *Runner) ScenarioFiles() []string {
 
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
+	defer func() { _ = plugin.CloseAll() }()
 	// setup context
 	ctx = ctx.WithColorConfig(r.colorConfig)
 	var baseVars any
