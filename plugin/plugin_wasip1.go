@@ -5,3 +5,5 @@ package plugin
 func Open(path string) (Plugin, error) {
 	return nil, nil
 }
+
+func CloseAll() {}

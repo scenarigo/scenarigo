@@ -231,13 +231,19 @@ type WasmPlugin struct {
 	cancelFn             gocontext.CancelFunc
 }
 
-func (p *WasmPlugin) close() error {
+// Close implements Plugin interface.
+// It cancels the plugin context and releases associated resources.
+func (p *WasmPlugin) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.closed {
-		return nil
+		return
 	}
+	// Drain any pending stdout/stderr before closing to prevent output interleaving
+	_ = p.readFromPipe(p.stdoutR)
+	_ = p.readFromPipe(p.stderrR)
 	defer func() { p.closeResources(nil) }()
 	p.cancelFn()
-	return nil
 }
 
 func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse, error) {
@@ -271,11 +277,12 @@ func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse
 	}
 	if res != nil && res.Context != nil && res.Context.ReporterID != "" {
 		// Logs and other records made through the reporter when executed in the plugin are reflected in the current reporter.
+		// Use SyncFromSerializable to only sync logs and failed/skipped state, preserving the host's reporter hierarchy.
 		curReporter, ok := ctx.Reporter().(interface {
-			SetFromSerializable(string, map[string]*reporter.SerializableReporter)
+			SyncFromSerializable(string, map[string]*reporter.SerializableReporter)
 		})
 		if ok {
-			curReporter.SetFromSerializable(res.Context.ReporterID, res.Context.ReporterMap)
+			curReporter.SyncFromSerializable(res.Context.ReporterID, res.Context.ReporterMap)
 		}
 	}
 	if res.Error != "" {
@@ -419,7 +426,6 @@ func (p *WasmPlugin) setup(sctx *Context, idx int) (*Context, func(*Context), er
 	return sctx, func(sctx *Context) {
 		// ignore teardown process's error.
 		_, _ = p.call(sctx, wasm.NewTeardownRequest(id, sctx.ToSerializable()))
-		_ = p.close()
 	}, nil
 }
 
