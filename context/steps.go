@@ -14,7 +14,7 @@ type Step struct {
 	Steps  *Steps `yaml:"steps,omitempty"` // child steps
 }
 
-// NewStesp returns a *Steps.
+// NewSteps returns a *Steps.
 func NewSteps() *Steps {
 	return &Steps{
 		mu:      sync.Mutex{},

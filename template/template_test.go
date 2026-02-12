@@ -1432,7 +1432,7 @@ suffix: -suf
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			lines := []string{"{{dump <-}}:"}
-			for _, line := range strings.Split(test.str, "\n") {
+			for line := range strings.SplitSeq(test.str, "\n") {
 				lines = append(lines, fmt.Sprintf("  %s", line))
 			}
 			tmpl, err := New(strings.Join(lines, "\n"))

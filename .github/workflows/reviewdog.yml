@@ -19,4 +19,4 @@ jobs:
         reviewdog_flags: '-conf=.reviewdog.yml -diff="git diff main"'
         fail_level: any
         golangci_lint_flags: '-c ./.golangci.yml'
-        golangci_lint_version: v2.2.1
+        golangci_lint_version: v2.9.0

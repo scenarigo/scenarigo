@@ -319,10 +319,10 @@ ok  	teardown1	0.000s
 				// For panic tests, check that the output contains expected lines
 				// but ignore the stack trace part
 				lines := strings.Split(actual, "\n")
-				expectedLines := strings.Split(test.expect, "\n")
+				expectedLines := strings.SplitSeq(test.expect, "\n")
 
 				// Check that each expected line exists in actual output
-				for _, expectedLine := range expectedLines {
+				for expectedLine := range expectedLines {
 					if expectedLine == "" {
 						continue
 					}

@@ -5,12 +5,12 @@ import (
 	"github.com/scenarigo/scenarigo/template/token"
 )
 
-// All node types implement the Node interface.
+// Node is an interface implemented by all node types.
 type Node interface {
 	Pos() int
 }
 
-// All expression nodes implement the Expr interface.
+// Expr is an interface implemented by all expression nodes.
 type Expr interface {
 	Node
 	exprNode()

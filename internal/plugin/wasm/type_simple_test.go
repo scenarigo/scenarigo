@@ -190,17 +190,17 @@ func TestNewType_Basic(t *testing.T) {
 	}{
 		{
 			name:     "string type",
-			input:    reflect.TypeOf(""),
+			input:    reflect.TypeFor[string](),
 			expected: STRING,
 		},
 		{
 			name:     "int type",
-			input:    reflect.TypeOf(0),
+			input:    reflect.TypeFor[int](),
 			expected: INT,
 		},
 		{
 			name:     "bool type",
-			input:    reflect.TypeOf(true),
+			input:    reflect.TypeFor[bool](),
 			expected: BOOL,
 		},
 	}
@@ -286,31 +286,31 @@ func TestDecodeValue(t *testing.T) {
 		name        string
 		data        string
 		targetType  reflect.Type
-		expected    interface{}
+		expected    any
 		expectError bool
 	}{
 		{
 			name:       "string value",
 			data:       `"test"`,
-			targetType: reflect.TypeOf(""),
+			targetType: reflect.TypeFor[string](),
 			expected:   "test",
 		},
 		{
 			name:       "int value",
 			data:       "42",
-			targetType: reflect.TypeOf(0),
+			targetType: reflect.TypeFor[int](),
 			expected:   42,
 		},
 		{
 			name:       "bool value",
 			data:       "true",
-			targetType: reflect.TypeOf(true),
+			targetType: reflect.TypeFor[bool](),
 			expected:   true,
 		},
 		{
 			name:        "invalid JSON",
 			data:        `{"invalid":}`,
-			targetType:  reflect.TypeOf(""),
+			targetType:  reflect.TypeFor[string](),
 			expectError: true,
 		},
 	}
@@ -342,7 +342,7 @@ func TestDecodeValue(t *testing.T) {
 }
 
 func TestDecodeValueWithType(t *testing.T) {
-	stringType := reflect.TypeOf("")
+	stringType := reflect.TypeFor[string]()
 
 	result, err := DecodeValueWithType(stringType, []byte(`"hello"`))
 	if err != nil {
@@ -533,7 +533,7 @@ func TestStructTypeAdvanced(t *testing.T) {
 	}
 
 	// Test newAnyType
-	var anyInterface interface{} = "test"
+	var anyInterface any = "test"
 	anyValue := reflect.ValueOf(&anyInterface).Elem()
 	anyType, err := newAnyType(anyValue)
 	if err != nil {
@@ -731,7 +731,7 @@ func TestComplexTypeOperations(t *testing.T) {
 
 func TestEdgeCases(t *testing.T) {
 	// Test empty interface
-	var emptyInterface interface{}
+	var emptyInterface any
 	emptyValue := reflect.ValueOf(&emptyInterface).Elem()
 	anyType, err := newAnyType(emptyValue)
 	if err != nil {
@@ -820,7 +820,7 @@ func TestCommandResponseInterface(t *testing.T) {
 
 func TestContextTypeOperations(t *testing.T) {
 	// Test context type handling in DecodeValueWithType
-	ctxType := reflect.TypeOf((*context.Context)(nil))
+	ctxType := reflect.TypeFor[*context.Context]()
 	sctx := &context.SerializableContext{
 		Vars: []any{map[string]any{"key": "value"}},
 	}
@@ -976,7 +976,7 @@ func TestEncodeValueEdgeCases(t *testing.T) {
 
 func TestDecodeValueWithTypeErrors(t *testing.T) {
 	// Test DecodeValueWithType with invalid JSON
-	stringType := reflect.TypeOf("")
+	stringType := reflect.TypeFor[string]()
 
 	_, err := DecodeValueWithType(stringType, []byte(`{invalid json`))
 	if err == nil {
@@ -1011,7 +1011,7 @@ func TestIsStructWithPointerChain(t *testing.T) {
 
 func TestAnyTypeWithInvalidValue(t *testing.T) {
 	// Test newAnyType with nil/invalid element
-	var emptyInterface interface{}
+	var emptyInterface any
 	nilValue := reflect.ValueOf(&emptyInterface).Elem()
 	anyType, err := newAnyType(nilValue)
 	if err != nil {
@@ -1181,11 +1181,11 @@ func TestValueEncodeDecodeComplexTypes(t *testing.T) {
 	complexStruct := struct {
 		Name    string
 		Values  []int
-		Mapping map[string]interface{}
+		Mapping map[string]any
 	}{
 		Name:   "test",
 		Values: []int{1, 2, 3},
-		Mapping: map[string]interface{}{
+		Mapping: map[string]any{
 			"key1": "value1",
 			"key2": 42,
 		},
@@ -1214,7 +1214,7 @@ func TestNewTypeWithAllReflectKinds(t *testing.T) {
 	// Test newType with various reflect.Kind values to ensure full coverage
 	tests := []struct {
 		name  string
-		value interface{}
+		value any
 		kind  Kind
 	}{
 		{"complex64", complex64(1 + 2i), Kind("complex64")},
@@ -1289,7 +1289,7 @@ func TestProtocolCommandBoundaryConditions(t *testing.T) {
 
 func TestValueConversionsEdgeCases(t *testing.T) {
 	// Test DecodeValueWithType with simple types that should work
-	stringType := reflect.TypeOf("")
+	stringType := reflect.TypeFor[string]()
 
 	// Valid string JSON
 	validData := []byte(`"test_string"`)
@@ -1475,7 +1475,7 @@ func TestTypeToReflectWithSchemaStep(t *testing.T) {
 		t.Fatalf("ToReflect() error = %v", err)
 	}
 
-	expectedType := reflect.TypeOf((*schema.Step)(nil))
+	expectedType := reflect.TypeFor[*schema.Step]()
 	if reflectType != expectedType {
 		t.Errorf("ToReflect() = %v, want %v", reflectType, expectedType)
 	}

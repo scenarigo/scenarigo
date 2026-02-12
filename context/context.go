@@ -87,7 +87,7 @@ func (c *Context) WithScenarioTitle(title string) *Context {
 	)
 }
 
-// ScenarioName returns the title of the scenario executing in this context.
+// ScenarioTitle returns the title of the scenario executing in this context.
 func (c *Context) ScenarioTitle() string {
 	title, ok := c.ctx.Value(keyScenarioName{}).(string)
 	if ok {

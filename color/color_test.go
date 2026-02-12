@@ -6,7 +6,7 @@ import (
 
 func TestMarshalYAML_Colorized(t *testing.T) {
 	// Set up test data
-	data := map[string]interface{}{
+	data := map[string]any{
 		"method": "GET",
 		"url":    "https://example.com",
 		"header": map[string]string{

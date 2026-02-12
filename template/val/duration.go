@@ -70,7 +70,7 @@ func (d Duration) Equal(v Value) (LogicalValue, error) {
 	return Bool(false), ErrOperationNotDefined
 }
 
-// Equal implements Equaler interface.
+// Compare implements Comparer interface.
 func (d Duration) Compare(v Value) (Value, error) {
 	if y, ok := v.GoValue().(time.Duration); ok {
 		x := time.Duration(d)
