@@ -191,9 +191,7 @@ func loadScenariosFromFileAST(f *ast.File, opt *loadOption) ([]*Scenario, error)
 		if err := dec.DecodeFromNode(doc.Body, &s); err != nil {
 			return nil, fmt.Errorf("failed to decode YAML: %w", err)
 		}
-		s.filepath = f.Name
-		s.Node = doc.Body
-		s.setColorConfig(opt.colorConfig)
+		s.setMetadata(f.Name, doc.Body, opt.colorConfig)
 		if err := s.Validate(); err != nil {
 			return nil, fmt.Errorf("validation error: %s: %w", s.filepath, err)
 		}
