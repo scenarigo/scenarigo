@@ -55,47 +55,39 @@ func TestDurationMeasurer(t *testing.T) {
 	child2 := parent.spawn()
 
 	// child1-1
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		child1.start()
 		time.Sleep(20 * durationTestUnit)
 		child1.stop()
-		wg.Done()
-	}()
+	})
 
 	// child1-2
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		time.Sleep(10 * durationTestUnit)
 		child1.start()
 		time.Sleep(20 * durationTestUnit)
 		child1.stop()
-		wg.Done()
-	}()
+	})
 
 	// child2-1
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		time.Sleep(10 * durationTestUnit)
 		child2.start()
 		time.Sleep(10 * durationTestUnit)
 		child2.stop()
-		wg.Done()
-	}()
+	})
 
 	// child2-2
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		time.Sleep(40 * durationTestUnit)
 		child2.start()
 		time.Sleep(10 * durationTestUnit)
 		child2.stop()
-		wg.Done()
-	}()
+	})
 
 	close(ch)
 	wg.Wait()

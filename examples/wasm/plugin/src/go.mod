@@ -1,8 +1,8 @@
 module github.com/scenarigo/scenarigo/examples/wasm/plugin/src
 
-go 1.24.0
+go 1.25.0
 
-toolchain go1.24.3
+toolchain go1.26.0
 
 require (
 	github.com/scenarigo/scenarigo v0.21.3

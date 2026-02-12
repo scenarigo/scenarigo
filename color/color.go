@@ -87,7 +87,7 @@ func (c *Config) SetEnabled(enabled bool) {
 	c.updateColorInstances()
 }
 
-// Color instances getters.
+// Red returns the red Color instance.
 func (c *Config) Red() *Color    { return c.red }
 func (c *Config) HiRed() *Color  { return c.hiRed }
 func (c *Config) Green() *Color  { return c.green }

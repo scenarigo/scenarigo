@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httputil"
 	"os"
@@ -80,8 +81,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 	srcEnvs := os.Environ()
 	envs := make([]string, 0, len(srcEnvs))
 	for _, kv := range srcEnvs {
-		i := strings.IndexByte(kv, '=')
-		key := kv[:i]
+		key, _, _ := strings.Cut(kv, "=")
 		if _, exists := ignoreEnvNameMap[key]; exists {
 			continue
 		}
@@ -417,9 +417,7 @@ func (p *WasmPlugin) setup(sctx *Context, idx int) (*Context, func(*Context), er
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get type map: %w", err)
 	}
-	for k, v := range typeMap {
-		p.nameToTypeMap[k] = v
-	}
+	maps.Copy(p.nameToTypeMap, typeMap)
 	if !setupRes.ExistsTeardown {
 		return sctx, nil, nil
 	}
@@ -451,9 +449,7 @@ func (p *WasmPlugin) setupEachScenario(sctx *Context, idx int) (*Context, func(*
 	if err != nil {
 		return nil, nil, err
 	}
-	for k, v := range typeMap {
-		p.nameToTypeMap[k] = v
-	}
+	maps.Copy(p.nameToTypeMap, typeMap)
 	if !setupRes.ExistsTeardown {
 		return sctx, nil, nil
 	}
@@ -766,7 +762,7 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 		if errText != "" {
 			return reflect.Value{}, errors.New(errText)
 		}
-		return reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()), nil
+		return reflect.Zero(reflect.TypeFor[error]()), nil
 	}
 	if v.Type.Step || v.Type.StepFunc || v.Type.LeftArrowFunc || v.Type.IsStruct() {
 		return reflect.ValueOf(
@@ -811,14 +807,14 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 	return rv, nil
 }
 
-var ctxType = reflect.TypeOf((*Context)(nil))
+var ctxType = reflect.TypeFor[*Context]()
 
 func replaceStructType(t reflect.Type) reflect.Type {
 	if t == ctxType {
 		return t
 	}
 	if wasm.IsStepFuncType(t) {
-		return reflect.TypeOf(&StructValue{})
+		return reflect.TypeFor[*StructValue]()
 	}
 	switch t.Kind() {
 	case reflect.Pointer:
@@ -840,7 +836,7 @@ func replaceStructType(t reflect.Type) reflect.Type {
 		}
 		return reflect.FuncOf(args, ret, false)
 	case reflect.Struct:
-		return reflect.TypeOf(StructValue{})
+		return reflect.TypeFor[StructValue]()
 	}
 	return t
 }

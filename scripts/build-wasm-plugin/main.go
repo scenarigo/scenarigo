@@ -109,7 +109,7 @@ func buildWasmPlugin(pluginName, srcDir, genDir string) error {
 	}
 
 	// Run scenarigo plugin build from repository root, but with config in tempDir
-	//nolint:gosec
+	//nolint:gosec,noctx // build script, no context needed
 	cmd := exec.Command("go", "run", "./cmd/scenarigo", "plugin", "build", "--wasm", "-c", filepath.Join(tempDir, "scenarigo.yaml"))
 	cmd.Dir = repoRoot
 	cmd.Stdout = os.Stdout
@@ -136,7 +136,7 @@ func createGoMod(tempDir string) error {
 
 	// Initialize go module in plugin/src directory
 	pluginSrcDir := filepath.Join(tempDir, "plugin", "src")
-	cmd := exec.Command("go", "mod", "init", "temp-plugin-build")
+	cmd := exec.Command("go", "mod", "init", "temp-plugin-build") //nolint:noctx // build script, no context needed
 	cmd.Dir = pluginSrcDir
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to run go mod init: %w", err)
@@ -144,7 +144,7 @@ func createGoMod(tempDir string) error {
 
 	// Use absolute path instead of relative path for replace directive
 	// This should be more reliable than relative paths
-	//nolint:gosec
+	//nolint:gosec,noctx // build script, no context needed
 	cmd = exec.Command("go", "mod", "edit", "-replace", "github.com/scenarigo/scenarigo="+repoRoot)
 	cmd.Dir = pluginSrcDir
 	if err := cmd.Run(); err != nil {
@@ -152,7 +152,7 @@ func createGoMod(tempDir string) error {
 	}
 
 	// Add a simple dependency first to test if go.mod works
-	cmd = exec.Command("go", "mod", "tidy")
+	cmd = exec.Command("go", "mod", "tidy") //nolint:noctx // build script, no context needed
 	cmd.Dir = pluginSrcDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

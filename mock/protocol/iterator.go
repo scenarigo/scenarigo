@@ -21,7 +21,7 @@ type MockIterator struct {
 	mocks []Mock
 }
 
-// New returns a new MockIterator.
+// NewMockIterator returns a new MockIterator.
 func NewMockIterator(mocks []Mock) *MockIterator {
 	//nolint:exhaustruct
 	return &MockIterator{

@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var stringType = reflect.TypeOf("")
+var stringType = reflect.TypeFor[string]()
 
 // ConvertStringsMap converts map[string]string to map[string][]string.
 func ConvertStringsMap(v reflect.Value) (map[string][]string, error) {

@@ -102,6 +102,21 @@ func TestBuild(t *testing.T) {
 			}
 		}
 	}
+
+	// Go 1.26+ changed `go mod init` to default the go directive to 1.(N-1).0
+	// and adds a toolchain directive (see https://github.com/golang/go/issues/74748).
+	goModInitVer := goVersion
+	goModInitToolchain := ""
+	if idx := strings.Index(runtime.Version(), "-devel"); idx == -1 {
+		parts := strings.Split(goVersion, ".")
+		if len(parts) >= 2 {
+			if minor, err := strconv.Atoi(parts[1]); err == nil && minor >= 26 {
+				goModInitVer = fmt.Sprintf("%s.%d.0", parts[0], minor-1)
+				goModInitToolchain = "go" + goVersion
+			}
+		}
+	}
+
 	pluginCode := `package main
 
 func Greet() string {
@@ -109,10 +124,10 @@ func Greet() string {
 }
 `
 	gomod := func(m string) string {
-		return fmt.Sprintf(`module %s
-
-go %s
-`, m, goVersion)
+		if goModInitToolchain != "" {
+			return fmt.Sprintf("module %s\n\ngo %s\n\ntoolchain %s\n", m, goModInitVer, goModInitToolchain)
+		}
+		return fmt.Sprintf("module %s\n\ngo %s\n", m, goModInitVer)
 	}
 
 	tmpl, err := template.ParseFiles("testdata/go.mod.tmpl")
