@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.25.0](https://github.com/scenarigo/scenarigo/compare/v0.24.1...v0.25.0) - 2026-02-11
+### New Features
+- Add scenarigo- prefix request headers/metadata for debugging by @zoncoen in https://github.com/scenarigo/scenarigo/pull/704
+### Bug Fixes
+- fix(template): prevent nil arguments from being replaced by *Context by @zoncoen in https://github.com/scenarigo/scenarigo/pull/707
+- Fix cleanup process for wasm plugin by @goccy in https://github.com/scenarigo/scenarigo/pull/702
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/text from 0.31.0 to 0.32.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/675
+- chore(deps): bump the github-actions group across 1 directory with 8 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/683
+- chore(deps): bump the github-actions group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/696
+- update deps by @zoncoen in https://github.com/scenarigo/scenarigo/pull/697
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/698
+
 ## [v0.24.1](https://github.com/scenarigo/scenarigo/compare/v0.24.0...v0.24.1) - 2025-12-08
 ### Bug Fixes
 - fix(cmd): fix list command not displaying output by @utahta in https://github.com/scenarigo/scenarigo/pull/674

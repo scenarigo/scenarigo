@@ -31,7 +31,7 @@ func (m *matcher) match(parent, name string) bool {
 		return true
 	}
 	depth := strings.Count(parent, "/") + 1
-	for _, s := range strings.Split(name, "/") {
+	for s := range strings.SplitSeq(name, "/") {
 		if depth >= len(m.patterns) {
 			return true
 		}

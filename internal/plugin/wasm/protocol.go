@@ -253,7 +253,7 @@ func NewGRPCInvokeRequest(client, method string, reqMsg []byte, md metadata.MD, 
 	}
 }
 
-// NewHTTPRequest creates a request to http request.
+// NewHTTPCallRequest creates a request to invoke an HTTP call.
 func NewHTTPCallRequest(client string, req []byte) *Request {
 	return &Request{
 		CommandType: HTTPCallCommand,

@@ -245,7 +245,7 @@ func (e *PathError) Error() string {
 	yml := e.yml()
 	if yml != "" {
 		var b strings.Builder
-		for _, l := range strings.Split(yml, "\n") {
+		for l := range strings.SplitSeq(yml, "\n") {
 			if len(l) > 0 {
 				b.WriteString("    ")
 				b.WriteString(strings.TrimRight(l, " "))

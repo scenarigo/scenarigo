@@ -12,6 +12,7 @@ import (
 )
 
 type (
+	keyScenarioName     struct{}
 	keyScenarioFilepath struct{}
 	keyPluginDir        struct{}
 	keyPlugins          struct{}
@@ -75,6 +76,24 @@ func (c *Context) WithReporter(r reporter.Reporter) *Context {
 // Reporter returns the reporter of context.
 func (c *Context) Reporter() reporter.Reporter {
 	return c.reporter
+}
+
+// WithScenarioTitle returns a copy of c with scenario title.
+func (c *Context) WithScenarioTitle(title string) *Context {
+	return newContext(
+		context.WithValue(c.ctx, keyScenarioName{}, title),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+// ScenarioTitle returns the title of the scenario executing in this context.
+func (c *Context) ScenarioTitle() string {
+	title, ok := c.ctx.Value(keyScenarioName{}).(string)
+	if ok {
+		return title
+	}
+	return ""
 }
 
 // WithScenarioFilepath returns a copy of c with the scenario filepath.

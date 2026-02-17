@@ -9,7 +9,9 @@ func WithExecutionContext(ctx context.Context, v any) context.Context {
 	return context.WithValue(ctx, executionContextKey{}, v)
 }
 
-func getExecutionContextValue(ctx context.Context) any {
+// ExecutionContext retrieves the value stored by WithExecutionContext.
+// Returns nil if ctx is nil or no value was stored.
+func ExecutionContext(ctx context.Context) any {
 	if ctx == nil {
 		return nil
 	}

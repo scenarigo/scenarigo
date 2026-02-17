@@ -1,5 +1,4 @@
 //go:build !race
-// +build !race
 
 package scenarigo
 
@@ -68,9 +67,8 @@ func TestE2E(t *testing.T) {
 
 					for _, scenario := range tc.Scenarios {
 						t.Run(scenario.Filename, func(t *testing.T) {
-							// TODO
-							if t.Name() == "TestE2E/wasm/testdata/testcases/retry.yaml/retry/composite-constant.yaml" {
-								t.Skip("TODO: fix wasm plugin mechanism")
+							if pluginType == "wasm" && scenario.SkipWasm {
+								t.Skip("skipped for wasm")
 							}
 
 							if scenario.Mocks != "" {
@@ -182,7 +180,11 @@ func TestE2E(t *testing.T) {
 								t.Fatal(err)
 							}
 
-							if got, expect := testutil.ReplaceOutput(b.String()), testutil.ReplaceOutput(string(expectedStdout)); got != expect {
+							var replaceOpts []testutil.ReplaceOption
+							if scenario.KeepScenarigoHeaders {
+								replaceOpts = append(replaceOpts, testutil.KeepScenarigoHeaders())
+							}
+							if got, expect := testutil.ReplaceOutput(b.String(), replaceOpts...), testutil.ReplaceOutput(string(expectedStdout), replaceOpts...); got != expect {
 								dmp := diffmatchpatch.New()
 								diffs := dmp.DiffMain(expect, got, false)
 								t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
@@ -201,12 +203,14 @@ type TestCase struct {
 }
 
 type TestScenario struct {
-	Filename string       `yaml:"filename"`
-	Mocks    string       `yaml:"mocks"`
-	Success  bool         `yaml:"success"`
-	Output   ExpectOutput `yaml:"output"`
-	Verbose  bool         `yaml:"verbose"`
-	Plugins  []string     `yaml:"plugins"`
+	Filename             string       `yaml:"filename"`
+	Mocks                string       `yaml:"mocks"`
+	Success              bool         `yaml:"success"`
+	Output               ExpectOutput `yaml:"output"`
+	Verbose              bool         `yaml:"verbose"`
+	Plugins              []string     `yaml:"plugins"`
+	KeepScenarigoHeaders bool         `yaml:"keepScenarigoHeaders"`
+	SkipWasm             bool         `yaml:"skipWasm"`
 }
 
 type ExpectOutput struct {

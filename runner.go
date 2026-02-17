@@ -253,6 +253,10 @@ func (r *Runner) Run(ctx *context.Context) {
 			})
 		}
 	}
+	// Register cleanup to close all plugins after all teardowns complete.
+	// Using Cleanup instead of defer ensures plugins remain open during teardown execution.
+	ctx.Reporter().Cleanup(func() { plugin.CloseAll() })
+
 	ctx, teardown := setups.setup(ctx)
 	if ctx.Reporter().Failed() {
 		teardown(ctx)
@@ -307,6 +311,8 @@ func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, bas
 	for _, scn := range scns {
 		localCtx := ctx.WithNode(scn.Node)
 		scenarioCtx := localCtx
+		scenarioCtx = scenarioCtx.WithScenarioFilepath(scn.Filepath())
+		scenarioCtx = scenarioCtx.WithScenarioTitle(scn.Title)
 		if baseVars != nil {
 			clonedVars, err := deepcopy.Copy(baseVars)
 			if err != nil {

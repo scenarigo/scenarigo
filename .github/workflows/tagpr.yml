@@ -12,9 +12,9 @@ jobs:
       with:
         app_id: ${{ secrets.WRITE_APP_ID }}
         private_key: ${{ secrets.WRITE_PRIVATE_KEY }}
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         token: ${{ steps.generate_token.outputs.token }}
-    - uses: Songmu/tagpr@fa7d23a4aada5ab0d15a76277a7e0b70d107a9c3 # v1.11.1
+    - uses: Songmu/tagpr@78a926ba835e34721053309043aee696ba9c70b1 # v1.15.0
       env:
         GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}

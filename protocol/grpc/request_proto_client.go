@@ -16,10 +16,12 @@ import (
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	grpcproto "github.com/scenarigo/scenarigo/protocol/grpc/proto"
+	"github.com/scenarigo/scenarigo/version"
 )
 
 var (
-	connPool = &grpcConnPool{
+	defaultUserAgent = fmt.Sprintf("scenarigo/%s", version.String())
+	connPool         = &grpcConnPool{
 		conns: map[string]*grpc.ClientConn{},
 	}
 	fdCache = &protoFdCache{
@@ -48,7 +50,7 @@ func (p *grpcConnPool) NewClient(target string, o *AuthOption) (*grpc.ClientConn
 	if err != nil {
 		return nil, errors.WithPath(err, "auth")
 	}
-	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.NewClient(target, grpc.WithUserAgent(defaultUserAgent), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, errors.WithPath(err, "target")
 	}

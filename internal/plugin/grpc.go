@@ -31,9 +31,9 @@ type CustomGRPCClient interface {
 }
 
 var (
-	typeContext  = reflect.TypeOf((*context.Context)(nil)).Elem()
-	typeMessage  = reflect.TypeOf((*proto.Message)(nil)).Elem()
-	typeCallOpts = reflect.TypeOf([]grpc.CallOption(nil))
+	typeContext  = reflect.TypeFor[context.Context]()
+	typeMessage  = reflect.TypeFor[proto.Message]()
+	typeCallOpts = reflect.TypeFor[[]grpc.CallOption]()
 )
 
 func ValidateGRPCMethod(method reflect.Value) error {

@@ -21,12 +21,27 @@ import (
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/mockutil"
+	"github.com/scenarigo/scenarigo/internal/protocolmeta"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	"github.com/scenarigo/scenarigo/internal/yamlutil"
 	"github.com/scenarigo/scenarigo/reporter"
 	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
+
+func scenarigoMetadata(name string, title string, filepath string) *yamlutil.MDMarshaler {
+	md := metadata.MD{}
+	if filepath != "" {
+		md[protocolmeta.ScenarigoScenarioFilepathBinKey] = []string{filepath}
+	}
+	if title != "" {
+		md[protocolmeta.ScenarigoScenarioTitleBinKey] = []string{title}
+	}
+	if name != "" {
+		md[protocolmeta.ScenarigoStepFullNameBinKey] = []string{name}
+	}
+	return yamlutil.NewMDMarshaler(md)
+}
 
 func TestRequestExtractor(t *testing.T) {
 	req := &RequestExtractor{
@@ -203,7 +218,7 @@ func TestRequest_Invoke(t *testing.T) {
 				// ensure that ctx.WithRequest and ctx.WithResponse are called
 				dumpReq := &request{
 					Method:   r.Method,
-					Metadata: r.Metadata,
+					Metadata: scenarigoMetadata(t.Name(), "", ""),
 					Message:  &ProtoMessageYAMLMarshaler{req},
 				}
 				if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform()); diff != "" {
@@ -251,7 +266,7 @@ func TestRequest_Invoke(t *testing.T) {
 				// ensure that ctx.WithRequest and ctx.WithResponse are called
 				dumpReq := &request{
 					Method:   r.Method,
-					Metadata: r.Metadata,
+					Metadata: scenarigoMetadata(t.Name(), "", ""),
 					Message:  &ProtoMessageYAMLMarshaler{req},
 				}
 				if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform()); diff != "" {
@@ -259,6 +274,41 @@ func TestRequest_Invoke(t *testing.T) {
 				}
 			})
 		})
+	})
+	t.Run("metadata encoding", func(t *testing.T) {
+		req := &testpb.EchoRequest{MessageId: "1", MessageBody: "hello"}
+		resp := &testpb.EchoResponse{MessageId: "1", MessageBody: "hello"}
+
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := testpb.NewMockTestClient(ctrl)
+		client.EXPECT().Echo(gomock.Any(), mockutil.ProtoMessage(req), gomock.Any()).Return(resp, nil)
+
+		r := &Request{
+			Client: "{{vars.client}}",
+			Method: "Echo",
+			Message: yaml.MapSlice{
+				yaml.MapItem{Key: "messageId", Value: "1"},
+				yaml.MapItem{Key: "messageBody", Value: "hello"},
+			},
+		}
+		ctx := context.FromT(t).
+			WithVars(map[string]any{"client": client}).
+			WithScenarioTitle("シナリオ").
+			WithScenarioFilepath("テスト/シナリオ.yaml")
+		ctx, _, err := r.Invoke(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+
+		dumpReq := &request{
+			Method:   r.Method,
+			Metadata: scenarigoMetadata(t.Name(), "シナリオ", "テスト/シナリオ.yaml"),
+			Message:  &ProtoMessageYAMLMarshaler{req},
+		}
+		if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform()); diff != "" {
+			t.Errorf("differs: (-want +got)\n%s", diff)
+		}
 	})
 
 	t.Run("failure", func(t *testing.T) {
@@ -351,6 +401,8 @@ func TestRequest_Invoke_Log(t *testing.T) {
         request:
           method: Echo
           metadata:
+            scenarigo-step-full-name-bin:
+            - test.yaml
             version:
             - 1.0.0
           message:
@@ -383,6 +435,8 @@ ok  	test.yaml	0.000s
         request:
           method: Echo
           metadata:
+            scenarigo-step-full-name-bin:
+            - test.yaml
             version:
             - 1.0.0
           message:

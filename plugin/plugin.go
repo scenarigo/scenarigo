@@ -139,6 +139,10 @@ func (p *openedPlugin) getSetup(setups []SetupFunc) SetupFunc {
 	}
 }
 
+// Close implements Plugin interface.
+// Native Go plugins cannot be closed once opened, so this is a no-op.
+func (p *openedPlugin) Close() {}
+
 // ExtractByKey implements query.KeyExtractor interface.
 func (p *openedPlugin) ExtractByKey(key string) (any, bool) {
 	sym, err := p.Lookup(key)
@@ -150,4 +154,15 @@ func (p *openedPlugin) ExtractByKey(key string) (any, bool) {
 		return v.Elem().Interface(), true
 	}
 	return sym, true
+}
+
+// CloseAll closes all cached plugins and clears the cache.
+// It should be called when all tests are complete.
+func CloseAll() {
+	m.Lock()
+	defer m.Unlock()
+	for _, p := range cache {
+		p.Close()
+	}
+	clear(cache)
 }

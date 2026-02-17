@@ -32,9 +32,7 @@ deps:
 		".deps[0].tags[0]",
 		".deps[0].tags[1]",
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	assertion, err := Build(ctx, in)
+	assertion, err := Build(t.Context(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,9 +42,7 @@ deps:
 	}
 
 	t.Run("no assertion", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		assertion, err := Build(ctx, nil)
+		assertion, err := Build(t.Context(), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,10 +135,8 @@ deps:
 		}
 	})
 	t.Run("options", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		assertion, err := Build(
-			ctx, `{{aaa}}`,
+			t.Context(), `{{aaa}}`,
 			FromTemplate(map[string]string{"aaa": "foo"}),
 			WithEqualers(EqualerFunc(func(a, b any) (bool, error) {
 				return true, nil
@@ -156,9 +150,7 @@ deps:
 		}
 	})
 	t.Run("use $", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		assertion, err := Build(ctx, `{{$ == "foo"}}`)
+		assertion, err := Build(t.Context(), `{{$ == "foo"}}`)
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
@@ -173,9 +165,7 @@ deps:
 		}
 	})
 	t.Run("use $ twice", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		assertion, err := Build(ctx, `{{$ == $}}`)
+		assertion, err := Build(t.Context(), `{{$ == $}}`)
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
@@ -184,9 +174,7 @@ deps:
 		}
 	})
 	t.Run("assertion result is not boolean", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		assertion, err := Build(ctx, `{{$ + $}}`)
+		assertion, err := Build(t.Context(), `{{$ + $}}`)
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
@@ -198,9 +186,7 @@ deps:
 	})
 	t.Run("left arrow function", func(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			assertion, err := Build(ctx, yaml.MapSlice{
+			assertion, err := Build(t.Context(), yaml.MapSlice{
 				yaml.MapItem{
 					Key: "{{call <-}}",
 					Value: yaml.MapSlice{
@@ -229,9 +215,7 @@ deps:
 		})
 		t.Run("failure", func(t *testing.T) {
 			t.Run("build error: left arrow function not found", func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				_, err := Build(ctx, yaml.MapSlice{
+				_, err := Build(t.Context(), yaml.MapSlice{
 					yaml.MapItem{
 						Key: "{{call <-}}",
 						Value: yaml.MapSlice{
@@ -253,9 +237,7 @@ deps:
 				}
 			})
 			t.Run("build error: faild to unmarshal left arrow function arg", func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				_, err := Build(ctx, yaml.MapSlice{
+				_, err := Build(t.Context(), yaml.MapSlice{
 					yaml.MapItem{
 						Key: "{{call <-}}",
 						Value: yaml.MapSlice{
@@ -285,9 +267,7 @@ deps:
 				}
 			})
 			t.Run("build error: invalid left arrow function arg", func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				_, err := Build(ctx, yaml.MapSlice{
+				_, err := Build(t.Context(), yaml.MapSlice{
 					yaml.MapItem{
 						Key: "{{call <-}}",
 						Value: yaml.MapSlice{
@@ -313,9 +293,7 @@ deps:
 				}
 			})
 			t.Run("assertion error", func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				assertion, err := Build(ctx, yaml.MapSlice{
+				assertion, err := Build(t.Context(), yaml.MapSlice{
 					yaml.MapItem{
 						Key: "{{call <-}}",
 						Value: yaml.MapSlice{

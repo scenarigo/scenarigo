@@ -35,7 +35,7 @@ func TestEncodeValue_Error(t *testing.T) {
 	testErr := errors.New("test error message")
 
 	// Create a reflect.Value with interface type error, not concrete type
-	errorInterfaceType := reflect.TypeOf((*error)(nil)).Elem()
+	errorInterfaceType := reflect.TypeFor[error]()
 	errValue := reflect.New(errorInterfaceType).Elem()
 	errValue.Set(reflect.ValueOf(testErr))
 
@@ -69,7 +69,7 @@ func TestEncodeValue_NewTypeError(t *testing.T) {
 }
 
 func TestDecodeValueWithType_ContextErrors(t *testing.T) {
-	ctxType := reflect.TypeOf((*context.Context)(nil))
+	ctxType := reflect.TypeFor[*context.Context]()
 
 	// Test invalid JSON for context (should fail at json.Unmarshal step - lines 53-55)
 	_, err := DecodeValueWithType(ctxType, []byte(`{invalid json}`))
@@ -80,7 +80,7 @@ func TestDecodeValueWithType_ContextErrors(t *testing.T) {
 
 func TestDecodeValueWithType_NonContextType(t *testing.T) {
 	// Test DecodeValueWithType with non-context type (lines 62-67)
-	stringType := reflect.TypeOf("")
+	stringType := reflect.TypeFor[string]()
 
 	// Test successful decode
 	result, err := DecodeValueWithType(stringType, []byte(`"hello world"`))
@@ -104,7 +104,7 @@ func TestDecodeValueWithType_NonContextType(t *testing.T) {
 }
 
 func TestDecodeValueWithType_ContextSuccess(t *testing.T) {
-	ctxType := reflect.TypeOf((*context.Context)(nil))
+	ctxType := reflect.TypeFor[*context.Context]()
 
 	// Create a serializable context
 	originalCtx := context.FromT(t)
