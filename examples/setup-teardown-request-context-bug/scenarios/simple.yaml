@@ -1,0 +1,9 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+
+title: check teardown RequestContext
+
+steps:
+- title: nop
+  ref: '{{plugins.plugin.Nop}}'
