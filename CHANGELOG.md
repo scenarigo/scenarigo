@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v0.25.1](https://github.com/scenarigo/scenarigo/compare/v0.25.0...v0.25.1) - 2026-02-18
+### Bug Fixes
+- fix(schema): preserve scenario filepath and metadata across Reset by @zoncoen in https://github.com/scenarigo/scenarigo/pull/714
+- fix: ensure `RequestContext` is valid during teardown and propagate signal context by @zoncoen in https://github.com/scenarigo/scenarigo/pull/721
+### Dependency Upgrades
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/708
+- chore(deps): bump github.com/jhump/protoreflect from 1.17.0 to 1.18.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/699
+- chore(deps): bump the github-actions group across 1 directory with 4 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/705
+- chore(deps): bump golang.org/x/mod from 0.32.0 to 0.33.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/709
+
 ## [v0.25.0](https://github.com/scenarigo/scenarigo/compare/v0.24.1...v0.25.0) - 2026-02-11
 ### New Features
 - Add scenarigo- prefix request headers/metadata for debugging by @zoncoen in https://github.com/scenarigo/scenarigo/pull/704
