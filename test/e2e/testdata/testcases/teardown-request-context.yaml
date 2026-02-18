@@ -1,0 +1,9 @@
+title: teardown receives valid RequestContext
+scenarios:
+- filename: teardown-request-context.yaml
+  success: true
+  output:
+    stdout: teardown-request-context.txt
+  verbose: true
+  plugins:
+  - teardownctx.so
