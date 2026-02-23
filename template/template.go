@@ -686,15 +686,11 @@ func buildArgs(
 }
 
 func contextValueFromExecutionContext(ctx context.Context) (reflect.Value, bool) {
-	v := ExecutionContext(ctx)
-	if v == nil {
+	c := ExecutionContext(ctx)
+	if c == nil {
 		return reflect.Value{}, false
 	}
-	rv := reflect.ValueOf(v)
-	if !rv.IsValid() {
-		return reflect.Value{}, false
-	}
-	return rv, true
+	return reflect.ValueOf(c), true
 }
 
 func convertArgument(fnName string, requiredType reflect.Type, v reflect.Value, argIdx int) (reflect.Value, error) {

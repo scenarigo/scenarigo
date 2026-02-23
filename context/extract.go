@@ -50,7 +50,9 @@ func (c *Context) ExtractByKey(key string) (any, bool) {
 	case nameEnv:
 		return env, true
 	case nameAssert:
-		return &assertions{c.RequestContext()}, true
+		if newAssertionsFunc != nil {
+			return newAssertionsFunc(c.RequestContext()), true
+		}
 	}
 	return nil, false
 }
