@@ -1,4 +1,4 @@
-package context
+package assert
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/scenarigo/scenarigo/assert"
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	"github.com/scenarigo/scenarigo/template"
 )
@@ -20,7 +19,7 @@ func TestAssertions(t *testing.T) {
 			decode(&i)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			return assert.MustBuild(ctx, i, assert.FromTemplate(map[string]any{
+			return MustBuild(ctx, i, FromTemplate(map[string]any{
 				"assert": &assertions{ctx},
 			})).Assert(v)
 		}
@@ -74,13 +73,13 @@ func TestLeftArrowFunc(t *testing.T) {
 			v, err := template.Execute(ctx, i, map[string]any{
 				"f": &leftArrowFunc{
 					ctx: ctx,
-					f:   buildArg(context.Background(), assert.Contains),
+					f:   buildAssertionArg(context.Background(), Contains),
 				},
 			})
 			if err != nil {
 				t.Fatalf("failed to execute: %s", err)
 			}
-			assertion := assert.MustBuild(context.Background(), v)
+			assertion := MustBuild(context.Background(), v)
 			if err := assertion.Assert(tc.ok); err != nil {
 				t.Errorf("unexpected error: %s", err)
 			}
