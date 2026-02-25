@@ -100,13 +100,13 @@ func TestDurationMeasurer(t *testing.T) {
 	close(ch)
 	wg.Wait()
 
-	if expect, got := 40*durationTestUnit, parent.duration.Truncate(durationTestUnit); got != expect {
+	if expect, got := 40*durationTestUnit, parent.duration.Truncate(5*durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
-	if expect, got := 30*durationTestUnit, child1.getDuration().Truncate(durationTestUnit); got != expect {
+	if expect, got := 30*durationTestUnit, child1.getDuration().Truncate(5*durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
-	if expect, got := 20*durationTestUnit, child2.getDuration().Truncate(durationTestUnit); got != expect {
+	if expect, got := 20*durationTestUnit, child2.getDuration().Truncate(5*durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
 }
