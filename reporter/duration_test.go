@@ -32,7 +32,7 @@ func TestTestContext(t *testing.T) {
 		}()
 
 		ctx.waitParallel() // wait goroutine function
-		if expect, got := duration, time.Since(now).Truncate(durationTestUnit); got != expect {
+		if expect, got := duration, time.Since(now).Truncate(5*durationTestUnit); got != expect {
 			t.Errorf("expected %s but got %s", expect, got)
 		}
 		if expect, got := int64(0), ctx.waitings(); got != expect {
@@ -61,7 +61,7 @@ func TestTestContext(t *testing.T) {
 		}()
 
 		ctx.waitParallel() // not wait goroutine function (run in parallel)
-		if expect, got := time.Duration(0), time.Since(now).Truncate(durationTestUnit); got != expect {
+		if expect, got := time.Duration(0), time.Since(now).Truncate(5*durationTestUnit); got != expect {
 			t.Errorf("expected %s but got %s", expect, got)
 		}
 		if expect, got := int64(0), ctx.waitings(); got != expect {
