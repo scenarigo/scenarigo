@@ -45,6 +45,7 @@ func TestWasmHost(t *testing.T) {
 	if !ok {
 		t.Fatalf("failed to get wasm plugin: %T", plg)
 	}
+	defer wasmPlugin.Close()
 	r := reporter.FromT(t)
 	ctx := context.New(r)
 	setup := wasmPlugin.GetSetup()

@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/goccy/go-yaml"
+	wasi "github.com/goccy/wasi-go"
 	"github.com/goccy/wasi-go/imports"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -97,7 +98,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = sys
+	// sys is stored in the plugin struct and closed in Close()
 
 	host := r.NewHostModuleBuilder("scenarigo")
 	host.NewFunctionBuilder().WithGoModuleFunction(
@@ -153,6 +154,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 
 	plugin := &WasmPlugin{
 		wasmRuntime: r,
+		wasiSystem:  sys,
 		reqCh:       make(chan []byte, 1),
 		resCh:       make(chan []byte),
 		stdoutR:     stdoutR,
@@ -214,6 +216,7 @@ func withPlugin(ctx gocontext.Context, plg *WasmPlugin) gocontext.Context {
 // It manages the WASM runtime and provides communication with the WASM module.
 type WasmPlugin struct {
 	wasmRuntime          wazero.Runtime
+	wasiSystem           wasi.System
 	nameToTypeMap        map[string]*wasm.Type
 	setupNum             int
 	setupEachScenarioNum int
@@ -234,16 +237,32 @@ type WasmPlugin struct {
 // Close implements Plugin interface.
 // It cancels the plugin context and releases associated resources.
 func (p *WasmPlugin) Close() {
+	// Cancel the context first without holding the mutex.
+	// This unblocks any in-flight call() that holds the mutex and is waiting
+	// on read(), because WithCloseOnContextDone terminates the wasm module
+	// and causes instanceModErrCh to receive, which lets call() return and
+	// release the mutex.
+	p.cancelFn()
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// Always close runtime and system regardless of p.closed.
+	// After cancelFn(), the goroutine running InstantiateModule may call
+	// closeResources(err) and set p.closed = true before we acquire the
+	// mutex, so we must not skip these calls behind the p.closed guard.
+	// wazero's Runtime.Close is idempotent (guarded by CompareAndSwap).
+	// wasi-go's System.Close is not called elsewhere, so no double-close occurs here.
+	_ = p.wasmRuntime.Close(gocontext.Background())
+	_ = p.wasiSystem.Close(gocontext.Background())
+
 	if p.closed {
 		return
 	}
 	// Drain any pending stdout/stderr before closing to prevent output interleaving
 	_ = p.readFromPipe(p.stdoutR)
 	_ = p.readFromPipe(p.stderrR)
-	defer func() { p.closeResources(nil) }()
-	p.cancelFn()
+	p.closeResources(nil)
 }
 
 func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse, error) {
