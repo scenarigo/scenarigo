@@ -5,7 +5,7 @@ go 1.25.0
 toolchain go1.26.0
 
 require (
-	github.com/scenarigo/scenarigo v0.25.0
+	github.com/scenarigo/scenarigo v0.25.1
 	google.golang.org/grpc v1.78.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -27,7 +27,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect
-	github.com/jhump/protoreflect v1.18.0 // indirect
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
