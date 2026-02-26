@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -17,10 +18,11 @@ import (
 	"github.com/scenarigo/scenarigo/reporter"
 )
 
-func TestWasmHost(t *testing.T) {
+func buildWasmPlugin(t *testing.T) string {
+	t.Helper()
+
 	srcDir := filepath.Join("testdata", "wasm", "src")
 
-	// go mod tidy to avoid the build error
 	goModTidy := exec.Command("go", "mod", "tidy")
 	goModTidy.Dir = srcDir
 	if out, err := goModTidy.CombinedOutput(); err != nil {
@@ -37,7 +39,13 @@ func TestWasmHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s: %v", string(out), err)
 	}
-	plg, err := openWasmPlugin(filepath.Join(srcDir, "main.wasm"))
+
+	return filepath.Join(srcDir, "main.wasm")
+}
+
+func TestWasmHost(t *testing.T) {
+	wasmPath := buildWasmPlugin(t)
+	plg, err := openWasmPlugin(wasmPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +53,7 @@ func TestWasmHost(t *testing.T) {
 	if !ok {
 		t.Fatalf("failed to get wasm plugin: %T", plg)
 	}
+	defer wasmPlugin.Close()
 	r := reporter.FromT(t)
 	ctx := context.New(r)
 	setup := wasmPlugin.GetSetup()
@@ -413,6 +422,71 @@ func TestWasmHost(t *testing.T) {
 		}
 		if !reflect.DeepEqual(requestBody, &responseBody) {
 			t.Fatalf("failed to get encho response: %q", encoded)
+		}
+	})
+}
+
+func TestWasmPluginClose(t *testing.T) {
+	wasmPath := buildWasmPlugin(t)
+
+	t.Run("close completes without deadlock", func(t *testing.T) {
+		// This test verifies that Close() does not deadlock when the WASM module
+		// is idle (waiting for the next request in the read_length host function).
+		// Before the fix, cancelFn() could not interrupt the Go channel receive
+		// (<-reqCh) in read_length, causing Close() to hang forever.
+		plg, err := openWasmPlugin(wasmPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		done := make(chan struct{})
+		go func() {
+			plg.Close()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Close() completed successfully.
+		case <-time.After(10 * time.Second):
+			t.Fatal("Close() did not complete within 10 seconds; likely deadlocked")
+		}
+	})
+
+	t.Run("close is idempotent", func(t *testing.T) {
+		plg, err := openWasmPlugin(wasmPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Calling Close() multiple times must not panic or deadlock.
+		plg.Close()
+		plg.Close()
+	})
+
+	t.Run("write returns error after close", func(t *testing.T) {
+		plg, err := openWasmPlugin(wasmPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wasmPlg := plg.(*WasmPlugin)
+		wasmPlg.Close()
+
+		if err := wasmPlg.write([]byte("test")); err == nil {
+			t.Fatal("write() should return an error after Close()")
+		}
+	})
+
+	t.Run("read returns error after close", func(t *testing.T) {
+		plg, err := openWasmPlugin(wasmPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wasmPlg := plg.(*WasmPlugin)
+		wasmPlg.Close()
+
+		if _, err := wasmPlg.read(); err == nil {
+			t.Fatal("read() should return an error after Close()")
 		}
 	})
 }
