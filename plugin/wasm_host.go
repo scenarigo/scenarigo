@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/goccy/go-yaml"
 	wasi "github.com/goccy/wasi-go"
@@ -229,7 +230,8 @@ type WasmPlugin struct {
 	stderrW              int
 	instanceModErrCh     chan error
 	instanceModErr       error
-	closed               bool
+	closed               atomic.Bool
+	closeResourcesOnce   sync.Once
 	mu                   sync.Mutex
 	cancelFn             gocontext.CancelFunc
 }
@@ -256,7 +258,7 @@ func (p *WasmPlugin) Close() {
 	_ = p.wasmRuntime.Close(gocontext.Background())
 	_ = p.wasiSystem.Close(gocontext.Background())
 
-	if p.closed {
+	if p.closed.Load() {
 		return
 	}
 	// Drain any pending stdout/stderr before closing to prevent output interleaving
@@ -320,7 +322,7 @@ func convertCommandResponse[T wasm.CommandResponse](v wasm.CommandResponse) (T, 
 }
 
 func (p *WasmPlugin) write(cmd []byte) error {
-	if p.closed {
+	if p.closed.Load() {
 		return p.instanceModErr
 	}
 	p.reqCh <- cmd
@@ -328,7 +330,7 @@ func (p *WasmPlugin) write(cmd []byte) error {
 }
 
 func (p *WasmPlugin) read() ([]byte, error) {
-	if p.closed {
+	if p.closed.Load() {
 		return nil, errors.New("plugin has already been closed")
 	}
 
@@ -344,10 +346,12 @@ func (p *WasmPlugin) read() ([]byte, error) {
 }
 
 func (p *WasmPlugin) closeResources(instanceModErr error) {
-	p.instanceModErr = instanceModErr
-	p.closed = true
-	closePipe(p.stdoutR, p.stdoutW)
-	closePipe(p.stderrR, p.stderrW)
+	p.closeResourcesOnce.Do(func() {
+		p.instanceModErr = instanceModErr
+		p.closed.Store(true)
+		closePipe(p.stdoutR, p.stdoutW)
+		closePipe(p.stderrR, p.stderrW)
+	})
 }
 
 func (p *WasmPlugin) Lookup(name string) (Symbol, error) {
