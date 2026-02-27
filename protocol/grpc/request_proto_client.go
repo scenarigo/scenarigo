@@ -96,7 +96,7 @@ func (c *protoFdCache) Compile(ctx gocontext.Context, imports, files []string) (
 
 type protoClient struct {
 	r              *Request
-	conn           *grpc.ClientConn
+	conn           grpc.ClientConnInterface
 	resolver       grpcproto.ServiceDescriptorResolver
 	fullMethodName string
 	md             protoreflect.MethodDescriptor
@@ -135,6 +135,32 @@ func newProtoClient(ctx *context.Context, r *Request, opts *RequestOptions) (*pr
 	if err != nil {
 		if grpcproto.IsUnimplementedReflectionServiceError(err) {
 			return nil, fmt.Errorf("%s doesn't implement gRPC reflection service: %w", target, err)
+		}
+		return nil, errors.WithPath(err, "service")
+	}
+	md := sd.Methods().ByName(protoreflect.Name(r.Method))
+	if md == nil {
+		return nil, errors.ErrorPathf("method", "method %q not found", r.Method)
+	}
+
+	return &protoClient{
+		r:              r,
+		conn:           conn,
+		resolver:       resolver,
+		fullMethodName: fmt.Sprintf("/%s/%s", sd.FullName(), md.Name()),
+		md:             md,
+	}, nil
+}
+
+// newProtoClientWithConn creates a protoClient using an existing connection.
+// This is used when a custom client provides its connection for reflection.
+func newProtoClientWithConn(ctx *context.Context, r *Request, conn grpc.ClientConnInterface) (*protoClient, error) {
+	resolver := grpcproto.NewReflectionClient(ctx.RequestContext(), conn)
+
+	sd, err := resolver.ResolveService(protoreflect.FullName(r.Service))
+	if err != nil {
+		if grpcproto.IsUnimplementedReflectionServiceError(err) {
+			return nil, fmt.Errorf("server doesn't implement gRPC reflection service: %w", err)
 		}
 		return nil, errors.WithPath(err, "service")
 	}
