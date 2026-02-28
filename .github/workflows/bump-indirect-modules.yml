@@ -29,6 +29,12 @@ jobs:
       run: |
         ./scripts/bump-indirect-modules.sh || true && go mod tidy
         cd plugin/testdata/wasm/src && go mod tidy
+    - name: Build
+      run: make build
+    - name: Run examples
+      env:
+        SCENARIGO_COLOR: true
+      run: make test/examples
     - name: Show diff
       run: git add -N . && git diff
     - name: Generate token
