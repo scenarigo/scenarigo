@@ -50,7 +50,7 @@ jobs:
         overwrite: true
 
   update:
-    if:  startsWith(github.head_ref, 'dependabot/') && github.actor == 'dependabot[bot]'
+    if: startsWith(github.head_ref, 'dependabot/') && github.actor == 'dependabot[bot]'
     needs: test
     runs-on: ubuntu-latest
     steps:
