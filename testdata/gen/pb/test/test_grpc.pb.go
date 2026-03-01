@@ -19,7 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Test_Echo_FullMethodName = "/scenarigo.testdata.test.Test/Echo"
+	Test_Echo_FullMethodName             = "/scenarigo.testdata.test.Test/Echo"
+	Test_ServerStreamEcho_FullMethodName = "/scenarigo.testdata.test.Test/ServerStreamEcho"
+	Test_ClientStreamEcho_FullMethodName = "/scenarigo.testdata.test.Test/ClientStreamEcho"
+	Test_BidiStreamEcho_FullMethodName   = "/scenarigo.testdata.test.Test/BidiStreamEcho"
 )
 
 // TestClient is the client API for Test service.
@@ -27,6 +30,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TestClient interface {
 	Echo(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error)
+	ServerStreamEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (Test_ServerStreamEchoClient, error)
+	ClientStreamEcho(ctx context.Context, opts ...grpc.CallOption) (Test_ClientStreamEchoClient, error)
+	BidiStreamEcho(ctx context.Context, opts ...grpc.CallOption) (Test_BidiStreamEchoClient, error)
 }
 
 type testClient struct {
@@ -46,11 +52,111 @@ func (c *testClient) Echo(ctx context.Context, in *EchoRequest, opts ...grpc.Cal
 	return out, nil
 }
 
+func (c *testClient) ServerStreamEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (Test_ServerStreamEchoClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Test_ServiceDesc.Streams[0], Test_ServerStreamEcho_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &testServerStreamEchoClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Test_ServerStreamEchoClient interface {
+	Recv() (*EchoResponse, error)
+	grpc.ClientStream
+}
+
+type testServerStreamEchoClient struct {
+	grpc.ClientStream
+}
+
+func (x *testServerStreamEchoClient) Recv() (*EchoResponse, error) {
+	m := new(EchoResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *testClient) ClientStreamEcho(ctx context.Context, opts ...grpc.CallOption) (Test_ClientStreamEchoClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Test_ServiceDesc.Streams[1], Test_ClientStreamEcho_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &testClientStreamEchoClient{stream}
+	return x, nil
+}
+
+type Test_ClientStreamEchoClient interface {
+	Send(*EchoRequest) error
+	CloseAndRecv() (*EchoResponse, error)
+	grpc.ClientStream
+}
+
+type testClientStreamEchoClient struct {
+	grpc.ClientStream
+}
+
+func (x *testClientStreamEchoClient) Send(m *EchoRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *testClientStreamEchoClient) CloseAndRecv() (*EchoResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(EchoResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *testClient) BidiStreamEcho(ctx context.Context, opts ...grpc.CallOption) (Test_BidiStreamEchoClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Test_ServiceDesc.Streams[2], Test_BidiStreamEcho_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &testBidiStreamEchoClient{stream}
+	return x, nil
+}
+
+type Test_BidiStreamEchoClient interface {
+	Send(*EchoRequest) error
+	Recv() (*EchoResponse, error)
+	grpc.ClientStream
+}
+
+type testBidiStreamEchoClient struct {
+	grpc.ClientStream
+}
+
+func (x *testBidiStreamEchoClient) Send(m *EchoRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *testBidiStreamEchoClient) Recv() (*EchoResponse, error) {
+	m := new(EchoResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TestServer is the server API for Test service.
 // All implementations should embed UnimplementedTestServer
 // for forward compatibility
 type TestServer interface {
 	Echo(context.Context, *EchoRequest) (*EchoResponse, error)
+	ServerStreamEcho(*EchoRequest, Test_ServerStreamEchoServer) error
+	ClientStreamEcho(Test_ClientStreamEchoServer) error
+	BidiStreamEcho(Test_BidiStreamEchoServer) error
 }
 
 // UnimplementedTestServer should be embedded to have forward compatible implementations.
@@ -59,6 +165,15 @@ type UnimplementedTestServer struct {
 
 func (UnimplementedTestServer) Echo(context.Context, *EchoRequest) (*EchoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Echo not implemented")
+}
+func (UnimplementedTestServer) ServerStreamEcho(*EchoRequest, Test_ServerStreamEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "method ServerStreamEcho not implemented")
+}
+func (UnimplementedTestServer) ClientStreamEcho(Test_ClientStreamEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "method ClientStreamEcho not implemented")
+}
+func (UnimplementedTestServer) BidiStreamEcho(Test_BidiStreamEchoServer) error {
+	return status.Errorf(codes.Unimplemented, "method BidiStreamEcho not implemented")
 }
 
 // UnsafeTestServer may be embedded to opt out of forward compatibility for this service.
@@ -90,6 +205,79 @@ func _Test_Echo_Handler(srv interface{}, ctx context.Context, dec func(interface
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Test_ServerStreamEcho_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(EchoRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(TestServer).ServerStreamEcho(m, &testServerStreamEchoServer{stream})
+}
+
+type Test_ServerStreamEchoServer interface {
+	Send(*EchoResponse) error
+	grpc.ServerStream
+}
+
+type testServerStreamEchoServer struct {
+	grpc.ServerStream
+}
+
+func (x *testServerStreamEchoServer) Send(m *EchoResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Test_ClientStreamEcho_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TestServer).ClientStreamEcho(&testClientStreamEchoServer{stream})
+}
+
+type Test_ClientStreamEchoServer interface {
+	SendAndClose(*EchoResponse) error
+	Recv() (*EchoRequest, error)
+	grpc.ServerStream
+}
+
+type testClientStreamEchoServer struct {
+	grpc.ServerStream
+}
+
+func (x *testClientStreamEchoServer) SendAndClose(m *EchoResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *testClientStreamEchoServer) Recv() (*EchoRequest, error) {
+	m := new(EchoRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _Test_BidiStreamEcho_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TestServer).BidiStreamEcho(&testBidiStreamEchoServer{stream})
+}
+
+type Test_BidiStreamEchoServer interface {
+	Send(*EchoResponse) error
+	Recv() (*EchoRequest, error)
+	grpc.ServerStream
+}
+
+type testBidiStreamEchoServer struct {
+	grpc.ServerStream
+}
+
+func (x *testBidiStreamEchoServer) Send(m *EchoResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *testBidiStreamEchoServer) Recv() (*EchoRequest, error) {
+	m := new(EchoRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Test_ServiceDesc is the grpc.ServiceDesc for Test service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -102,6 +290,23 @@ var Test_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Test_Echo_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ServerStreamEcho",
+			Handler:       _Test_ServerStreamEcho_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ClientStreamEcho",
+			Handler:       _Test_ClientStreamEcho_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "BidiStreamEcho",
+			Handler:       _Test_BidiStreamEcho_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "test/test.proto",
 }
