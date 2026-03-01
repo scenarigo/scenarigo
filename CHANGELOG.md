@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v0.25.2](https://github.com/scenarigo/scenarigo/compare/v0.25.1...v0.25.2) - 2026-03-01
+### Bug Fixes
+- fix(plugin): fix FD leak, deadlock, and double-close in WasmPlugin by @zoncoen in https://github.com/scenarigo/scenarigo/pull/726
+### Code Refactoring
+- refactor(context): break circular imports between context, assert, and template packages by @zoncoen in https://github.com/scenarigo/scenarigo/pull/723
+### Dependency Upgrades
+- chore(deps): bump google.golang.org/grpc from 1.78.0 to 1.79.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/715
+- chore(deps): bump google.golang.org/grpc from 1.78.0 to 1.79.0 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/716
+- chore(deps): bump the github-actions group across 1 directory with 5 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/730
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/717
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/732
+
 ## [v0.25.1](https://github.com/scenarigo/scenarigo/compare/v0.25.0...v0.25.1) - 2026-02-18
 ### Bug Fixes
 - fix(schema): preserve scenario filepath and metadata across Reset by @zoncoen in https://github.com/scenarigo/scenarigo/pull/714
