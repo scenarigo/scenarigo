@@ -4,6 +4,9 @@ package scenarigo.testdata.test;
 
 service Test {
     rpc Echo(EchoRequest) returns (EchoResponse) {};
+    rpc ServerStreamEcho(EchoRequest) returns (stream EchoResponse) {};
+    rpc ClientStreamEcho(stream EchoRequest) returns (EchoResponse) {};
+    rpc BidiStreamEcho(stream EchoRequest) returns (stream EchoResponse) {};
 }
 
 message EchoRequest {

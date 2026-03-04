@@ -651,7 +651,8 @@ steps:
 - `target`: The gRPC server address (e.g., `localhost:50051`)
 - `service`: Full service name as defined in the `.proto` file
 - `method`: The RPC method name to call
-- `message`: The request message (as YAML/JSON matching the protobuf structure)
+- `message`: The request message for unary and server streaming RPCs (as YAML/JSON matching the protobuf structure)
+- `messages`: A list of request messages for client streaming and bidirectional streaming RPCs
 - `options.proto.imports`: List of directories to search for `.proto` files
 - `options.proto.files`: List of `.proto` files to load
 - `options.auth.insecure`: Set to `true` for insecure connections (no TLS)
@@ -813,6 +814,111 @@ steps:
     status:
       code: OK
 ```
+
+### gRPC Streaming
+
+Scenarigo supports all gRPC streaming types: server streaming, client streaming, and bidirectional streaming.
+
+#### Server Streaming
+
+For server streaming RPCs, use `message` (singular) to send a single request and `messages` in the expect block to validate the streamed responses:
+
+```yaml
+steps:
+- title: server streaming
+  protocol: grpc
+  request:
+    target: localhost:50051
+    service: myapp.EchoService
+    method: ServerStreamEcho
+    message:
+      messageId: "1"
+      messageBody: hello
+    options:
+      proto:
+        files:
+        - service.proto
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    messages:
+    - messageId: "1"
+      messageBody: hello-0
+    - messageId: "1"
+      messageBody: hello-1
+    - messageId: "1"
+      messageBody: hello-2
+```
+
+#### Client Streaming
+
+For client streaming RPCs, use `messages` (plural) to send multiple request messages. The server responds with a single `message`:
+
+```yaml
+steps:
+- title: client streaming
+  protocol: grpc
+  request:
+    target: localhost:50051
+    service: myapp.EchoService
+    method: ClientStreamEcho
+    messages:
+    - messageId: "1"
+      messageBody: hello
+    - messageId: "2"
+      messageBody: world
+    options:
+      proto:
+        files:
+        - service.proto
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    message:
+      messageId: aggregated
+      messageBody: hello,world
+```
+
+#### Bidirectional Streaming
+
+For bidirectional streaming RPCs, use `messages` for both request and response. Template expressions in request messages can reference already-received responses using `response.messages[N]`, which blocks until the Nth response is available:
+
+```yaml
+steps:
+- title: bidi streaming
+  protocol: grpc
+  request:
+    target: localhost:50051
+    service: myapp.EchoService
+    method: BidiStreamEcho
+    messages:
+    - messageId: "1"
+      messageBody: hello
+    - messageId: "2"
+      messageBody: '{{response.messages[0].messageBody}}'  # references the first response
+    options:
+      proto:
+        files:
+        - service.proto
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    messages:
+    - messageId: "1"
+      messageBody: 're: hello'
+    - messageId: "2"
+      messageBody: 're: re: hello'
+```
+
+> **Note:** In bidirectional streaming, each request message template is evaluated just before it is sent. This means `response.messages[0]` in the second request message will block until the first response has been received from the server, enabling request-response interleaving patterns.
+
+> **Note:** gRPC streaming is not yet supported with WebAssembly (WASM) plugins. WASM plugin support for streaming will be added in a future release.
 
 ### gRPC-specific features
 

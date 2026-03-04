@@ -1,0 +1,13 @@
+title: grpc streaming
+scenarios:
+- filename: grpc-streaming/proto.yaml
+  success: true
+  output:
+    stdout: grpc-streaming/proto.yaml
+- filename: grpc-streaming/custom-client.yaml
+  success: true
+  plugins:
+  - grpc.so
+  skipWasm: true
+  output:
+    stdout: grpc-streaming/custom-client.yaml

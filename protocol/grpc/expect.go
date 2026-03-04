@@ -22,11 +22,12 @@ import (
 
 // Expect represents expected response values.
 type Expect struct {
-	Code    string        `yaml:"code,omitempty"`
-	Message any           `yaml:"message,omitempty"`
-	Status  ExpectStatus  `yaml:"status,omitempty"`
-	Header  yaml.MapSlice `yaml:"header,omitempty"`
-	Trailer yaml.MapSlice `yaml:"trailer,omitempty"`
+	Code     string        `yaml:"code,omitempty"`
+	Message  any           `yaml:"message,omitempty"`
+	Messages []any         `yaml:"messages,omitempty"`
+	Status   ExpectStatus  `yaml:"status,omitempty"`
+	Header   yaml.MapSlice `yaml:"header,omitempty"`
+	Trailer  yaml.MapSlice `yaml:"trailer,omitempty"`
 
 	// for backward compatibility
 	Body any `yaml:"body,omitempty"`
@@ -82,6 +83,11 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		return nil, errors.WrapPathf(err, "message", "invalid expect response message")
 	}
 
+	msgsAssertion, err := assert.Build(ctx.RequestContext(), e.Messages, assert.FromTemplate(ctx))
+	if err != nil {
+		return nil, errors.WrapPathf(err, "messages", "invalid expect response messages")
+	}
+
 	return assert.AssertionFunc(func(v any) error {
 		resp, ok := v.(*response)
 		if !ok {
@@ -104,6 +110,9 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 		}
 		if err := msgAssertion.Assert(resp.Message); err != nil {
 			return errors.WithPath(err, "message")
+		}
+		if err := msgsAssertion.Assert(resp.Messages); err != nil {
+			return errors.WithPath(err, "messages")
 		}
 		return nil
 	}), nil
