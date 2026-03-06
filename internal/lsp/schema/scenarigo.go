@@ -74,6 +74,7 @@ func stepFields() []*FieldInfo {
 		{Name: "secrets", Type: FieldTypeMap, Description: "Step-level secrets"},
 		{Name: "protocol", Type: FieldTypeString, Description: "Protocol to use", EnumValues: []string{"http", "grpc"}},
 		{Name: "request", Type: FieldTypeObject, Description: "Request definition (protocol-specific)",
+			DynamicKey: "protocol",
 			DynamicChildren: func(discriminator string) []*FieldInfo {
 				switch discriminator {
 				case "http":
@@ -86,6 +87,7 @@ func stepFields() []*FieldInfo {
 			},
 		},
 		{Name: "expect", Type: FieldTypeObject, Description: "Expected response (protocol-specific)",
+			DynamicKey: "protocol",
 			DynamicChildren: func(discriminator string) []*FieldInfo {
 				switch discriminator {
 				case "http":

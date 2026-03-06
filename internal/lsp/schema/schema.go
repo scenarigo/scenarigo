@@ -14,6 +14,9 @@ type FieldInfo struct {
 	Children []*FieldInfo
 	// Deprecated marks the field as deprecated.
 	Deprecated bool
+	// DynamicKey is the sibling field name whose value determines dynamic children.
+	// For example, "protocol" means the value of the "protocol" sibling field is used.
+	DynamicKey string
 	// DynamicChildren resolves children based on a discriminator value.
 	// For example, "request" children depend on "protocol" value.
 	DynamicChildren func(discriminator string) []*FieldInfo
@@ -111,8 +114,8 @@ func (s *Schema) ChildFields(path []string, context map[string]string) []*FieldI
 		}
 		if current.DynamicChildren != nil {
 			discriminator := ""
-			if context != nil {
-				discriminator = context[current.Name]
+			if context != nil && current.DynamicKey != "" {
+				discriminator = context[current.DynamicKey]
 			}
 			fields = current.DynamicChildren(discriminator)
 		} else {

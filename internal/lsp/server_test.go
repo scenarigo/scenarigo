@@ -13,9 +13,9 @@ import (
 )
 
 type testClient struct {
-	t      *testing.T
-	inW    io.Writer
-	outR   *bufio.Reader
+	t    *testing.T
+	inW  io.Writer
+	outR *bufio.Reader
 }
 
 func newTestClient(t *testing.T) (*Server, *testClient) {
@@ -51,7 +51,6 @@ func (c *testClient) sendNotification(method string, params string) {
 
 func (c *testClient) readMessage() json.RawMessage {
 	c.t.Helper()
-	// Read headers.
 	contentLength := -1
 	for {
 		line, err := c.outR.ReadString('\n')
@@ -104,9 +103,22 @@ func (c *testClient) openDocument(uri, text string) {
 			"text": %s
 		}
 	}`, uri, jsonString(text)))
-	// Wait a bit for async processing, then drain diagnostics notification.
 	time.Sleep(10 * time.Millisecond)
 	c.readMessage() // diagnostics
+}
+
+func (c *testClient) complete(id int, uri string, line, char int) CompletionList {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/completion", fmt.Sprintf(`{
+		"textDocument": {"uri": %q},
+		"position": {"line": %d, "character": %d}
+	}`, uri, line, char))
+	resp := c.readResponse()
+	var list CompletionList
+	if err := json.Unmarshal(resp, &list); err != nil {
+		c.t.Fatalf("unmarshal completion: %v", err)
+	}
+	return list
 }
 
 func TestServer_Initialize(t *testing.T) {
@@ -135,16 +147,7 @@ func TestServer_Completion_ScenarioKeys(t *testing.T) {
 	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    "
 	client.openDocument("file:///tmp/test.yaml", scenarioText)
 
-	client.sendRequest(2, "textDocument/completion", `{
-		"textDocument": {"uri": "file:///tmp/test.yaml"},
-		"position": {"line": 5, "character": 4}
-	}`)
-	resp := client.readResponse()
-
-	var list CompletionList
-	if err := json.Unmarshal(resp, &list); err != nil {
-		t.Fatalf("unmarshal completion: %v", err)
-	}
+	list := client.complete(2, "file:///tmp/test.yaml", 5, 4)
 
 	labels := labelSet(list.Items)
 	for _, key := range []string{"request", "expect", "bind", "vars", "timeout"} {
@@ -169,16 +172,7 @@ func TestServer_Completion_ValueEnum(t *testing.T) {
 	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: "
 	client.openDocument("file:///tmp/test.yaml", scenarioText)
 
-	client.sendRequest(2, "textDocument/completion", `{
-		"textDocument": {"uri": "file:///tmp/test.yaml"},
-		"position": {"line": 4, "character": 15}
-	}`)
-	resp := client.readResponse()
-
-	var list CompletionList
-	if err := json.Unmarshal(resp, &list); err != nil {
-		t.Fatalf("unmarshal completion: %v", err)
-	}
+	list := client.complete(2, "file:///tmp/test.yaml", 4, 15)
 
 	labels := labelSet(list.Items)
 	if !labels["http"] || !labels["grpc"] {
@@ -196,21 +190,89 @@ func TestServer_Completion_ConfigKeys(t *testing.T) {
 	configText := "schemaVersion: config/v1\n"
 	client.openDocument("file:///tmp/scenarigo.yaml", configText)
 
-	client.sendRequest(2, "textDocument/completion", `{
-		"textDocument": {"uri": "file:///tmp/scenarigo.yaml"},
-		"position": {"line": 1, "character": 0}
-	}`)
-	resp := client.readResponse()
-
-	var list CompletionList
-	if err := json.Unmarshal(resp, &list); err != nil {
-		t.Fatalf("unmarshal completion: %v", err)
-	}
+	list := client.complete(2, "file:///tmp/scenarigo.yaml", 1, 0)
 
 	labels := labelSet(list.Items)
 	for _, key := range []string{"scenarios", "plugins", "protocols", "output", "input", "execution"} {
 		if !labels[key] {
 			t.Errorf("expected %q in config completions, got: %v", key, labelList(list.Items))
+		}
+	}
+}
+
+func TestServer_Completion_DynamicHTTPRequest(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	// Step with protocol: http, cursor inside request:
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    request:\n      "
+	client.openDocument("file:///tmp/test.yaml", scenarioText)
+
+	list := client.complete(2, "file:///tmp/test.yaml", 6, 6)
+
+	labels := labelSet(list.Items)
+	for _, key := range []string{"method", "url", "body", "header"} {
+		if !labels[key] {
+			t.Errorf("expected HTTP request field %q, got: %v", key, labelList(list.Items))
+		}
+	}
+	// gRPC-only fields should not appear.
+	for _, key := range []string{"service", "target", "metadata"} {
+		if labels[key] {
+			t.Errorf("should not have gRPC field %q in HTTP request", key)
+		}
+	}
+}
+
+func TestServer_Completion_DynamicGRPCRequest(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: grpc\n    request:\n      "
+	client.openDocument("file:///tmp/test.yaml", scenarioText)
+
+	list := client.complete(2, "file:///tmp/test.yaml", 6, 6)
+
+	labels := labelSet(list.Items)
+	for _, key := range []string{"target", "service", "method", "message"} {
+		if !labels[key] {
+			t.Errorf("expected gRPC request field %q, got: %v", key, labelList(list.Items))
+		}
+	}
+	// HTTP-only fields should not appear.
+	if labels["url"] {
+		t.Error("should not have HTTP field 'url' in gRPC request")
+	}
+}
+
+func TestServer_Completion_DynamicHTTPExpect(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    request:\n      method: GET\n      url: http://example.com\n    expect:\n      "
+	client.openDocument("file:///tmp/test.yaml", scenarioText)
+
+	list := client.complete(2, "file:///tmp/test.yaml", 9, 6)
+
+	labels := labelSet(list.Items)
+	for _, key := range []string{"code", "header", "body"} {
+		if !labels[key] {
+			t.Errorf("expected HTTP expect field %q, got: %v", key, labelList(list.Items))
+		}
+	}
+	// gRPC-only expect fields should not appear.
+	for _, key := range []string{"trailer", "status"} {
+		if labels[key] {
+			t.Errorf("should not have gRPC field %q in HTTP expect", key)
 		}
 	}
 }
