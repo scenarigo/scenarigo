@@ -226,10 +226,7 @@ func (s *Server) complete(doc *document, pos Position) []CompletionItem {
 }
 
 func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext) []CompletionItem {
-	// Find sibling values for dynamic resolution (e.g., protocol value).
-	siblingContext := make(map[string]string)
-
-	fields := sch.ChildFields(ctx.Path, siblingContext)
+	fields := sch.ChildFields(ctx.Path, ctx.SiblingValues)
 	if fields == nil {
 		return nil
 	}
