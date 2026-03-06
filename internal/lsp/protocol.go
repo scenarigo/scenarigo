@@ -43,6 +43,7 @@ type ServerCapabilities struct {
 	TextDocumentSync   int                `json:"textDocumentSync"`
 	CompletionProvider *CompletionOptions `json:"completionProvider,omitempty"`
 	HoverProvider      bool               `json:"hoverProvider,omitempty"`
+	DefinitionProvider bool               `json:"definitionProvider,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -151,3 +152,15 @@ const (
 	DiagnosticSeverityWarning     = 2
 	DiagnosticSeverityInformation = 3
 )
+
+// Definition types.
+
+type DefinitionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
+type Location struct {
+	URI   string `json:"uri"`
+	Range Range  `json:"range"`
+}
