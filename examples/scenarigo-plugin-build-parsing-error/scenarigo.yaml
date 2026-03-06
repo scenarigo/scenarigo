@@ -1,0 +1,8 @@
+schemaVersion: config/v1
+
+pluginDirectory: ./plugin/gen
+plugins:
+  plugin.so:
+    src: ./plugin/src
+  other-plugin.so:
+    src: github.com/ShotaroTakami/scenarigo/examples/scenarigo-plugin-build-parsing-error/other-plugin@takami-updateRequireDirectives-check-bug
