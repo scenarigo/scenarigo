@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -102,6 +103,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleCompletion(req)
 	case "textDocument/hover":
 		s.handleHover(req)
+	case "textDocument/definition":
+		s.handleDefinition(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -120,7 +123,8 @@ func (s *Server) handleInitialize(req *Request) {
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: []string{":", " ", "\n"},
 			},
-			HoverProvider: true,
+			HoverProvider:      true,
+			DefinitionProvider: true,
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
@@ -203,6 +207,103 @@ func (s *Server) handleHover(req *Request) {
 		return
 	}
 	s.sendResponse(req.ID, hover, nil)
+}
+
+func (s *Server) handleDefinition(req *Request) {
+	var params DefinitionParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.logger.Printf("definition unmarshal error: %v", err)
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	loc := s.definition(doc, params)
+	if loc == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+	s.sendResponse(req.ID, loc, nil)
+}
+
+func (s *Server) definition(doc *document, params DefinitionParams) *Location {
+	if doc.Parsed == nil {
+		return nil
+	}
+
+	// Get cursor context to determine which field we're on.
+	ctx := doc.Parsed.GetCursorContext(params.Position.Line, params.Position.Character)
+	if ctx == nil || len(ctx.Path) == 0 {
+		return nil
+	}
+
+	lastKey := ctx.Path[len(ctx.Path)-1]
+
+	// Handle "include" field: jump to the referenced scenario file.
+	// Handle "plugins" values: jump to the plugin source.
+	// Handle "scenarios" values: jump to scenario files.
+	switch {
+	case lastKey == "include":
+		// Value is a file path relative to the current document.
+		return s.resolveFileLocation(params.TextDocument.URI, ctx.PartialValue)
+	case ctx.Type == yamlutil.CursorContextValue:
+		// Check if we're in a plugins mapping or scenarios array.
+		for _, key := range ctx.Path {
+			if key == "plugins" || key == "scenarios" {
+				return s.resolveFileLocation(params.TextDocument.URI, ctx.PartialValue)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) resolveFileLocation(docURI, filePath string) *Location {
+	if filePath == "" {
+		return nil
+	}
+
+	// Convert document URI to directory path.
+	docPath := uriToPath(docURI)
+	if docPath == "" {
+		return nil
+	}
+
+	dir := filepath.Dir(docPath)
+	resolved := filepath.Join(dir, filePath)
+
+	// Check if file exists.
+	if _, err := os.Stat(resolved); err != nil {
+		return nil
+	}
+
+	return &Location{
+		URI: pathToURI(resolved),
+		Range: Range{
+			Start: Position{Line: 0, Character: 0},
+			End:   Position{Line: 0, Character: 0},
+		},
+	}
+}
+
+func uriToPath(uri string) string {
+	if strings.HasPrefix(uri, "file://") {
+		return strings.TrimPrefix(uri, "file://")
+	}
+	return ""
+}
+
+func pathToURI(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "file://" + path
+	}
+	return "file://" + abs
 }
 
 func (s *Server) complete(doc *document, pos Position) []CompletionItem {
