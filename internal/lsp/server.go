@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goccy/go-yaml/ast"
+
 	"github.com/scenarigo/scenarigo/internal/lsp/schema"
 	"github.com/scenarigo/scenarigo/internal/lsp/yamlutil"
 )
@@ -350,12 +352,114 @@ func (s *Server) publishDiagnostics(uri string) {
 			Severity: DiagnosticSeverityError,
 			Message:  "Invalid YAML syntax",
 		})
+	} else {
+		sch := schema.DetectSchemaType(doc.Text)
+		diagnostics = append(diagnostics, s.validateDocument(doc, sch)...)
 	}
 
 	s.sendNotification("textDocument/publishDiagnostics", PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
 	})
+}
+
+func (s *Server) validateDocument(doc *document, sch *schema.Schema) []Diagnostic {
+	if doc.Parsed == nil || doc.Parsed.File == nil {
+		return nil
+	}
+	var diags []Diagnostic
+	for _, d := range doc.Parsed.File.Docs {
+		if d.Body == nil {
+			continue
+		}
+		s.validateNode(d.Body, sch.Fields, nil, &diags)
+	}
+	return diags
+}
+
+func (s *Server) validateNode(node ast.Node, fields []*schema.FieldInfo, siblingValues map[string]string, diags *[]Diagnostic) {
+	if node == nil || fields == nil {
+		return
+	}
+
+	switch n := node.(type) {
+	case *ast.MappingNode:
+		// First pass: collect sibling values for dynamic resolution.
+		siblings := make(map[string]string)
+		for _, mv := range n.Values {
+			if mv.Key != nil && mv.Value != nil {
+				if sv, ok := mv.Value.(*ast.StringNode); ok {
+					siblings[mv.Key.String()] = sv.Value
+				}
+			}
+		}
+		// Second pass: validate each key.
+		for _, mv := range n.Values {
+			s.validateMappingValue(mv, fields, siblings, diags)
+		}
+	case *ast.MappingValueNode:
+		s.validateMappingValue(n, fields, siblingValues, diags)
+	}
+}
+
+func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema.FieldInfo, siblings map[string]string, diags *[]Diagnostic) {
+	if mv.Key == nil {
+		return
+	}
+	keyName := mv.Key.String()
+	tok := mv.Key.GetToken()
+
+	// Find matching field in schema.
+	var field *schema.FieldInfo
+	for _, f := range fields {
+		if f.Name == keyName {
+			field = f
+			break
+		}
+	}
+
+	if field == nil {
+		// Unknown key.
+		if tok != nil {
+			*diags = append(*diags, Diagnostic{
+				Range: Range{
+					Start: Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
+					End:   Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1 + len(keyName)},
+				},
+				Severity: DiagnosticSeverityWarning,
+				Message:  fmt.Sprintf("unknown field %q", keyName),
+			})
+		}
+		return
+	}
+
+	// Recurse into child nodes.
+	if mv.Value != nil {
+		var childFields []*schema.FieldInfo
+		if field.DynamicChildren != nil {
+			discriminator := ""
+			if field.DynamicKey != "" && siblings != nil {
+				discriminator = siblings[field.DynamicKey]
+			}
+			childFields = field.DynamicChildren(discriminator)
+		} else {
+			childFields = field.Children
+		}
+
+		switch v := mv.Value.(type) {
+		case *ast.MappingNode:
+			s.validateNode(v, childFields, nil, diags)
+		case *ast.SequenceNode:
+			// For sequences with object items (e.g., steps), validate each item.
+			if field.Children != nil {
+				for _, item := range v.Values {
+					if m, ok := item.(*ast.MappingNode); ok {
+						s.validateNode(m, field.Children, nil, diags)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (s *Server) sendResponse(id *json.RawMessage, result any, respErr *ResponseError) {
