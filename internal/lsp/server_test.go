@@ -107,6 +107,29 @@ func (c *testClient) openDocument(uri, text string) {
 	c.readMessage() // diagnostics
 }
 
+func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiagnosticsParams {
+	c.t.Helper()
+	c.sendNotification("textDocument/didOpen", fmt.Sprintf(`{
+		"textDocument": {
+			"uri": %q,
+			"languageId": "yaml",
+			"version": 1,
+			"text": %s
+		}
+	}`, uri, jsonString(text)))
+	time.Sleep(10 * time.Millisecond)
+	raw := c.readMessage()
+	var notif Notification
+	if err := json.Unmarshal(raw, &notif); err != nil {
+		c.t.Fatalf("unmarshal notification: %v", err)
+	}
+	var params PublishDiagnosticsParams
+	if err := json.Unmarshal(notif.Params, &params); err != nil {
+		c.t.Fatalf("unmarshal diagnostics: %v", err)
+	}
+	return params
+}
+
 func (c *testClient) complete(id int, uri string, line, char int) CompletionList {
 	c.t.Helper()
 	c.sendRequest(id, "textDocument/completion", fmt.Sprintf(`{
@@ -277,7 +300,56 @@ func TestServer_Completion_DynamicHTTPExpect(t *testing.T) {
 	}
 }
 
+func TestServer_Diagnostics_UnknownKey(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	// Scenario with unknown key "unknownField".
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nunknownField: hello\nsteps:\n  - title: step1\n    protocol: http\n    badKey: value\n"
+	diags := client.openDocumentAndGetDiagnostics("file:///tmp/test.yaml", scenarioText)
+
+	// Should have diagnostics for unknown keys.
+	found := make(map[string]bool)
+	for _, d := range diags.Diagnostics {
+		found[d.Message] = true
+	}
+
+	if !found[`unknown field "unknownField"`] {
+		t.Errorf("expected diagnostic for unknownField, got: %v", diagMessages(diags.Diagnostics))
+	}
+	if !found[`unknown field "badKey"`] {
+		t.Errorf("expected diagnostic for badKey, got: %v", diagMessages(diags.Diagnostics))
+	}
+}
+
+func TestServer_Diagnostics_ValidDocument(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	// Valid scenario - should have no diagnostics.
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    request:\n      method: GET\n      url: http://example.com\n"
+	diags := client.openDocumentAndGetDiagnostics("file:///tmp/test.yaml", scenarioText)
+
+	if len(diags.Diagnostics) > 0 {
+		t.Errorf("expected no diagnostics for valid document, got: %v", diagMessages(diags.Diagnostics))
+	}
+}
+
 // --- helpers ---
+
+func diagMessages(diags []Diagnostic) []string {
+	var msgs []string
+	for _, d := range diags {
+		msgs = append(msgs, d.Message)
+	}
+	return msgs
+}
 
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
