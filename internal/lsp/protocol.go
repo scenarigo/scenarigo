@@ -109,9 +109,12 @@ type CompletionItem struct {
 
 // CompletionItemKind values.
 const (
+	CompletionItemKindFunction = 3
 	CompletionItemKindField    = 5
-	CompletionItemKindValue    = 12
+	CompletionItemKindVariable = 6
+	CompletionItemKindModule   = 9
 	CompletionItemKindProperty = 10
+	CompletionItemKindValue    = 12
 	CompletionItemKindKeyword  = 14
 )
 

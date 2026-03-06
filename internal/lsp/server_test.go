@@ -334,6 +334,71 @@ func TestServer_Definition_Include(t *testing.T) {
 	}
 }
 
+func TestServer_Completion_TemplateTopLevel(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	// Template expression with cursor inside {{ }}.
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    request:\n      url: \"{{\"\n"
+	client.openDocument("file:///tmp/test.yaml", scenarioText)
+
+	// Line 6: `      url: "{{"`
+	// Cursor after the second { at character 14.
+	list := client.complete(2, "file:///tmp/test.yaml", 6, 14)
+
+	labels := labelSet(list.Items)
+	for _, name := range []string{"vars", "secrets", "plugins", "request", "response", "steps", "env", "assert", "size"} {
+		if !labels[name] {
+			t.Errorf("expected template completion %q, got: %v", name, labelList(list.Items))
+		}
+	}
+}
+
+func TestServer_Completion_TemplatePartial(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    request:\n      url: '{{var'\n"
+	client.openDocument("file:///tmp/test.yaml", scenarioText)
+
+	list := client.complete(2, "file:///tmp/test.yaml", 6, 16)
+
+	labels := labelSet(list.Items)
+	if !labels["vars"] {
+		t.Errorf("expected 'vars' for partial 'var', got: %v", labelList(list.Items))
+	}
+	// Should not include non-matching names.
+	if labels["plugins"] {
+		t.Error("should not include 'plugins' when typing 'var'")
+	}
+}
+
+func TestServer_Completion_TemplateAssertDot(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	scenarioText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    expect:\n      body:\n        name: '{{assert.'\n"
+	client.openDocument("file:///tmp/test.yaml", scenarioText)
+
+	list := client.complete(2, "file:///tmp/test.yaml", 7, 24)
+
+	labels := labelSet(list.Items)
+	for _, name := range []string{"contains", "notContains", "regexp", "notZero", "greaterThan", "length", "and", "or", "any"} {
+		if !labels[name] {
+			t.Errorf("expected assert function %q, got: %v", name, labelList(list.Items))
+		}
+	}
+}
+
 func TestServer_Diagnostics_UnknownKey(t *testing.T) {
 	srv, client := newTestClient(t)
 	go srv.Run()

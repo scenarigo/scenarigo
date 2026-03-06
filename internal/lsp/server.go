@@ -307,6 +307,11 @@ func pathToURI(path string) string {
 }
 
 func (s *Server) complete(doc *document, pos Position) []CompletionItem {
+	// Check if cursor is inside a template expression {{ }}.
+	if tmplExpr, ok := getTemplateContext(doc.Text, pos); ok {
+		return s.completeTemplate(tmplExpr)
+	}
+
 	sch := schema.DetectSchemaType(doc.Text)
 
 	// Use the parsed document for cursor context, fall back to text-based analysis.
@@ -326,6 +331,128 @@ func (s *Server) complete(doc *document, pos Position) []CompletionItem {
 	default:
 		return nil
 	}
+}
+
+// getTemplateContext checks if the cursor is inside {{ }} and returns the
+// partial expression being typed.
+func getTemplateContext(text string, pos Position) (string, bool) {
+	lines := strings.Split(text, "\n")
+	if pos.Line >= len(lines) {
+		return "", false
+	}
+	line := lines[pos.Line]
+	if pos.Character > len(line) {
+		return "", false
+	}
+	// Look backwards from cursor for "{{".
+	prefix := line[:pos.Character]
+	openIdx := strings.LastIndex(prefix, "{{")
+	if openIdx < 0 {
+		return "", false
+	}
+	// Check there's no closing "}}" between {{ and cursor.
+	between := prefix[openIdx+2:]
+	if strings.Contains(between, "}}") {
+		return "", false
+	}
+	return strings.TrimSpace(between), true
+}
+
+func (s *Server) completeTemplate(expr string) []CompletionItem {
+	// Parse the expression to determine what to complete.
+	// "vars" → complete top-level template variables
+	// "vars." → complete after dot
+	// "" → complete all top-level names
+
+	// Top-level template names available in scenarigo.
+	topLevel := []templateCandidate{
+		{"vars", "Scenario/step variables", CompletionItemKindVariable},
+		{"secrets", "Secret variables", CompletionItemKindVariable},
+		{"plugins", "Plugin exports", CompletionItemKindVariable},
+		{"request", "Request data (protocol-specific)", CompletionItemKindVariable},
+		{"response", "Response data (protocol-specific)", CompletionItemKindVariable},
+		{"steps", "Results from previous steps", CompletionItemKindVariable},
+		{"env", "Environment variable", CompletionItemKindVariable},
+		{"assert", "Assertion functions", CompletionItemKindModule},
+		{"size", "Get size of collection", CompletionItemKindFunction},
+		{"type", "Get type name", CompletionItemKindFunction},
+		{"int", "Convert to int", CompletionItemKindFunction},
+		{"uint", "Convert to uint", CompletionItemKindFunction},
+		{"float", "Convert to float", CompletionItemKindFunction},
+		{"bool", "Convert to bool", CompletionItemKindFunction},
+		{"string", "Convert to string", CompletionItemKindFunction},
+		{"bytes", "Convert to bytes", CompletionItemKindFunction},
+		{"time", "Time type conversion", CompletionItemKindFunction},
+		{"duration", "Duration type conversion", CompletionItemKindFunction},
+	}
+
+	// If there's a dot, we need to complete after the prefix.
+	dotIdx := strings.LastIndex(expr, ".")
+	if dotIdx >= 0 {
+		prefix := expr[:dotIdx]
+		partial := expr[dotIdx+1:]
+		return s.completeTemplateDot(prefix, partial)
+	}
+
+	// Complete top-level names.
+	var items []CompletionItem
+	for _, c := range topLevel {
+		if expr != "" && !strings.HasPrefix(c.name, expr) {
+			continue
+		}
+		items = append(items, CompletionItem{
+			Label:         c.name,
+			Kind:          c.kind,
+			Documentation: c.desc,
+		})
+	}
+	return items
+}
+
+type templateCandidate struct {
+	name string
+	desc string
+	kind int
+}
+
+func (s *Server) completeTemplateDot(prefix, partial string) []CompletionItem {
+	// Known sub-completions.
+	var candidates []templateCandidate
+
+	switch prefix {
+	case "assert":
+		candidates = []templateCandidate{
+			{"and", "Combine assertions with AND (assert.and <- [a, b])", CompletionItemKindFunction},
+			{"or", "Combine assertions with OR (assert.or <- [a, b])", CompletionItemKindFunction},
+			{"any", "Accept any value (always passes)", CompletionItemKindFunction},
+			{"contains", "Assert value contains substring/element (assert.contains <- expected)", CompletionItemKindFunction},
+			{"notContains", "Assert value does not contain (assert.notContains <- value)", CompletionItemKindFunction},
+			{"regexp", "Assert value matches regexp pattern (assert.regexp <- pattern)", CompletionItemKindFunction},
+			{"notZero", "Assert value is not zero value", CompletionItemKindFunction},
+			{"greaterThan", "Assert value > threshold (assert.greaterThan <- n)", CompletionItemKindFunction},
+			{"greaterThanOrEqual", "Assert value >= threshold (assert.greaterThanOrEqual <- n)", CompletionItemKindFunction},
+			{"lessThan", "Assert value < threshold (assert.lessThan <- n)", CompletionItemKindFunction},
+			{"lessThanOrEqual", "Assert value <= threshold (assert.lessThanOrEqual <- n)", CompletionItemKindFunction},
+			{"length", "Assert length of collection (assert.length <- n)", CompletionItemKindFunction},
+		}
+	}
+
+	if candidates == nil {
+		return nil
+	}
+
+	var items []CompletionItem
+	for _, c := range candidates {
+		if partial != "" && !strings.HasPrefix(c.name, partial) {
+			continue
+		}
+		items = append(items, CompletionItem{
+			Label:         c.name,
+			Kind:          c.kind,
+			Documentation: c.desc,
+		})
+	}
+	return items
 }
 
 func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext) []CompletionItem {
