@@ -119,6 +119,9 @@ type CursorContext struct {
 	PartialValue string
 	// ParentKeys lists sibling keys already present at the same level.
 	ParentKeys []string
+	// SiblingValues maps sibling key names to their values at the same level.
+	// Used for dynamic schema resolution (e.g., protocol value determines request fields).
+	SiblingValues map[string]string
 }
 
 type CursorContextType int
@@ -146,14 +149,22 @@ func (d *Document) GetCursorContext(line, col int) *CursorContext {
 	colonIdx := strings.Index(currentLine, ":")
 	trimmed := strings.TrimSpace(currentLine)
 
+	// Helper to build key context with sibling values.
+	keyContext := func(partialKey string) *CursorContext {
+		siblings := make(map[string]string)
+		path, parentKeys := d.getPathAndSiblingsForIndent(line, siblings)
+		return &CursorContext{
+			Type:          CursorContextKey,
+			Path:          path,
+			PartialKey:    partialKey,
+			ParentKeys:    parentKeys,
+			SiblingValues: siblings,
+		}
+	}
+
 	// Empty line or only whitespace: key completion at current indent level.
 	if trimmed == "" {
-		path, parentKeys := d.getPathForIndent(line, col)
-		return &CursorContext{
-			Type:       CursorContextKey,
-			Path:       path,
-			ParentKeys: parentKeys,
-		}
+		return keyContext("")
 	}
 
 	// Line starts with "- ": sequence item, could be key completion.
@@ -161,42 +172,22 @@ func (d *Document) GetCursorContext(line, col int) *CursorContext {
 		afterDash := strings.TrimPrefix(trimmed, "- ")
 		subColonIdx := strings.Index(afterDash, ":")
 		if subColonIdx < 0 {
-			// No colon yet - could be typing a key.
-			path, parentKeys := d.getPathForIndent(line, col)
-			return &CursorContext{
-				Type:       CursorContextKey,
-				Path:       path,
-				PartialKey: strings.TrimSpace(afterDash),
-				ParentKeys: parentKeys,
-			}
+			return keyContext(strings.TrimSpace(afterDash))
 		}
 	}
 
 	if colonIdx < 0 {
-		// No colon: user is typing a key.
-		path, parentKeys := d.getPathForIndent(line, col)
-		return &CursorContext{
-			Type:       CursorContextKey,
-			Path:       path,
-			PartialKey: trimmed,
-			ParentKeys: parentKeys,
-		}
+		return keyContext(trimmed)
 	}
 
 	if col <= colonIdx {
-		// Cursor is before colon: key context.
-		path, parentKeys := d.getPathForIndent(line, col)
-		return &CursorContext{
-			Type:       CursorContextKey,
-			Path:       path,
-			PartialKey: strings.TrimSpace(currentLine[:col]),
-			ParentKeys: parentKeys,
-		}
+		return keyContext(strings.TrimSpace(currentLine[:col]))
 	}
 
 	// Cursor is after colon: value context.
 	// Build path using text-based analysis: parent path + current key.
-	parentPath, _ := d.getPathForIndent(line, col)
+	siblings := make(map[string]string)
+	parentPath, _ := d.getPathAndSiblingsForIndent(line, siblings)
 	currentKey := extractKey(trimmed)
 	var path []string
 	path = append(path, parentPath...)
@@ -205,20 +196,23 @@ func (d *Document) GetCursorContext(line, col int) *CursorContext {
 	}
 	valueText := strings.TrimSpace(currentLine[colonIdx+1:])
 	return &CursorContext{
-		Type:         CursorContextValue,
-		Path:         path,
-		PartialValue: valueText,
+		Type:          CursorContextValue,
+		Path:          path,
+		PartialValue:  valueText,
+		SiblingValues: siblings,
 	}
 }
 
-// getPathForIndent determines the schema path for a given indent level
+// getPathAndSiblingsForIndent determines the schema path for a given indent level
 // by walking backwards through lines to find parent and sibling keys.
 //
 // YAML structure awareness:
 //   - Sequence items ("- key: val") have their content indent at (line_indent + 2).
 //   - When we encounter a "- " line, its keys are siblings if content indent matches.
 //   - A line with lower indent that ends with ":" (no value) is a parent mapping.
-func (d *Document) getPathForIndent(line, _ int) (path []string, parentKeys []string) {
+//
+// If siblingValues is non-nil, it also collects key=value pairs at the same indent level.
+func (d *Document) getPathAndSiblingsForIndent(line int, siblingValues map[string]string) (path []string, parentKeys []string) {
 	lines := strings.Split(d.Text, "\n")
 	if line >= len(lines) {
 		return nil, nil
@@ -240,6 +234,11 @@ func (d *Document) getPathForIndent(line, _ int) (path []string, parentKeys []st
 		if ei == currentIndent {
 			if key := extractKey(trimmed); key != "" {
 				parentKeys = append(parentKeys, key)
+				if siblingValues != nil {
+					if val := extractValue(trimmed); val != "" {
+						siblingValues[key] = val
+					}
+				}
 			}
 		}
 
@@ -283,4 +282,21 @@ func extractKey(trimmedLine string) string {
 		return ""
 	}
 	return strings.TrimSpace(s[:colonIdx])
+}
+
+func extractValue(trimmedLine string) string {
+	s := trimmedLine
+	if strings.HasPrefix(s, "- ") {
+		s = strings.TrimPrefix(s, "- ")
+	}
+	colonIdx := strings.Index(s, ":")
+	if colonIdx < 0 {
+		return ""
+	}
+	val := strings.TrimSpace(s[colonIdx+1:])
+	// Strip quotes.
+	if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
+		val = val[1 : len(val)-1]
+	}
+	return val
 }
