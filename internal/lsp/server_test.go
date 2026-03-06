@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -297,6 +299,38 @@ func TestServer_Completion_DynamicHTTPExpect(t *testing.T) {
 		if labels[key] {
 			t.Errorf("should not have gRPC field %q in HTTP expect", key)
 		}
+	}
+}
+
+func TestServer_Definition_Include(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	// Create a temp file to link to.
+	tmpDir := t.TempDir()
+	targetFile := filepath.Join(tmpDir, "included.yaml")
+	os.WriteFile(targetFile, []byte("title: included\n"), 0o644)
+
+	scenarioText := fmt.Sprintf("schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - include: %s\n", "included.yaml")
+	docURI := "file://" + filepath.Join(tmpDir, "test.yaml")
+	client.openDocument(docURI, scenarioText)
+
+	// Request definition on the include value.
+	client.sendRequest(2, "textDocument/definition", fmt.Sprintf(`{
+		"textDocument": {"uri": %q},
+		"position": {"line": 3, "character": 16}
+	}`, docURI))
+	resp := client.readResponse()
+
+	var loc Location
+	if err := json.Unmarshal(resp, &loc); err != nil {
+		t.Fatalf("unmarshal location: %v", err)
+	}
+	if !strings.HasSuffix(loc.URI, "included.yaml") {
+		t.Errorf("expected URI ending with included.yaml, got: %s", loc.URI)
 	}
 }
 
