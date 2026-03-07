@@ -107,6 +107,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleDefinition(req)
 	case "textDocument/documentSymbol":
 		s.handleDocumentSymbol(req)
+	case "textDocument/codeAction":
+		s.handleCodeAction(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -128,6 +130,7 @@ func (s *Server) handleInitialize(req *Request) {
 			HoverProvider:      true,
 			DefinitionProvider:     true,
 			DocumentSymbolProvider: true,
+			CodeActionProvider:     true,
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
@@ -250,6 +253,101 @@ func (s *Server) handleDocumentSymbol(req *Request) {
 
 	symbols := s.documentSymbols(doc)
 	s.sendResponse(req.ID, symbols, nil)
+}
+
+func (s *Server) handleCodeAction(req *Request) {
+	var params CodeActionParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.logger.Printf("codeAction unmarshal error: %v", err)
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil || doc.Parsed == nil {
+		s.sendResponse(req.ID, []CodeAction{}, nil)
+		return
+	}
+
+	sch := schema.DetectSchemaType(doc.Text)
+	var actions []CodeAction
+
+	for _, diag := range params.Context.Diagnostics {
+		if !strings.HasPrefix(diag.Message, "unknown field ") {
+			continue
+		}
+
+		// Extract the unknown field name from the diagnostic message.
+		unknownKey := strings.TrimPrefix(diag.Message, `unknown field "`)
+		unknownKey = strings.TrimSuffix(unknownKey, `"`)
+
+		// Get valid fields at this position using cursor context.
+		ctx := doc.Parsed.GetCursorContext(diag.Range.Start.Line, diag.Range.Start.Character)
+		if ctx == nil {
+			continue
+		}
+
+		var validFields []*schema.FieldInfo
+		if ctx.Type == yamlutil.CursorContextKey || ctx.Type == yamlutil.CursorContextUnknown {
+			validFields = sch.ChildFields(ctx.Path, ctx.SiblingValues)
+		}
+		if validFields == nil {
+			validFields = sch.Fields
+		}
+
+		// Find similar field names.
+		for _, f := range validFields {
+			if levenshtein(unknownKey, f.Name) <= 3 {
+				action := CodeAction{
+					Title:       fmt.Sprintf("Did you mean %q?", f.Name),
+					Kind:        CodeActionKindQuickFix,
+					Diagnostics: []Diagnostic{diag},
+					Edit: &WorkspaceEdit{
+						Changes: map[string][]TextEdit{
+							params.TextDocument.URI: {
+								{
+									Range:   diag.Range,
+									NewText: f.Name,
+								},
+							},
+						},
+					},
+				}
+				actions = append(actions, action)
+			}
+		}
+	}
+
+	s.sendResponse(req.ID, actions, nil)
+}
+
+// levenshtein computes the edit distance between two strings.
+func levenshtein(a, b string) int {
+	la, lb := len(a), len(b)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
 }
 
 func (s *Server) documentSymbols(doc *document) []DocumentSymbol {
