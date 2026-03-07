@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -9,7 +10,7 @@ import (
 
 func TestEditorSession_OpenEditComplete(t *testing.T) {
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -44,7 +45,7 @@ func TestEditorSession_OpenEditComplete(t *testing.T) {
 
 func TestEditorSession_MultipleDocuments(t *testing.T) {
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -74,7 +75,7 @@ func TestEditorSession_MultipleDocuments(t *testing.T) {
 
 func TestEditorSession_EditAndDiagnostics(t *testing.T) {
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -116,7 +117,7 @@ func TestEditorSession_EditAndDiagnostics(t *testing.T) {
 
 func TestEditorSession_Lifecycle(t *testing.T) {
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	// Initialize.
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
@@ -158,7 +159,7 @@ func TestEditorSession_Lifecycle(t *testing.T) {
 
 func TestEditorSession_CodeAction_DidYouMean(t *testing.T) {
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -214,7 +215,7 @@ func TestEditorSession_CodeAction_DidYouMean(t *testing.T) {
 
 func TestEditorSession_ForeignModelineSkipped(t *testing.T) {
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
