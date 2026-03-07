@@ -46,6 +46,7 @@ type ServerCapabilities struct {
 	DefinitionProvider     bool               `json:"definitionProvider,omitempty"`
 	DocumentSymbolProvider bool               `json:"documentSymbolProvider,omitempty"`
 	CodeActionProvider         bool               `json:"codeActionProvider,omitempty"`
+	ReferencesProvider         bool                 `json:"referencesProvider,omitempty"`
 	DocumentFormattingProvider bool                 `json:"documentFormattingProvider,omitempty"`
 	SignatureHelpProvider      *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
 }
@@ -242,6 +243,18 @@ type DefinitionParams struct {
 type Location struct {
 	URI   string `json:"uri"`
 	Range Range  `json:"range"`
+}
+
+// References types.
+
+type ReferenceParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+	Context      ReferenceContext       `json:"context"`
+}
+
+type ReferenceContext struct {
+	IncludeDeclaration bool `json:"includeDeclaration"`
 }
 
 // Formatting types.

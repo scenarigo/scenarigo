@@ -33,6 +33,7 @@ type lspExpect struct {
 	FormattedText      *string         `yaml:"formattedText"`
 	SignatureLabel     *string         `yaml:"signatureLabel"`
 	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
+	ReferenceCount    *int            `yaml:"referenceCount"`
 }
 
 type labelMatcher struct {
@@ -140,6 +141,11 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 			t.Fatal("signatureHelp test requires $0 cursor marker in document")
 		}
 		runSignatureHelpFixture(t, tc, docText, cursorLine, cursorChar)
+	case "references":
+		if !hasCursor {
+			t.Fatal("references test requires $0 cursor marker in document")
+		}
+		runReferencesFixture(t, tc, docText, cursorLine, cursorChar)
 	default:
 		t.Fatalf("unknown operation: %s", tc.Operation)
 	}
@@ -464,6 +470,39 @@ func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line,
 		}
 		if help.Signatures[0].Label != *tc.Expect.SignatureLabel {
 			t.Errorf("expected signature label %q, got %q", *tc.Expect.SignatureLabel, help.Signatures[0].Label)
+		}
+	}
+}
+
+func runReferencesFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	srv, client := newTestClient(t)
+	go srv.Run(context.Background())
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	uri := "file:///tmp/test.yaml"
+	client.openDocument(uri, docText)
+
+	// Default to includeDeclaration: true.
+	client.sendRequest(2, "textDocument/references", fmt.Sprintf(`{
+		"textDocument": {"uri": %q},
+		"position": {"line": %d, "character": %d},
+		"context": {"includeDeclaration": true}
+	}`, uri, line, char))
+	resp := client.readResponse()
+
+	if tc.Expect.ReferenceCount != nil {
+		var locs []Location
+		if string(resp) != "null" {
+			if err := json.Unmarshal(resp, &locs); err != nil {
+				t.Fatalf("unmarshal locations: %v", err)
+			}
+		}
+		if len(locs) != *tc.Expect.ReferenceCount {
+			t.Errorf("expected %d references, got %d: %v", *tc.Expect.ReferenceCount, len(locs), locs)
 		}
 	}
 }

@@ -132,6 +132,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleFormatting(req)
 	case "textDocument/signatureHelp":
 		s.handleSignatureHelp(req)
+	case "textDocument/references":
+		s.handleReferences(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -164,6 +166,7 @@ func (s *Server) handleInitialize(req *Request) {
 			DefinitionProvider:         true,
 			DocumentSymbolProvider:     true,
 			CodeActionProvider:         true,
+			ReferencesProvider:         true,
 			DocumentFormattingProvider: s.config.Formatting,
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
@@ -1842,4 +1845,396 @@ func (s *Server) writeMessage(msg any) {
 	if _, err := s.writer.Write(body); err != nil {
 		s.logger.Printf("write body error: %v", err)
 	}
+}
+
+// --- textDocument/references ---
+
+func (s *Server) handleReferences(req *Request) {
+	var params ReferenceParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.logger.Printf("references unmarshal error: %v", err)
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, []Location{}, nil)
+		return
+	}
+
+	locs := s.references(doc, params)
+	if locs == nil {
+		locs = []Location{}
+	}
+	s.sendResponse(req.ID, locs, nil)
+}
+
+// templateRef represents a reference to a dotted path inside a template expression.
+type templateRef struct {
+	path     []string // e.g., ["vars", "myVar"] or ["steps", "login", "response"]
+	line     int      // 0-based
+	startCol int      // 0-based, column of path start (e.g., "vars" in "{{vars.myVar}}")
+	endCol   int      // 0-based, column past the last char of the matched prefix
+}
+
+// scanTemplateRefs scans the document text for all template expressions and extracts
+// dotted path references from them.
+func scanTemplateRefs(text string) []templateRef {
+	var refs []templateRef
+	lines := strings.Split(text, "\n")
+
+	for lineIdx, line := range lines {
+		pos := 0
+		for {
+			openIdx := strings.Index(line[pos:], "{{")
+			if openIdx < 0 {
+				break
+			}
+			openIdx += pos
+			closeIdx := strings.Index(line[openIdx+2:], "}}")
+			if closeIdx < 0 {
+				break
+			}
+			closeIdx += openIdx + 2
+
+			expr := line[openIdx+2 : closeIdx]
+
+			// Handle "<-" operator: only process the left-hand side.
+			if arrowIdx := strings.Index(expr, "<-"); arrowIdx >= 0 {
+				expr = expr[:arrowIdx]
+			}
+
+			expr = strings.TrimSpace(expr)
+			if expr == "" {
+				pos = closeIdx + 2
+				continue
+			}
+
+			// Parse dotted path.
+			parts := strings.Split(expr, ".")
+			if len(parts) == 0 {
+				pos = closeIdx + 2
+				continue
+			}
+
+			// Find the column where this path starts within the line.
+			// The path starts after "{{" + any leading whitespace.
+			exprStart := openIdx + 2
+			for exprStart < closeIdx && line[exprStart] == ' ' {
+				exprStart++
+			}
+
+			// Calculate end column: covers parts[0].parts[1] (the first 2 segments).
+			pathStr := expr
+			endColOffset := exprStart + len(pathStr)
+
+			refs = append(refs, templateRef{
+				path:     parts,
+				line:     lineIdx,
+				startCol: exprStart,
+				endCol:   endColOffset,
+			})
+
+			pos = closeIdx + 2
+		}
+	}
+	return refs
+}
+
+// identifySymbol determines what symbol the cursor is on.
+// Returns a 2-element path like ["vars", "myVar"] or ["steps", "login"], and the declaration range.
+func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange *Range) {
+	if doc.Parsed == nil {
+		return nil, nil
+	}
+
+	// First check if cursor is inside a template expression.
+	// Use getFullTemplateExpr to get the complete expression (not just up to cursor).
+	if tmplExpr, ok := getFullTemplateExpr(doc.Text, pos); ok {
+		tmplExpr = strings.TrimSpace(tmplExpr)
+		if tmplExpr == "" {
+			return nil, nil
+		}
+		// Handle "<-" operator: only consider the left-hand side.
+		if arrowIdx := strings.Index(tmplExpr, "<-"); arrowIdx >= 0 {
+			tmplExpr = strings.TrimSpace(tmplExpr[:arrowIdx])
+		}
+		parts := strings.Split(tmplExpr, ".")
+		if len(parts) >= 2 {
+			root := parts[0]
+			if root == "vars" || root == "secrets" || root == "steps" {
+				sp := []string{root, parts[1]}
+				dr := findDeclRange(doc, sp)
+				return sp, dr
+			}
+		}
+		return nil, nil
+	}
+
+	// Check YAML structure: is cursor on a vars/secrets key or step id value?
+	ctx := doc.Parsed.GetCursorContext(pos.Line, pos.Character)
+	if ctx == nil || len(ctx.Path) == 0 {
+		return nil, nil
+	}
+
+	lines := strings.Split(doc.Text, "\n")
+	currentLine := ""
+	if pos.Line < len(lines) {
+		currentLine = lines[pos.Line]
+	}
+
+	// Case 1: Cursor on a key under "vars:" or "secrets:"
+	// ctx.Path would be ["vars"] or ["secrets"] and we're on a child key.
+	for i, key := range ctx.Path {
+		if (key == "vars" || key == "secrets") && i == len(ctx.Path)-1 {
+			// Cursor is on the "vars"/"secrets" key itself; check if this is a child key position.
+			if ctx.Type == yamlutil.CursorContextKey && ctx.PartialKey != "" {
+				// Cursor is on a key that IS under vars/secrets — but ctx.Path ends with "vars"
+				// which means the partial key IS the child. Actually let's check siblings.
+			}
+		}
+	}
+
+	// Check if cursor is on a child key of vars/secrets.
+	if len(ctx.Path) >= 1 {
+		parent := ctx.Path[len(ctx.Path)-1]
+		if (parent == "vars" || parent == "secrets") && ctx.Type == yamlutil.CursorContextKey {
+			keyName := extractKeyFromLine(currentLine)
+			if keyName != "" {
+				r := keyRange(pos.Line, currentLine, keyName)
+				return []string{parent, keyName}, &r
+			}
+		}
+	}
+
+	// Check if this is a key under vars/secrets when we're on the value side.
+	if len(ctx.Path) >= 2 {
+		grandParent := ctx.Path[len(ctx.Path)-2]
+		if grandParent == "vars" || grandParent == "secrets" {
+			keyName := ctx.Path[len(ctx.Path)-1]
+			r := keyRange(pos.Line, currentLine, keyName)
+			return []string{grandParent, keyName}, &r
+		}
+	}
+
+	// Case 2: Cursor on a step's "id" value.
+	if ctx.Type == yamlutil.CursorContextValue {
+		lastKey := ctx.Path[len(ctx.Path)-1]
+		if lastKey == "id" && ctx.PartialValue != "" {
+			// Verify it's under steps.
+			for _, key := range ctx.Path {
+				if key == "steps" {
+					idValue := ctx.PartialValue
+					r := valueRange(pos.Line, currentLine, idValue)
+					return []string{"steps", idValue}, &r
+				}
+			}
+		}
+	}
+
+	// Case 3: Cursor on the key "id" itself, get the value.
+	if ctx.Type == yamlutil.CursorContextKey {
+		keyName := extractKeyFromLine(currentLine)
+		if keyName == "id" {
+			// Get the value from the same line.
+			colonIdx := strings.Index(currentLine, ":")
+			if colonIdx >= 0 {
+				val := strings.TrimSpace(currentLine[colonIdx+1:])
+				if val != "" {
+					for _, key := range ctx.Path {
+						if key == "steps" {
+							r := valueRange(pos.Line, currentLine, val)
+							return []string{"steps", val}, &r
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// extractKeyFromLine extracts the YAML key from a line like "  myKey: value" or "  - myKey: value".
+func extractKeyFromLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "- ") {
+		trimmed = strings.TrimPrefix(trimmed, "- ")
+	}
+	colonIdx := strings.Index(trimmed, ":")
+	if colonIdx < 0 {
+		return ""
+	}
+	return strings.TrimSpace(trimmed[:colonIdx])
+}
+
+// keyRange returns a Range covering the key name on the given line.
+func keyRange(line int, lineText, keyName string) Range {
+	idx := strings.Index(lineText, keyName)
+	if idx < 0 {
+		return Range{Start: Position{Line: line, Character: 0}, End: Position{Line: line, Character: 0}}
+	}
+	return Range{
+		Start: Position{Line: line, Character: idx},
+		End:   Position{Line: line, Character: idx + len(keyName)},
+	}
+}
+
+// valueRange returns a Range covering the value on the given line (after ":").
+func valueRange(line int, lineText, value string) Range {
+	colonIdx := strings.Index(lineText, ":")
+	if colonIdx < 0 {
+		return Range{Start: Position{Line: line, Character: 0}, End: Position{Line: line, Character: 0}}
+	}
+	// Find value after colon.
+	afterColon := lineText[colonIdx+1:]
+	valIdx := strings.Index(afterColon, value)
+	if valIdx < 0 {
+		return Range{Start: Position{Line: line, Character: 0}, End: Position{Line: line, Character: 0}}
+	}
+	start := colonIdx + 1 + valIdx
+	return Range{
+		Start: Position{Line: line, Character: start},
+		End:   Position{Line: line, Character: start + len(value)},
+	}
+}
+
+func (s *Server) references(doc *document, params ReferenceParams) []Location {
+	if schema.DetectSchemaType(doc.Text) == nil {
+		return nil
+	}
+
+	symbolPath, declRange := identifySymbol(doc, params.Position)
+	if symbolPath == nil || len(symbolPath) < 2 {
+		return nil
+	}
+
+	refs := scanTemplateRefs(doc.Text)
+
+	var locs []Location
+
+	// If includeDeclaration, add the declaration location.
+	if params.Context.IncludeDeclaration && declRange != nil {
+		locs = append(locs, Location{
+			URI:   params.TextDocument.URI,
+			Range: *declRange,
+		})
+	}
+
+	// Match template refs whose first 2 path elements match symbolPath.
+	for _, ref := range refs {
+		if len(ref.path) < 2 {
+			continue
+		}
+		if ref.path[0] == symbolPath[0] && ref.path[1] == symbolPath[1] {
+			// Highlight just the matched prefix (e.g., "vars.myVar" portion).
+			matchEnd := ref.startCol + len(ref.path[0]) + 1 + len(ref.path[1])
+			if matchEnd > ref.endCol {
+				matchEnd = ref.endCol
+			}
+			locs = append(locs, Location{
+				URI: params.TextDocument.URI,
+				Range: Range{
+					Start: Position{Line: ref.line, Character: ref.startCol},
+					End:   Position{Line: ref.line, Character: matchEnd},
+				},
+			})
+		}
+	}
+
+	return locs
+}
+
+// findDeclRange searches the document for the declaration of a symbol and returns its range.
+// This is used when the cursor is inside a template expression to find the original definition.
+func findDeclRange(doc *document, symbolPath []string) *Range {
+	if len(symbolPath) < 2 || doc.Parsed == nil {
+		return nil
+	}
+
+	root := symbolPath[0]
+	name := symbolPath[1]
+	lines := strings.Split(doc.Text, "\n")
+
+	switch root {
+	case "vars", "secrets":
+		// Find the key under the vars/secrets mapping.
+		inBlock := false
+		blockIndent := -1
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == root+":" {
+				inBlock = true
+				blockIndent = getLineIndent(line)
+				continue
+			}
+			if inBlock {
+				if trimmed == "" {
+					continue
+				}
+				lineIndent := getLineIndent(line)
+				if lineIndent <= blockIndent {
+					break // Left the block.
+				}
+				key := extractKeyFromLine(line)
+				if key == name {
+					r := keyRange(i, line, name)
+					return &r
+				}
+			}
+		}
+	case "steps":
+		// Find the step with id: <name>.
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			// Look for "id: <name>" or "- id: <name>".
+			s := trimmed
+			if strings.HasPrefix(s, "- ") {
+				s = strings.TrimPrefix(s, "- ")
+			}
+			if strings.HasPrefix(s, "id:") {
+				val := strings.TrimSpace(strings.TrimPrefix(s, "id:"))
+				if val == name {
+					r := valueRange(i, line, name)
+					return &r
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func getLineIndent(line string) int {
+	return len(line) - len(strings.TrimLeft(line, " "))
+}
+
+// getFullTemplateExpr returns the full template expression surrounding the cursor.
+// Unlike getTemplateContext which returns text up to the cursor, this returns the entire expression.
+func getFullTemplateExpr(text string, pos Position) (string, bool) {
+	lines := strings.Split(text, "\n")
+	if pos.Line >= len(lines) {
+		return "", false
+	}
+	line := lines[pos.Line]
+	if pos.Character > len(line) {
+		return "", false
+	}
+	// Look backwards from cursor for "{{".
+	prefix := line[:pos.Character]
+	openIdx := strings.LastIndex(prefix, "{{")
+	if openIdx < 0 {
+		return "", false
+	}
+	// Check there's no closing "}}" between {{ and cursor.
+	between := prefix[openIdx+2:]
+	if strings.Contains(between, "}}") {
+		return "", false
+	}
+	// Find the closing "}}" after the opening.
+	closeIdx := strings.Index(line[openIdx+2:], "}}")
+	if closeIdx < 0 {
+		return "", false
+	}
+	return strings.TrimSpace(line[openIdx+2 : openIdx+2+closeIdx]), true
 }
