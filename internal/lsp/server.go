@@ -1003,12 +1003,16 @@ func (s *Server) validateNode(node ast.Node, fields []*schema.FieldInfo, sibling
 
 	switch n := node.(type) {
 	case *ast.MappingNode:
-		// First pass: collect sibling values for dynamic resolution.
+		// First pass: collect sibling values and present keys for dynamic resolution.
 		siblings := make(map[string]string)
+		presentKeys := make(map[string]bool)
 		for _, mv := range n.Values {
-			if mv.Key != nil && mv.Value != nil {
-				if sv, ok := mv.Value.(*ast.StringNode); ok {
-					siblings[mv.Key.String()] = sv.Value
+			if mv.Key != nil {
+				presentKeys[mv.Key.String()] = true
+				if mv.Value != nil {
+					if sv, ok := mv.Value.(*ast.StringNode); ok {
+						siblings[mv.Key.String()] = sv.Value
+					}
 				}
 			}
 		}
@@ -1016,6 +1020,8 @@ func (s *Server) validateNode(node ast.Node, fields []*schema.FieldInfo, sibling
 		for _, mv := range n.Values {
 			s.validateMappingValue(mv, fields, siblings, diags)
 		}
+		// Third pass: check required fields.
+		s.validateRequiredFields(n, fields, presentKeys, diags)
 	case *ast.MappingValueNode:
 		s.validateMappingValue(n, fields, siblingValues, diags)
 	}
@@ -1104,6 +1110,27 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema
 				}
 			}
 		}
+	}
+}
+
+func (s *Server) validateRequiredFields(node *ast.MappingNode, fields []*schema.FieldInfo, presentKeys map[string]bool, diags *[]Diagnostic) {
+	for _, f := range fields {
+		if !f.Required || presentKeys[f.Name] {
+			continue
+		}
+		// Report at the mapping node's position.
+		tok := node.GetToken()
+		if tok == nil {
+			continue
+		}
+		*diags = append(*diags, Diagnostic{
+			Range: Range{
+				Start: Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
+				End:   Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
+			},
+			Severity: DiagnosticSeverityWarning,
+			Message:  fmt.Sprintf("missing required field %q", f.Name),
+		})
 	}
 }
 

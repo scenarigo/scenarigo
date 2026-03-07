@@ -113,7 +113,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Enum value validation | Supported | Warns on values not in the allowed set (lists allowed values) |
 | YAML syntax errors | Supported | Reports parse failures |
 | Type checking | Not yet | Type mismatches (string/int/bool/duration) |
-| Required field validation | Not yet | Warns when required fields are missing |
+| Required field validation | Supported | Warns when required fields are missing (e.g., `method`/`url` in HTTP request) |
 
 ### Other Features
 
