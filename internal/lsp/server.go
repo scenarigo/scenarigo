@@ -1635,6 +1635,11 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema
 		}
 	}
 
+	// Validate type.
+	if mv.Value != nil {
+		s.validateFieldType(mv.Value, field, keyName, diags)
+	}
+
 	// Recurse into child nodes.
 	if mv.Value != nil {
 		var childFields []*schema.FieldInfo
@@ -1682,6 +1687,124 @@ func (s *Server) validateRequiredFields(node *ast.MappingNode, fields []*schema.
 			Severity: DiagnosticSeverityWarning,
 			Message:  fmt.Sprintf("missing required field %q", f.Name),
 		})
+	}
+}
+
+func (s *Server) validateFieldType(value ast.Node, field *schema.FieldInfo, keyName string, diags *[]Diagnostic) {
+	if field.Type == schema.FieldTypeAny || field.Type == schema.FieldTypeMap {
+		return // Accept anything.
+	}
+
+	// Skip type checking for template expressions and alias nodes.
+	switch v := value.(type) {
+	case *ast.StringNode:
+		if strings.Contains(v.Value, "{{") {
+			return
+		}
+	case *ast.LiteralNode:
+		return // Block scalars are strings, compatible with string fields.
+	case *ast.AliasNode:
+		return // Cannot determine type statically.
+	case *ast.AnchorNode:
+		if v.Value != nil {
+			s.validateFieldType(v.Value, field, keyName, diags)
+		}
+		return
+	}
+
+	var mismatch string
+	switch field.Type {
+	case schema.FieldTypeBool:
+		switch value.(type) {
+		case *ast.BoolNode:
+			// OK.
+		case *ast.StringNode:
+			// Strings are accepted (template expressions, etc.).
+		default:
+			mismatch = describeNodeType(value)
+		}
+	case schema.FieldTypeString, schema.FieldTypeDuration:
+		switch value.(type) {
+		case *ast.StringNode, *ast.IntegerNode, *ast.FloatNode, *ast.BoolNode:
+			// OK: YAML scalars are acceptable as strings.
+		default:
+			mismatch = describeNodeType(value)
+		}
+	case schema.FieldTypeInt:
+		switch value.(type) {
+		case *ast.IntegerNode:
+			// OK.
+		case *ast.StringNode:
+			// Strings are accepted (template expressions).
+		default:
+			mismatch = describeNodeType(value)
+		}
+	case schema.FieldTypeFloat:
+		switch value.(type) {
+		case *ast.IntegerNode, *ast.FloatNode:
+			// OK.
+		case *ast.StringNode:
+			// Strings are accepted (template expressions).
+		default:
+			mismatch = describeNodeType(value)
+		}
+	case schema.FieldTypeObject:
+		switch value.(type) {
+		case *ast.MappingNode:
+			// OK.
+		case *ast.StringNode:
+			// Strings are accepted (template expressions like "{{vars.xxx}}").
+		case *ast.NullNode:
+			// OK: null is acceptable for optional objects.
+		default:
+			mismatch = describeNodeType(value)
+		}
+	case schema.FieldTypeArray:
+		switch value.(type) {
+		case *ast.SequenceNode:
+			// OK.
+		case *ast.StringNode:
+			// Strings are accepted (template expressions).
+		case *ast.NullNode:
+			// OK.
+		default:
+			mismatch = describeNodeType(value)
+		}
+	}
+
+	if mismatch != "" {
+		tok := value.GetToken()
+		if tok != nil {
+			*diags = append(*diags, Diagnostic{
+				Range: Range{
+					Start: Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
+					End:   Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1 + len(value.String())},
+				},
+				Severity: DiagnosticSeverityWarning,
+				Message:  fmt.Sprintf("field %q expects %s, got %s", keyName, field.Type, mismatch),
+			})
+		}
+	}
+}
+
+func describeNodeType(node ast.Node) string {
+	switch node.(type) {
+	case *ast.BoolNode:
+		return "bool"
+	case *ast.IntegerNode:
+		return "int"
+	case *ast.FloatNode:
+		return "float"
+	case *ast.StringNode, *ast.LiteralNode:
+		return "string"
+	case *ast.MappingNode:
+		return "object"
+	case *ast.SequenceNode:
+		return "array"
+	case *ast.NullNode:
+		return "null"
+	default:
+		return "unknown"
 	}
 }
 
