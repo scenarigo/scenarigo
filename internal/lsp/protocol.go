@@ -118,6 +118,8 @@ const (
 	CompletionItemKindProperty = 10
 	CompletionItemKindValue    = 12
 	CompletionItemKindKeyword  = 14
+	CompletionItemKindFile     = 17
+	CompletionItemKindFolder   = 19
 )
 
 type HoverParams struct {
