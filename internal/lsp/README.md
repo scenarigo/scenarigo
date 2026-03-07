@@ -10,6 +10,66 @@ scenarigo lsp
 
 The LSP server communicates over stdio using JSON-RPC 2.0. Configure your editor to use it as an LSP client.
 
+## Editor Setup
+
+### Neovim (nvim-lspconfig)
+
+Add the following to your Neovim configuration (e.g., `~/.config/nvim/init.lua` or a file loaded by it):
+
+```lua
+local lspconfig = require("lspconfig")
+local configs = require("lspconfig.configs")
+
+if not configs.scenarigo then
+  configs.scenarigo = {
+    default_config = {
+      cmd = { "scenarigo", "lsp" },
+      filetypes = { "yaml" },
+      root_dir = lspconfig.util.root_pattern("scenarigo.yaml", ".git"),
+      settings = {},
+    },
+  }
+end
+
+lspconfig.scenarigo.setup({})
+```
+
+If you only want the LSP active for scenarigo-related YAML files, use `root_dir` to scope it — the server will only start when `scenarigo.yaml` or `.git` is found in a parent directory.
+
+### Vim (vim-lsp)
+
+Using [vim-lsp](https://github.com/prabirshrestha/vim-lsp), add the following to your `.vimrc`:
+
+```vim
+if executable('scenarigo')
+  au User lsp_setup call lsp#register_server(#{
+    \ name: 'scenarigo',
+    \ cmd: ['scenarigo', 'lsp'],
+    \ allowlist: ['yaml'],
+    \ root_uri: {server_info->
+    \   lsp#utils#path_to_uri(
+    \     lsp#utils#find_nearest_parent_file_directory(
+    \       lsp#utils#get_buffer_path(),
+    \       ['scenarigo.yaml', '.git']))},
+    \ })
+endif
+```
+
+### Neovim (manual, without nvim-lspconfig)
+
+```lua
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "yaml",
+  callback = function()
+    vim.lsp.start({
+      name = "scenarigo",
+      cmd = { "scenarigo", "lsp" },
+      root_dir = vim.fs.root(0, { "scenarigo.yaml", ".git" }),
+    })
+  end,
+})
+```
+
 ## Feature Matrix
 
 ### LSP Methods
@@ -64,7 +124,22 @@ The LSP server communicates over stdio using JSON-RPC 2.0. Configure your editor
 | Document Symbol | Supported | Hierarchical symbol tree from YAML structure; steps use their `title` as the symbol name |
 | Code Action | Supported | Suggests quick fixes for unknown fields using Levenshtein distance (<= 3) |
 | Schema auto-detection | Supported | Detects config vs. scenario from the `schemaVersion` value |
+| Non-scenarigo YAML coexistence | Supported | Silent when `schemaVersion` key is absent; skips files with `# yaml-language-server:` modeline |
 | Broken YAML handling | Supported | Caches last successful AST + text-based analysis hybrid |
+
+## Schema Detection
+
+The LSP uses the `schemaVersion` key to decide how to handle a YAML file:
+
+| Condition | Behavior |
+|---|---|
+| `schemaVersion: scenario/v1` | Full LSP features using the scenario schema |
+| `schemaVersion: config/v1` | Full LSP features using the config schema |
+| `schemaVersion:` present, value empty or unrecognized | Defaults to scenario schema (most common type) so that completion and diagnostics remain active while the user is typing |
+| `schemaVersion` key absent | File is treated as non-scenarigo YAML — all features are disabled (no completions, diagnostics, hover, etc.) |
+| `# yaml-language-server: ...` modeline present | File is skipped entirely (not stored in memory), avoiding conflicts with other YAML language servers |
+
+This design means the server can be registered for all `*.yaml` files without interfering with non-scenarigo YAML. When another YAML language server (e.g., [yaml-language-server](https://github.com/redhat-developer/yaml-language-server)) is also active, both servers can coexist: scenarigo stays silent on files it does not own, and files with a `yaml-language-server` modeline are fully ignored.
 
 ## Supported Schemas
 
@@ -96,10 +171,10 @@ internal/lsp/
   integration_test.go   # Session-level integration tests (open -> edit -> complete -> hover -> close)
   server_fuzz_test.go   # FuzzGetTemplateContext, FuzzCompleteTemplate
   testdata/
-    completion/         # 9 completion test fixtures
-    diagnostics/        # 3 diagnostics test fixtures
+    completion/         # 13 completion test fixtures
+    diagnostics/        # 4 diagnostics test fixtures
     definition/         # 1 definition test fixture
-    hover/              # 2 hover test fixtures
+    hover/              # 3 hover test fixtures
     documentSymbol/     # 1 document symbol test fixture
   yamlutil/
     position_test.go    # GetCursorContext unit tests
