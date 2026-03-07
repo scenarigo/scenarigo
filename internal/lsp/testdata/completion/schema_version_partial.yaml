@@ -1,0 +1,9 @@
+---
+name: "schemaVersion value completion with partial input"
+document: |
+  schemaVersion: sc$0
+operation: completion
+expect:
+  completionLabels:
+    contains: [scenario/v1]
+    excludes: [config/v1]
