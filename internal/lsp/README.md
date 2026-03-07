@@ -70,6 +70,35 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 ```
 
+## Configuration
+
+The server accepts `initializationOptions` to configure features. All options default to enabled (`true`).
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `formatting` | `bool` | `true` | Enable `textDocument/formatting` (schema key ordering) |
+
+### Neovim example
+
+```lua
+lspconfig.scenarigo.setup({
+  init_options = {
+    formatting = false, -- disable formatting if you use another YAML formatter
+  },
+})
+```
+
+### Vim (vim-lsp) example
+
+```vim
+au User lsp_setup call lsp#register_server(#{
+  \ name: 'scenarigo',
+  \ cmd: ['scenarigo', 'lsp'],
+  \ allowlist: ['yaml'],
+  \ initialization_options: {'formatting': v:false},
+  \ })
+```
+
 ## Feature Matrix
 
 ### LSP Methods
