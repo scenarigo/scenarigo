@@ -1,0 +1,15 @@
+---
+name: "gRPC request field completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: grpc
+      request:
+        $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [target, service, method, message]
+    excludes: [url]

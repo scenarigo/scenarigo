@@ -1,0 +1,18 @@
+---
+name: "HTTP expect field completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+      expect:
+        $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [code, header, body]
+    excludes: [trailer, status]

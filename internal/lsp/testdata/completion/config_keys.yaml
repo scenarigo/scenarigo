@@ -1,0 +1,9 @@
+---
+name: "config top-level key completion"
+document: |
+  schemaVersion: config/v1
+  $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [scenarios, plugins, protocols, output, input, execution]

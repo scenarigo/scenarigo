@@ -1,0 +1,13 @@
+---
+name: "jump to included file"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - include: $0included.yaml
+operation: definition
+files:
+  included.yaml: "title: included\n"
+expect:
+  definitionURI:
+    suffix: "included.yaml"
