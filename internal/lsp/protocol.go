@@ -42,8 +42,9 @@ type InitializeResult struct {
 type ServerCapabilities struct {
 	TextDocumentSync   int                `json:"textDocumentSync"`
 	CompletionProvider *CompletionOptions `json:"completionProvider,omitempty"`
-	HoverProvider      bool               `json:"hoverProvider,omitempty"`
-	DefinitionProvider bool               `json:"definitionProvider,omitempty"`
+	HoverProvider          bool               `json:"hoverProvider,omitempty"`
+	DefinitionProvider     bool               `json:"definitionProvider,omitempty"`
+	DocumentSymbolProvider bool               `json:"documentSymbolProvider,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -154,6 +155,41 @@ const (
 	DiagnosticSeverityError       = 1
 	DiagnosticSeverityWarning     = 2
 	DiagnosticSeverityInformation = 3
+)
+
+// DocumentSymbol types.
+
+type DocumentSymbolParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+}
+
+type DocumentSymbol struct {
+	Name           string           `json:"name"`
+	Detail         string           `json:"detail,omitempty"`
+	Kind           int              `json:"kind"`
+	Range          Range            `json:"range"`
+	SelectionRange Range            `json:"selectionRange"`
+	Children       []DocumentSymbol `json:"children,omitempty"`
+}
+
+// SymbolKind values.
+const (
+	SymbolKindFile      = 1
+	SymbolKindModule    = 2
+	SymbolKindNamespace = 3
+	SymbolKindPackage   = 4
+	SymbolKindClass     = 5
+	SymbolKindMethod    = 6
+	SymbolKindProperty  = 7
+	SymbolKindField     = 8
+	SymbolKindVariable  = 13
+	SymbolKindConstant  = 14
+	SymbolKindString    = 15
+	SymbolKindNumber    = 16
+	SymbolKindBoolean   = 17
+	SymbolKindArray     = 18
+	SymbolKindObject    = 19
+	SymbolKindKey       = 20
 )
 
 // Definition types.
