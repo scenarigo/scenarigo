@@ -1,0 +1,17 @@
+---
+name: "YAML without schemaVersion is silent"
+document: |
+  name: my-app
+  services:
+    web:
+      image: nginx
+      unknownThing: value
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "empty YAML is silent"
+document: ""
+operation: diagnostics
+expect:
+  diagnosticCount: 0

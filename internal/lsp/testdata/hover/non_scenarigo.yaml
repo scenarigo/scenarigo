@@ -1,0 +1,7 @@
+---
+name: "no hover for non-scenarigo YAML"
+document: |
+  $0name: my-app
+operation: hover
+expect:
+  hoverIsNull: true

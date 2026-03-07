@@ -211,3 +211,39 @@ func TestEditorSession_CodeAction_DidYouMean(t *testing.T) {
 		t.Errorf("expected 'Did you mean \"protocol\"?' in actions, got: %v", titles)
 	}
 }
+
+func TestEditorSession_ForeignModelineSkipped(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	// Open a file with a yaml-language-server modeline.
+	// The server should NOT store it and NOT send diagnostics.
+	foreignText := "# yaml-language-server: $schema=https://json.schemastore.org/github-workflow\nname: CI\non: push\n"
+	client.sendNotification("textDocument/didOpen", fmt.Sprintf(`{
+		"textDocument": {
+			"uri": "file:///tmp/workflow.yaml",
+			"languageId": "yaml",
+			"version": 1,
+			"text": %s
+		}
+	}`, jsonString(foreignText)))
+
+	// No diagnostics notification should be sent.
+	// Verify by requesting completion — should return empty since doc is not in store.
+	client.sendRequest(2, "textDocument/completion", `{
+		"textDocument": {"uri": "file:///tmp/workflow.yaml"},
+		"position": {"line": 2, "character": 0}
+	}`)
+	resp := client.readResponse()
+
+	var list CompletionList
+	if err := json.Unmarshal(resp, &list); err != nil {
+		t.Fatalf("unmarshal completion: %v", err)
+	}
+	if len(list.Items) != 0 {
+		t.Errorf("expected no completions for foreign modeline file, got: %v", labelList(list.Items))
+	}
+}

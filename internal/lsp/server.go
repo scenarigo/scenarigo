@@ -142,6 +142,10 @@ func (s *Server) handleDidOpen(req *Request) {
 		s.logger.Printf("didOpen unmarshal error: %v", err)
 		return
 	}
+	if hasForeignModeline(params.TextDocument.Text) {
+		// File is managed by another YAML language server; skip to save memory.
+		return
+	}
 	s.docs.Open(params.TextDocument.URI, params.TextDocument.Version, params.TextDocument.Text)
 	s.publishDiagnostics(params.TextDocument.URI)
 }
@@ -153,7 +157,13 @@ func (s *Server) handleDidChange(req *Request) {
 		return
 	}
 	if len(params.ContentChanges) > 0 {
-		s.docs.Update(params.TextDocument.URI, params.TextDocument.Version, params.ContentChanges[len(params.ContentChanges)-1].Text)
+		text := params.ContentChanges[len(params.ContentChanges)-1].Text
+		if hasForeignModeline(text) {
+			// A modeline was added; drop from store to free memory.
+			s.docs.Close(params.TextDocument.URI)
+			return
+		}
+		s.docs.Update(params.TextDocument.URI, params.TextDocument.Version, text)
 	}
 	s.publishDiagnostics(params.TextDocument.URI)
 }
@@ -251,6 +261,12 @@ func (s *Server) handleDocumentSymbol(req *Request) {
 		return
 	}
 
+	sch := schema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		s.sendResponse(req.ID, []DocumentSymbol{}, nil)
+		return
+	}
+
 	symbols := s.documentSymbols(doc)
 	s.sendResponse(req.ID, symbols, nil)
 }
@@ -270,6 +286,11 @@ func (s *Server) handleCodeAction(req *Request) {
 	}
 
 	sch := schema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		s.sendResponse(req.ID, []CodeAction{}, nil)
+		return
+	}
+
 	var actions []CodeAction
 
 	for _, diag := range params.Context.Diagnostics {
@@ -493,6 +514,9 @@ func (s *Server) definition(doc *document, params DefinitionParams) *Location {
 	if doc.Parsed == nil {
 		return nil
 	}
+	if schema.DetectSchemaType(doc.Text) == nil {
+		return nil
+	}
 
 	// Get cursor context to determine which field we're on.
 	ctx := doc.Parsed.GetCursorContext(params.Position.Line, params.Position.Character)
@@ -565,12 +589,15 @@ func pathToURI(path string) string {
 }
 
 func (s *Server) complete(doc *document, pos Position) []CompletionItem {
+	sch := schema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		return nil
+	}
+
 	// Check if cursor is inside a template expression {{ }}.
 	if tmplExpr, ok := getTemplateContext(doc.Text, pos); ok {
 		return s.completeTemplate(tmplExpr)
 	}
-
-	sch := schema.DetectSchemaType(doc.Text)
 
 	// Use the parsed document for cursor context, fall back to text-based analysis.
 	var ctx *yamlutil.CursorContext
@@ -792,6 +819,9 @@ func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext)
 
 func (s *Server) hover(doc *document, pos Position) *Hover {
 	sch := schema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		return nil
+	}
 	if doc.Parsed == nil {
 		return nil
 	}
@@ -828,8 +858,11 @@ func (s *Server) publishDiagnostics(uri string) {
 
 	var diagnostics []Diagnostic
 
-	// Check if YAML parsing failed.
-	if doc.Parsed == nil {
+	sch := schema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		// Not a scenarigo YAML file; send empty diagnostics and stay silent.
+	} else if doc.Parsed == nil {
+		// Check if YAML parsing failed.
 		diagnostics = append(diagnostics, Diagnostic{
 			Range: Range{
 				Start: Position{Line: 0, Character: 0},
@@ -839,7 +872,6 @@ func (s *Server) publishDiagnostics(uri string) {
 			Message:  "Invalid YAML syntax",
 		})
 	} else {
-		sch := schema.DetectSchemaType(doc.Text)
 		diagnostics = append(diagnostics, s.validateDocument(doc, sch)...)
 	}
 
