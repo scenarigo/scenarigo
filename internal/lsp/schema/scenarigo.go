@@ -6,7 +6,7 @@ package schema
 func ConfigSchema() *Schema {
 	return &Schema{
 		Fields: []*FieldInfo{
-			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the configuration file", EnumValues: []string{"config/v1", "scenario/v1"}},
+			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the configuration file", Required: true, EnumValues: []string{"config/v1", "scenario/v1"}},
 			{Name: "vars", Type: FieldTypeMap, Description: "Variables available in all scenarios"},
 			{Name: "secrets", Type: FieldTypeMap, Description: "Secret variables (not displayed in logs)"},
 			{Name: "scenarios", Type: FieldTypeArray, Description: "Paths to scenario files or directories", IsFilePath: true},
@@ -50,7 +50,7 @@ func ConfigSchema() *Schema {
 func ScenarioSchema() *Schema {
 	return &Schema{
 		Fields: []*FieldInfo{
-			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the scenario file", EnumValues: []string{"scenario/v1", "config/v1"}},
+			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the scenario file", Required: true, EnumValues: []string{"scenario/v1", "config/v1"}},
 			{Name: "title", Type: FieldTypeString, Description: "Scenario title"},
 			{Name: "description", Type: FieldTypeString, Description: "Scenario description"},
 			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin name to path mapping", IsFilePath: true},
@@ -134,8 +134,8 @@ func retryFields() []*FieldInfo {
 func httpRequestFields() []*FieldInfo {
 	return []*FieldInfo{
 		{Name: "client", Type: FieldTypeString, Description: "Custom HTTP client (template expression)"},
-		{Name: "method", Type: FieldTypeString, Description: "HTTP method", EnumValues: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}},
-		{Name: "url", Type: FieldTypeString, Description: "Request URL"},
+		{Name: "method", Type: FieldTypeString, Description: "HTTP method", Required: true, EnumValues: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}},
+		{Name: "url", Type: FieldTypeString, Description: "Request URL", Required: true},
 		{Name: "query", Type: FieldTypeMap, Description: "Query parameters"},
 		{Name: "header", Type: FieldTypeMap, Description: "Request headers"},
 		{Name: "body", Type: FieldTypeAny, Description: "Request body"},

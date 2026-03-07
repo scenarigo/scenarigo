@@ -16,6 +16,8 @@ type FieldInfo struct {
 	Children []*FieldInfo
 	// Deprecated marks the field as deprecated.
 	Deprecated bool
+	// Required marks the field as required.
+	Required bool
 	// IsFilePath indicates the field value is a file path and should offer
 	// filesystem-based completion.
 	IsFilePath bool
