@@ -168,7 +168,10 @@ func (d *Document) GetCursorContext(line, col int) *CursorContext {
 		return keyContext("")
 	}
 
-	// Line starts with "- ": sequence item, could be key completion.
+	// Line starts with "- " or is just "-": sequence item.
+	if trimmed == "-" {
+		return keyContext("")
+	}
 	if strings.HasPrefix(trimmed, "- ") {
 		afterDash := strings.TrimPrefix(trimmed, "- ")
 		subColonIdx := strings.Index(afterDash, ":")

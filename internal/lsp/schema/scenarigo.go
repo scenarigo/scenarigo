@@ -9,9 +9,9 @@ func ConfigSchema() *Schema {
 			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the configuration file", EnumValues: []string{"config/v1", "scenario/v1"}},
 			{Name: "vars", Type: FieldTypeMap, Description: "Variables available in all scenarios"},
 			{Name: "secrets", Type: FieldTypeMap, Description: "Secret variables (not displayed in logs)"},
-			{Name: "scenarios", Type: FieldTypeArray, Description: "Paths to scenario files or directories"},
-			{Name: "pluginDirectory", Type: FieldTypeString, Description: "Directory for plugin builds"},
-			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin definitions", Children: []*FieldInfo{
+			{Name: "scenarios", Type: FieldTypeArray, Description: "Paths to scenario files or directories", IsFilePath: true},
+			{Name: "pluginDirectory", Type: FieldTypeString, Description: "Directory for plugin builds", IsFilePath: true},
+			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin definitions", IsFilePath: true, Children: []*FieldInfo{
 				// Each plugin key maps to PluginConfig
 			}},
 			{Name: "protocols", Type: FieldTypeObject, Description: "Protocol-specific options", Children: []*FieldInfo{
@@ -53,7 +53,7 @@ func ScenarioSchema() *Schema {
 			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the scenario file", EnumValues: []string{"scenario/v1", "config/v1"}},
 			{Name: "title", Type: FieldTypeString, Description: "Scenario title"},
 			{Name: "description", Type: FieldTypeString, Description: "Scenario description"},
-			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin name to path mapping"},
+			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin name to path mapping", IsFilePath: true},
 			{Name: "vars", Type: FieldTypeMap, Description: "Variables available in steps"},
 			{Name: "secrets", Type: FieldTypeMap, Description: "Secret variables (not displayed in logs)"},
 			{Name: "steps", Type: FieldTypeArray, Description: "Test steps", Children: stepFields()},
@@ -99,7 +99,7 @@ func stepFields() []*FieldInfo {
 				}
 			},
 		},
-		{Name: "include", Type: FieldTypeString, Description: "Path to another scenario file to include"},
+		{Name: "include", Type: FieldTypeString, Description: "Path to another scenario file to include", IsFilePath: true},
 		{Name: "ref", Type: FieldTypeAny, Description: "Reference to a step in another scenario"},
 		{Name: "bind", Type: FieldTypeObject, Description: "Bind step results to variables", Children: []*FieldInfo{
 			{Name: "vars", Type: FieldTypeMap, Description: "Variables to bind from response"},
