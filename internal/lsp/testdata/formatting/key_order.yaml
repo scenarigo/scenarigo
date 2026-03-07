@@ -1,0 +1,24 @@
+---
+name: "reorder top-level keys to schema order"
+document: |
+  title: test
+  schemaVersion: scenario/v1
+  steps: []
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    title: test
+    steps: []
+---
+name: "already in order produces no changes"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps: []
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    title: test
+    steps: []

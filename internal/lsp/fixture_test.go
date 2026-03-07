@@ -30,6 +30,7 @@ type lspExpect struct {
 	HoverContains      []string        `yaml:"hoverContains"`
 	HoverIsNull        *bool           `yaml:"hoverIsNull"`
 	SymbolNames        *labelMatcher   `yaml:"symbolNames"`
+	FormattedText      *string         `yaml:"formattedText"`
 }
 
 type labelMatcher struct {
@@ -130,6 +131,8 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 			t.Fatal("definition test requires $0 cursor marker in document")
 		}
 		runDefinitionFixture(t, tc, docText, cursorLine, cursorChar)
+	case "formatting":
+		runFormattingFixture(t, tc, docText)
 	default:
 		t.Fatalf("unknown operation: %s", tc.Operation)
 	}
@@ -358,4 +361,63 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 			}
 		}
 	}
+}
+
+func runFormattingFixture(t *testing.T, tc lspTestCase, docText string) {
+	t.Helper()
+
+	srv, client := newTestClient(t)
+	go srv.Run(context.Background())
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	uri := "file:///tmp/test.yaml"
+	client.openDocument(uri, docText)
+
+	client.sendRequest(2, "textDocument/formatting", fmt.Sprintf(`{
+		"textDocument": {"uri": %q},
+		"options": {"tabSize": 2, "insertSpaces": true}
+	}`, uri))
+	resp := client.readResponse()
+
+	if tc.Expect.FormattedText != nil {
+		var edits []TextEdit
+		if string(resp) != "null" {
+			if err := json.Unmarshal(resp, &edits); err != nil {
+				t.Fatalf("unmarshal text edits: %v", err)
+			}
+		}
+		result := applyTextEdits(docText, edits)
+		if result != *tc.Expect.FormattedText {
+			t.Errorf("formatted text mismatch:\ngot:\n%s\nwant:\n%s", result, *tc.Expect.FormattedText)
+		}
+	}
+}
+
+// applyTextEdits applies LSP text edits to the original text.
+func applyTextEdits(text string, edits []TextEdit) string {
+	if len(edits) == 0 {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+
+	// Apply edits in reverse order to preserve positions.
+	for i := len(edits) - 1; i >= 0; i-- {
+		e := edits[i]
+		startOff := lineCharToOffset(lines, e.Range.Start.Line, e.Range.Start.Character)
+		endOff := lineCharToOffset(lines, e.Range.End.Line, e.Range.End.Character)
+		text = text[:startOff] + e.NewText + text[endOff:]
+		lines = strings.Split(text, "\n")
+	}
+	return text
+}
+
+func lineCharToOffset(lines []string, line, char int) int {
+	off := 0
+	for i := 0; i < line && i < len(lines); i++ {
+		off += len(lines[i]) + 1 // +1 for \n
+	}
+	off += char
+	return off
 }

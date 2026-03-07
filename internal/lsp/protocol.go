@@ -45,7 +45,8 @@ type ServerCapabilities struct {
 	HoverProvider          bool               `json:"hoverProvider,omitempty"`
 	DefinitionProvider     bool               `json:"definitionProvider,omitempty"`
 	DocumentSymbolProvider bool               `json:"documentSymbolProvider,omitempty"`
-	CodeActionProvider     bool               `json:"codeActionProvider,omitempty"`
+	CodeActionProvider         bool               `json:"codeActionProvider,omitempty"`
+	DocumentFormattingProvider bool               `json:"documentFormattingProvider,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -236,4 +237,19 @@ type DefinitionParams struct {
 type Location struct {
 	URI   string `json:"uri"`
 	Range Range  `json:"range"`
+}
+
+// Formatting types.
+
+type DocumentFormattingParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Options      FormattingOptions      `json:"options"`
+}
+
+type FormattingOptions struct {
+	TabSize                int  `json:"tabSize"`
+	InsertSpaces           bool `json:"insertSpaces"`
+	TrimTrailingWhitespace bool `json:"trimTrailingWhitespace,omitempty"`
+	InsertFinalNewline     bool `json:"insertFinalNewline,omitempty"`
+	TrimFinalNewlines      bool `json:"trimFinalNewlines,omitempty"`
 }
