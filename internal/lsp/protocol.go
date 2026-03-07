@@ -45,6 +45,7 @@ type ServerCapabilities struct {
 	HoverProvider          bool               `json:"hoverProvider,omitempty"`
 	DefinitionProvider     bool               `json:"definitionProvider,omitempty"`
 	DocumentSymbolProvider bool               `json:"documentSymbolProvider,omitempty"`
+	CodeActionProvider     bool               `json:"codeActionProvider,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -156,6 +157,36 @@ const (
 	DiagnosticSeverityWarning     = 2
 	DiagnosticSeverityInformation = 3
 )
+
+// CodeAction types.
+
+type CodeActionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Range        Range                  `json:"range"`
+	Context      CodeActionContext      `json:"context"`
+}
+
+type CodeActionContext struct {
+	Diagnostics []Diagnostic `json:"diagnostics"`
+}
+
+type CodeAction struct {
+	Title       string        `json:"title"`
+	Kind        string        `json:"kind,omitempty"`
+	Diagnostics []Diagnostic  `json:"diagnostics,omitempty"`
+	Edit        *WorkspaceEdit `json:"edit,omitempty"`
+}
+
+type WorkspaceEdit struct {
+	Changes map[string][]TextEdit `json:"changes,omitempty"`
+}
+
+type TextEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}
+
+const CodeActionKindQuickFix = "quickfix"
 
 // DocumentSymbol types.
 

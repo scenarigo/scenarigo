@@ -155,3 +155,59 @@ func TestEditorSession_Lifecycle(t *testing.T) {
 	client.sendRequest(4, "shutdown", `{}`)
 	client.readResponse()
 }
+
+func TestEditorSession_CodeAction_DidYouMean(t *testing.T) {
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	// Open document with a typo: "protocl" instead of "protocol".
+	docText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocl: http\n"
+	diags := client.openDocumentAndGetDiagnostics("file:///tmp/test.yaml", docText)
+
+	// Find the diagnostic for the unknown field.
+	var unknownDiag *Diagnostic
+	for i, d := range diags.Diagnostics {
+		if d.Message == `unknown field "protocl"` {
+			unknownDiag = &diags.Diagnostics[i]
+			break
+		}
+	}
+	if unknownDiag == nil {
+		t.Fatalf("expected diagnostic for protocl, got: %v", diagMessages(diags.Diagnostics))
+	}
+
+	// Request code actions with the diagnostic.
+	diagJSON, _ := json.Marshal([]Diagnostic{*unknownDiag})
+	client.sendRequest(2, "textDocument/codeAction", fmt.Sprintf(`{
+		"textDocument": {"uri": "file:///tmp/test.yaml"},
+		"range": {"start": {"line": %d, "character": %d}, "end": {"line": %d, "character": %d}},
+		"context": {"diagnostics": %s}
+	}`, unknownDiag.Range.Start.Line, unknownDiag.Range.Start.Character,
+		unknownDiag.Range.End.Line, unknownDiag.Range.End.Character,
+		string(diagJSON)))
+	resp := client.readResponse()
+
+	var actions []CodeAction
+	if err := json.Unmarshal(resp, &actions); err != nil {
+		t.Fatalf("unmarshal code actions: %v", err)
+	}
+
+	// Should suggest "protocol".
+	found := false
+	for _, a := range actions {
+		if a.Title == `Did you mean "protocol"?` {
+			found = true
+			break
+		}
+	}
+	if !found {
+		titles := make([]string, len(actions))
+		for i, a := range actions {
+			titles[i] = a.Title
+		}
+		t.Errorf("expected 'Did you mean \"protocol\"?' in actions, got: %v", titles)
+	}
+}
