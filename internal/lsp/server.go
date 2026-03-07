@@ -47,59 +47,76 @@ func NewServer() *Server {
 // It blocks until the context is canceled, the input stream is closed, or
 // an "exit" notification is received.
 func (s *Server) Run(ctx context.Context) error {
-	// When the context is canceled (e.g. SIGINT), close the reader to
-	// unblock any pending read.
-	if closer, ok := s.reader.(io.Closer); ok {
-		context.AfterFunc(ctx, func() { closer.Close() })
+	type readResult struct {
+		body []byte
+		err  error
 	}
+	ch := make(chan readResult, 1)
 
-	reader := bufio.NewReader(s.reader)
+	go func() {
+		reader := bufio.NewReader(s.reader)
+		for {
+			body, err := readMessage(reader)
+			ch <- readResult{body, err}
+			if err != nil {
+				return
+			}
+		}
+	}()
 
 	for {
-		// Read headers until empty line.
-		contentLength := -1
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF || ctx.Err() != nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case result := <-ch:
+			if result.err != nil {
+				if result.err == io.EOF {
 					return nil
 				}
-				return fmt.Errorf("read header error: %w", err)
+				return result.err
 			}
-			line = strings.TrimRight(line, "\r\n")
-			if line == "" {
-				break // End of headers.
+
+			var req Request
+			if err := json.Unmarshal(result.body, &req); err != nil {
+				s.logger.Printf("failed to unmarshal request: %v", err)
+				continue
 			}
-			if strings.HasPrefix(line, "Content-Length: ") {
-				n, err := strconv.Atoi(strings.TrimPrefix(line, "Content-Length: "))
-				if err != nil {
-					return fmt.Errorf("invalid Content-Length: %w", err)
-				}
-				contentLength = n
-			}
-		}
 
-		if contentLength < 0 {
-			continue
+			s.handleMessage(&req)
 		}
-
-		// Read content body.
-		body := make([]byte, contentLength)
-		if _, err := io.ReadFull(reader, body); err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return fmt.Errorf("read body error: %w", err)
-		}
-
-		var req Request
-		if err := json.Unmarshal(body, &req); err != nil {
-			s.logger.Printf("failed to unmarshal request: %v", err)
-			continue
-		}
-
-		s.handleMessage(&req)
 	}
+}
+
+// readMessage reads a single LSP message (headers + body) from the reader.
+func readMessage(reader *bufio.Reader) ([]byte, error) {
+	contentLength := -1
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+		if strings.HasPrefix(line, "Content-Length: ") {
+			n, err := strconv.Atoi(strings.TrimPrefix(line, "Content-Length: "))
+			if err != nil {
+				return nil, fmt.Errorf("invalid Content-Length: %w", err)
+			}
+			contentLength = n
+		}
+	}
+
+	if contentLength < 0 {
+		return nil, fmt.Errorf("missing Content-Length header")
+	}
+
+	body := make([]byte, contentLength)
+	if _, err := io.ReadFull(reader, body); err != nil {
+		return nil, err
+	}
+	return body, nil
 }
 
 func (s *Server) handleMessage(req *Request) {
