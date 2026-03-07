@@ -22,3 +22,103 @@ expect:
     schemaVersion: scenario/v1
     title: test
     steps: []
+---
+name: "leading comments move with their key"
+document: |
+  steps: []
+  # Title of the scenario
+  title: my-test
+  schemaVersion: scenario/v1
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    # Title of the scenario
+    title: my-test
+    steps: []
+---
+name: "multi-line leading comments move with their key"
+document: |
+  steps: []
+  # This is the title
+  # of the scenario
+  title: my-test
+  schemaVersion: scenario/v1
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    # This is the title
+    # of the scenario
+    title: my-test
+    steps: []
+---
+name: "blank line separates comment from key"
+document: |
+  steps: []
+
+  # This comment is separated by blank line
+  title: my-test
+  schemaVersion: scenario/v1
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    # This comment is separated by blank line
+    title: my-test
+    steps: []
+
+---
+name: "anchor/alias dependency skips reordering"
+document: |
+  title: test
+  vars:
+    base: &base hello
+  schemaVersion: scenario/v1
+  steps:
+    - expect:
+        body: *base
+operation: formatting
+expect:
+  formattedText: |
+    title: test
+    vars:
+      base: &base hello
+    schemaVersion: scenario/v1
+    steps:
+      - expect:
+          body: *base
+---
+name: "block scalar content preserved during reorder"
+document: |
+  description: |
+    multi
+    line
+    description
+  title: test
+  schemaVersion: scenario/v1
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    title: test
+    description: |
+      multi
+      line
+      description
+---
+name: "block scalar as last entry does not lose content"
+document: |
+  title: test
+  schemaVersion: scenario/v1
+  description: |
+    hello
+    world
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    title: test
+    description: |
+      hello
+      world
