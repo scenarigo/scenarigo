@@ -39,7 +39,7 @@ func NewServer() *Server {
 		writer: os.Stdout,
 		logger: log.New(os.Stderr, "[scenarigo-lsp] ", log.LstdFlags),
 		docs:   newDocumentStore(),
-		config: serverConfig{Formatting: true},
+		config: serverConfig{Formatting: false},
 	}
 }
 
