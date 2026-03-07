@@ -1253,31 +1253,55 @@ func (s *Server) formatNode(node ast.Node, fields []*schema.FieldInfo, lines []s
 }
 
 func (s *Server) formatChildren(mapping *ast.MappingNode, fields []*schema.FieldInfo, lines []string) []TextEdit {
+	// Build siblings map for DynamicChildren resolution.
+	siblings := make(map[string]string)
+	for _, mv := range mapping.Values {
+		if mv.Key == nil || mv.Value == nil {
+			continue
+		}
+		if sv, ok := mv.Value.(*ast.StringNode); ok {
+			siblings[mv.Key.String()] = sv.Value
+		}
+	}
+
 	var edits []TextEdit
 	for _, mv := range mapping.Values {
 		if mv.Key == nil || mv.Value == nil {
 			continue
 		}
-		// Find child fields for this key.
-		var childFields []*schema.FieldInfo
+		keyName := mv.Key.String()
+
+		// Find the field definition for this key.
+		var field *schema.FieldInfo
 		for _, f := range fields {
-			if f.Name == mv.Key.String() {
-				childFields = f.Children
+			if f.Name == keyName {
+				field = f
 				break
 			}
 		}
+		if field == nil {
+			continue
+		}
+
+		// Resolve child fields (static or dynamic).
+		var childFields []*schema.FieldInfo
+		if field.DynamicChildren != nil {
+			discriminator := ""
+			if field.DynamicKey != "" {
+				discriminator = siblings[field.DynamicKey]
+			}
+			childFields = field.DynamicChildren(discriminator)
+		} else {
+			childFields = field.Children
+		}
+
 		if childFields != nil {
 			edits = append(edits, s.formatNode(mv.Value, childFields, lines)...)
 		}
 		// Handle sequence items (e.g., steps).
-		if seq, ok := mv.Value.(*ast.SequenceNode); ok {
-			for _, f := range fields {
-				if f.Name == mv.Key.String() && f.Children != nil {
-					for _, item := range seq.Values {
-						edits = append(edits, s.formatNode(item, f.Children, lines)...)
-					}
-					break
-				}
+		if seq, ok := mv.Value.(*ast.SequenceNode); ok && field.Children != nil {
+			for _, item := range seq.Values {
+				edits = append(edits, s.formatNode(item, field.Children, lines)...)
 			}
 		}
 	}

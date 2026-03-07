@@ -107,6 +107,28 @@ expect:
       line
       description
 ---
+name: "reorder HTTP request fields via DynamicChildren"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - title: test
+      protocol: http
+      request:
+        body: hello
+        url: http://example.com
+        method: POST
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    steps:
+      - title: test
+        protocol: http
+        request:
+          method: POST
+          url: http://example.com
+          body: hello
+---
 name: "block scalar as last entry does not lose content"
 document: |
   title: test
