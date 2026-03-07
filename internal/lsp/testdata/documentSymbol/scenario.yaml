@@ -1,0 +1,29 @@
+---
+name: "scenario document symbols"
+document: |
+  schemaVersion: scenario/v1
+  title: test scenario
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+    - title: step2
+      protocol: grpc
+operation: documentSymbol
+expect:
+  symbolNames:
+    contains: [schemaVersion, title, steps, step1, step2, protocol, request, method, url]
+---
+name: "config document symbols"
+document: |
+  schemaVersion: config/v1
+  scenarios:
+    - scenarios/
+  plugins:
+    grpcPlugin: plugin.so
+operation: documentSymbol
+expect:
+  symbolNames:
+    contains: [schemaVersion, scenarios, plugins]
