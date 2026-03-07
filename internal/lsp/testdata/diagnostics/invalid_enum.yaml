@@ -25,7 +25,7 @@ expect:
     excludes:
       - 'invalid value "http" for field "protocol" (allowed: http, grpc)'
 ---
-name: "invalid schemaVersion produces diagnostic"
+name: "unknown schemaVersion defaults to scenario schema"
 document: |
   schemaVersion: invalid/v99
   title: test
@@ -33,4 +33,4 @@ operation: diagnostics
 expect:
   diagnosticMessages:
     contains:
-      - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1)'
+      - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1, config/v1)'

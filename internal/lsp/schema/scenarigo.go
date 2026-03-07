@@ -6,7 +6,7 @@ package schema
 func ConfigSchema() *Schema {
 	return &Schema{
 		Fields: []*FieldInfo{
-			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the configuration file", EnumValues: []string{"config/v1"}},
+			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the configuration file", EnumValues: []string{"config/v1", "scenario/v1"}},
 			{Name: "vars", Type: FieldTypeMap, Description: "Variables available in all scenarios"},
 			{Name: "secrets", Type: FieldTypeMap, Description: "Secret variables (not displayed in logs)"},
 			{Name: "scenarios", Type: FieldTypeArray, Description: "Paths to scenario files or directories"},
@@ -50,7 +50,7 @@ func ConfigSchema() *Schema {
 func ScenarioSchema() *Schema {
 	return &Schema{
 		Fields: []*FieldInfo{
-			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the scenario file", EnumValues: []string{"scenario/v1"}},
+			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the scenario file", EnumValues: []string{"scenario/v1", "config/v1"}},
 			{Name: "title", Type: FieldTypeString, Description: "Scenario title"},
 			{Name: "description", Type: FieldTypeString, Description: "Scenario description"},
 			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin name to path mapping"},
@@ -201,22 +201,30 @@ func grpcRequestOptionFields() []*FieldInfo {
 }
 
 // DetectSchemaType determines whether a YAML document is config or scenario.
+// Returns nil if the document has no "schemaVersion:" key, indicating it
+// is not a scenarigo YAML file and the LSP should remain silent.
+// When the key exists but the value is empty or unrecognized, it defaults
+// to ScenarioSchema (the most common type) so that completion and other
+// features remain available while the user is still typing.
 func DetectSchemaType(text string) *Schema {
-	// Simple heuristic: check for schemaVersion field.
 	for _, line := range splitLines(text) {
 		trimmed := trimSpace(line)
 		if hasPrefix(trimmed, "schemaVersion:") {
 			value := trimSpace(trimmed[len("schemaVersion:"):])
-			// Remove quotes.
 			value = trimQuotes(value)
-			if value == "config/v1" {
+			switch value {
+			case "config/v1":
 				return ConfigSchema()
+			case "scenario/v1":
+				return ScenarioSchema()
+			default:
+				// Key exists but value is empty or unrecognized.
+				// Default to scenario schema so features stay active.
+				return ScenarioSchema()
 			}
-			return ScenarioSchema()
 		}
 	}
-	// Default to scenario.
-	return ScenarioSchema()
+	return nil
 }
 
 func splitLines(s string) []string {
