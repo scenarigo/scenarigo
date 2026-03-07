@@ -1,10 +1,24 @@
 package lsp
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/scenarigo/scenarigo/internal/lsp/yamlutil"
 )
+
+// hasForeignModeline checks if the YAML text contains a modeline comment
+// indicating it is managed by another YAML language server.
+// e.g., "# yaml-language-server: $schema=..."
+func hasForeignModeline(text string) bool {
+	for _, line := range strings.SplitN(text, "\n", 20) {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# yaml-language-server:") {
+			return true
+		}
+	}
+	return false
+}
 
 // documentStore manages open text documents and their parsed state.
 type documentStore struct {
