@@ -24,6 +24,12 @@ type Server struct {
 	writer io.Writer
 	logger *log.Logger
 	docs   *documentStore
+	config serverConfig
+}
+
+// serverConfig holds user-configurable settings.
+type serverConfig struct {
+	Formatting bool `json:"formatting"`
 }
 
 // NewServer creates a new LSP server that communicates over stdio.
@@ -33,6 +39,7 @@ func NewServer() *Server {
 		writer: os.Stdout,
 		logger: log.New(os.Stderr, "[scenarigo-lsp] ", log.LstdFlags),
 		docs:   newDocumentStore(),
+		config: serverConfig{Formatting: true},
 	}
 }
 
@@ -137,17 +144,27 @@ func (s *Server) handleMessage(req *Request) {
 }
 
 func (s *Server) handleInitialize(req *Request) {
+	// Read initializationOptions if present.
+	var initParams struct {
+		InitializationOptions *serverConfig `json:"initializationOptions"`
+	}
+	if req.Params != nil {
+		if err := json.Unmarshal(req.Params, &initParams); err == nil && initParams.InitializationOptions != nil {
+			s.config = *initParams.InitializationOptions
+		}
+	}
+
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
 			TextDocumentSync: 1, // Full sync.
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: []string{":", " ", "\n"},
 			},
-			HoverProvider:      true,
-			DefinitionProvider:     true,
-			DocumentSymbolProvider: true,
+			HoverProvider:              true,
+			DefinitionProvider:         true,
+			DocumentSymbolProvider:     true,
 			CodeActionProvider:         true,
-			DocumentFormattingProvider: true,
+			DocumentFormattingProvider: s.config.Formatting,
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
 			},
@@ -366,6 +383,11 @@ func (s *Server) handleFormatting(req *Request) {
 	var params DocumentFormattingParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		s.logger.Printf("formatting unmarshal error: %v", err)
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	if !s.config.Formatting {
 		s.sendResponse(req.ID, nil, nil)
 		return
 	}
