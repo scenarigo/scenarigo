@@ -158,6 +158,7 @@ const (
 	DiagnosticSeverityError       = 1
 	DiagnosticSeverityWarning     = 2
 	DiagnosticSeverityInformation = 3
+	DiagnosticSeverityHint        = 4
 )
 
 // CodeAction types.
