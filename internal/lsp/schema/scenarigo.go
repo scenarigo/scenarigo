@@ -82,7 +82,7 @@ func stepFields() []*FieldInfo {
 				case "grpc":
 					return grpcRequestFields()
 				default:
-					return nil
+					return mergeFields(httpRequestFields(), grpcRequestFields())
 				}
 			},
 		},
@@ -95,7 +95,7 @@ func stepFields() []*FieldInfo {
 				case "grpc":
 					return grpcExpectFields()
 				default:
-					return nil
+					return mergeFields(httpExpectFields(), grpcExpectFields())
 				}
 			},
 		},
@@ -244,6 +244,22 @@ func trimSpace(s string) string {
 		j--
 	}
 	return s[i:j]
+}
+
+// mergeFields combines two field slices, deduplicating by name.
+func mergeFields(a, b []*FieldInfo) []*FieldInfo {
+	seen := make(map[string]bool, len(a))
+	result := make([]*FieldInfo, 0, len(a)+len(b))
+	for _, f := range a {
+		seen[f.Name] = true
+		result = append(result, f)
+	}
+	for _, f := range b {
+		if !seen[f.Name] {
+			result = append(result, f)
+		}
+	}
+	return result
 }
 
 func hasPrefix(s, prefix string) bool {

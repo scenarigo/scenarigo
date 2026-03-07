@@ -1,5 +1,7 @@
 package schema
 
+import "unicode"
+
 // FieldInfo describes a YAML field in a schema.
 type FieldInfo struct {
 	// Name is the YAML key name.
@@ -67,6 +69,8 @@ type Schema struct {
 }
 
 // FindField looks up a field by navigating the given key path.
+// Numeric path segments (e.g., "0") are treated as array indices and skipped,
+// continuing with the same field set (array items share the parent's children).
 func (s *Schema) FindField(path []string) *FieldInfo {
 	if s == nil || len(path) == 0 {
 		return nil
@@ -74,11 +78,18 @@ func (s *Schema) FindField(path []string) *FieldInfo {
 	fields := s.Fields
 	var found *FieldInfo
 	for _, key := range path {
+		if isNumeric(key) {
+			continue
+		}
 		found = nil
 		for _, f := range fields {
 			if f.Name == key {
 				found = f
-				fields = f.Children
+				if f.DynamicChildren != nil {
+					fields = f.DynamicChildren("")
+				} else {
+					fields = f.Children
+				}
 				break
 			}
 		}
@@ -87,6 +98,18 @@ func (s *Schema) FindField(path []string) *FieldInfo {
 		}
 	}
 	return found
+}
+
+func isNumeric(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // ChildFields returns the child fields at the given path.

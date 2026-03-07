@@ -26,6 +26,8 @@ type lspExpect struct {
 	DiagnosticMessages *messageMatcher `yaml:"diagnosticMessages"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
 	DefinitionURI      *uriMatcher     `yaml:"definitionURI"`
+	HoverContains      []string        `yaml:"hoverContains"`
+	HoverIsNull        *bool           `yaml:"hoverIsNull"`
 }
 
 type labelMatcher struct {
@@ -114,6 +116,11 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 		runCompletionFixture(t, tc, docText, cursorLine, cursorChar)
 	case "diagnostics":
 		runDiagnosticsFixture(t, tc, docText)
+	case "hover":
+		if !hasCursor {
+			t.Fatal("hover test requires $0 cursor marker in document")
+		}
+		runHoverFixture(t, tc, docText, cursorLine, cursorChar)
 	case "definition":
 		if !hasCursor {
 			t.Fatal("definition test requires $0 cursor marker in document")
@@ -184,6 +191,44 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 		for _, exclude := range tc.Expect.DiagnosticMessages.Excludes {
 			if msgs[exclude] {
 				t.Errorf("should not have diagnostic %q", exclude)
+			}
+		}
+	}
+}
+
+func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	srv, client := newTestClient(t)
+	go srv.Run()
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	uri := "file:///tmp/test.yaml"
+	client.openDocument(uri, docText)
+
+	client.sendRequest(2, "textDocument/hover", fmt.Sprintf(`{
+		"textDocument": {"uri": %q},
+		"position": {"line": %d, "character": %d}
+	}`, uri, line, char))
+	resp := client.readResponse()
+
+	if tc.Expect.HoverIsNull != nil && *tc.Expect.HoverIsNull {
+		if string(resp) != "null" {
+			t.Errorf("expected null hover, got: %s", resp)
+		}
+		return
+	}
+
+	if len(tc.Expect.HoverContains) > 0 {
+		var hover Hover
+		if err := json.Unmarshal(resp, &hover); err != nil {
+			t.Fatalf("unmarshal hover: %v", err)
+		}
+		for _, want := range tc.Expect.HoverContains {
+			if !strings.Contains(hover.Contents.Value, want) {
+				t.Errorf("expected hover to contain %q, got: %s", want, hover.Contents.Value)
 			}
 		}
 	}
