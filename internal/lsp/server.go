@@ -105,6 +105,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleHover(req)
 	case "textDocument/definition":
 		s.handleDefinition(req)
+	case "textDocument/documentSymbol":
+		s.handleDocumentSymbol(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -124,7 +126,8 @@ func (s *Server) handleInitialize(req *Request) {
 				TriggerCharacters: []string{":", " ", "\n"},
 			},
 			HoverProvider:      true,
-			DefinitionProvider: true,
+			DefinitionProvider:     true,
+			DocumentSymbolProvider: true,
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
@@ -229,6 +232,163 @@ func (s *Server) handleDefinition(req *Request) {
 		return
 	}
 	s.sendResponse(req.ID, loc, nil)
+}
+
+func (s *Server) handleDocumentSymbol(req *Request) {
+	var params DocumentSymbolParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.logger.Printf("documentSymbol unmarshal error: %v", err)
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil || doc.Parsed == nil || doc.Parsed.File == nil {
+		s.sendResponse(req.ID, []DocumentSymbol{}, nil)
+		return
+	}
+
+	symbols := s.documentSymbols(doc)
+	s.sendResponse(req.ID, symbols, nil)
+}
+
+func (s *Server) documentSymbols(doc *document) []DocumentSymbol {
+	if doc.Parsed == nil || doc.Parsed.File == nil {
+		return nil
+	}
+	var symbols []DocumentSymbol
+	for _, d := range doc.Parsed.File.Docs {
+		if d.Body == nil {
+			continue
+		}
+		symbols = append(symbols, s.nodeToSymbols(d.Body)...)
+	}
+	return symbols
+}
+
+func (s *Server) nodeToSymbols(node ast.Node) []DocumentSymbol {
+	if node == nil {
+		return nil
+	}
+
+	switch n := node.(type) {
+	case *ast.MappingNode:
+		var syms []DocumentSymbol
+		for _, mv := range n.Values {
+			syms = append(syms, s.mappingValueToSymbol(mv))
+		}
+		return syms
+	case *ast.MappingValueNode:
+		sym := s.mappingValueToSymbol(n)
+		return []DocumentSymbol{sym}
+	default:
+		return nil
+	}
+}
+
+func (s *Server) mappingValueToSymbol(mv *ast.MappingValueNode) DocumentSymbol {
+	keyName := mv.Key.String()
+	tok := mv.Key.GetToken()
+
+	startLine := 0
+	startChar := 0
+	if tok != nil {
+		startLine = tok.Position.Line - 1
+		startChar = tok.Position.Column - 1
+	}
+
+	selRange := Range{
+		Start: Position{Line: startLine, Character: startChar},
+		End:   Position{Line: startLine, Character: startChar + len(keyName)},
+	}
+
+	sym := DocumentSymbol{
+		Name:           keyName,
+		Kind:           symbolKindForNode(mv.Value),
+		Range:          nodeRange(mv),
+		SelectionRange: selRange,
+	}
+
+	// Add detail for simple values.
+	if mv.Value != nil {
+		switch v := mv.Value.(type) {
+		case *ast.StringNode:
+			sym.Detail = v.Value
+		case *ast.IntegerNode:
+			sym.Detail = v.Token.Value
+		case *ast.BoolNode:
+			sym.Detail = v.Token.Value
+		}
+	}
+
+	// Recurse into children.
+	if mv.Value != nil {
+		switch v := mv.Value.(type) {
+		case *ast.MappingNode:
+			for _, child := range v.Values {
+				sym.Children = append(sym.Children, s.mappingValueToSymbol(child))
+			}
+		case *ast.SequenceNode:
+			for i, item := range v.Values {
+				switch m := item.(type) {
+				case *ast.MappingNode:
+					// Sequence item with mapping: create a symbol for the item.
+					itemSym := DocumentSymbol{
+						Name:           fmt.Sprintf("[%d]", i),
+						Kind:           SymbolKindObject,
+						Range:          nodeRange(m),
+						SelectionRange: nodeRange(m),
+					}
+					// Use "title" or first key as the name if available.
+					for _, child := range m.Values {
+						if child.Key.String() == "title" {
+							if sv, ok := child.Value.(*ast.StringNode); ok {
+								itemSym.Name = sv.Value
+							}
+						}
+						itemSym.Children = append(itemSym.Children, s.mappingValueToSymbol(child))
+					}
+					sym.Children = append(sym.Children, itemSym)
+				}
+			}
+		}
+	}
+
+	return sym
+}
+
+func symbolKindForNode(node ast.Node) int {
+	if node == nil {
+		return SymbolKindProperty
+	}
+	switch node.(type) {
+	case *ast.MappingNode:
+		return SymbolKindObject
+	case *ast.SequenceNode:
+		return SymbolKindArray
+	case *ast.StringNode:
+		return SymbolKindString
+	case *ast.IntegerNode:
+		return SymbolKindNumber
+	case *ast.BoolNode:
+		return SymbolKindBoolean
+	default:
+		return SymbolKindProperty
+	}
+}
+
+func nodeRange(node ast.Node) Range {
+	tok := node.GetToken()
+	if tok == nil {
+		return Range{}
+	}
+	startLine := tok.Position.Line - 1
+	startChar := tok.Position.Column - 1
+	// Approximate end position from the token.
+	return Range{
+		Start: Position{Line: startLine, Character: startChar},
+		End:   Position{Line: startLine, Character: startChar + len(tok.Value)},
+	}
 }
 
 func (s *Server) definition(doc *document, params DefinitionParams) *Location {
