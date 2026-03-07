@@ -1,0 +1,14 @@
+---
+name: "template expression top-level completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        url: "{{$0"
+operation: completion
+expect:
+  completionLabels:
+    contains: [vars, secrets, plugins, request, response, steps, env, assert, size]
