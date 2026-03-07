@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,7 +37,15 @@ func NewServer() *Server {
 }
 
 // Run starts the LSP server main loop.
-func (s *Server) Run() error {
+// It blocks until the context is canceled, the input stream is closed, or
+// an "exit" notification is received.
+func (s *Server) Run(ctx context.Context) error {
+	// When the context is canceled (e.g. SIGINT), close the reader to
+	// unblock any pending read.
+	if closer, ok := s.reader.(io.Closer); ok {
+		context.AfterFunc(ctx, func() { closer.Close() })
+	}
+
 	reader := bufio.NewReader(s.reader)
 
 	for {
@@ -45,7 +54,7 @@ func (s *Server) Run() error {
 		for {
 			line, err := reader.ReadString('\n')
 			if err != nil {
-				if err == io.EOF {
+				if err == io.EOF || ctx.Err() != nil {
 					return nil
 				}
 				return fmt.Errorf("read header error: %w", err)
@@ -70,6 +79,9 @@ func (s *Server) Run() error {
 		// Read content body.
 		body := make([]byte, contentLength)
 		if _, err := io.ReadFull(reader, body); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			return fmt.Errorf("read body error: %w", err)
 		}
 

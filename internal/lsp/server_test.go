@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -147,7 +148,7 @@ func (c *testClient) complete(id int, uri string, line, char int) CompletionList
 
 func TestServer_Initialize(t *testing.T) {
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	result := client.readResponse()

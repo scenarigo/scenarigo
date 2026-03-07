@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -138,7 +139,7 @@ func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	t.Helper()
 
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -167,7 +168,7 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 	t.Helper()
 
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -203,7 +204,7 @@ func runDocumentSymbolFixture(t *testing.T, tc lspTestCase, docText string) {
 	t.Helper()
 
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -265,7 +266,7 @@ func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char in
 	t.Helper()
 
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
 	client.readResponse()
@@ -316,7 +317,7 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	}
 
 	srv, client := newTestClient(t)
-	go srv.Run()
+	go srv.Run(context.Background())
 
 	client.sendRequest(1, "initialize", fmt.Sprintf(`{"rootUri":"file://%s"}`, tmpDir))
 	client.readResponse()
