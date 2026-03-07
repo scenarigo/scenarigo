@@ -1,0 +1,14 @@
+---
+name: "step-level key completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [request, expect, bind, vars, timeout]
+    excludes: [title, protocol]
