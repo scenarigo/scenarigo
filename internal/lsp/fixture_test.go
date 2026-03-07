@@ -138,13 +138,29 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
 	t.Helper()
 
+	// Use a temp dir when auxiliary files are specified (e.g. file path completion).
+	rootDir := "/tmp"
+	if len(tc.Files) > 0 {
+		rootDir = t.TempDir()
+		for name, content := range tc.Files {
+			p := filepath.Join(rootDir, name)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+				t.Fatalf("write file %s: %v", name, err)
+			}
+		}
+	}
+
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	rootURI := "file://" + rootDir
+	client.sendRequest(1, "initialize", fmt.Sprintf(`{"rootUri":%q}`, rootURI))
 	client.readResponse()
 
-	uri := "file:///tmp/test.yaml"
+	uri := "file://" + rootDir + "/test.yaml"
 	client.openDocument(uri, docText)
 
 	list := client.complete(2, uri, line, char)

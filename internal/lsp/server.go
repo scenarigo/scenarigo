@@ -622,9 +622,15 @@ func (s *Server) complete(doc *document, pos Position) []CompletionItem {
 
 	switch ctx.Type {
 	case yamlutil.CursorContextKey:
-		return s.completeKeys(sch, ctx)
+		items := s.completeKeys(sch, ctx)
+		if items != nil {
+			return items
+		}
+		// If no key completions found, the parent might be a file-path array
+		// (e.g. "scenarios: \n  - <cursor>"). Fall through to file path completion.
+		return s.completeFilePathFromContext(sch, ctx, doc.URI)
 	case yamlutil.CursorContextValue:
-		return s.completeValues(sch, ctx)
+		return s.completeValues(sch, ctx, doc.URI)
 	default:
 		return nil
 	}
@@ -792,7 +798,7 @@ func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext) [
 	return items
 }
 
-func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext) []CompletionItem {
+func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
 	if len(ctx.Path) == 0 {
 		return nil
 	}
@@ -826,7 +832,90 @@ func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext)
 		}
 	}
 
+	// File path completion.
+	if field.IsFilePath {
+		return s.completeFilePath(docURI, ctx.PartialValue)
+	}
+
 	return nil
+}
+
+// completeFilePathFromContext checks if the current path refers to a file-path
+// array field (e.g., scenarios) and offers filesystem completion.
+func (s *Server) completeFilePathFromContext(sch *schema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
+	if len(ctx.Path) == 0 {
+		return nil
+	}
+	field := sch.FindField(ctx.Path)
+	if field == nil || !field.IsFilePath {
+		return nil
+	}
+	return s.completeFilePath(docURI, ctx.PartialKey)
+}
+
+func (s *Server) completeFilePath(docURI, partial string) []CompletionItem {
+	docPath := uriToPath(docURI)
+	if docPath == "" {
+		return nil
+	}
+	dir := filepath.Dir(docPath)
+
+	// Determine the search directory and prefix from the partial value.
+	searchDir := dir
+	prefix := partial
+	if partial != "" {
+		absPartial := filepath.Join(dir, partial)
+		info, err := os.Stat(absPartial)
+		if err == nil && info.IsDir() {
+			// Partial is a complete directory: list its contents.
+			searchDir = absPartial
+			prefix = ""
+		} else {
+			// Partial may be a partial filename in a directory.
+			searchDir = filepath.Dir(absPartial)
+			prefix = filepath.Base(absPartial)
+		}
+	}
+
+	entries, err := os.ReadDir(searchDir)
+	if err != nil {
+		return nil
+	}
+
+	// Build the relative path prefix from doc dir to searchDir.
+	relDir, err := filepath.Rel(dir, searchDir)
+	if err != nil {
+		return nil
+	}
+
+	var items []CompletionItem
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue // skip hidden files
+		}
+		if prefix != "" && !strings.HasPrefix(name, prefix) {
+			continue
+		}
+
+		relPath := name
+		if relDir != "." {
+			relPath = filepath.Join(relDir, name)
+		}
+
+		kind := CompletionItemKindFile
+		if entry.IsDir() {
+			kind = CompletionItemKindFolder
+			relPath += "/"
+		}
+
+		items = append(items, CompletionItem{
+			Label:      relPath,
+			Kind:       kind,
+			InsertText: relPath,
+		})
+	}
+	return items
 }
 
 func (s *Server) hover(doc *document, pos Position) *Hover {

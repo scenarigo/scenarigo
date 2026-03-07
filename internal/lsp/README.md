@@ -102,7 +102,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Template variable completion | Supported | Inside `{{`, suggests `vars`, `secrets`, `assert`, etc. |
 | Template dot completion | Supported | `{{assert.` suggests `contains`, `notZero`, etc. |
 | Partial match filtering | Supported | Filters candidates by prefix as you type |
-| File path completion | Not yet | Path candidates for `include`, `plugins`, `scenarios` |
+| File path completion | Supported | Filesystem-based candidates for `include`, `plugins`, `scenarios`, `pluginDirectory` |
 | Plugin export completion | Not yet | Variables/functions exported by plugins |
 
 ### Diagnostics
@@ -171,7 +171,7 @@ internal/lsp/
   integration_test.go   # Session-level integration tests (open -> edit -> complete -> hover -> close)
   server_fuzz_test.go   # FuzzGetTemplateContext, FuzzCompleteTemplate
   testdata/
-    completion/         # 13 completion test fixtures
+    completion/         # 15 completion test fixtures
     diagnostics/        # 4 diagnostics test fixtures
     definition/         # 1 definition test fixture
     hover/              # 3 hover test fixtures

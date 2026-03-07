@@ -16,6 +16,9 @@ type FieldInfo struct {
 	Children []*FieldInfo
 	// Deprecated marks the field as deprecated.
 	Deprecated bool
+	// IsFilePath indicates the field value is a file path and should offer
+	// filesystem-based completion.
+	IsFilePath bool
 	// DynamicKey is the sibling field name whose value determines dynamic children.
 	// For example, "protocol" means the value of the "protocol" sibling field is used.
 	DynamicKey string
