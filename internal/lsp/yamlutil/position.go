@@ -68,6 +68,7 @@ func findNode(node ast.Node, line, col int, path *NodePath) bool {
 	case *ast.MappingValueNode:
 		keyTok := n.Key.GetToken()
 		if keyTok != nil && keyTok.Position.Line == line {
+			path.Keys = append(path.Keys, n.Key.String())
 			path.Node = n
 			return true
 		}
