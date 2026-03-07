@@ -29,6 +29,7 @@ func newTestClient(t *testing.T) (*Server, *testClient) {
 		writer: outW,
 		logger: log.New(io.Discard, "", 0),
 		docs:   newDocumentStore(),
+		config: serverConfig{Formatting: true},
 	}
 	return srv, &testClient{t: t, inW: inW, outR: bufio.NewReader(outR)}
 }
