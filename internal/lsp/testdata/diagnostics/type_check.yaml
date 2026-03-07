@@ -1,0 +1,70 @@
+---
+name: "bool field with mapping value produces type error"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - continueOnError:
+        key: value
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'field "continueOnError" expects bool, got object'
+---
+name: "bool field with correct value produces no type error"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - continueOnError: true
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'field "continueOnError" expects bool, got object'
+---
+name: "string field with sequence value produces type error"
+document: |
+  schemaVersion: scenario/v1
+  title:
+    - item1
+    - item2
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'field "title" expects string, got array'
+---
+name: "object field with int value produces type error"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request: 42
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'field "request" expects object, got int'
+---
+name: "template expression in object field is accepted"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request: "{{vars.req}}"
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'field "request" expects object'
+---
+name: "array field with mapping value produces type error"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    key: value
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'field "steps" expects array, got object'
