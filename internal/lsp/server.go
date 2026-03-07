@@ -123,6 +123,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleCodeAction(req)
 	case "textDocument/formatting":
 		s.handleFormatting(req)
+	case "textDocument/signatureHelp":
+		s.handleSignatureHelp(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -146,6 +148,9 @@ func (s *Server) handleInitialize(req *Request) {
 			DocumentSymbolProvider: true,
 			CodeActionProvider:         true,
 			DocumentFormattingProvider: true,
+			SignatureHelpProvider: &SignatureHelpOptions{
+				TriggerCharacters: []string{"<"},
+			},
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
@@ -379,6 +384,122 @@ func (s *Server) handleFormatting(req *Request) {
 
 	edits := s.formatDocument(doc, sch)
 	s.sendResponse(req.ID, edits, nil)
+}
+
+func (s *Server) handleSignatureHelp(req *Request) {
+	var params SignatureHelpParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.logger.Printf("signatureHelp unmarshal error: %v", err)
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	help := s.signatureHelp(doc, params.Position)
+	if help == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+	s.sendResponse(req.ID, help, nil)
+}
+
+// templateSignature describes a scenarigo template function.
+type templateSignature struct {
+	name   string
+	label  string
+	doc    string
+	params []ParameterInformation
+}
+
+var templateSignatures = []templateSignature{
+	{
+		name: "assert.contains", label: "assert.contains <- expected",
+		doc:    "Assert that the value contains the expected substring or element",
+		params: []ParameterInformation{{Label: "expected", Documentation: "Substring or element to find"}},
+	},
+	{
+		name: "assert.notContains", label: "assert.notContains <- value",
+		doc:    "Assert that the value does not contain the given substring or element",
+		params: []ParameterInformation{{Label: "value", Documentation: "Substring or element that should not be present"}},
+	},
+	{
+		name: "assert.regexp", label: "assert.regexp <- pattern",
+		doc:    "Assert that the value matches the regular expression pattern",
+		params: []ParameterInformation{{Label: "pattern", Documentation: "Regular expression pattern"}},
+	},
+	{
+		name: "assert.greaterThan", label: "assert.greaterThan <- threshold",
+		doc:    "Assert that the value is greater than the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.greaterThanOrEqual", label: "assert.greaterThanOrEqual <- threshold",
+		doc:    "Assert that the value is greater than or equal to the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.lessThan", label: "assert.lessThan <- threshold",
+		doc:    "Assert that the value is less than the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.lessThanOrEqual", label: "assert.lessThanOrEqual <- threshold",
+		doc:    "Assert that the value is less than or equal to the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.length", label: "assert.length <- n",
+		doc:    "Assert that the collection has exactly n elements",
+		params: []ParameterInformation{{Label: "n", Documentation: "Expected length"}},
+	},
+	{
+		name: "assert.and", label: "assert.and <- [assertions...]",
+		doc:    "Combine multiple assertions with AND (all must pass)",
+		params: []ParameterInformation{{Label: "assertions", Documentation: "List of assertions"}},
+	},
+	{
+		name: "assert.or", label: "assert.or <- [assertions...]",
+		doc:    "Combine multiple assertions with OR (at least one must pass)",
+		params: []ParameterInformation{{Label: "assertions", Documentation: "List of assertions"}},
+	},
+}
+
+func (s *Server) signatureHelp(doc *document, pos Position) *SignatureHelp {
+	// Only active inside {{ }} template expressions, after "<-".
+	tmplExpr, ok := getTemplateContext(doc.Text, pos)
+	if !ok {
+		return nil
+	}
+
+	// Look for "<-" in the expression.
+	arrowIdx := strings.LastIndex(tmplExpr, "<-")
+	if arrowIdx < 0 {
+		return nil
+	}
+
+	funcName := strings.TrimSpace(tmplExpr[:arrowIdx])
+
+	for _, sig := range templateSignatures {
+		if sig.name == funcName {
+			return &SignatureHelp{
+				Signatures: []SignatureInformation{
+					{
+						Label:         sig.label,
+						Documentation: sig.doc,
+						Parameters:    sig.params,
+					},
+				},
+				ActiveSignature: 0,
+				ActiveParameter: 0,
+			}
+		}
+	}
+	return nil
 }
 
 // levenshtein computes the edit distance between two strings.

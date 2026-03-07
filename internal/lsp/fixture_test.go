@@ -31,6 +31,8 @@ type lspExpect struct {
 	HoverIsNull        *bool           `yaml:"hoverIsNull"`
 	SymbolNames        *labelMatcher   `yaml:"symbolNames"`
 	FormattedText      *string         `yaml:"formattedText"`
+	SignatureLabel     *string         `yaml:"signatureLabel"`
+	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
 }
 
 type labelMatcher struct {
@@ -133,6 +135,11 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 		runDefinitionFixture(t, tc, docText, cursorLine, cursorChar)
 	case "formatting":
 		runFormattingFixture(t, tc, docText)
+	case "signatureHelp":
+		if !hasCursor {
+			t.Fatal("signatureHelp test requires $0 cursor marker in document")
+		}
+		runSignatureHelpFixture(t, tc, docText, cursorLine, cursorChar)
 	default:
 		t.Fatalf("unknown operation: %s", tc.Operation)
 	}
@@ -420,4 +427,43 @@ func lineCharToOffset(lines []string, line, char int) int {
 	}
 	off += char
 	return off
+}
+
+func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	srv, client := newTestClient(t)
+	go srv.Run(context.Background())
+
+	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
+	client.readResponse()
+
+	uri := "file:///tmp/test.yaml"
+	client.openDocument(uri, docText)
+
+	client.sendRequest(2, "textDocument/signatureHelp", fmt.Sprintf(`{
+		"textDocument": {"uri": %q},
+		"position": {"line": %d, "character": %d}
+	}`, uri, line, char))
+	resp := client.readResponse()
+
+	if tc.Expect.SignatureIsNull != nil && *tc.Expect.SignatureIsNull {
+		if string(resp) != "null" {
+			t.Errorf("expected null signature help, got: %s", resp)
+		}
+		return
+	}
+
+	if tc.Expect.SignatureLabel != nil {
+		var help SignatureHelp
+		if err := json.Unmarshal(resp, &help); err != nil {
+			t.Fatalf("unmarshal signature help: %v", err)
+		}
+		if len(help.Signatures) == 0 {
+			t.Fatal("expected at least one signature")
+		}
+		if help.Signatures[0].Label != *tc.Expect.SignatureLabel {
+			t.Errorf("expected signature label %q, got %q", *tc.Expect.SignatureLabel, help.Signatures[0].Label)
+		}
+	}
 }
