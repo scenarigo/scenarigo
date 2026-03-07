@@ -1148,10 +1148,18 @@ func (s *Server) formatNode(node ast.Node, fields []*schema.FieldInfo, lines []s
 		return s.formatChildren(mapping, fields, lines)
 	}
 
+	// Skip reordering if the mapping has cross-entry anchor/alias dependencies,
+	// because reordering could place an alias before its anchor definition.
+	if hasAnchorAliasDependency(mapping) {
+		return s.formatChildren(mapping, fields, lines)
+	}
+
 	// Determine line ranges for each mapping value.
+	// Pass 1: compute startLine (including leading comments) for all entries.
 	type entry struct {
-		mv       *ast.MappingValueNode
-		startLine int // 0-based inclusive
+		mv        *ast.MappingValueNode
+		keyLine   int // 0-based, the actual key line
+		startLine int // 0-based inclusive (may include leading comments)
 		endLine   int // 0-based inclusive
 		order     int
 	}
@@ -1165,30 +1173,40 @@ func (s *Server) formatNode(node ast.Node, fields []*schema.FieldInfo, lines []s
 		if tok == nil {
 			return nil // Can't determine position, bail out.
 		}
-		startLine := tok.Position.Line - 1 // Convert to 0-based.
+		keyLine := tok.Position.Line - 1 // Convert to 0-based.
+		indent := getIndentFromLine(lines, keyLine)
 
-		// End line: start of next sibling - 1, or use a heuristic.
-		var endLine int
-		if i+1 < len(mapping.Values) {
-			nextTok := mapping.Values[i+1].Key.GetToken()
-			if nextTok == nil {
-				return nil
-			}
-			endLine = nextTok.Position.Line - 2 // Line before next key.
-		} else {
-			// Last entry: find end by looking for next non-empty line at same or lower indent.
-			endLine = s.findEntryEnd(lines, startLine, getIndentFromLine(lines, startLine))
-		}
+		// Include leading comment lines that are contiguous with this key
+		// at the same or deeper indentation.
+		startLine := findLeadingCommentStart(lines, keyLine, indent)
 
 		idx, exists := order[mv.Key.String()]
 		if !exists {
 			idx = len(fields) + i // Preserve relative order of unknown keys.
 		}
-		entries = append(entries, entry{mv: mv, startLine: startLine, endLine: endLine, order: idx})
+		entries = append(entries, entry{mv: mv, keyLine: keyLine, startLine: startLine, endLine: 0, order: idx})
+		_ = i // used above
 	}
 
 	if len(entries) == 0 {
 		return nil
+	}
+
+	// Pass 2: compute endLine for each entry.
+	// For non-last entries: endLine = next entry's startLine - 1, trimming trailing blank lines.
+	// For the last entry: use findEntryEnd heuristic.
+	for i := range entries {
+		if i+1 < len(entries) {
+			endLine := entries[i+1].startLine - 1
+			// Trim trailing blank lines so they stay as separators rather than
+			// being attached to this entry and moved during reordering.
+			for endLine > entries[i].keyLine && strings.TrimSpace(lines[endLine]) == "" {
+				endLine--
+			}
+			entries[i].endLine = endLine
+		} else {
+			entries[i].endLine = s.findEntryEnd(lines, entries[i].keyLine, getIndentFromLine(lines, entries[i].keyLine))
+		}
 	}
 
 	// Sort entries by schema order (stable to preserve unknown key order).
@@ -1267,13 +1285,36 @@ func (s *Server) formatChildren(mapping *ast.MappingNode, fields []*schema.Field
 }
 
 func (s *Server) findEntryEnd(lines []string, startLine, indent int) int {
+	inBlockScalar := false
+	blockScalarBaseIndent := 0
 	for i := startLine + 1; i < len(lines); i++ {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
+
+		if inBlockScalar {
+			if trimmed == "" {
+				continue // blank lines are part of block scalar
+			}
+			lineIndent := len(line) - len(strings.TrimLeft(line, " "))
+			if lineIndent > blockScalarBaseIndent {
+				continue // still inside block scalar content
+			}
+			// Block scalar ended, fall through to normal processing.
+			inBlockScalar = false
+		}
+
 		if trimmed == "" {
 			continue
 		}
 		lineIndent := len(line) - len(strings.TrimLeft(line, " "))
+
+		// Check if this line introduces a block scalar value (e.g., "key: |" or "key: >-").
+		if isBlockScalarLine(trimmed) {
+			inBlockScalar = true
+			blockScalarBaseIndent = lineIndent
+			continue
+		}
+
 		if lineIndent <= indent && !strings.HasPrefix(trimmed, "#") {
 			return i - 1
 		}
@@ -1284,6 +1325,117 @@ func (s *Server) findEntryEnd(lines []string, startLine, indent int) int {
 		end--
 	}
 	return end
+}
+
+// isBlockScalarLine checks if a trimmed line contains a block scalar indicator
+// as a value (e.g., "key: |", "body: >-", "key: |2").
+func isBlockScalarLine(trimmed string) bool {
+	colonIdx := strings.Index(trimmed, ":")
+	if colonIdx < 0 {
+		return false
+	}
+	after := strings.TrimSpace(trimmed[colonIdx+1:])
+	if after == "" {
+		return false
+	}
+	// Strip trailing comment (e.g., "| # comment").
+	if commentIdx := strings.Index(after, " #"); commentIdx >= 0 {
+		after = strings.TrimSpace(after[:commentIdx])
+	}
+	// Valid block scalar indicators: |, >, |+, |-, >+, >-, |2, >2, |+2, |-2, etc.
+	if after == "" {
+		return false
+	}
+	if after[0] != '|' && after[0] != '>' {
+		return false
+	}
+	for _, ch := range after[1:] {
+		if ch != '+' && ch != '-' && (ch < '0' || ch > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// findLeadingCommentStart scans backward from keyLine to find contiguous comment
+// lines at the same or deeper indent. Returns the first comment line, or keyLine
+// if no leading comments are found.
+func findLeadingCommentStart(lines []string, keyLine, indent int) int {
+	start := keyLine
+	for i := keyLine - 1; i >= 0; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" {
+			break // blank line ends the comment block
+		}
+		if !strings.HasPrefix(trimmed, "#") {
+			break // not a comment
+		}
+		lineIndent := len(lines[i]) - len(strings.TrimLeft(lines[i], " "))
+		if lineIndent < indent {
+			break // comment at a shallower indent belongs to a parent
+		}
+		start = i
+	}
+	return start
+}
+
+// hasAnchorAliasDependency checks if any anchor defined in one entry of the mapping
+// is referenced by an alias in a different entry. Reordering such a mapping could
+// place an alias before its anchor, producing invalid YAML.
+func hasAnchorAliasDependency(mapping *ast.MappingNode) bool {
+	type anchorInfo struct {
+		entryIdx int
+	}
+	anchors := make(map[string]int) // anchor name -> entry index
+
+	for i, mv := range mapping.Values {
+		ast.Walk(&anchorCollector{anchors: anchors, idx: i}, mv)
+	}
+
+	if len(anchors) == 0 {
+		return false
+	}
+
+	// Check if any alias references an anchor from a different entry.
+	for i, mv := range mapping.Values {
+		var found bool
+		ast.Walk(&aliasChecker{anchors: anchors, idx: i, found: &found}, mv)
+		if found {
+			return true
+		}
+	}
+	return false
+}
+
+type anchorCollector struct {
+	anchors map[string]int
+	idx     int
+}
+
+func (c *anchorCollector) Visit(node ast.Node) ast.Visitor {
+	if n, ok := node.(*ast.AnchorNode); ok && n.Name != nil {
+		c.anchors[n.Name.String()] = c.idx
+	}
+	return c
+}
+
+type aliasChecker struct {
+	anchors map[string]int
+	idx     int
+	found   *bool
+}
+
+func (c *aliasChecker) Visit(node ast.Node) ast.Visitor {
+	if *c.found {
+		return nil
+	}
+	if n, ok := node.(*ast.AliasNode); ok && n.Value != nil {
+		if anchorIdx, exists := c.anchors[n.Value.String()]; exists && anchorIdx != c.idx {
+			*c.found = true
+			return nil
+		}
+	}
+	return c
 }
 
 func getIndentFromLine(lines []string, line int) int {
