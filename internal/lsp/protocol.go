@@ -46,7 +46,12 @@ type ServerCapabilities struct {
 	DefinitionProvider     bool               `json:"definitionProvider,omitempty"`
 	DocumentSymbolProvider bool               `json:"documentSymbolProvider,omitempty"`
 	CodeActionProvider         bool               `json:"codeActionProvider,omitempty"`
-	DocumentFormattingProvider bool               `json:"documentFormattingProvider,omitempty"`
+	DocumentFormattingProvider bool                 `json:"documentFormattingProvider,omitempty"`
+	SignatureHelpProvider      *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
+}
+
+type SignatureHelpOptions struct {
+	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -244,6 +249,30 @@ type Location struct {
 type DocumentFormattingParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 	Options      FormattingOptions      `json:"options"`
+}
+
+// SignatureHelp types.
+
+type SignatureHelpParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
+type SignatureHelp struct {
+	Signatures      []SignatureInformation `json:"signatures"`
+	ActiveSignature int                    `json:"activeSignature"`
+	ActiveParameter int                    `json:"activeParameter"`
+}
+
+type SignatureInformation struct {
+	Label         string                 `json:"label"`
+	Documentation string                 `json:"documentation,omitempty"`
+	Parameters    []ParameterInformation `json:"parameters,omitempty"`
+}
+
+type ParameterInformation struct {
+	Label         string `json:"label"`
+	Documentation string `json:"documentation,omitempty"`
 }
 
 type FormattingOptions struct {

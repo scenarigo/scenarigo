@@ -1,0 +1,33 @@
+---
+name: "assert.contains signature after <-"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - expect:
+        body: "{{assert.contains <- $0}}"
+operation: signatureHelp
+expect:
+  signatureLabel: "assert.contains <- expected"
+---
+name: "assert.regexp signature after <-"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - expect:
+        body: "{{assert.regexp <- $0}}"
+operation: signatureHelp
+expect:
+  signatureLabel: "assert.regexp <- pattern"
+---
+name: "no signature without <-"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - expect:
+        body: "{{assert.contains$0}}"
+operation: signatureHelp
+expect:
+  signatureIsNull: true

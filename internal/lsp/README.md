@@ -89,7 +89,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/formatting` | Supported | Key reordering to match schema field order |
 | `textDocument/references` | Not yet | Find references to variables |
 | `textDocument/rename` | Not yet | Rename symbols |
-| `textDocument/signatureHelp` | Not yet | Template function signatures |
+| `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
 
 ### Completion
