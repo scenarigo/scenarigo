@@ -86,7 +86,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors |
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
-| `textDocument/formatting` | Not yet | YAML formatting |
+| `textDocument/formatting` | Supported | Key reordering to match schema field order |
 | `textDocument/references` | Not yet | Find references to variables |
 | `textDocument/rename` | Not yet | Rename symbols |
 | `textDocument/signatureHelp` | Not yet | Template function signatures |

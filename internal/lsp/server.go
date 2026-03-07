@@ -121,6 +121,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleDocumentSymbol(req)
 	case "textDocument/codeAction":
 		s.handleCodeAction(req)
+	case "textDocument/formatting":
+		s.handleFormatting(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -142,7 +144,8 @@ func (s *Server) handleInitialize(req *Request) {
 			HoverProvider:      true,
 			DefinitionProvider:     true,
 			DocumentSymbolProvider: true,
-			CodeActionProvider:     true,
+			CodeActionProvider:         true,
+			DocumentFormattingProvider: true,
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
@@ -352,6 +355,30 @@ func (s *Server) handleCodeAction(req *Request) {
 	}
 
 	s.sendResponse(req.ID, actions, nil)
+}
+
+func (s *Server) handleFormatting(req *Request) {
+	var params DocumentFormattingParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.logger.Printf("formatting unmarshal error: %v", err)
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil || doc.Parsed == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	sch := schema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	edits := s.formatDocument(doc, sch)
+	s.sendResponse(req.ID, edits, nil)
 }
 
 // levenshtein computes the edit distance between two strings.
@@ -916,6 +943,211 @@ func (s *Server) completeFilePath(docURI, partial string) []CompletionItem {
 		})
 	}
 	return items
+}
+
+func (s *Server) formatDocument(doc *document, sch *schema.Schema) []TextEdit {
+	if doc.Parsed == nil || doc.Parsed.File == nil {
+		return nil
+	}
+
+	lines := strings.Split(doc.Text, "\n")
+	var edits []TextEdit
+
+	for _, d := range doc.Parsed.File.Docs {
+		if d.Body == nil {
+			continue
+		}
+		edits = append(edits, s.formatNode(d.Body, sch.Fields, lines)...)
+	}
+	return edits
+}
+
+// formatNode reorders keys in a mapping to match the schema field order.
+func (s *Server) formatNode(node ast.Node, fields []*schema.FieldInfo, lines []string) []TextEdit {
+	if node == nil || fields == nil {
+		return nil
+	}
+
+	mapping, ok := node.(*ast.MappingNode)
+	if !ok {
+		return nil
+	}
+
+	if len(mapping.Values) <= 1 {
+		return nil // Nothing to reorder.
+	}
+
+	// Build schema order map.
+	order := make(map[string]int, len(fields))
+	for i, f := range fields {
+		order[f.Name] = i
+	}
+
+	// Check if already in order.
+	inOrder := true
+	lastOrder := -1
+	for _, mv := range mapping.Values {
+		if mv.Key == nil {
+			continue
+		}
+		idx, exists := order[mv.Key.String()]
+		if !exists {
+			idx = len(fields) // Unknown keys go at the end.
+		}
+		if idx < lastOrder {
+			inOrder = false
+			break
+		}
+		lastOrder = idx
+	}
+	if inOrder {
+		// Already in schema order. Recurse into children.
+		return s.formatChildren(mapping, fields, lines)
+	}
+
+	// Determine line ranges for each mapping value.
+	type entry struct {
+		mv       *ast.MappingValueNode
+		startLine int // 0-based inclusive
+		endLine   int // 0-based inclusive
+		order     int
+	}
+
+	var entries []entry
+	for i, mv := range mapping.Values {
+		if mv.Key == nil {
+			continue
+		}
+		tok := mv.Key.GetToken()
+		if tok == nil {
+			return nil // Can't determine position, bail out.
+		}
+		startLine := tok.Position.Line - 1 // Convert to 0-based.
+
+		// End line: start of next sibling - 1, or use a heuristic.
+		var endLine int
+		if i+1 < len(mapping.Values) {
+			nextTok := mapping.Values[i+1].Key.GetToken()
+			if nextTok == nil {
+				return nil
+			}
+			endLine = nextTok.Position.Line - 2 // Line before next key.
+		} else {
+			// Last entry: find end by looking for next non-empty line at same or lower indent.
+			endLine = s.findEntryEnd(lines, startLine, getIndentFromLine(lines, startLine))
+		}
+
+		idx, exists := order[mv.Key.String()]
+		if !exists {
+			idx = len(fields) + i // Preserve relative order of unknown keys.
+		}
+		entries = append(entries, entry{mv: mv, startLine: startLine, endLine: endLine, order: idx})
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	// Sort entries by schema order (stable to preserve unknown key order).
+	sorted := make([]entry, len(entries))
+	copy(sorted, entries)
+	for i := 1; i < len(sorted); i++ {
+		for j := i; j > 0 && sorted[j].order < sorted[j-1].order; j-- {
+			sorted[j], sorted[j-1] = sorted[j-1], sorted[j]
+		}
+	}
+
+	// Check if sort actually changed anything.
+	changed := false
+	for i := range entries {
+		if entries[i].startLine != sorted[i].startLine {
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return s.formatChildren(mapping, fields, lines)
+	}
+
+	// Build the replacement text.
+	rangeStart := entries[0].startLine
+	rangeEnd := entries[len(entries)-1].endLine
+
+	var newLines []string
+	for _, e := range sorted {
+		for l := e.startLine; l <= e.endLine && l < len(lines); l++ {
+			newLines = append(newLines, lines[l])
+		}
+	}
+
+	edit := TextEdit{
+		Range: Range{
+			Start: Position{Line: rangeStart, Character: 0},
+			End:   Position{Line: rangeEnd + 1, Character: 0},
+		},
+		NewText: strings.Join(newLines, "\n") + "\n",
+	}
+
+	return []TextEdit{edit}
+}
+
+func (s *Server) formatChildren(mapping *ast.MappingNode, fields []*schema.FieldInfo, lines []string) []TextEdit {
+	var edits []TextEdit
+	for _, mv := range mapping.Values {
+		if mv.Key == nil || mv.Value == nil {
+			continue
+		}
+		// Find child fields for this key.
+		var childFields []*schema.FieldInfo
+		for _, f := range fields {
+			if f.Name == mv.Key.String() {
+				childFields = f.Children
+				break
+			}
+		}
+		if childFields != nil {
+			edits = append(edits, s.formatNode(mv.Value, childFields, lines)...)
+		}
+		// Handle sequence items (e.g., steps).
+		if seq, ok := mv.Value.(*ast.SequenceNode); ok {
+			for _, f := range fields {
+				if f.Name == mv.Key.String() && f.Children != nil {
+					for _, item := range seq.Values {
+						edits = append(edits, s.formatNode(item, f.Children, lines)...)
+					}
+					break
+				}
+			}
+		}
+	}
+	return edits
+}
+
+func (s *Server) findEntryEnd(lines []string, startLine, indent int) int {
+	for i := startLine + 1; i < len(lines); i++ {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		lineIndent := len(line) - len(strings.TrimLeft(line, " "))
+		if lineIndent <= indent && !strings.HasPrefix(trimmed, "#") {
+			return i - 1
+		}
+	}
+	// Last line of file.
+	end := len(lines) - 1
+	for end > startLine && strings.TrimSpace(lines[end]) == "" {
+		end--
+	}
+	return end
+}
+
+func getIndentFromLine(lines []string, line int) int {
+	if line >= len(lines) {
+		return 0
+	}
+	return len(lines[line]) - len(strings.TrimLeft(lines[line], " "))
 }
 
 func (s *Server) hover(doc *document, pos Position) *Hover {
