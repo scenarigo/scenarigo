@@ -856,7 +856,7 @@ func (s *Server) publishDiagnostics(uri string) {
 		return
 	}
 
-	var diagnostics []Diagnostic
+	diagnostics := []Diagnostic{}
 
 	sch := schema.DetectSchemaType(doc.Text)
 	if sch == nil {
