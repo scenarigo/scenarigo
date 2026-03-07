@@ -821,6 +821,32 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema
 		return
 	}
 
+	// Validate enum values.
+	if len(field.EnumValues) > 0 && mv.Value != nil {
+		if sv, ok := mv.Value.(*ast.StringNode); ok {
+			valid := false
+			for _, ev := range field.EnumValues {
+				if sv.Value == ev {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				valTok := mv.Value.GetToken()
+				if valTok != nil {
+					*diags = append(*diags, Diagnostic{
+						Range: Range{
+							Start: Position{Line: valTok.Position.Line - 1, Character: valTok.Position.Column - 1},
+							End:   Position{Line: valTok.Position.Line - 1, Character: valTok.Position.Column - 1 + len(sv.Value)},
+						},
+						Severity: DiagnosticSeverityWarning,
+						Message:  fmt.Sprintf("invalid value %q for field %q (allowed: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", ")),
+					})
+				}
+			}
+		}
+	}
+
 	// Recurse into child nodes.
 	if mv.Value != nil {
 		var childFields []*schema.FieldInfo

@@ -1,0 +1,36 @@
+---
+name: "invalid protocol value produces diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: ftp
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'invalid value "ftp" for field "protocol" (allowed: http, grpc)'
+---
+name: "valid protocol value has no enum diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'invalid value "http" for field "protocol" (allowed: http, grpc)'
+---
+name: "invalid schemaVersion produces diagnostic"
+document: |
+  schemaVersion: invalid/v99
+  title: test
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1)'
