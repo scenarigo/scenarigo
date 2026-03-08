@@ -193,24 +193,63 @@ internal/lsp/
 
 ## Testing
 
+The LSP server has three tiers of tests, each with a different purpose and cost.
+
+### Test Tiers
+
+| Tier | Files | Run with | Purpose |
+|---|---|---|---|
+| **Unit / Fuzz** | `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
+| **Fixture + Session** | `fixture_test.go` + `testdata/`, `integration_test.go` | `go test ./internal/lsp/...` | Protocol-level behavior via in-process `io.Pipe` |
+| **E2E (binary + Neovim)** | `e2e_test.go` + `testdata/e2e_nvim/` | `make test/lsp-e2e` | Real binary over OS pipes; real editor integration |
+
+#### Unit / Fuzz Tests
+
+Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateContext`, `FuzzCompleteTemplate`, `FuzzGetCursorContext`) detect panics and edge cases via random input.
+
+#### Fixture Tests (data-driven)
+
+Single-operation tests declared in YAML under `testdata/{operation}/`. Each fixture specifies a document (with `$0` cursor marker), an operation, and expected results. **New tests should be added here whenever possible** — no Go code changes needed.
+
+Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `documentSymbol`, `formatting`, `signatureHelp`, `references`.
+
+#### Session Tests (multi-step Go tests)
+
+`integration_test.go` contains tests that require multi-step interactions impossible to express in YAML fixtures: editing a document and re-completing, opening multiple documents simultaneously, verifying diagnostics update after edits, code action flows that depend on diagnostics, and full lifecycle (initialize → operations → close → shutdown).
+
+#### E2E Tests
+
+Gated behind the `e2e_lsp` build tag. These tests build the real `scenarigo` binary via `make build` and test:
+
+- **Binary stdio tests** — launch `scenarigo lsp` as a subprocess, communicate via stdin/stdout pipes. Tests full lifecycle, shutdown/exit behavior, stdin close handling, config file reads from disk, and formatting.
+- **Neovim integration** (`TestE2E_Neovim`) — launches headless Neovim (`nvim --headless --clean`) with a Lua test script that uses `vim.lsp.start` to connect to the server. Tests client attach, completion, hover, diagnostics, and diagnostics-after-edit through Neovim's real LSP client. Skipped if `nvim` is not available.
+
+### File Layout
+
 ```
 internal/lsp/
-  server_test.go        # testClient infrastructure, TestServer_Initialize, TestServer_Fixtures
-  fixture_test.go       # YAML fixture loader, parseCursorMarker, per-operation runners
-  integration_test.go   # Session-level integration tests (open -> edit -> complete -> hover -> close)
-  server_fuzz_test.go   # FuzzGetTemplateContext, FuzzCompleteTemplate
+  server_test.go          # testClient (helpers, typed methods), TestServer_Initialize
+  fixture_test.go         # YAML fixture loader, parseCursorMarker, per-operation runners
+  integration_test.go     # Multi-step session tests (TestEditorSession_*)
+  server_fuzz_test.go     # FuzzGetTemplateContext, FuzzCompleteTemplate
+  e2e_test.go             # [e2e_lsp] Binary subprocess + Neovim headless tests
   testdata/
-    completion/         # 15 completion test fixtures
-    diagnostics/        # 4 diagnostics test fixtures
-    definition/         # 1 definition test fixture
-    hover/              # 3 hover test fixtures
-    documentSymbol/     # 1 document symbol test fixture
+    completion/           # Completion fixtures
+    diagnostics/          # Diagnostics fixtures
+    definition/           # Definition fixtures
+    hover/                # Hover fixtures
+    documentSymbol/       # Document symbol fixtures
+    formatting/           # Formatting fixtures
+    signatureHelp/        # Signature help fixtures
+    references/           # References fixtures
+    e2e_nvim/
+      lsp_test.lua        # Neovim Lua test script
   yamlutil/
-    position_test.go    # GetCursorContext unit tests
+    position_test.go      # GetCursorContext unit tests
     position_fuzz_test.go # FuzzGetCursorContext
 ```
 
-### Adding a Test
+### Adding a Fixture Test
 
 Add a YAML file under `testdata/{operation}/` and `TestServer_Fixtures` will pick it up automatically. No code changes needed.
 
@@ -221,11 +260,24 @@ document: |
   schemaVersion: scenario/v1
   steps:
     - protocol: $0
-operation: completion  # completion | diagnostics | definition | hover | documentSymbol
+operation: completion
 expect:
   completionLabels:
     contains: [http, grpc]
     excludes: [url]
 ```
 
-`$0` marks the cursor position (required for completion, hover, and definition operations).
+`$0` marks the cursor position (required for completion, hover, definition, signatureHelp, and references).
+
+### Running Tests
+
+```bash
+# Unit + Fixture + Session tests (default, fast)
+go test ./internal/lsp/...
+
+# E2E tests (builds binary, launches subprocesses)
+make test/lsp-e2e
+
+# All together
+go test -tags e2e_lsp ./internal/lsp/...
+```
