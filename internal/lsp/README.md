@@ -129,10 +129,11 @@ au User lsp_setup call lsp#register_server(#{
 | Enum value completion | Supported | e.g., `protocol: ` suggests `http`, `grpc` |
 | Protocol-aware completion | Supported | `request`/`expect` fields change based on `protocol` value |
 | Template variable completion | Supported | Inside `{{`, suggests `vars`, `secrets`, `assert`, etc. |
-| Template dot completion | Supported | `{{assert.` suggests `contains`, `notZero`, etc.; `{{vars.`/`{{secrets.`/`{{steps.` suggests keys from document and config |
+| Template dot completion | Supported | `{{assert.` suggests `contains`, `notZero`, etc.; `{{vars.`/`{{secrets.`/`{{steps.` suggests keys from document and config; `{{plugins.` suggests plugin names |
 | Partial match filtering | Supported | Filters candidates by prefix as you type |
 | File path completion | Supported | Filesystem-based candidates for `include`, `plugins`, `scenarios`, `pluginDirectory` |
-| Plugin export completion | Not yet | Variables/functions exported by plugins |
+| Plugin name completion | Supported | `{{plugins.` suggests plugin names from document and config |
+| Plugin export completion | Not yet | Variables/functions exported by plugins (requires plugin metadata) |
 
 ### Diagnostics
 
