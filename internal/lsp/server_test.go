@@ -34,18 +34,26 @@ func newTestClient(t *testing.T) (*Server, *testClient) {
 	return srv, &testClient{t: t, inW: inW, outR: bufio.NewReader(outR)}
 }
 
-func (c *testClient) sendRequest(id int, method string, params string) {
+func (c *testClient) sendRequest(id int, method string, params any) {
 	c.t.Helper()
-	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":%q,"params":%s}`, id, method, params)
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		c.t.Fatalf("marshal params: %v", err)
+	}
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":%q,"params":%s}`, id, method, paramsJSON)
 	msg := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(body), body)
 	if _, err := io.WriteString(c.inW, msg); err != nil {
 		c.t.Fatalf("write request: %v", err)
 	}
 }
 
-func (c *testClient) sendNotification(method string, params string) {
+func (c *testClient) sendNotification(method string, params any) {
 	c.t.Helper()
-	body := fmt.Sprintf(`{"jsonrpc":"2.0","method":%q,"params":%s}`, method, params)
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		c.t.Fatalf("marshal params: %v", err)
+	}
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","method":%q,"params":%s}`, method, paramsJSON)
 	msg := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(body), body)
 	if _, err := io.WriteString(c.inW, msg); err != nil {
 		c.t.Fatalf("write notification: %v", err)
@@ -98,28 +106,28 @@ func (c *testClient) readResponse() json.RawMessage {
 
 func (c *testClient) openDocument(uri, text string) {
 	c.t.Helper()
-	c.sendNotification("textDocument/didOpen", fmt.Sprintf(`{
-		"textDocument": {
-			"uri": %q,
-			"languageId": "yaml",
-			"version": 1,
-			"text": %s
-		}
-	}`, uri, jsonString(text)))
+	c.sendNotification("textDocument/didOpen", DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{
+			URI:        uri,
+			LanguageID: "yaml",
+			Version:    1,
+			Text:       text,
+		},
+	})
 	time.Sleep(10 * time.Millisecond)
 	c.readMessage() // diagnostics
 }
 
 func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiagnosticsParams {
 	c.t.Helper()
-	c.sendNotification("textDocument/didOpen", fmt.Sprintf(`{
-		"textDocument": {
-			"uri": %q,
-			"languageId": "yaml",
-			"version": 1,
-			"text": %s
-		}
-	}`, uri, jsonString(text)))
+	c.sendNotification("textDocument/didOpen", DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{
+			URI:        uri,
+			LanguageID: "yaml",
+			Version:    1,
+			Text:       text,
+		},
+	})
 	time.Sleep(10 * time.Millisecond)
 	raw := c.readMessage()
 	var notif Notification
@@ -135,10 +143,10 @@ func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiag
 
 func (c *testClient) complete(id int, uri string, line, char int) CompletionList {
 	c.t.Helper()
-	c.sendRequest(id, "textDocument/completion", fmt.Sprintf(`{
-		"textDocument": {"uri": %q},
-		"position": {"line": %d, "character": %d}
-	}`, uri, line, char))
+	c.sendRequest(id, "textDocument/completion", CompletionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
 	resp := c.readResponse()
 	var list CompletionList
 	if err := json.Unmarshal(resp, &list); err != nil {
@@ -147,17 +155,116 @@ func (c *testClient) complete(id int, uri string, line, char int) CompletionList
 	return list
 }
 
+// --- typed helper methods ---
+
+func (c *testClient) initialize(id int, rootURI string) InitializeResult {
+	c.t.Helper()
+	c.sendRequest(id, "initialize", InitializeParams{RootURI: rootURI})
+	resp := c.readResponse()
+	var result InitializeResult
+	if err := json.Unmarshal(resp, &result); err != nil {
+		c.t.Fatalf("unmarshal initialize result: %v", err)
+	}
+	return result
+}
+
+func (c *testClient) changeDocument(uri string, version int, newText string) {
+	c.t.Helper()
+	c.sendNotification("textDocument/didChange", DidChangeTextDocumentParams{
+		TextDocument: VersionedTextDocumentIdentifier{
+			TextDocumentIdentifier: TextDocumentIdentifier{URI: uri},
+			Version:                version,
+		},
+		ContentChanges: []TextDocumentContentChangeEvent{{Text: newText}},
+	})
+	time.Sleep(10 * time.Millisecond)
+	c.readMessage() // diagnostics after change
+}
+
+func (c *testClient) closeDocument(uri string) {
+	c.t.Helper()
+	c.sendNotification("textDocument/didClose", DidCloseTextDocumentParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	})
+	time.Sleep(10 * time.Millisecond)
+	c.readMessage() // clear diagnostics notification
+}
+
+func (c *testClient) hover(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/hover", HoverParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) definition(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/definition", DefinitionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) references(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/references", ReferenceParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+		Context:      ReferenceContext{IncludeDeclaration: true},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) documentSymbol(id int, uri string) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/documentSymbol", DocumentSymbolParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) codeAction(id int, uri string, r Range, diags []Diagnostic) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/codeAction", CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        r,
+		Context:      CodeActionContext{Diagnostics: diags},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) formatting(id int, uri string) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/formatting", DocumentFormattingParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Options:      FormattingOptions{TabSize: 2, InsertSpaces: true},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) signatureHelp(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/signatureHelp", SignatureHelpParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) shutdown(id int) {
+	c.t.Helper()
+	c.sendRequest(id, "shutdown", struct{}{})
+	c.readResponse()
+}
+
 func TestServer_Initialize(t *testing.T) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
-	result := client.readResponse()
-
-	var initResult InitializeResult
-	if err := json.Unmarshal(result, &initResult); err != nil {
-		t.Fatalf("unmarshal result: %v", err)
-	}
+	initResult := client.initialize(1, "file:///tmp")
 	if initResult.Capabilities.CompletionProvider == nil {
 		t.Fatal("expected completion provider")
 	}
@@ -186,11 +293,6 @@ func diagMessages(diags []Diagnostic) []string {
 		msgs = append(msgs, d.Message)
 	}
 	return msgs
-}
-
-func jsonString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
 }
 
 func labelSet(items []CompletionItem) map[string]bool {

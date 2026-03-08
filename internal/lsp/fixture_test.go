@@ -173,8 +173,7 @@ func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	go srv.Run(context.Background())
 
 	rootURI := "file://" + rootDir
-	client.sendRequest(1, "initialize", fmt.Sprintf(`{"rootUri":%q}`, rootURI))
-	client.readResponse()
+	client.initialize(1, rootURI)
 
 	uri := "file://" + rootDir + "/test.yaml"
 	client.openDocument(uri, docText)
@@ -202,8 +201,7 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
-	client.readResponse()
+	client.initialize(1, "file:///tmp")
 
 	uri := "file:///tmp/test.yaml"
 	diags := client.openDocumentAndGetDiagnostics(uri, docText)
@@ -238,16 +236,12 @@ func runDocumentSymbolFixture(t *testing.T, tc lspTestCase, docText string) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
-	client.readResponse()
+	client.initialize(1, "file:///tmp")
 
 	uri := "file:///tmp/test.yaml"
 	client.openDocument(uri, docText)
 
-	client.sendRequest(2, "textDocument/documentSymbol", fmt.Sprintf(`{
-		"textDocument": {"uri": %q}
-	}`, uri))
-	resp := client.readResponse()
+	resp := client.documentSymbol(2, uri)
 
 	if tc.Expect.SymbolNames != nil {
 		var symbols []DocumentSymbol
@@ -300,17 +294,12 @@ func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char in
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
-	client.readResponse()
+	client.initialize(1, "file:///tmp")
 
 	uri := "file:///tmp/test.yaml"
 	client.openDocument(uri, docText)
 
-	client.sendRequest(2, "textDocument/hover", fmt.Sprintf(`{
-		"textDocument": {"uri": %q},
-		"position": {"line": %d, "character": %d}
-	}`, uri, line, char))
-	resp := client.readResponse()
+	resp := client.hover(2, uri, line, char)
 
 	if tc.Expect.HoverIsNull != nil && *tc.Expect.HoverIsNull {
 		if string(resp) != "null" {
@@ -320,13 +309,13 @@ func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char in
 	}
 
 	if len(tc.Expect.HoverContains) > 0 {
-		var hover Hover
-		if err := json.Unmarshal(resp, &hover); err != nil {
+		var hoverResult Hover
+		if err := json.Unmarshal(resp, &hoverResult); err != nil {
 			t.Fatalf("unmarshal hover: %v", err)
 		}
 		for _, want := range tc.Expect.HoverContains {
-			if !strings.Contains(hover.Contents.Value, want) {
-				t.Errorf("expected hover to contain %q, got: %s", want, hover.Contents.Value)
+			if !strings.Contains(hoverResult.Contents.Value, want) {
+				t.Errorf("expected hover to contain %q, got: %s", want, hoverResult.Contents.Value)
 			}
 		}
 	}
@@ -351,17 +340,13 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", fmt.Sprintf(`{"rootUri":"file://%s"}`, tmpDir))
-	client.readResponse()
+	rootURI := fmt.Sprintf("file://%s", tmpDir)
+	client.initialize(1, rootURI)
 
 	docURI := "file://" + filepath.Join(tmpDir, "test.yaml")
 	client.openDocument(docURI, docText)
 
-	client.sendRequest(2, "textDocument/definition", fmt.Sprintf(`{
-		"textDocument": {"uri": %q},
-		"position": {"line": %d, "character": %d}
-	}`, docURI, line, char))
-	resp := client.readResponse()
+	resp := client.definition(2, docURI, line, char)
 
 	if tc.Expect.DefinitionURI != nil {
 		var loc Location
@@ -382,17 +367,12 @@ func runFormattingFixture(t *testing.T, tc lspTestCase, docText string) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
-	client.readResponse()
+	client.initialize(1, "file:///tmp")
 
 	uri := "file:///tmp/test.yaml"
 	client.openDocument(uri, docText)
 
-	client.sendRequest(2, "textDocument/formatting", fmt.Sprintf(`{
-		"textDocument": {"uri": %q},
-		"options": {"tabSize": 2, "insertSpaces": true}
-	}`, uri))
-	resp := client.readResponse()
+	resp := client.formatting(2, uri)
 
 	if tc.Expect.FormattedText != nil {
 		var edits []TextEdit
@@ -441,17 +421,12 @@ func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line,
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
-	client.readResponse()
+	client.initialize(1, "file:///tmp")
 
 	uri := "file:///tmp/test.yaml"
 	client.openDocument(uri, docText)
 
-	client.sendRequest(2, "textDocument/signatureHelp", fmt.Sprintf(`{
-		"textDocument": {"uri": %q},
-		"position": {"line": %d, "character": %d}
-	}`, uri, line, char))
-	resp := client.readResponse()
+	resp := client.signatureHelp(2, uri, line, char)
 
 	if tc.Expect.SignatureIsNull != nil && *tc.Expect.SignatureIsNull {
 		if string(resp) != "null" {
@@ -480,19 +455,12 @@ func runReferencesFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.sendRequest(1, "initialize", `{"rootUri":"file:///tmp"}`)
-	client.readResponse()
+	client.initialize(1, "file:///tmp")
 
 	uri := "file:///tmp/test.yaml"
 	client.openDocument(uri, docText)
 
-	// Default to includeDeclaration: true.
-	client.sendRequest(2, "textDocument/references", fmt.Sprintf(`{
-		"textDocument": {"uri": %q},
-		"position": {"line": %d, "character": %d},
-		"context": {"includeDeclaration": true}
-	}`, uri, line, char))
-	resp := client.readResponse()
+	resp := client.references(2, uri, line, char)
 
 	if tc.Expect.ReferenceCount != nil {
 		var locs []Location
