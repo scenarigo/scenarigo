@@ -934,16 +934,23 @@ func findBlockKeyRange(text, blockName, keyName string) *Range {
 	return nil
 }
 
-// pluginSymbols holds exported symbols extracted from a Go plugin source directory.
-type pluginSymbols struct {
-	Funcs  []string
-	Values []string
+// pluginSymbol represents an exported symbol from a Go plugin source.
+type pluginSymbol struct {
+	Name      string
+	Signature string // e.g., "func(ctx context.Context, addr string) TestClient"
+	Doc       string // doc comment
+	IsFunc    bool
 }
 
-// extractGoExportedSymbols parses Go source files in dir and returns exported function and variable names.
+// pluginSymbols holds exported symbols extracted from a Go plugin source directory.
+type pluginSymbols struct {
+	Symbols []pluginSymbol
+}
+
+// extractGoExportedSymbols parses Go source files in dir and returns exported symbols with signatures and docs.
 func extractGoExportedSymbols(dir string) (*pluginSymbols, error) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, nil, 0)
+	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
@@ -954,7 +961,12 @@ func extractGoExportedSymbols(dir string) (*pluginSymbols, error) {
 				switch d := decl.(type) {
 				case *goast.FuncDecl:
 					if d.Recv == nil && d.Name.IsExported() {
-						syms.Funcs = append(syms.Funcs, d.Name.Name)
+						syms.Symbols = append(syms.Symbols, pluginSymbol{
+							Name:      d.Name.Name,
+							Signature: formatFuncSignature(d),
+							Doc:       cleanDocComment(d.Doc),
+							IsFunc:    true,
+						})
 					}
 				case *goast.GenDecl:
 					if d.Tok != token.VAR {
@@ -967,7 +979,11 @@ func extractGoExportedSymbols(dir string) (*pluginSymbols, error) {
 						}
 						for _, name := range vs.Names {
 							if name.IsExported() {
-								syms.Values = append(syms.Values, name.Name)
+								syms.Symbols = append(syms.Symbols, pluginSymbol{
+									Name:      name.Name,
+									Signature: formatVarType(vs),
+									Doc:       cleanDocComment(firstNonNil(vs.Doc, d.Doc)),
+								})
 							}
 						}
 					}
@@ -976,6 +992,119 @@ func extractGoExportedSymbols(dir string) (*pluginSymbols, error) {
 		}
 	}
 	return &syms, nil
+}
+
+func firstNonNil(groups ...*goast.CommentGroup) *goast.CommentGroup {
+	for _, g := range groups {
+		if g != nil {
+			return g
+		}
+	}
+	return nil
+}
+
+// formatFuncSignature formats a function declaration's signature as a string.
+func formatFuncSignature(d *goast.FuncDecl) string {
+	var b strings.Builder
+	b.WriteString("func(")
+	if d.Type.Params != nil {
+		formatFieldList(&b, d.Type.Params)
+	}
+	b.WriteString(")")
+	if d.Type.Results != nil && len(d.Type.Results.List) > 0 {
+		if len(d.Type.Results.List) == 1 && len(d.Type.Results.List[0].Names) == 0 {
+			b.WriteString(" ")
+			formatExpr(&b, d.Type.Results.List[0].Type)
+		} else {
+			b.WriteString(" (")
+			formatFieldList(&b, d.Type.Results)
+			b.WriteString(")")
+		}
+	}
+	return b.String()
+}
+
+// formatVarType formats the type of a variable declaration.
+func formatVarType(vs *goast.ValueSpec) string {
+	if vs.Type != nil {
+		var b strings.Builder
+		formatExpr(&b, vs.Type)
+		return b.String()
+	}
+	return "var"
+}
+
+// formatFieldList formats a list of function parameters or results.
+func formatFieldList(b *strings.Builder, fl *goast.FieldList) {
+	for i, field := range fl.List {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		if len(field.Names) > 0 {
+			for j, name := range field.Names {
+				if j > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(name.Name)
+			}
+			b.WriteString(" ")
+		}
+		formatExpr(b, field.Type)
+	}
+}
+
+// formatExpr formats a Go type expression as a string.
+func formatExpr(b *strings.Builder, expr goast.Expr) {
+	switch t := expr.(type) {
+	case *goast.Ident:
+		b.WriteString(t.Name)
+	case *goast.SelectorExpr:
+		formatExpr(b, t.X)
+		b.WriteString(".")
+		b.WriteString(t.Sel.Name)
+	case *goast.StarExpr:
+		b.WriteString("*")
+		formatExpr(b, t.X)
+	case *goast.ArrayType:
+		b.WriteString("[]")
+		formatExpr(b, t.Elt)
+	case *goast.MapType:
+		b.WriteString("map[")
+		formatExpr(b, t.Key)
+		b.WriteString("]")
+		formatExpr(b, t.Value)
+	case *goast.InterfaceType:
+		b.WriteString("interface{}")
+	case *goast.Ellipsis:
+		b.WriteString("...")
+		formatExpr(b, t.Elt)
+	case *goast.FuncType:
+		b.WriteString("func(")
+		if t.Params != nil {
+			formatFieldList(b, t.Params)
+		}
+		b.WriteString(")")
+		if t.Results != nil && len(t.Results.List) > 0 {
+			b.WriteString(" ")
+			if len(t.Results.List) == 1 && len(t.Results.List[0].Names) == 0 {
+				formatExpr(b, t.Results.List[0].Type)
+			} else {
+				b.WriteString("(")
+				formatFieldList(b, t.Results)
+				b.WriteString(")")
+			}
+		}
+	default:
+		b.WriteString("any")
+	}
+}
+
+// cleanDocComment extracts and cleans a doc comment from an AST comment group.
+func cleanDocComment(doc *goast.CommentGroup) string {
+	if doc == nil {
+		return ""
+	}
+	return strings.TrimSpace(doc.Text())
 }
 
 // getPluginSymbols returns the exported symbols for a plugin source directory, using a cache.
@@ -1260,24 +1389,24 @@ func (s *Server) completeTemplate(doc *document, expr string) []CompletionItem {
 
 	// Top-level template names available in scenarigo.
 	topLevel := []templateCandidate{
-		{"vars", "Scenario/step variables", CompletionItemKindVariable},
-		{"secrets", "Secret variables", CompletionItemKindVariable},
-		{"plugins", "Plugin exports", CompletionItemKindVariable},
-		{"request", "Request data (protocol-specific)", CompletionItemKindVariable},
-		{"response", "Response data (protocol-specific)", CompletionItemKindVariable},
-		{"steps", "Results from previous steps", CompletionItemKindVariable},
-		{"env", "Environment variable", CompletionItemKindVariable},
-		{"assert", "Assertion functions", CompletionItemKindModule},
-		{"size", "Get size of collection", CompletionItemKindFunction},
-		{"type", "Get type name", CompletionItemKindFunction},
-		{"int", "Convert to int", CompletionItemKindFunction},
-		{"uint", "Convert to uint", CompletionItemKindFunction},
-		{"float", "Convert to float", CompletionItemKindFunction},
-		{"bool", "Convert to bool", CompletionItemKindFunction},
-		{"string", "Convert to string", CompletionItemKindFunction},
-		{"bytes", "Convert to bytes", CompletionItemKindFunction},
-		{"time", "Time type conversion", CompletionItemKindFunction},
-		{"duration", "Duration type conversion", CompletionItemKindFunction},
+		{name: "vars", detail: "Scenario/step variables", kind: CompletionItemKindVariable},
+		{name: "secrets", detail: "Secret variables", kind: CompletionItemKindVariable},
+		{name: "plugins", detail: "Plugin exports", kind: CompletionItemKindVariable},
+		{name: "request", detail: "Request data (protocol-specific)", kind: CompletionItemKindVariable},
+		{name: "response", detail: "Response data (protocol-specific)", kind: CompletionItemKindVariable},
+		{name: "steps", detail: "Results from previous steps", kind: CompletionItemKindVariable},
+		{name: "env", detail: "Environment variable", kind: CompletionItemKindVariable},
+		{name: "assert", detail: "Assertion functions", kind: CompletionItemKindModule},
+		{name: "size", detail: "func(v any) int", doc: "Get size of collection", kind: CompletionItemKindFunction},
+		{name: "type", detail: "func(v any) string", doc: "Get type name of value", kind: CompletionItemKindFunction},
+		{name: "int", detail: "func(v any) int64", doc: "Convert value to int", kind: CompletionItemKindFunction},
+		{name: "uint", detail: "func(v any) uint64", doc: "Convert value to uint", kind: CompletionItemKindFunction},
+		{name: "float", detail: "func(v any) float64", doc: "Convert value to float", kind: CompletionItemKindFunction},
+		{name: "bool", detail: "func(v any) bool", doc: "Convert value to bool", kind: CompletionItemKindFunction},
+		{name: "string", detail: "func(v any) string", doc: "Convert value to string", kind: CompletionItemKindFunction},
+		{name: "bytes", detail: "func(v any) []byte", doc: "Convert value to bytes", kind: CompletionItemKindFunction},
+		{name: "time", detail: "func(v any) time.Time", doc: "Convert value to time.Time", kind: CompletionItemKindFunction},
+		{name: "duration", detail: "func(v any) time.Duration", doc: "Convert value to time.Duration", kind: CompletionItemKindFunction},
 	}
 
 	// If there's a dot, we need to complete after the prefix.
@@ -1294,19 +1423,25 @@ func (s *Server) completeTemplate(doc *document, expr string) []CompletionItem {
 		if expr != "" && !strings.HasPrefix(c.name, expr) {
 			continue
 		}
+		doc := c.doc
+		if doc == "" {
+			doc = c.detail
+		}
 		items = append(items, CompletionItem{
 			Label:         c.name,
 			Kind:          c.kind,
-			Documentation: c.desc,
+			Detail:        c.detail,
+			Documentation: doc,
 		})
 	}
 	return items
 }
 
 type templateCandidate struct {
-	name string
-	desc string
-	kind int
+	name   string
+	detail string // short signature shown inline (e.g., "func(expected any)")
+	doc    string // longer documentation (e.g., doc comment)
+	kind   int
 }
 
 func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []CompletionItem {
@@ -1316,48 +1451,48 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 	switch prefix {
 	case "assert":
 		candidates = []templateCandidate{
-			{"and", "Combine assertions with AND (assert.and <- [a, b])", CompletionItemKindFunction},
-			{"or", "Combine assertions with OR (assert.or <- [a, b])", CompletionItemKindFunction},
-			{"any", "Accept any value (always passes)", CompletionItemKindFunction},
-			{"contains", "Assert value contains substring/element (assert.contains <- expected)", CompletionItemKindFunction},
-			{"notContains", "Assert value does not contain (assert.notContains <- value)", CompletionItemKindFunction},
-			{"regexp", "Assert value matches regexp pattern (assert.regexp <- pattern)", CompletionItemKindFunction},
-			{"notZero", "Assert value is not zero value", CompletionItemKindFunction},
-			{"greaterThan", "Assert value > threshold (assert.greaterThan <- n)", CompletionItemKindFunction},
-			{"greaterThanOrEqual", "Assert value >= threshold (assert.greaterThanOrEqual <- n)", CompletionItemKindFunction},
-			{"lessThan", "Assert value < threshold (assert.lessThan <- n)", CompletionItemKindFunction},
-			{"lessThanOrEqual", "Assert value <= threshold (assert.lessThanOrEqual <- n)", CompletionItemKindFunction},
-			{"length", "Assert length of collection (assert.length <- n)", CompletionItemKindFunction},
+			{name: "and", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with AND — all must pass", kind: CompletionItemKindFunction},
+			{name: "or", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with OR — at least one must pass", kind: CompletionItemKindFunction},
+			{name: "any", detail: "any", doc: "Accept any value (always passes)", kind: CompletionItemKindFunction},
+			{name: "contains", detail: "func(expected any) any", doc: "Assert value contains the expected substring or element", kind: CompletionItemKindFunction},
+			{name: "notContains", detail: "func(value any) any", doc: "Assert value does not contain the given substring or element", kind: CompletionItemKindFunction},
+			{name: "regexp", detail: "func(pattern string) any", doc: "Assert value matches the regular expression pattern", kind: CompletionItemKindFunction},
+			{name: "notZero", detail: "any", doc: "Assert value is not the zero value of its type", kind: CompletionItemKindFunction},
+			{name: "greaterThan", detail: "func(n any) any", doc: "Assert value is greater than the threshold", kind: CompletionItemKindFunction},
+			{name: "greaterThanOrEqual", detail: "func(n any) any", doc: "Assert value is greater than or equal to the threshold", kind: CompletionItemKindFunction},
+			{name: "lessThan", detail: "func(n any) any", doc: "Assert value is less than the threshold", kind: CompletionItemKindFunction},
+			{name: "lessThanOrEqual", detail: "func(n any) any", doc: "Assert value is less than or equal to the threshold", kind: CompletionItemKindFunction},
+			{name: "length", detail: "func(n int) any", doc: "Assert collection has the specified length", kind: CompletionItemKindFunction},
 		}
 	case "vars", "secrets":
 		if doc != nil {
 			for _, key := range extractBlockKeys(doc.Text, prefix) {
-				candidates = append(candidates, templateCandidate{key, "", CompletionItemKindVariable})
+				candidates = append(candidates, templateCandidate{name: key, kind: CompletionItemKindVariable})
 			}
 			// Also include keys from bind.vars / bind.secrets blocks.
 			for _, bk := range extractBindKeys(doc.Text, prefix) {
-				candidates = append(candidates, templateCandidate{bk.key, "(from bind)", CompletionItemKindVariable})
+				candidates = append(candidates, templateCandidate{name: bk.key, detail: "(from bind)", kind: CompletionItemKindVariable})
 			}
 		}
 		// Also look for keys in the config file (scenarigo.yaml).
 		for _, key := range s.configBlockKeys(prefix) {
-			candidates = append(candidates, templateCandidate{key, "(from scenarigo.yaml)", CompletionItemKindVariable})
+			candidates = append(candidates, templateCandidate{name: key, detail: "(from scenarigo.yaml)", kind: CompletionItemKindVariable})
 		}
 	case "steps":
 		if doc != nil {
 			for _, id := range extractStepIDs(doc.Text) {
-				candidates = append(candidates, templateCandidate{id, "Step result", CompletionItemKindVariable})
+				candidates = append(candidates, templateCandidate{name: id, detail: "Step result", kind: CompletionItemKindVariable})
 			}
 		}
 	case "plugins":
 		if doc != nil {
 			for _, name := range extractBlockKeys(doc.Text, "plugins") {
-				candidates = append(candidates, templateCandidate{name, "Plugin", CompletionItemKindModule})
+				candidates = append(candidates, templateCandidate{name: name, detail: "Plugin", kind: CompletionItemKindModule})
 			}
 		}
 		// Also look for plugins defined in the config file.
 		for _, name := range s.configBlockKeys("plugins") {
-			candidates = append(candidates, templateCandidate{name, "Plugin (from scenarigo.yaml)", CompletionItemKindModule})
+			candidates = append(candidates, templateCandidate{name: name, detail: "Plugin (from scenarigo.yaml)", kind: CompletionItemKindModule})
 		}
 	default:
 		// Handle plugins.<name> — complete exported symbols from plugin source.
@@ -1365,11 +1500,17 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 			pluginAlias := strings.TrimPrefix(prefix, "plugins.")
 			if sourceDir := s.resolvePluginSourceDir(doc, pluginAlias); sourceDir != "" {
 				if syms := s.getPluginSymbols(sourceDir); syms != nil {
-					for _, name := range syms.Funcs {
-						candidates = append(candidates, templateCandidate{name, "Function", CompletionItemKindFunction})
-					}
-					for _, name := range syms.Values {
-						candidates = append(candidates, templateCandidate{name, "Variable", CompletionItemKindVariable})
+					for _, sym := range syms.Symbols {
+						kind := CompletionItemKindVariable
+						if sym.IsFunc {
+							kind = CompletionItemKindFunction
+						}
+						candidates = append(candidates, templateCandidate{
+							name:   sym.Name,
+							detail: sym.Signature,
+							doc:    sym.Doc,
+							kind:   kind,
+						})
 					}
 				}
 			}
@@ -1390,11 +1531,15 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 			continue
 		}
 		seen[c.name] = true
+		doc := c.doc
+		if doc == "" {
+			doc = c.detail
+		}
 		items = append(items, CompletionItem{
 			Label:         c.name,
 			Kind:          c.kind,
-			Detail:        c.desc,
-			Documentation: c.desc,
+			Detail:        c.detail,
+			Documentation: doc,
 		})
 	}
 	return items
