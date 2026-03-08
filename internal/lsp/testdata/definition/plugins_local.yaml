@@ -1,0 +1,19 @@
+---
+name: "jump to local plugins definition"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  plugins:
+    grpc: grpc.so
+  steps:
+    - title: step1
+      request:
+        url: '{{$0plugins.grpc}}'
+operation: definition
+expect:
+  definitionURI:
+    suffix: "test.yaml"
+    startLine: 3
+    startChar: 2
+    endLine: 3
+    endChar: 6

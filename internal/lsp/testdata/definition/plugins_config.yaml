@@ -1,0 +1,22 @@
+---
+name: "jump to config plugins definition in scenarigo.yaml"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      request:
+        url: '{{$0plugins.myPlugin}}'
+operation: definition
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      myPlugin: my_plugin.so
+expect:
+  definitionURI:
+    suffix: "scenarigo.yaml"
+    startLine: 2
+    startChar: 2
+    endLine: 2
+    endChar: 10
