@@ -3,6 +3,8 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -255,4 +257,82 @@ func TestEditorSession_FullWorkflow(t *testing.T) {
 
 	// Shutdown.
 	client.shutdown(6)
+}
+
+// TestEditorSession_PluginExportCompletion verifies that plugin export completion
+// includes signatures and doc comments from Go source.
+func TestEditorSession_PluginExportCompletion(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Write config file.
+	configContent := "schemaVersion: config/v1\nplugins:\n  myplugin.so:\n    src: ./plugin/src\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "scenarigo.yaml"), []byte(configContent), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	// Write plugin Go source.
+	srcDir := filepath.Join(tmpDir, "plugin", "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	goSrc := `package main
+
+// CreateClient creates a new test client connected to the given address.
+func CreateClient(ctx interface{}, addr string) interface{} { return nil }
+
+// DefaultTimeout is the default timeout for requests.
+var DefaultTimeout int
+`
+	if err := os.WriteFile(filepath.Join(srcDir, "main.go"), []byte(goSrc), 0o644); err != nil {
+		t.Fatalf("write go source: %v", err)
+	}
+
+	srv, client := newTestClient(t)
+	go srv.Run(context.Background())
+
+	rootURI := "file://" + tmpDir
+	client.initialize(1, rootURI)
+
+	// Open a scenario that uses {{plugins.myplugin.
+	docText := "schemaVersion: scenario/v1\nplugins:\n  myplugin: myplugin.so\nsteps:\n  - title: step1\n    request:\n      client: '{{plugins.myplugin.'\n"
+	uri := "file://" + filepath.Join(tmpDir, "test.yaml")
+	client.openDocument(uri, docText)
+
+	// Complete at the cursor position (line 6, after "myplugin.").
+	list := client.complete(2, uri, 6, 34)
+
+	// Verify labels.
+	labels := labelSet(list.Items)
+	if !labels["CreateClient"] {
+		t.Errorf("expected CreateClient in completions, got: %v", labelList(list.Items))
+	}
+	if !labels["DefaultTimeout"] {
+		t.Errorf("expected DefaultTimeout in completions, got: %v", labelList(list.Items))
+	}
+
+	// Verify signature and doc for CreateClient.
+	for _, item := range list.Items {
+		if item.Label == "CreateClient" {
+			if item.Detail == "" {
+				t.Error("expected Detail (signature) for CreateClient, got empty")
+			}
+			if item.Kind != CompletionItemKindFunction {
+				t.Errorf("expected Function kind for CreateClient, got %d", item.Kind)
+			}
+			if item.Documentation == "" {
+				t.Error("expected Documentation (doc comment) for CreateClient, got empty")
+			}
+			break
+		}
+	}
+
+	// Verify DefaultTimeout is a variable.
+	for _, item := range list.Items {
+		if item.Label == "DefaultTimeout" {
+			if item.Kind != CompletionItemKindVariable {
+				t.Errorf("expected Variable kind for DefaultTimeout, got %d", item.Kind)
+			}
+			break
+		}
+	}
 }
