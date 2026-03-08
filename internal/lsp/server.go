@@ -5,12 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	goast "go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/goccy/go-yaml/ast"
 
@@ -20,12 +24,14 @@ import (
 
 // Server is the LSP server.
 type Server struct {
-	reader  io.Reader
-	writer  io.Writer
-	logger  *log.Logger
-	docs    *documentStore
-	config  serverConfig
-	rootURI string
+	reader           io.Reader
+	writer           io.Writer
+	logger           *log.Logger
+	docs             *documentStore
+	config           serverConfig
+	rootURI          string
+	pluginSymbolsMu  sync.Mutex
+	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
 }
 
 // serverConfig holds user-configurable settings.
@@ -788,7 +794,12 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 
 	// Try to find the definition in the current document.
 	if root == "plugins" {
-		// Plugins don't have bind blocks; just check top-level and config.
+		if len(parts) >= 3 {
+			// plugins.<name>.<symbol> — jump to Go source definition.
+			symbolName := parts[2]
+			return s.findPluginSymbolDefinition(doc, name, symbolName)
+		}
+		// plugins.<name> — jump to plugin declaration.
 		if r := findBlockKeyRange(doc.Text, "plugins", name); r != nil {
 			return &Location{URI: params.TextDocument.URI, Range: *r}
 		}
@@ -835,6 +846,64 @@ func (s *Server) findConfigDefinition(blockName, keyName string) *Location {
 	return nil
 }
 
+// findPluginSymbolDefinition finds the Go source location of an exported symbol in a plugin.
+func (s *Server) findPluginSymbolDefinition(doc *document, pluginAlias, symbolName string) *Location {
+	sourceDir := s.resolvePluginSourceDir(doc, pluginAlias)
+	if sourceDir == "" {
+		return nil
+	}
+
+	// Parse Go files to find the symbol's location.
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, sourceDir, nil, 0)
+	if err != nil {
+		return nil
+	}
+
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				switch d := decl.(type) {
+				case *goast.FuncDecl:
+					if d.Recv == nil && d.Name.Name == symbolName {
+						pos := fset.Position(d.Name.Pos())
+						return &Location{
+							URI: pathToURI(pos.Filename),
+							Range: Range{
+								Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
+								End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
+							},
+						}
+					}
+				case *goast.GenDecl:
+					if d.Tok != token.VAR {
+						continue
+					}
+					for _, spec := range d.Specs {
+						vs, ok := spec.(*goast.ValueSpec)
+						if !ok {
+							continue
+						}
+						for _, name := range vs.Names {
+							if name.Name == symbolName {
+								pos := fset.Position(name.Pos())
+								return &Location{
+									URI: pathToURI(pos.Filename),
+									Range: Range{
+										Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
+										End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
+									},
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // findBlockKeyRange finds the range of a specific key within a named block in YAML text.
 func findBlockKeyRange(text, blockName, keyName string) *Range {
 	lines := strings.Split(text, "\n")
@@ -863,6 +932,220 @@ func findBlockKeyRange(text, blockName, keyName string) *Range {
 		}
 	}
 	return nil
+}
+
+// pluginSymbols holds exported symbols extracted from a Go plugin source directory.
+type pluginSymbols struct {
+	Funcs  []string
+	Values []string
+}
+
+// extractGoExportedSymbols parses Go source files in dir and returns exported function and variable names.
+func extractGoExportedSymbols(dir string) (*pluginSymbols, error) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	var syms pluginSymbols
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				switch d := decl.(type) {
+				case *goast.FuncDecl:
+					if d.Recv == nil && d.Name.IsExported() {
+						syms.Funcs = append(syms.Funcs, d.Name.Name)
+					}
+				case *goast.GenDecl:
+					if d.Tok != token.VAR {
+						continue
+					}
+					for _, spec := range d.Specs {
+						vs, ok := spec.(*goast.ValueSpec)
+						if !ok {
+							continue
+						}
+						for _, name := range vs.Names {
+							if name.IsExported() {
+								syms.Values = append(syms.Values, name.Name)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return &syms, nil
+}
+
+// getPluginSymbols returns the exported symbols for a plugin source directory, using a cache.
+func (s *Server) getPluginSymbols(sourceDir string) *pluginSymbols {
+	s.pluginSymbolsMu.Lock()
+	defer s.pluginSymbolsMu.Unlock()
+
+	if s.pluginSymbolsCache != nil {
+		if syms, ok := s.pluginSymbolsCache[sourceDir]; ok {
+			return syms
+		}
+	}
+
+	syms, err := extractGoExportedSymbols(sourceDir)
+	if err != nil {
+		return nil
+	}
+
+	if s.pluginSymbolsCache == nil {
+		s.pluginSymbolsCache = make(map[string]*pluginSymbols)
+	}
+	s.pluginSymbolsCache[sourceDir] = syms
+	return syms
+}
+
+// resolvePluginSourceDir resolves the Go source directory for a plugin.
+// It maps a scenario plugin alias to a binary name, then looks up the source path in scenarigo.yaml.
+//
+// Flow: scenario "plugins: { grpc: grpc.so }" → config "plugins: { grpc.so: { src: ./plugin/src } }"
+func (s *Server) resolvePluginSourceDir(doc *document, pluginAlias string) string {
+	rootPath := uriToPath(s.rootURI)
+	if rootPath == "" {
+		return ""
+	}
+
+	// Get the binary name from the scenario's plugins block.
+	binaryName := ""
+	if doc != nil {
+		for _, key := range extractBlockKeys(doc.Text, "plugins") {
+			if key == pluginAlias {
+				binaryName = extractBlockValue(doc.Text, "plugins", key)
+				break
+			}
+		}
+	}
+	if binaryName == "" {
+		// Maybe the alias IS the binary name (config file context).
+		binaryName = pluginAlias
+	}
+
+	// Read config to find source path.
+	configPath := filepath.Join(rootPath, "scenarigo.yaml")
+	configText := ""
+	configURI := pathToURI(configPath)
+	if cdoc := s.docs.Get(configURI); cdoc != nil {
+		configText = cdoc.Text
+	} else {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return ""
+		}
+		configText = string(data)
+	}
+
+	// Extract src value for this plugin binary from config.
+	srcPath := extractPluginSrc(configText, binaryName)
+	if srcPath == "" {
+		return ""
+	}
+
+	// Resolve relative to config root.
+	if !filepath.IsAbs(srcPath) {
+		srcPath = filepath.Join(rootPath, srcPath)
+	}
+
+	// Verify directory exists.
+	if info, err := os.Stat(srcPath); err != nil || !info.IsDir() {
+		return ""
+	}
+	return srcPath
+}
+
+// extractBlockValue extracts the value for a specific key in a named block.
+// e.g., extractBlockValue(text, "plugins", "grpc") returns "grpc.so" from "plugins:\n  grpc: grpc.so".
+func extractBlockValue(text, blockName, keyName string) string {
+	lines := strings.Split(text, "\n")
+	inBlock := false
+	blockIndent := -1
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == blockName+":" {
+			inBlock = true
+			blockIndent = getLineIndent(line)
+			continue
+		}
+		if inBlock {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= blockIndent {
+				break
+			}
+			key := extractKeyFromLine(line)
+			if key == keyName {
+				colonIdx := strings.Index(trimmed, ":")
+				if colonIdx >= 0 {
+					val := strings.TrimSpace(trimmed[colonIdx+1:])
+					val = strings.Trim(val, `"'`)
+					return val
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// extractPluginSrc extracts the src value for a plugin binary from config text.
+// Config format: "plugins:\n  binary.so:\n    src: ./path"
+func extractPluginSrc(configText, binaryName string) string {
+	lines := strings.Split(configText, "\n")
+	inPlugins := false
+	pluginsIndent := -1
+	inPlugin := false
+	pluginIndent := -1
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		lineIndent := getLineIndent(line)
+
+		if trimmed == "plugins:" {
+			inPlugins = true
+			pluginsIndent = lineIndent
+			inPlugin = false
+			continue
+		}
+
+		if inPlugins && lineIndent <= pluginsIndent {
+			break
+		}
+
+		if inPlugins && !inPlugin {
+			key := extractKeyFromLine(line)
+			if key == binaryName {
+				inPlugin = true
+				pluginIndent = lineIndent
+				// Check if src is on the same line (inline mapping).
+				continue
+			}
+		}
+
+		if inPlugin {
+			if lineIndent <= pluginIndent {
+				break // Left this plugin's block.
+			}
+			key := extractKeyFromLine(line)
+			if key == "src" {
+				colonIdx := strings.Index(trimmed, ":")
+				if colonIdx >= 0 {
+					val := strings.TrimSpace(trimmed[colonIdx+1:])
+					val = strings.Trim(val, `"'`)
+					return val
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func (s *Server) resolveFileLocation(docURI, filePath string) *Location {
@@ -1075,6 +1358,21 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 		// Also look for plugins defined in the config file.
 		for _, name := range s.configBlockKeys("plugins") {
 			candidates = append(candidates, templateCandidate{name, "Plugin (from scenarigo.yaml)", CompletionItemKindModule})
+		}
+	default:
+		// Handle plugins.<name> — complete exported symbols from plugin source.
+		if strings.HasPrefix(prefix, "plugins.") {
+			pluginAlias := strings.TrimPrefix(prefix, "plugins.")
+			if sourceDir := s.resolvePluginSourceDir(doc, pluginAlias); sourceDir != "" {
+				if syms := s.getPluginSymbols(sourceDir); syms != nil {
+					for _, name := range syms.Funcs {
+						candidates = append(candidates, templateCandidate{name, "Function", CompletionItemKindFunction})
+					}
+					for _, name := range syms.Values {
+						candidates = append(candidates, templateCandidate{name, "Variable", CompletionItemKindVariable})
+					}
+				}
+			}
 		}
 	}
 
