@@ -47,7 +47,11 @@ type messageMatcher struct {
 }
 
 type uriMatcher struct {
-	Suffix string `yaml:"suffix"`
+	Suffix    string `yaml:"suffix"`
+	StartLine *int   `yaml:"startLine"`
+	StartChar *int   `yaml:"startChar"`
+	EndLine   *int   `yaml:"endLine"`
+	EndChar   *int   `yaml:"endChar"`
 }
 
 // parseCursorMarker finds and removes the $0 cursor marker from the document text.
@@ -356,6 +360,26 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 		if tc.Expect.DefinitionURI.Suffix != "" {
 			if !strings.HasSuffix(loc.URI, tc.Expect.DefinitionURI.Suffix) {
 				t.Errorf("expected URI ending with %q, got: %s", tc.Expect.DefinitionURI.Suffix, loc.URI)
+			}
+		}
+		if tc.Expect.DefinitionURI.StartLine != nil {
+			if loc.Range.Start.Line != *tc.Expect.DefinitionURI.StartLine {
+				t.Errorf("expected start line %d, got %d", *tc.Expect.DefinitionURI.StartLine, loc.Range.Start.Line)
+			}
+		}
+		if tc.Expect.DefinitionURI.StartChar != nil {
+			if loc.Range.Start.Character != *tc.Expect.DefinitionURI.StartChar {
+				t.Errorf("expected start char %d, got %d", *tc.Expect.DefinitionURI.StartChar, loc.Range.Start.Character)
+			}
+		}
+		if tc.Expect.DefinitionURI.EndLine != nil {
+			if loc.Range.End.Line != *tc.Expect.DefinitionURI.EndLine {
+				t.Errorf("expected end line %d, got %d", *tc.Expect.DefinitionURI.EndLine, loc.Range.End.Line)
+			}
+		}
+		if tc.Expect.DefinitionURI.EndChar != nil {
+			if loc.Range.End.Character != *tc.Expect.DefinitionURI.EndChar {
+				t.Errorf("expected end char %d, got %d", *tc.Expect.DefinitionURI.EndChar, loc.Range.End.Character)
 			}
 		}
 	}
