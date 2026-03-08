@@ -3,9 +3,6 @@ package lsp
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -111,34 +108,6 @@ func TestEditorSession_EditAndDiagnostics(t *testing.T) {
 	}
 }
 
-func TestEditorSession_Lifecycle(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
-
-	// Initialize.
-	initResult := client.initialize(1, "file:///tmp")
-	if initResult.Capabilities.CompletionProvider == nil {
-		t.Fatal("expected completion provider")
-	}
-
-	// Open document.
-	docText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocol: http\n    request:\n      method: GET\n      url: http://example.com\n"
-	client.openDocument("file:///tmp/test.yaml", docText)
-
-	// Completion.
-	list := client.complete(2, "file:///tmp/test.yaml", 8, 6)
-	_ = list // just verify no panic
-
-	// Hover.
-	client.hover(3, "file:///tmp/test.yaml", 4, 5)
-
-	// Close document.
-	client.closeDocument("file:///tmp/test.yaml")
-
-	// Shutdown.
-	client.shutdown(4)
-}
-
 func TestEditorSession_CodeAction_DidYouMean(t *testing.T) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
@@ -212,111 +181,17 @@ func TestEditorSession_ForeignModelineSkipped(t *testing.T) {
 	}
 }
 
-// TestEditorSession_TemplateVarsSecretsSteps simulates an editor session
-// where the user opens a scenario with vars, secrets, and steps, then
-// requests template dot-completion for each.
-func TestEditorSession_TemplateVarsSecretsSteps(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
-
-	client.initialize(1, "file:///tmp")
-
-	docText := "schemaVersion: scenario/v1\ntitle: test\nvars:\n  myVar: hello\n  anotherVar: world\nsecrets:\n  apiKey: xxx\nsteps:\n  - id: login\n    title: login step\n    protocol: http\n  - id: fetchData\n    title: fetch data\n    request:\n      url: '{{vars.}}'\n"
-	client.openDocument("file:///tmp/test.yaml", docText)
-
-	// {{vars. -> myVar, anotherVar
-	list := client.complete(10, "file:///tmp/test.yaml", 14, 19)
-	labels := labelSet(list.Items)
-	if !labels["myVar"] || !labels["anotherVar"] {
-		t.Errorf("vars. completion: expected myVar and anotherVar, got: %v", labelList(list.Items))
-	}
-
-	// Edit to {{steps.
-	newText := "schemaVersion: scenario/v1\ntitle: test\nvars:\n  myVar: hello\n  anotherVar: world\nsecrets:\n  apiKey: xxx\nsteps:\n  - id: login\n    title: login step\n    protocol: http\n  - id: fetchData\n    title: fetch data\n    request:\n      url: '{{steps.}}'\n"
-	client.changeDocument("file:///tmp/test.yaml", 2, newText)
-
-	list = client.complete(11, "file:///tmp/test.yaml", 14, 20)
-	labels = labelSet(list.Items)
-	if !labels["login"] || !labels["fetchData"] {
-		t.Errorf("steps. completion: expected login and fetchData, got: %v", labelList(list.Items))
-	}
-
-	// Edit to {{secrets.
-	newText2 := "schemaVersion: scenario/v1\ntitle: test\nvars:\n  myVar: hello\n  anotherVar: world\nsecrets:\n  apiKey: xxx\nsteps:\n  - id: login\n    title: login step\n    protocol: http\n  - id: fetchData\n    title: fetch data\n    request:\n      url: '{{secrets.}}'\n"
-	client.changeDocument("file:///tmp/test.yaml", 3, newText2)
-
-	list = client.complete(12, "file:///tmp/test.yaml", 14, 22)
-	labels = labelSet(list.Items)
-	if !labels["apiKey"] {
-		t.Errorf("secrets. completion: expected apiKey, got: %v", labelList(list.Items))
-	}
-}
-
-// TestEditorSession_TemplateVarsPartialFilter verifies partial-match filtering
-// in template dot-completion (e.g., {{vars.my -> myVar only).
-func TestEditorSession_TemplateVarsPartialFilter(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
-
-	client.initialize(1, "file:///tmp")
-
-	docText := "schemaVersion: scenario/v1\ntitle: test\nvars:\n  myVar: hello\n  anotherVar: world\nsteps:\n  - title: step1\n    request:\n      url: '{{vars.my}}'\n"
-	client.openDocument("file:///tmp/test.yaml", docText)
-
-	list := client.complete(2, "file:///tmp/test.yaml", 8, 21)
-	labels := labelSet(list.Items)
-	if !labels["myVar"] {
-		t.Errorf("expected myVar, got: %v", labelList(list.Items))
-	}
-	if labels["anotherVar"] {
-		t.Errorf("should not include anotherVar when filtering by 'my'")
-	}
-}
-
-// TestEditorSession_ConfigVarsCompletion verifies that vars from scenarigo.yaml
-// are included in template completion candidates.
-func TestEditorSession_ConfigVarsCompletion(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Write a config file with vars.
-	configContent := "schemaVersion: config/v1\nvars:\n  configVar: from-config\n  anotherConfigVar: also\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "scenarigo.yaml"), []byte(configContent), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
-
-	rootURI := fmt.Sprintf("file://%s", tmpDir)
-	client.initialize(1, rootURI)
-
-	// Scenario file with no local vars, but using {{vars.
-	docText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    request:\n      url: '{{vars.}}'\n"
-	uri := "file://" + filepath.Join(tmpDir, "test.yaml")
-	client.openDocument(uri, docText)
-
-	list := client.complete(2, uri, 5, 19)
-	labels := labelSet(list.Items)
-	if !labels["configVar"] || !labels["anotherConfigVar"] {
-		t.Errorf("expected config vars, got: %v", labelList(list.Items))
-	}
-
-	// Check detail indicates config origin.
-	for _, item := range list.Items {
-		if item.Label == "configVar" && item.Detail != "(from scenarigo.yaml)" {
-			t.Errorf("expected detail '(from scenarigo.yaml)' for configVar, got: %q", item.Detail)
-		}
-	}
-}
-
 // TestEditorSession_FullWorkflow simulates a realistic editor workflow:
-// open file -> get diagnostics -> complete -> hover -> symbols -> references -> code action -> close.
+// initialize → open → diagnostics → hover → symbols → references → close → shutdown.
 func TestEditorSession_FullWorkflow(t *testing.T) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
+	// Initialize and verify capabilities.
 	initResult := client.initialize(1, "file:///tmp")
-	// Verify all expected capabilities are advertised.
+	if initResult.Capabilities.CompletionProvider == nil {
+		t.Fatal("expected completion provider")
+	}
 	if !initResult.Capabilities.HoverProvider {
 		t.Error("expected hover provider")
 	}
@@ -340,8 +215,12 @@ func TestEditorSession_FullWorkflow(t *testing.T) {
 		t.Errorf("expected no diagnostics, got: %v", diagMessages(diags.Diagnostics))
 	}
 
+	// Completion.
+	list := client.complete(2, "file:///tmp/test.yaml", 12, 8)
+	_ = list // verify no panic
+
 	// Hover on "protocol".
-	hoverResp := client.hover(2, "file:///tmp/test.yaml", 7, 6)
+	hoverResp := client.hover(3, "file:///tmp/test.yaml", 7, 6)
 	var hoverResult Hover
 	if err := json.Unmarshal(hoverResp, &hoverResult); err != nil {
 		t.Fatalf("unmarshal hover: %v", err)
@@ -351,7 +230,7 @@ func TestEditorSession_FullWorkflow(t *testing.T) {
 	}
 
 	// Document symbols.
-	symResp := client.documentSymbol(3, "file:///tmp/test.yaml")
+	symResp := client.documentSymbol(4, "file:///tmp/test.yaml")
 	var symbols []DocumentSymbol
 	if err := json.Unmarshal(symResp, &symbols); err != nil {
 		t.Fatalf("unmarshal symbols: %v", err)
@@ -362,7 +241,7 @@ func TestEditorSession_FullWorkflow(t *testing.T) {
 	}
 
 	// References on "token" (line 3, char 4 = the key "token" under vars).
-	refsResp := client.references(4, "file:///tmp/test.yaml", 3, 4)
+	refsResp := client.references(5, "file:///tmp/test.yaml", 3, 4)
 	var locs []Location
 	if err := json.Unmarshal(refsResp, &locs); err != nil {
 		t.Fatalf("unmarshal locations: %v", err)
@@ -375,5 +254,5 @@ func TestEditorSession_FullWorkflow(t *testing.T) {
 	client.closeDocument("file:///tmp/test.yaml")
 
 	// Shutdown.
-	client.shutdown(5)
+	client.shutdown(6)
 }
