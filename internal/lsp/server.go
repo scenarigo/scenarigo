@@ -1043,6 +1043,10 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 			for _, key := range extractBlockKeys(doc.Text, prefix) {
 				candidates = append(candidates, templateCandidate{key, "", CompletionItemKindVariable})
 			}
+			// Also include keys from bind.vars / bind.secrets blocks.
+			for _, bk := range extractBindKeys(doc.Text, prefix) {
+				candidates = append(candidates, templateCandidate{bk.key, "(from bind)", CompletionItemKindVariable})
+			}
 		}
 		// Also look for keys in the config file (scenarigo.yaml).
 		for _, key := range s.configBlockKeys(prefix) {
@@ -2248,6 +2252,77 @@ func extractBlockKeys(text, blockName string) []string {
 	return keys
 }
 
+// bindKeyInfo represents a key found in a bind.vars or bind.secrets block, with its line number.
+type bindKeyInfo struct {
+	key  string
+	line int
+}
+
+// extractBindKeys scans the document for all bind.vars or bind.secrets keys.
+// blockName should be "vars" or "secrets".
+// Returns keys in document order (top to bottom).
+func extractBindKeys(text, blockName string) []bindKeyInfo {
+	lines := strings.Split(text, "\n")
+	var result []bindKeyInfo
+
+	// State machine: look for "bind:" → blockName+":" → keys.
+	inBind := false
+	bindIndent := -1
+	inTargetBlock := false
+	targetBlockIndent := -1
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		lineIndent := getLineIndent(line)
+
+		// Check if we left the bind block.
+		if inBind && lineIndent <= bindIndent {
+			inBind = false
+			inTargetBlock = false
+		}
+
+		// Check if we left the target block (vars/secrets under bind).
+		if inTargetBlock && lineIndent <= targetBlockIndent {
+			inTargetBlock = false
+		}
+
+		if inTargetBlock {
+			key := extractKeyFromLine(line)
+			if key != "" {
+				result = append(result, bindKeyInfo{key: key, line: i})
+			}
+			continue
+		}
+
+		if inBind && trimmed == blockName+":" {
+			inTargetBlock = true
+			targetBlockIndent = lineIndent
+			continue
+		}
+
+		// Detect "bind:" (could appear at any step level).
+		if trimmed == "bind:" {
+			inBind = true
+			bindIndent = lineIndent
+			inTargetBlock = false
+			continue
+		}
+		// Also handle "- bind:" at a list item start.
+		stripped := strings.TrimPrefix(trimmed, "- ")
+		if stripped == "bind:" && stripped != trimmed {
+			inBind = true
+			bindIndent = lineIndent + 2 // indent past the "- "
+			inTargetBlock = false
+			continue
+		}
+	}
+	return result
+}
+
 // extractStepIDs extracts step IDs from the "steps" block of a document.
 func extractStepIDs(text string) []string {
 	lines := strings.Split(text, "\n")
@@ -2387,7 +2462,7 @@ func (s *Server) references(doc *document, params ReferenceParams) []Location {
 }
 
 // findDeclRange searches the document for the declaration of a symbol and returns its range.
-// This is used when the cursor is inside a template expression to find the original definition.
+// For vars/secrets, it uses last-write-wins: the last definition (top-level or bind) wins.
 func findDeclRange(doc *document, symbolPath []string) *Range {
 	if len(symbolPath) < 2 || doc.Parsed == nil {
 		return nil
@@ -2399,31 +2474,23 @@ func findDeclRange(doc *document, symbolPath []string) *Range {
 
 	switch root {
 	case "vars", "secrets":
-		// Find the key under the vars/secrets mapping.
-		inBlock := false
-		blockIndent := -1
-		for i, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == root+":" {
-				inBlock = true
-				blockIndent = getLineIndent(line)
-				continue
-			}
-			if inBlock {
-				if trimmed == "" {
-					continue
-				}
-				lineIndent := getLineIndent(line)
-				if lineIndent <= blockIndent {
-					break // Left the block.
-				}
-				key := extractKeyFromLine(line)
-				if key == name {
-					r := keyRange(i, line, name)
-					return &r
-				}
+		// Last-write-wins: collect all definitions (top-level + bind), return the last one.
+		var lastRange *Range
+
+		// Scan top-level block.
+		if r := findBlockKeyRange(doc.Text, root, name); r != nil {
+			lastRange = r
+		}
+
+		// Scan bind blocks — these appear later and override top-level.
+		for _, bk := range extractBindKeys(doc.Text, root) {
+			if bk.key == name {
+				r := keyRange(bk.line, lines[bk.line], name)
+				lastRange = &r
 			}
 		}
+
+		return lastRange
 	case "steps":
 		// Find the step with id: <name>.
 		for i, line := range lines {

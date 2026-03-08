@@ -1,0 +1,26 @@
+---
+name: "jump to bind.vars definition"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com
+      bind:
+        vars:
+          authToken: "{{response.body.token}}"
+    - title: step2
+      protocol: http
+      request:
+        url: '{{$0vars.authToken}}'
+operation: definition
+expect:
+  definitionURI:
+    suffix: "test.yaml"
+    startLine: 10
+    startChar: 8
+    endLine: 10
+    endChar: 17
