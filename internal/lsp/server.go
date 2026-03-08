@@ -20,11 +20,12 @@ import (
 
 // Server is the LSP server.
 type Server struct {
-	reader io.Reader
-	writer io.Writer
-	logger *log.Logger
-	docs   *documentStore
-	config serverConfig
+	reader  io.Reader
+	writer  io.Writer
+	logger  *log.Logger
+	docs    *documentStore
+	config  serverConfig
+	rootURI string
 }
 
 // serverConfig holds user-configurable settings.
@@ -163,13 +164,17 @@ func (s *Server) handleMessage(req *Request) {
 }
 
 func (s *Server) handleInitialize(req *Request) {
-	// Read initializationOptions if present.
+	// Read initializationOptions and rootUri if present.
 	var initParams struct {
+		RootURI               string        `json:"rootUri"`
 		InitializationOptions *serverConfig `json:"initializationOptions"`
 	}
 	if req.Params != nil {
-		if err := json.Unmarshal(req.Params, &initParams); err == nil && initParams.InitializationOptions != nil {
-			s.config = *initParams.InitializationOptions
+		if err := json.Unmarshal(req.Params, &initParams); err == nil {
+			if initParams.InitializationOptions != nil {
+				s.config = *initParams.InitializationOptions
+			}
+			s.rootURI = initParams.RootURI
 		}
 	}
 
@@ -798,7 +803,7 @@ func (s *Server) complete(doc *document, pos Position) []CompletionItem {
 
 	// Check if cursor is inside a template expression {{ }}.
 	if tmplExpr, ok := getTemplateContext(doc.Text, pos); ok {
-		return s.completeTemplate(tmplExpr)
+		return s.completeTemplate(doc, tmplExpr)
 	}
 
 	// Use the parsed document for cursor context, fall back to text-based analysis.
@@ -851,7 +856,7 @@ func getTemplateContext(text string, pos Position) (string, bool) {
 	return strings.TrimSpace(between), true
 }
 
-func (s *Server) completeTemplate(expr string) []CompletionItem {
+func (s *Server) completeTemplate(doc *document, expr string) []CompletionItem {
 	// Parse the expression to determine what to complete.
 	// "vars" → complete top-level template variables
 	// "vars." → complete after dot
@@ -884,7 +889,7 @@ func (s *Server) completeTemplate(expr string) []CompletionItem {
 	if dotIdx >= 0 {
 		prefix := expr[:dotIdx]
 		partial := expr[dotIdx+1:]
-		return s.completeTemplateDot(prefix, partial)
+		return s.completeTemplateDot(doc, prefix, partial)
 	}
 
 	// Complete top-level names.
@@ -908,7 +913,7 @@ type templateCandidate struct {
 	kind int
 }
 
-func (s *Server) completeTemplateDot(prefix, partial string) []CompletionItem {
+func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []CompletionItem {
 	// Known sub-completions.
 	var candidates []templateCandidate
 
@@ -928,20 +933,42 @@ func (s *Server) completeTemplateDot(prefix, partial string) []CompletionItem {
 			{"lessThanOrEqual", "Assert value <= threshold (assert.lessThanOrEqual <- n)", CompletionItemKindFunction},
 			{"length", "Assert length of collection (assert.length <- n)", CompletionItemKindFunction},
 		}
+	case "vars", "secrets":
+		if doc != nil {
+			for _, key := range extractBlockKeys(doc.Text, prefix) {
+				candidates = append(candidates, templateCandidate{key, "", CompletionItemKindVariable})
+			}
+		}
+		// Also look for keys in the config file (scenarigo.yaml).
+		for _, key := range s.configBlockKeys(prefix) {
+			candidates = append(candidates, templateCandidate{key, "(from scenarigo.yaml)", CompletionItemKindVariable})
+		}
+	case "steps":
+		if doc != nil {
+			for _, id := range extractStepIDs(doc.Text) {
+				candidates = append(candidates, templateCandidate{id, "Step result", CompletionItemKindVariable})
+			}
+		}
 	}
 
 	if candidates == nil {
 		return nil
 	}
 
+	seen := make(map[string]bool)
 	var items []CompletionItem
 	for _, c := range candidates {
 		if partial != "" && !strings.HasPrefix(c.name, partial) {
 			continue
 		}
+		if seen[c.name] {
+			continue
+		}
+		seen[c.name] = true
 		items = append(items, CompletionItem{
 			Label:         c.name,
 			Kind:          c.kind,
+			Detail:        c.desc,
 			Documentation: c.desc,
 		})
 	}
@@ -2084,6 +2111,97 @@ func extractKeyFromLine(line string) string {
 		return ""
 	}
 	return strings.TrimSpace(trimmed[:colonIdx])
+}
+
+// extractBlockKeys extracts top-level keys under the given block name (e.g. "vars", "secrets").
+func extractBlockKeys(text, blockName string) []string {
+	lines := strings.Split(text, "\n")
+	var keys []string
+	inBlock := false
+	blockIndent := -1
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == blockName+":" {
+			inBlock = true
+			blockIndent = getLineIndent(line)
+			continue
+		}
+		if inBlock {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= blockIndent {
+				break
+			}
+			key := extractKeyFromLine(line)
+			if key != "" {
+				keys = append(keys, key)
+			}
+		}
+	}
+	return keys
+}
+
+// extractStepIDs extracts step IDs from the "steps" block of a document.
+func extractStepIDs(text string) []string {
+	lines := strings.Split(text, "\n")
+	var ids []string
+	inSteps := false
+	stepsIndent := -1
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "steps:" {
+			inSteps = true
+			stepsIndent = getLineIndent(line)
+			continue
+		}
+		if inSteps {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= stepsIndent {
+				break
+			}
+			// Look for "id: <value>" lines.
+			key := extractKeyFromLine(line)
+			if key == "id" {
+				colonIdx := strings.Index(trimmed, ":")
+				if colonIdx >= 0 {
+					val := strings.TrimSpace(trimmed[colonIdx+1:])
+					// Remove surrounding quotes if present.
+					val = strings.Trim(val, `"'`)
+					if val != "" {
+						ids = append(ids, val)
+					}
+				}
+			}
+		}
+	}
+	return ids
+}
+
+// configBlockKeys reads keys from the given block in the config file (scenarigo.yaml).
+func (s *Server) configBlockKeys(blockName string) []string {
+	rootPath := uriToPath(s.rootURI)
+	if rootPath == "" {
+		return nil
+	}
+	configPath := filepath.Join(rootPath, "scenarigo.yaml")
+
+	// Try document store first (if the file is open in the editor).
+	configURI := pathToURI(configPath)
+	if doc := s.docs.Get(configURI); doc != nil {
+		return extractBlockKeys(doc.Text, blockName)
+	}
+
+	// Fall back to reading from disk.
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+	return extractBlockKeys(string(data), blockName)
 }
 
 // keyRange returns a Range covering the key name on the given line.

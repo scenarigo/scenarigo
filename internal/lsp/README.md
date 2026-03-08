@@ -116,7 +116,7 @@ au User lsp_setup call lsp#register_server(#{
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
 | `textDocument/formatting` | Supported | Key reordering to match schema field order |
-| `textDocument/references` | Not yet | Find references to variables |
+| `textDocument/references` | Supported | Find references to variables |
 | `textDocument/rename` | Not yet | Rename symbols |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
@@ -129,7 +129,7 @@ au User lsp_setup call lsp#register_server(#{
 | Enum value completion | Supported | e.g., `protocol: ` suggests `http`, `grpc` |
 | Protocol-aware completion | Supported | `request`/`expect` fields change based on `protocol` value |
 | Template variable completion | Supported | Inside `{{`, suggests `vars`, `secrets`, `assert`, etc. |
-| Template dot completion | Supported | `{{assert.` suggests `contains`, `notZero`, etc. |
+| Template dot completion | Supported | `{{assert.` suggests `contains`, `notZero`, etc.; `{{vars.`/`{{secrets.`/`{{steps.` suggests keys from document and config |
 | Partial match filtering | Supported | Filters candidates by prefix as you type |
 | File path completion | Supported | Filesystem-based candidates for `include`, `plugins`, `scenarios`, `pluginDirectory` |
 | Plugin export completion | Not yet | Variables/functions exported by plugins |

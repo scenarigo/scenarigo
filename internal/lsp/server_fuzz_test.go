@@ -30,6 +30,6 @@ func FuzzCompleteTemplate(f *testing.F) {
 
 	srv := &Server{}
 	f.Fuzz(func(t *testing.T, expr string) {
-		srv.completeTemplate(expr)
+		srv.completeTemplate(nil, expr)
 	})
 }
