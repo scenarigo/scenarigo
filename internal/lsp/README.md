@@ -133,7 +133,7 @@ au User lsp_setup call lsp#register_server(#{
 | Partial match filtering | Supported | Filters candidates by prefix as you type |
 | File path completion | Supported | Filesystem-based candidates for `include`, `plugins`, `scenarios`, `pluginDirectory` |
 | Plugin name completion | Supported | `{{plugins.` suggests plugin names from document and config |
-| Plugin export completion | Not yet | Variables/functions exported by plugins (requires plugin metadata) |
+| Plugin export completion | Supported | `{{plugins.grpc.` suggests exported functions/variables by parsing Go source (resolved via `PluginConfig.Src` in `scenarigo.yaml`) |
 
 ### Diagnostics
 
@@ -150,7 +150,7 @@ au User lsp_setup call lsp#register_server(#{
 | Feature | Status | Description |
 |---|---|---|
 | Hover | Supported | Shows field name, type, description, and allowed values in Markdown |
-| Definition | Supported | Jump from `include` value to the target file; also works for `plugins`/`scenarios` values |
+| Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
 | Document Symbol | Supported | Hierarchical symbol tree from YAML structure; steps use their `title` as the symbol name |
 | Code Action | Supported | Suggests quick fixes for unknown fields using Levenshtein distance (<= 3) |
 | Schema auto-detection | Supported | Detects config vs. scenario from the `schemaVersion` value |

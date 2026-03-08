@@ -1,0 +1,52 @@
+---
+name: "jump to plugin exported function in Go source"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    myplugin: myplugin.so
+  steps:
+    - title: step1
+      request:
+        client: '{{$0plugins.myplugin.CreateClient}}'
+operation: definition
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      myplugin.so:
+        src: ./plugin/src
+  plugin/src/main.go: |
+    package main
+
+    func CreateClient() {}
+expect:
+  definitionURI:
+    suffix: "plugin/src/main.go"
+    startLine: 2
+    startChar: 5
+---
+name: "jump to plugin exported variable in Go source"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    myplugin: myplugin.so
+  steps:
+    - title: step1
+      request:
+        url: '{{$0plugins.myplugin.ServerAddr}}'
+operation: definition
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      myplugin.so:
+        src: ./plugin/src
+  plugin/src/main.go: |
+    package main
+
+    var ServerAddr string
+expect:
+  definitionURI:
+    suffix: "plugin/src/main.go"
+    startLine: 2
+    startChar: 4
