@@ -781,12 +781,20 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 		return nil
 	}
 	root := parts[0]
-	if root != "vars" && root != "secrets" {
+	if root != "vars" && root != "secrets" && root != "plugins" {
 		return nil
 	}
 	name := parts[1]
 
 	// Try to find the definition in the current document.
+	if root == "plugins" {
+		// Plugins don't have bind blocks; just check top-level and config.
+		if r := findBlockKeyRange(doc.Text, "plugins", name); r != nil {
+			return &Location{URI: params.TextDocument.URI, Range: *r}
+		}
+		return s.findConfigDefinition("plugins", name)
+	}
+
 	symbolPath := []string{root, name}
 	if dr := findDeclRange(doc, symbolPath); dr != nil {
 		return &Location{
@@ -1057,6 +1065,16 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 			for _, id := range extractStepIDs(doc.Text) {
 				candidates = append(candidates, templateCandidate{id, "Step result", CompletionItemKindVariable})
 			}
+		}
+	case "plugins":
+		if doc != nil {
+			for _, name := range extractBlockKeys(doc.Text, "plugins") {
+				candidates = append(candidates, templateCandidate{name, "Plugin", CompletionItemKindModule})
+			}
+		}
+		// Also look for plugins defined in the config file.
+		for _, name := range s.configBlockKeys("plugins") {
+			candidates = append(candidates, templateCandidate{name, "Plugin (from scenarigo.yaml)", CompletionItemKindModule})
 		}
 	}
 
