@@ -1,0 +1,19 @@
+---
+name: "jump to local vars definition"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    token: abc123
+  steps:
+    - title: step1
+      request:
+        url: '{{$0vars.token}}'
+operation: definition
+expect:
+  definitionURI:
+    suffix: "test.yaml"
+    startLine: 3
+    startChar: 2
+    endLine: 3
+    endChar: 7
