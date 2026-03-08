@@ -1,0 +1,36 @@
+---
+name: "bind.vars last-write-wins: later bind overrides earlier"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    token: initial
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com
+      bind:
+        vars:
+          token: "{{response.body.token}}"
+    - title: step2
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com
+      bind:
+        vars:
+          token: "{{response.body.newToken}}"
+    - title: step3
+      protocol: http
+      request:
+        url: '{{$0vars.token}}'
+operation: definition
+expect:
+  definitionURI:
+    suffix: "test.yaml"
+    startLine: 20
+    startChar: 8
+    endLine: 20
+    endChar: 13
