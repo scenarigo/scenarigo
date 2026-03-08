@@ -725,6 +725,11 @@ func (s *Server) definition(doc *document, params DefinitionParams) *Location {
 		return nil
 	}
 
+	// Check if cursor is inside a template expression (e.g., {{vars.token}}).
+	if loc := s.templateVarDefinition(doc, params); loc != nil {
+		return loc
+	}
+
 	// Get cursor context to determine which field we're on.
 	ctx := doc.Parsed.GetCursorContext(params.Position.Line, params.Position.Character)
 	if ctx == nil || len(ctx.Path) == 0 {
@@ -749,6 +754,106 @@ func (s *Server) definition(doc *document, params DefinitionParams) *Location {
 		}
 	}
 
+	return nil
+}
+
+// templateVarDefinition handles definition jump for template variable references
+// like {{vars.token}} or {{secrets.apiKey}}.
+// It first looks for the definition in the current document, then falls back to
+// the scenarigo.yaml config file.
+func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *Location {
+	tmplExpr, ok := getFullTemplateExpr(doc.Text, params.Position)
+	if !ok {
+		return nil
+	}
+	tmplExpr = strings.TrimSpace(tmplExpr)
+	if tmplExpr == "" {
+		return nil
+	}
+
+	// Handle "<-" operator: only consider the left-hand side.
+	if arrowIdx := strings.Index(tmplExpr, "<-"); arrowIdx >= 0 {
+		tmplExpr = strings.TrimSpace(tmplExpr[:arrowIdx])
+	}
+
+	parts := strings.Split(tmplExpr, ".")
+	if len(parts) < 2 {
+		return nil
+	}
+	root := parts[0]
+	if root != "vars" && root != "secrets" {
+		return nil
+	}
+	name := parts[1]
+
+	// Try to find the definition in the current document.
+	symbolPath := []string{root, name}
+	if dr := findDeclRange(doc, symbolPath); dr != nil {
+		return &Location{
+			URI:   params.TextDocument.URI,
+			Range: *dr,
+		}
+	}
+
+	// Fall back to scenarigo.yaml config file.
+	return s.findConfigDefinition(root, name)
+}
+
+// findConfigDefinition searches for a variable definition in scenarigo.yaml.
+func (s *Server) findConfigDefinition(blockName, keyName string) *Location {
+	rootPath := uriToPath(s.rootURI)
+	if rootPath == "" {
+		return nil
+	}
+	configPath := filepath.Join(rootPath, "scenarigo.yaml")
+
+	// Try document store first (if the file is open in the editor).
+	configURI := pathToURI(configPath)
+	if doc := s.docs.Get(configURI); doc != nil {
+		if r := findBlockKeyRange(doc.Text, blockName, keyName); r != nil {
+			return &Location{URI: configURI, Range: *r}
+		}
+		return nil
+	}
+
+	// Fall back to reading from disk.
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+	if r := findBlockKeyRange(string(data), blockName, keyName); r != nil {
+		return &Location{URI: pathToURI(configPath), Range: *r}
+	}
+	return nil
+}
+
+// findBlockKeyRange finds the range of a specific key within a named block in YAML text.
+func findBlockKeyRange(text, blockName, keyName string) *Range {
+	lines := strings.Split(text, "\n")
+	inBlock := false
+	blockIndent := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == blockName+":" {
+			inBlock = true
+			blockIndent = getLineIndent(line)
+			continue
+		}
+		if inBlock {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= blockIndent {
+				break
+			}
+			key := extractKeyFromLine(line)
+			if key == keyName {
+				r := keyRange(i, line, keyName)
+				return &r
+			}
+		}
+	}
 	return nil
 }
 

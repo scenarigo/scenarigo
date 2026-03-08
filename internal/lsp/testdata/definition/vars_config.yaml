@@ -1,0 +1,22 @@
+---
+name: "jump to config vars definition in scenarigo.yaml"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      request:
+        url: '{{$0vars.globalVar}}'
+operation: definition
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    vars:
+      globalVar: hello
+expect:
+  definitionURI:
+    suffix: "scenarigo.yaml"
+    startLine: 2
+    startChar: 2
+    endLine: 2
+    endChar: 11
