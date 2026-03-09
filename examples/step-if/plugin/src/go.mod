@@ -2,11 +2,11 @@ module github.com/scenarigo/scenarigo/examples/step-if/plugin
 
 go 1.25.0
 
-toolchain go1.26.0
+toolchain go1.26.1
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/scenarigo/scenarigo v0.25.1
+	github.com/scenarigo/scenarigo v0.25.2
 )
 
 require (
@@ -26,7 +26,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect
-	github.com/jhump/protoreflect/v2 v2.0.0-beta.2 // indirect
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -37,6 +36,7 @@ require (
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
