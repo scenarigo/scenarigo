@@ -1,0 +1,13 @@
+schemaVersion: config/v1
+scenarios:
+  - scenarios
+pluginDirectory: ./gen
+plugins:
+  myplugin.so:
+    src: ./plugin/src
+vars:
+  globalToken: from-config
+  apiEndpoint: https://api.example.com
+secrets:
+  globalApiKey: secret-key-123
+  token: '{{env.API_TOKEN}}'

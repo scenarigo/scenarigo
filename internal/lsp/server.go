@@ -260,11 +260,14 @@ func (s *Server) handleCompletion(req *Request) {
 
 	doc := s.docs.Get(params.TextDocument.URI)
 	if doc == nil {
-		s.sendResponse(req.ID, CompletionList{}, nil)
+		s.sendResponse(req.ID, CompletionList{Items: []CompletionItem{}}, nil)
 		return
 	}
 
 	items := s.complete(doc, params.Position)
+	if items == nil {
+		items = []CompletionItem{}
+	}
 	s.sendResponse(req.ID, CompletionList{
 		IsIncomplete: false,
 		Items:        items,
@@ -782,7 +785,35 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 		tmplExpr = strings.TrimSpace(tmplExpr[:arrowIdx])
 	}
 
-	parts := strings.Split(tmplExpr, ".")
+	// For function call syntax like plugins.myplugin.CreateClient(vars.apiEndpoint),
+	// resolve the sub-expression under the cursor:
+	//   cursor on CreateClient → plugins.myplugin.CreateClient
+	//   cursor on apiEndpoint  → vars.apiEndpoint
+	resolveExpr := tmplExpr
+	if parenIdx := strings.Index(tmplExpr, "("); parenIdx >= 0 {
+		lines := strings.Split(doc.Text, "\n")
+		if params.Position.Line < len(lines) {
+			line := lines[params.Position.Line]
+			prefix := line[:params.Position.Character]
+			openIdx := strings.LastIndex(prefix, "{{")
+			if openIdx >= 0 {
+				cursorInRaw := params.Position.Character - (openIdx + 2)
+				rawParenIdx := strings.Index(line[openIdx+2:], "(")
+				if rawParenIdx >= 0 && cursorInRaw > rawParenIdx {
+					// Cursor is inside the argument list.
+					closeIdx := strings.LastIndex(tmplExpr, ")")
+					if closeIdx > parenIdx {
+						resolveExpr = strings.TrimSpace(tmplExpr[parenIdx+1 : closeIdx])
+					}
+				} else {
+					// Cursor is on the function/variable part.
+					resolveExpr = tmplExpr[:parenIdx]
+				}
+			}
+		}
+	}
+
+	parts := strings.Split(resolveExpr, ".")
 	if len(parts) < 2 {
 		return nil
 	}
@@ -796,8 +827,7 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 	if root == "plugins" {
 		if len(parts) >= 3 {
 			// plugins.<name>.<symbol> — jump to Go source definition.
-			symbolName := parts[2]
-			return s.findPluginSymbolDefinition(doc, name, symbolName)
+			return s.findPluginSymbolDefinition(doc, name, parts[2])
 		}
 		// plugins.<name> — jump to plugin declaration.
 		if r := findBlockKeyRange(doc.Text, "plugins", name); r != nil {
@@ -1222,6 +1252,19 @@ func extractBlockValue(text, blockName, keyName string) string {
 	return ""
 }
 
+// extractTopLevelValue extracts the value of a top-level key from YAML text.
+// e.g., extractTopLevelValue(text, "pluginDirectory") returns "./gen" from "pluginDirectory: ./gen".
+func extractTopLevelValue(text, key string) string {
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, key+":") {
+			val := strings.TrimSpace(trimmed[len(key)+1:])
+			return strings.Trim(val, `"'`)
+		}
+	}
+	return ""
+}
+
 // extractPluginSrc extracts the src value for a plugin binary from config text.
 // Config format: "plugins:\n  binary.so:\n    src: ./path"
 func extractPluginSrc(configText, binaryName string) string {
@@ -1342,7 +1385,7 @@ func (s *Server) complete(doc *document, pos Position) []CompletionItem {
 
 	switch ctx.Type {
 	case yamlutil.CursorContextKey:
-		items := s.completeKeys(sch, ctx)
+		items := s.completeKeys(sch, ctx, pos)
 		if items != nil {
 			return items
 		}
@@ -1545,7 +1588,7 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 	return items
 }
 
-func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext) []CompletionItem {
+func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext, pos Position) []CompletionItem {
 	fields := sch.ChildFields(ctx.Path, ctx.SiblingValues)
 	if fields == nil {
 		return nil
@@ -1555,6 +1598,13 @@ func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext) [
 	existing := make(map[string]bool)
 	for _, k := range ctx.ParentKeys {
 		existing[k] = true
+	}
+
+	// TextEdit range: from the start of the partial key to the cursor position.
+	startChar := pos.Character - len(ctx.PartialKey)
+	editRange := Range{
+		Start: Position{Line: pos.Line, Character: startChar},
+		End:   Position{Line: pos.Line, Character: pos.Character},
 	}
 
 	var items []CompletionItem
@@ -1579,6 +1629,7 @@ func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext) [
 			Detail:        f.Type.String(),
 			Documentation: f.Description,
 			InsertText:    insertText,
+			TextEdit:      &TextEdit{Range: editRange, NewText: insertText},
 			SortText:      fmt.Sprintf("%03d_%s", i, f.Name),
 		})
 	}
@@ -1592,6 +1643,17 @@ func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext,
 
 	field := sch.FindField(ctx.Path)
 	if field == nil {
+		// For map-type fields like plugins, the full path (e.g., ["plugins", "myplugin"])
+		// won't match a schema field. Check if the parent is a file-path map field.
+		if len(ctx.Path) >= 2 {
+			parentField := sch.FindField(ctx.Path[:len(ctx.Path)-1])
+			if parentField != nil && parentField.Type == schema.FieldTypeMap && parentField.IsFilePath {
+				if dir := s.resolvePluginBuildDir(); dir != "" {
+					return s.completeFilePathInDir(dir, ctx.PartialValue)
+				}
+				return s.completeFilePath(docURI, ctx.PartialValue)
+			}
+		}
 		return nil
 	}
 
@@ -1696,6 +1758,92 @@ func (s *Server) completeFilePath(docURI, partial string) []CompletionItem {
 			relPath += "/"
 		}
 
+		items = append(items, CompletionItem{
+			Label:      relPath,
+			Kind:       kind,
+			InsertText: relPath,
+		})
+	}
+	return items
+}
+
+// resolvePluginBuildDir returns the absolute path of pluginDirectory from config.
+func (s *Server) resolvePluginBuildDir() string {
+	rootPath := uriToPath(s.rootURI)
+	if rootPath == "" {
+		return ""
+	}
+
+	configPath := filepath.Join(rootPath, "scenarigo.yaml")
+	configText := ""
+	configURI := pathToURI(configPath)
+	if cdoc := s.docs.Get(configURI); cdoc != nil {
+		configText = cdoc.Text
+	} else {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return ""
+		}
+		configText = string(data)
+	}
+
+	dir := extractTopLevelValue(configText, "pluginDirectory")
+	if dir == "" {
+		return ""
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(rootPath, dir)
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return ""
+	}
+	return dir
+}
+
+// completeFilePathInDir lists files in the given directory for file path completion.
+func (s *Server) completeFilePathInDir(dir, partial string) []CompletionItem {
+	searchDir := dir
+	prefix := partial
+	if partial != "" {
+		absPartial := filepath.Join(dir, partial)
+		info, err := os.Stat(absPartial)
+		if err == nil && info.IsDir() {
+			searchDir = absPartial
+			prefix = ""
+		} else {
+			searchDir = filepath.Dir(absPartial)
+			prefix = filepath.Base(absPartial)
+		}
+	}
+
+	entries, err := os.ReadDir(searchDir)
+	if err != nil {
+		return nil
+	}
+
+	relDir, err := filepath.Rel(dir, searchDir)
+	if err != nil {
+		return nil
+	}
+
+	var items []CompletionItem
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		relPath := name
+		if relDir != "." {
+			relPath = filepath.Join(relDir, name)
+		}
+		kind := CompletionItemKindFile
+		if entry.IsDir() {
+			kind = CompletionItemKindFolder
+			relPath += "/"
+		}
 		items = append(items, CompletionItem{
 			Label:      relPath,
 			Kind:       kind,
