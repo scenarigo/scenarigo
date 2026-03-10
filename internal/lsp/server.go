@@ -1425,6 +1425,12 @@ func (s *Server) completeTemplate(doc *document, expr string) []CompletionItem {
 	// "vars." → complete after dot
 	// "" → complete all top-level names
 
+	// For function call syntax like "plugins.myplugin.CreateClient(vars.api",
+	// complete the argument sub-expression after the last "(".
+	if parenIdx := strings.LastIndex(expr, "("); parenIdx >= 0 {
+		expr = strings.TrimSpace(expr[parenIdx+1:])
+	}
+
 	// Top-level template names available in scenarigo.
 	topLevel := []templateCandidate{
 		{name: "vars", detail: "Scenario/step variables", kind: CompletionItemKindVariable},
