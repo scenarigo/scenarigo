@@ -27,6 +27,9 @@ func FuzzCompleteTemplate(f *testing.F) {
 	f.Add("unknown.field.deep")
 	f.Add("...")
 	f.Add("a.b.c.d.e")
+	f.Add("plugins.myPlugin.CreateClient(vars.")
+	f.Add("plugins.p.Func(")
+	f.Add("plugins.p.Func(vars.x)")
 
 	srv := &Server{}
 	f.Fuzz(func(t *testing.T, expr string) {
