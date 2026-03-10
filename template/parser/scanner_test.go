@@ -289,6 +289,46 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
+			"nil keyword": {
+				src: `{{nil}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.NIL,
+						lit: "nil",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"null keyword": {
+				src: `{{null}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.NIL,
+						lit: "null",
+					},
+					{
+						pos: 7,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
 			"just a IDENT": {
 				src: "{{  test  }}",
 				expected: []result{

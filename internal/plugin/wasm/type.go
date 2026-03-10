@@ -67,16 +67,16 @@ const (
 const nullString = "null"
 
 var (
-	errorType = reflect.TypeOf((*error)(nil)).Elem()
+	errorType = reflect.TypeFor[error]()
 	stepType  = reflect.TypeOf((*interface {
 		Run(*context.Context, *schema.Step) *context.Context
 	})(nil)).Elem()
-	leftArrowFuncType = reflect.TypeOf((*template.Func)(nil)).Elem()
-	ctxType           = reflect.TypeOf((*context.Context)(nil))
-	schemaStepType    = reflect.TypeOf((*schema.Step)(nil))
+	leftArrowFuncType = reflect.TypeFor[template.Func]()
+	ctxType           = reflect.TypeFor[*context.Context]()
+	schemaStepType    = reflect.TypeFor[*schema.Step]()
 )
 
-// PointerTyep represents pointer type information from a WASM plugin.
+// PointerType represents pointer type information from a WASM plugin.
 type PointerType struct {
 	Elem *Type `json:"elem"`
 }
@@ -268,7 +268,7 @@ func newAnyType(v reflect.Value) (*Type, error) {
 }
 
 func (t *AnyType) ToReflect() (reflect.Type, error) {
-	return reflect.TypeOf((*any)(nil)).Elem(), nil
+	return reflect.TypeFor[any](), nil
 }
 
 func (t *AnyType) String() string {
@@ -452,37 +452,37 @@ func (t *NameWithType) String() string {
 func (t *Type) ToReflect() (reflect.Type, error) {
 	switch t.Kind {
 	case INT:
-		return reflect.TypeOf(int(0)), nil
+		return reflect.TypeFor[int](), nil
 	case INT8:
-		return reflect.TypeOf(int8(0)), nil
+		return reflect.TypeFor[int8](), nil
 	case INT16:
-		return reflect.TypeOf(int16(0)), nil
+		return reflect.TypeFor[int16](), nil
 	case INT32:
-		return reflect.TypeOf(int32(0)), nil
+		return reflect.TypeFor[int32](), nil
 	case INT64:
-		return reflect.TypeOf(int64(0)), nil
+		return reflect.TypeFor[int64](), nil
 	case UINT:
-		return reflect.TypeOf(uint(0)), nil
+		return reflect.TypeFor[uint](), nil
 	case UINT8:
-		return reflect.TypeOf(uint8(0)), nil
+		return reflect.TypeFor[uint8](), nil
 	case UINT16:
-		return reflect.TypeOf(uint16(0)), nil
+		return reflect.TypeFor[uint16](), nil
 	case UINT32:
-		return reflect.TypeOf(uint32(0)), nil
+		return reflect.TypeFor[uint32](), nil
 	case UINT64:
-		return reflect.TypeOf(uint64(0)), nil
+		return reflect.TypeFor[uint64](), nil
 	case UINTPTR:
-		return reflect.TypeOf(uintptr(0)), nil
+		return reflect.TypeFor[uintptr](), nil
 	case FLOAT32:
-		return reflect.TypeOf(float32(0)), nil
+		return reflect.TypeFor[float32](), nil
 	case FLOAT64:
-		return reflect.TypeOf(float64(0)), nil
+		return reflect.TypeFor[float64](), nil
 	case BOOL:
-		return reflect.TypeOf(false), nil
+		return reflect.TypeFor[bool](), nil
 	case STRING:
-		return reflect.TypeOf(""), nil
+		return reflect.TypeFor[string](), nil
 	case BYTES:
-		return reflect.TypeOf([]byte{}), nil
+		return reflect.TypeFor[[]byte](), nil
 	case FUNC:
 		return t.Func.ToReflect()
 	case MAP:

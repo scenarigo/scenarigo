@@ -246,7 +246,9 @@ const (
 	TestResultPassed
 	TestResultFailed
 	TestResultSkipped
+)
 
+const (
 	testResultUndefinedString = "undefined"
 	testResultPassedString    = "passed"
 	testResultFailedString    = "failed"
@@ -360,7 +362,7 @@ func (d *TestDuration) UnmarshalYAML(b []byte) error {
 	return nil
 }
 
-// MarshalYAML implements xml.Marshaler interface.
+// MarshalXMLAttr implements xml.MarshalerAttr interface.
 func (d TestDuration) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 	return xml.Attr{
 		Name:  name,

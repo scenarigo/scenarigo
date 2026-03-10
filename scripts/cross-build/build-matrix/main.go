@@ -19,7 +19,7 @@ var minVer *semver.Version
 
 func init() {
 	var err error
-	minVer, err = semver.NewVersion("1.23.0")
+	minVer, err = semver.NewVersion("1.25.0")
 	if err != nil {
 		panic(err)
 	}

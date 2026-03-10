@@ -87,7 +87,7 @@ func (c *Context) WithScenarioTitle(title string) *Context {
 	)
 }
 
-// ScenarioName returns the title of the scenario executing in this context.
+// ScenarioTitle returns the title of the scenario executing in this context.
 func (c *Context) ScenarioTitle() string {
 	title, ok := c.ctx.Value(keyScenarioName{}).(string)
 	if ok {
@@ -317,5 +317,7 @@ func RunWithRetry(c *Context, name string, f func(*Context), policy reporter.Ret
 
 // Teardown registers a named function to be called when all parallel subtests complete.
 func (c *Context) Teardown(name string, f func(*Context)) {
-	c.Reporter().Teardown(name, func(r reporter.Reporter) { f(c.WithReporter(r)) })
+	c.Reporter().Teardown(name, func(r reporter.Reporter) {
+		f(c.WithRequestContext(context.WithoutCancel(c.reqCtx)).WithReporter(r))
+	})
 }

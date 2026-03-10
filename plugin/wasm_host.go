@@ -1,3 +1,70 @@
+// WasmPlugin lifecycle
+//
+// This file implements WasmPlugin, which runs a WASI-compiled Go plugin as a
+// WASM module and communicates with it over a request/response channel pair.
+//
+// # Architecture
+//
+//	┌─────────────────────────┐          ┌──────────────────────────┐
+//	│       Host (Go)         │          │   Guest (WASM module)    │
+//	│                         │  reqCh   │                          │
+//	│  write() ──────────────────────▶ read_length ──▶ read         │
+//	│                         │          │          (host funcs)    │
+//	│                         │  resCh   │                          │
+//	│  read()  ◀──────────────────────── write                     │
+//	│                         │          │        (host func)       │
+//	└─────────────────────────┘          └──────────────────────────┘
+//
+// The host calls write() to send a request and read() to receive the response.
+// Inside the WASM module, the guest's main loop calls the host-exported
+// read_length/read functions to receive the request, processes it, and calls
+// the host-exported write function to send back the response.
+//
+// # Goroutine and resource ownership
+//
+// openWasmPlugin starts a background goroutine that runs InstantiateModule.
+// This goroutine owns the module execution and communicates via reqCh/resCh.
+// When the module exits (normally or due to context cancellation), the
+// goroutine stores the error in modErr and signals completion by closing the
+// done channel. It never performs resource cleanup.
+//
+// Close() is the sole owner of resource cleanup:
+//
+//  1. Cancel context (cancelFn) — signals host functions to stop blocking.
+//  2. Close the wazero runtime (wasmRuntime.Close) — immediately marks all
+//     modules as closed. This is necessary because after step 1, host
+//     functions return on ctx.Done() but the guest re-enters them in a tight
+//     loop; WithCloseOnContextDone's goroutine may not be scheduled during
+//     this loop. Closing the runtime ensures the wazero engine exits after
+//     the current host function returns.
+//  3. Wait for goroutine completion (<-done) — guarantees modErr is set and
+//     no concurrent module access remains.
+//  4. Release remaining resources (pipes, WASI system) under mu.
+//
+// closeOnce ensures Close() is idempotent.
+//
+// # Channel design
+//
+//   - reqCh (buffered, size 1): Allows write() to send without blocking on
+//     the goroutine. Because the buffer means both <-done and reqCh<- can be
+//     ready simultaneously after Close(), write() uses a two-step "priority
+//     select" — a non-blocking done check first — to always detect shutdown.
+//   - resCh (unbuffered): read() blocks until the guest sends a response.
+//     A simple select on done and resCh suffices because the guest cannot
+//     produce a response without first consuming a request.
+//
+// # Host function context awareness
+//
+// Both read_length and write host functions select on ctx.Done() to avoid
+// deadlock during shutdown:
+//
+//   - read_length: Without the check, <-reqCh blocks forever since no more
+//     requests are sent after Close(). cancelFn() alone cannot interrupt a Go
+//     channel receive.
+//   - write: After read_length returns 0 on cancellation, the guest may still
+//     call write. Since resCh is unbuffered and no reader exists during
+//     shutdown, the send would block forever.
+
 package plugin
 
 import (
@@ -7,6 +74,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httputil"
 	"os"
@@ -16,6 +84,7 @@ import (
 	"sync"
 
 	"github.com/goccy/go-yaml"
+	wasi "github.com/goccy/wasi-go"
 	"github.com/goccy/wasi-go/imports"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -80,8 +149,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 	srcEnvs := os.Environ()
 	envs := make([]string, 0, len(srcEnvs))
 	for _, kv := range srcEnvs {
-		i := strings.IndexByte(kv, '=')
-		key := kv[:i]
+		key, _, _ := strings.Cut(kv, "=")
 		if _, exists := ignoreEnvNameMap[key]; exists {
 			continue
 		}
@@ -97,7 +165,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = sys
+	// sys is stored in the plugin struct and closed in Close()
 
 	host := r.NewHostModuleBuilder("scenarigo")
 	host.NewFunctionBuilder().WithGoModuleFunction(
@@ -106,12 +174,18 @@ func openWasmPlugin(path string) (Plugin, error) {
 			if plg == nil {
 				panic("failed to get plugin from context")
 			}
-			req := <-plg.reqCh
-
-			plg.req = req
-			// Since the request needs to be referenced again in the `read` host function, it is stored in plg.req.
-			// These functions are evaluated sequentially, so they are thread-safe.
-			stack[0] = uint64(len(req))
+			// Wait for the next request or context cancellation.
+			// The ctx.Done() case is essential: without it, Close() would deadlock
+			// because cancelFn() cannot interrupt a Go channel receive (<-reqCh),
+			// so the InstantiateModule goroutine would never finish and <-done would block forever.
+			select {
+			case <-ctx.Done():
+				stack[0] = 0
+				return
+			case req := <-plg.reqCh:
+				plg.req = req
+				stack[0] = uint64(len(req))
+			}
 		}),
 		[]api.ValueType{},
 		[]api.ValueType{api.ValueTypeI32},
@@ -142,7 +216,15 @@ func openWasmPlugin(path string) (Plugin, error) {
 			if !ok {
 				panic("failed to read memory from plugin")
 			}
-			plg.resCh <- b
+			// Like read_length, we must monitor ctx.Done() to avoid deadlock.
+			// After read_length returns 0 due to context cancellation, the WASM module
+			// may still proceed to call this write function. Since resCh is unbuffered
+			// and nobody is calling read() during shutdown, the send would block forever.
+			select {
+			case <-ctx.Done():
+				return
+			case plg.resCh <- b:
+			}
 		}),
 		[]api.ValueType{api.ValueTypeI32, api.ValueTypeI32},
 		[]api.ValueType{},
@@ -153,26 +235,27 @@ func openWasmPlugin(path string) (Plugin, error) {
 
 	plugin := &WasmPlugin{
 		wasmRuntime: r,
+		wasiSystem:  sys,
 		reqCh:       make(chan []byte, 1),
 		resCh:       make(chan []byte),
 		stdoutR:     stdoutR,
 		stderrR:     stderrR,
 		stdoutW:     stdoutW,
 		stderrW:     stderrW,
+		done:        make(chan struct{}),
 		cancelFn:    cancel,
 	}
 
-	// setting the buffer size to 1 ensures that the function can exit even if there is no receiver.
-	instanceModErrCh := make(chan error, 1)
+	// Start the WASM module in a background goroutine.
+	// The goroutine only signals completion; it never performs resource cleanup.
+	// Resource cleanup is exclusively handled by Close().
 	go func() {
 		_, err := r.InstantiateModule(
 			withPlugin(ctx, plugin), compiledMod, wazero.NewModuleConfig(),
 		)
-		instanceModErrCh <- err
-		plugin.closeResources(err)
+		plugin.modErr = err
+		close(plugin.done)
 	}()
-
-	plugin.instanceModErrCh = instanceModErrCh
 
 	res, err := plugin.call(nil, wasm.NewInitRequest())
 	if err != nil {
@@ -211,33 +294,67 @@ func withPlugin(ctx gocontext.Context, plg *WasmPlugin) gocontext.Context {
 }
 
 // WasmPlugin represents a WASM plugin instance.
-// It manages the WASM runtime and provides communication with the WASM module.
+// See the file-level comment for the full lifecycle and design documentation.
 type WasmPlugin struct {
 	wasmRuntime          wazero.Runtime
+	wasiSystem           wasi.System
 	nameToTypeMap        map[string]*wasm.Type
 	setupNum             int
 	setupEachScenarioNum int
-	req                  []byte
-	reqCh                chan []byte
-	resCh                chan []byte
-	stdoutR              int
-	stdoutW              int
-	stderrR              int
-	stderrW              int
-	instanceModErrCh     chan error
-	instanceModErr       error
-	closed               bool
-	mu                   sync.Mutex
-	cancelFn             gocontext.CancelFunc
+
+	// req holds the current request bytes, shared between the read_length and read host functions.
+	// These host functions are always called sequentially by the WASM module, so no synchronization is needed.
+	req []byte
+
+	// reqCh and resCh are the request/response channels for host ↔ WASM module communication.
+	// reqCh is buffered (size 1) so write() can send without blocking on the goroutine.
+	reqCh chan []byte
+	resCh chan []byte
+
+	// Pipe file descriptors for capturing WASM module's stdout/stderr.
+	stdoutR int
+	stdoutW int
+	stderrR int
+	stderrW int
+
+	// done is closed when the InstantiateModule goroutine finishes.
+	// modErr holds the error from InstantiateModule, written before done is closed
+	// (happens-before guarantee), so it can be read safely after <-done.
+	done   chan struct{}
+	modErr error
+
+	// closeOnce ensures Close() performs cleanup exactly once.
+	closeOnce sync.Once
+	// mu protects pipe reads (readFromPipe) from concurrent access by call() and Close().
+	mu       sync.Mutex
+	cancelFn gocontext.CancelFunc
 }
 
-func (p *WasmPlugin) close() error {
-	if p.closed {
-		return nil
-	}
-	defer func() { p.closeResources(nil) }()
-	p.cancelFn()
-	return nil
+// Close terminates the WASM module and releases all associated resources.
+// It is safe to call multiple times. See the file-level comment for the
+// shutdown sequence details.
+func (p *WasmPlugin) Close() {
+	p.closeOnce.Do(func() {
+		p.cancelFn()
+		// Close the runtime to terminate the WASM module immediately.
+		// cancelFn() cancels the context, but the host functions (read_length, write)
+		// only return on ctx.Done(); the guest then re-enters host functions in a tight
+		// loop. WithCloseOnContextDone's goroutine may not be scheduled during this loop.
+		// Closing the runtime explicitly marks all modules as closed, so the wazero engine
+		// exits after the current host function returns.
+		_ = p.wasmRuntime.Close(gocontext.Background())
+		<-p.done
+
+		p.mu.Lock()
+		defer p.mu.Unlock()
+
+		_ = p.readFromPipe(p.stdoutR)
+		_ = p.readFromPipe(p.stderrR)
+
+		closePipe(p.stdoutR, p.stdoutW)
+		closePipe(p.stderrR, p.stderrW)
+		_ = p.wasiSystem.Close(gocontext.Background())
+	})
 }
 
 func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse, error) {
@@ -271,11 +388,12 @@ func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse
 	}
 	if res != nil && res.Context != nil && res.Context.ReporterID != "" {
 		// Logs and other records made through the reporter when executed in the plugin are reflected in the current reporter.
+		// Use SyncFromSerializable to only sync logs and failed/skipped state, preserving the host's reporter hierarchy.
 		curReporter, ok := ctx.Reporter().(interface {
-			SetFromSerializable(string, map[string]*reporter.SerializableReporter)
+			SyncFromSerializable(string, map[string]*reporter.SerializableReporter)
 		})
 		if ok {
-			curReporter.SetFromSerializable(res.Context.ReporterID, res.Context.ReporterMap)
+			curReporter.SyncFromSerializable(res.Context.ReporterID, res.Context.ReporterMap)
 		}
 	}
 	if res.Error != "" {
@@ -293,35 +411,36 @@ func convertCommandResponse[T wasm.CommandResponse](v wasm.CommandResponse) (T, 
 	return ret, nil
 }
 
+// write sends a request to the WASM module.
+// If the module has already terminated, it returns the module's error immediately.
+//
+// The two-step select is necessary because reqCh is buffered (size 1).
+// After Close(), both <-done and reqCh<- may be ready simultaneously,
+// and Go's select would pick one at random. The first non-blocking check
+// on done ensures we always detect a closed module before attempting to send.
 func (p *WasmPlugin) write(cmd []byte) error {
-	if p.closed {
-		return p.instanceModErr
+	select {
+	case <-p.done:
+		return fmt.Errorf("plugin closed: %w", p.modErr)
+	default:
 	}
-	p.reqCh <- cmd
-	return nil
+	select {
+	case <-p.done:
+		return fmt.Errorf("plugin closed: %w", p.modErr)
+	case p.reqCh <- cmd:
+		return nil
+	}
 }
 
+// read waits for a response from the WASM module.
+// If the module has already terminated, it returns the module's error immediately.
 func (p *WasmPlugin) read() ([]byte, error) {
-	if p.closed {
-		return nil, errors.New("plugin has already been closed")
-	}
-
 	select {
-	case err := <-p.instanceModErrCh:
-		// If the module instance is terminated,
-		// it is considered that the termination process has been completed.
-		p.closeResources(err)
-		return nil, err
+	case <-p.done:
+		return nil, fmt.Errorf("plugin closed: %w", p.modErr)
 	case res := <-p.resCh:
 		return res, nil
 	}
-}
-
-func (p *WasmPlugin) closeResources(instanceModErr error) {
-	p.instanceModErr = instanceModErr
-	p.closed = true
-	closePipe(p.stdoutR, p.stdoutW)
-	closePipe(p.stderrR, p.stderrW)
 }
 
 func (p *WasmPlugin) Lookup(name string) (Symbol, error) {
@@ -410,16 +529,13 @@ func (p *WasmPlugin) setup(sctx *Context, idx int) (*Context, func(*Context), er
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get type map: %w", err)
 	}
-	for k, v := range typeMap {
-		p.nameToTypeMap[k] = v
-	}
+	maps.Copy(p.nameToTypeMap, typeMap)
 	if !setupRes.ExistsTeardown {
 		return sctx, nil, nil
 	}
 	return sctx, func(sctx *Context) {
 		// ignore teardown process's error.
 		_, _ = p.call(sctx, wasm.NewTeardownRequest(id, sctx.ToSerializable()))
-		_ = p.close()
 	}, nil
 }
 
@@ -445,9 +561,7 @@ func (p *WasmPlugin) setupEachScenario(sctx *Context, idx int) (*Context, func(*
 	if err != nil {
 		return nil, nil, err
 	}
-	for k, v := range typeMap {
-		p.nameToTypeMap[k] = v
-	}
+	maps.Copy(p.nameToTypeMap, typeMap)
 	if !setupRes.ExistsTeardown {
 		return sctx, nil, nil
 	}
@@ -760,7 +874,7 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 		if errText != "" {
 			return reflect.Value{}, errors.New(errText)
 		}
-		return reflect.Zero(reflect.TypeOf((*error)(nil)).Elem()), nil
+		return reflect.Zero(reflect.TypeFor[error]()), nil
 	}
 	if v.Type.Step || v.Type.StepFunc || v.Type.LeftArrowFunc || v.Type.IsStruct() {
 		return reflect.ValueOf(
@@ -805,14 +919,14 @@ func (p *WasmPlugin) decodeValue(typ *wasm.Type, v *wasm.Value) (reflect.Value, 
 	return rv, nil
 }
 
-var ctxType = reflect.TypeOf((*Context)(nil))
+var ctxType = reflect.TypeFor[*Context]()
 
 func replaceStructType(t reflect.Type) reflect.Type {
 	if t == ctxType {
 		return t
 	}
 	if wasm.IsStepFuncType(t) {
-		return reflect.TypeOf(&StructValue{})
+		return reflect.TypeFor[*StructValue]()
 	}
 	switch t.Kind() {
 	case reflect.Pointer:
@@ -834,7 +948,7 @@ func replaceStructType(t reflect.Type) reflect.Type {
 		}
 		return reflect.FuncOf(args, ret, false)
 	case reflect.Struct:
-		return reflect.TypeOf(StructValue{})
+		return reflect.TypeFor[StructValue]()
 	}
 	return t
 }

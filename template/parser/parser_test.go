@@ -95,6 +95,30 @@ func TestParser_Parse(t *testing.T) {
 					Rdbrace: 7,
 				},
 			},
+			"nil keyword": {
+				src: `{{nil}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BasicLit{
+						ValuePos: 3,
+						Kind:     token.NIL,
+						Value:    "nil",
+					},
+					Rdbrace: 6,
+				},
+			},
+			"null keyword": {
+				src: `{{null}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BasicLit{
+						ValuePos: 3,
+						Kind:     token.NIL,
+						Value:    "null",
+					},
+					Rdbrace: 7,
+				},
+			},
 			"not bool": {
 				src: `{{!true}}`,
 				expected: &ast.ParameterExpr{

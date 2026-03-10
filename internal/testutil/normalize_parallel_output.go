@@ -29,8 +29,9 @@ type testBlockInfo struct {
 
 // extractTestName extracts the base test name from a full test name (removes subtest suffix).
 func extractBaseTestName(testName string) string {
-	if idx := strings.Index(testName, "/"); idx >= 0 {
-		return testName[:idx]
+	before, _, found := strings.Cut(testName, "/")
+	if found {
+		return before
 	}
 	return testName
 }

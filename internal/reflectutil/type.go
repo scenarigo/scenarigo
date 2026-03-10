@@ -2,4 +2,4 @@ package reflectutil
 
 import "reflect"
 
-var TypeError = reflect.TypeOf((*error)(nil)).Elem()
+var TypeError = reflect.TypeFor[error]()

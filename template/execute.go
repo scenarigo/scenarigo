@@ -15,8 +15,8 @@ import (
 
 //nolint:exhaustruct
 var (
-	yamlMapItemType = reflect.TypeOf(yaml.MapItem{})
-	funcCallType    = reflect.TypeOf(FuncCall{})
+	yamlMapItemType = reflect.TypeFor[yaml.MapItem]()
+	funcCallType    = reflect.TypeFor[FuncCall]()
 )
 
 // Execute executes templates of i with data.

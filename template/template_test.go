@@ -83,6 +83,14 @@ func TestTemplate_Execute(t *testing.T) {
 			str:    "{{false}}",
 			expect: false,
 		},
+		"nil": {
+			str:    "{{nil}}",
+			expect: nil,
+		},
+		"null": {
+			str:    "{{null}}",
+			expect: nil,
+		},
 		"query from data": {
 			str: "{{a.b[1]}}",
 			data: map[string]map[string][]string{
@@ -1424,7 +1432,7 @@ suffix: -suf
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			lines := []string{"{{dump <-}}:"}
-			for _, line := range strings.Split(test.str, "\n") {
+			for line := range strings.SplitSeq(test.str, "\n") {
 				lines = append(lines, fmt.Sprintf("  %s", line))
 			}
 			tmpl, err := New(strings.Join(lines, "\n"))

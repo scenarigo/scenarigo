@@ -16,8 +16,8 @@ func init() {
 }
 
 var (
-	protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
-	uint64Type   = reflect.TypeOf(uint64(0))
+	protoMessage = reflect.TypeFor[proto.Message]()
+	uint64Type   = reflect.TypeFor[uint64]()
 )
 
 func equalEnum(expected any, got any) (bool, error) {

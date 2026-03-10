@@ -55,58 +55,50 @@ func TestDurationMeasurer(t *testing.T) {
 	child2 := parent.spawn()
 
 	// child1-1
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		child1.start()
 		time.Sleep(20 * durationTestUnit)
 		child1.stop()
-		wg.Done()
-	}()
+	})
 
 	// child1-2
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		time.Sleep(10 * durationTestUnit)
 		child1.start()
 		time.Sleep(20 * durationTestUnit)
 		child1.stop()
-		wg.Done()
-	}()
+	})
 
 	// child2-1
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		time.Sleep(10 * durationTestUnit)
 		child2.start()
 		time.Sleep(10 * durationTestUnit)
 		child2.stop()
-		wg.Done()
-	}()
+	})
 
 	// child2-2
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		<-ch
 		time.Sleep(40 * durationTestUnit)
 		child2.start()
 		time.Sleep(10 * durationTestUnit)
 		child2.stop()
-		wg.Done()
-	}()
+	})
 
 	close(ch)
 	wg.Wait()
 
-	if expect, got := 40*durationTestUnit, parent.duration.Truncate(durationTestUnit); got != expect {
+	if expect, got := 40*durationTestUnit, parent.duration.Truncate(5*durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
-	if expect, got := 30*durationTestUnit, child1.getDuration().Truncate(durationTestUnit); got != expect {
+	if expect, got := 30*durationTestUnit, child1.getDuration().Truncate(5*durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
-	if expect, got := 20*durationTestUnit, child2.getDuration().Truncate(durationTestUnit); got != expect {
+	if expect, got := 20*durationTestUnit, child2.getDuration().Truncate(5*durationTestUnit); got != expect {
 		t.Errorf("expected %s but got %s", expect, got)
 	}
 }

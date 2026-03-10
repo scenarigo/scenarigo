@@ -29,7 +29,7 @@ func TestWithColorConfig(t *testing.T) {
 func TestWithTestSummary(t *testing.T) {
 	// Test WithTestSummary function
 	var contextTestSummary bool
-	var testSummaryObject interface{}
+	var testSummaryObject any
 
 	Run(func(r Reporter) {
 		rep, ok := r.(*reporter)

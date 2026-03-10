@@ -60,13 +60,13 @@ type Type interface {
 }
 
 var (
-	typeInt64   = reflect.TypeOf(int64(0))
-	typeUint64  = reflect.TypeOf(uint64(0))
-	typeFloat64 = reflect.TypeOf(float64(0))
-	typeBool    = reflect.TypeOf(false)
-	typeString  = reflect.TypeOf("")
-	typeBytes   = reflect.TypeOf([]byte{})
-	typeTime    = reflect.TypeOf(time.Time{})
+	typeInt64   = reflect.TypeFor[int64]()
+	typeUint64  = reflect.TypeFor[uint64]()
+	typeFloat64 = reflect.TypeFor[float64]()
+	typeBool    = reflect.TypeFor[bool]()
+	typeString  = reflect.TypeFor[string]()
+	typeBytes   = reflect.TypeFor[[]byte]()
+	typeTime    = reflect.TypeFor[time.Time]()
 )
 
 type basicType struct {

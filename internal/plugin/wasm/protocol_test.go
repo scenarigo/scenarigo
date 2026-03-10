@@ -155,7 +155,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 			name: "SetupRequest",
 			req: NewSetupRequest("setup-123", &context.SerializableContext{
 				Vars: []any{
-					map[string]interface{}{"key1": "value1"},
+					map[string]any{"key1": "value1"},
 				},
 			}, 0),
 			validateFunc: func(t *testing.T, resp *Response) {
@@ -271,7 +271,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 			name: "TeardownRequest",
 			req: NewTeardownRequest("teardown-789", &context.SerializableContext{
 				Vars: []any{
-					map[string]interface{}{"cleanup": true},
+					map[string]any{"cleanup": true},
 				},
 			}),
 			validateFunc: func(t *testing.T, resp *Response) {
@@ -289,7 +289,7 @@ func TestEncodeRequestHandleCommandDecodeResponse(t *testing.T) {
 			name: "SetupEachScenarioRequest",
 			req: NewSetupEachScenarioRequest("scenario-456", &context.SerializableContext{
 				Vars: []any{
-					map[string]interface{}{"scenario": "test"},
+					map[string]any{"scenario": "test"},
 				},
 			}, 0),
 			validateFunc: func(t *testing.T, resp *Response) {
@@ -552,7 +552,7 @@ func TestToTypeMapMethods(t *testing.T) {
 
 func TestToContextMethods(t *testing.T) {
 	ctx := &context.SerializableContext{
-		Vars: []any{map[string]interface{}{"test": "value"}},
+		Vars: []any{map[string]any{"test": "value"}},
 	}
 
 	// Test SetupCommandRequest.ToContext

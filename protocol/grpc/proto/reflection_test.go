@@ -1,7 +1,6 @@
 package proto
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -17,9 +16,6 @@ import (
 )
 
 func TestReflectionClient(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	addr := startServer(t)
 	cc, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -27,7 +23,7 @@ func TestReflectionClient(t *testing.T) {
 	}
 	defer cc.Close()
 
-	client := NewReflectionClient(ctx, cc)
+	client := NewReflectionClient(t.Context(), cc)
 	names, err := client.ListServices()
 	if err != nil {
 		t.Fatalf("failed to get services: %s", err)

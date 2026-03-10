@@ -55,12 +55,30 @@ func (s *Scenario) UnmarshalYAML(b []byte) error {
 }
 
 func (s *Scenario) Reset() error {
-	return yaml.UnmarshalWithOptions(s.yamlBytes, s, yaml.UseOrderedMap(), yaml.Strict())
+	// Preserve metadata that should be kept across reset.
+	filepath := s.filepath
+	node := s.Node
+	colorConfig := s.colorConfig
+
+	if err := yaml.UnmarshalWithOptions(s.yamlBytes, s, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
+		return err
+	}
+
+	// Restore metadata lost by unmarshalling.
+	s.setMetadata(filepath, node, colorConfig)
+	return nil
 }
 
 // Filepath returns YAML filepath of s.
 func (s *Scenario) Filepath() string {
 	return s.filepath
+}
+
+// setMetadata sets metadata fields that are not part of YAML.
+func (s *Scenario) setMetadata(filepath string, node ast.Node, colorConfig *color.Config) {
+	s.filepath = filepath
+	s.Node = node
+	s.setColorConfig(colorConfig)
 }
 
 // setColorConfig sets the color configuration for error reporting.

@@ -28,7 +28,7 @@ type LogicalValue interface {
 	IsTruthy() bool
 }
 
-// Negater is an interface that supports unary '-' operator.
+// Negator is an interface that supports unary '-' operator.
 type Negator interface {
 	Neg() (Value, error)
 }

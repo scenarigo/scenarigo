@@ -11,6 +11,7 @@ const (
 	INT    // 123
 	FLOAT  // 1.23
 	BOOL   // true
+	NIL    // nil
 	IDENT  // vars
 
 	ADD  // +
@@ -66,6 +67,8 @@ func (t Token) String() string {
 		return "float"
 	case BOOL:
 		return "bool"
+	case NIL:
+		return "nil"
 	case IDENT:
 		return "ident"
 	case ADD:

@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	// These values will be set by the root command.
+	// ConfigPath is the configuration file path. Set by the root command.
 	ConfigPath string
 	Root       string
 )

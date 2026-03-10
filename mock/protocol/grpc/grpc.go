@@ -102,7 +102,7 @@ func (s *server) setup() (func() error, error) {
 	if s.srv != nil {
 		return nil, errors.New("server already started")
 	}
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.Port))
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.Port)) //nolint:noctx // no context available in setup
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen: %w", err)
 	}

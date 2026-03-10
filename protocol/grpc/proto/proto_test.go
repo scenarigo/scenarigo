@@ -1,7 +1,6 @@
 package proto
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -32,11 +31,8 @@ func TestCompiler(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
 			c := NewCompiler(test.imports)
-			fds, err := c.Compile(ctx, test.files)
+			fds, err := c.Compile(t.Context(), test.files)
 			if err != nil {
 				t.Fatalf("failed to compile: %s", err)
 			}

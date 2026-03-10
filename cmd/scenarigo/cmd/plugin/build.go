@@ -163,9 +163,9 @@ func buildRun(cmd *cobra.Command, args []string) error {
 
 func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error {
 	runtimeVersion := runtime.Version()
-	debugLog(cmd, "scenarigo was built with %s", runtimeVersion)
+	debugLogf(cmd, "scenarigo was built with %s", runtimeVersion)
 	if !goversion.IsValid(goVer) {
-		warnLog(cmd, "failed to parse the Go version that built scenarigo: %s", runtimeVersion)
+		warnLogf(cmd, "failed to parse the Go version that built scenarigo: %s", runtimeVersion)
 	}
 
 	cfg, err := config.Load()
@@ -180,8 +180,8 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 	if err != nil {
 		return err
 	}
-	debugLog(cmd, "found go command: %s", goCmd)
-	debugLog(cmd, "set GOTOOLCHAIN=%s", toolchain)
+	debugLogf(cmd, "found go command: %s", goCmd)
+	debugLogf(cmd, "set GOTOOLCHAIN=%s", toolchain)
 
 	pbs := make([]*pluginBuilder, 0, cfg.Plugins.Len())
 	pluginModules := map[string]*overrideModule{}
@@ -295,7 +295,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 
 	// Check if plugin name has .wasm suffix and enable WASM build automatically
 	if strings.HasSuffix(out, ".wasm") && !opts.wasm {
-		debugLog(cmd, "detected .wasm suffix in plugin name %s, enabling WASM build", out)
+		debugLogf(cmd, "detected .wasm suffix in plugin name %s, enabling WASM build", out)
 		opts.wasm = true
 	}
 
@@ -307,14 +307,14 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 		if err != nil {
 			return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
 		}
-		debugLog(cmd, "download %s into %s", item.Value.Src, m)
+		debugLogf(cmd, "download %s into %s", item.Value.Src, m)
 
 		m, f, err := copyModule(cmd, m)
 		clean = f
 		if err != nil {
 			return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
 		}
-		debugLog(cmd, "copy %s into %s", item.Value.Src, m)
+		debugLogf(cmd, "copy %s into %s", item.Value.Src, m)
 
 		mod = m
 		src = s
@@ -333,7 +333,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 	if !opts.skipMigration {
 		// replace zoncoen/scenarigo to scenarigo/scenarigo
 		if _, ok := pb.initialRequires[oldScenarigoModPath]; ok {
-			debugLog(cmd, "replace %s => %s in %s", oldScenarigoModPath, newScenarigoModPath, item.Value.Src)
+			debugLogf(cmd, "replace %s => %s in %s", oldScenarigoModPath, newScenarigoModPath, item.Value.Src)
 
 			fset := token.NewFileSet()
 			if err := filepath.Walk(pb.dir, func(path string, info fs.FileInfo, err error) error {
@@ -712,7 +712,7 @@ func modTidy(cmd *cobra.Command, dir, goCmd string) error {
 			return nil
 		}
 		if i != retry {
-			warnLog(cmd, `"go mod tidy" failed, retry...`)
+			warnLogf(cmd, `"go mod tidy" failed, retry...`)
 		}
 		if i > 0 && err.Error() == "" {
 			// attempted retries and got no output
@@ -834,7 +834,7 @@ func (pb *pluginBuilder) updateGoMod(cmd *cobra.Command, goCmd string, overrideK
 	if err := pb.editGoMod(cmd, goCmd, func(gomod *modfile.File) error {
 		if toolchain == toolchainLocal {
 			if gomod.Toolchain != nil {
-				warnLog(cmd, "%s: remove toolchain by scenarigo", pb.name)
+				warnLogf(cmd, "%s: remove toolchain by scenarigo", pb.name)
 				gomod.DropToolchainStmt()
 			}
 			return nil
@@ -843,9 +843,9 @@ func (pb *pluginBuilder) updateGoMod(cmd *cobra.Command, goCmd string, overrideK
 		switch compareVers(gomod.Go.Version, toolchain) {
 		case -1: // go.mod < scenarigo go version
 			if gomod.Toolchain == nil {
-				warnLog(cmd, "%s: add toolchain %s by scenarigo", pb.name, toolchain)
+				warnLogf(cmd, "%s: add toolchain %s by scenarigo", pb.name, toolchain)
 			} else if gomod.Toolchain.Name != toolchain {
-				warnLog(cmd, "%s: change toolchain %s ==> %s by scenarigo", pb.name, gomod.Toolchain.Name, toolchain)
+				warnLogf(cmd, "%s: change toolchain %s ==> %s by scenarigo", pb.name, gomod.Toolchain.Name, toolchain)
 			}
 			if err := gomod.AddToolchainStmt(toolchain); err != nil {
 				return fmt.Errorf("%s: %w", pb.gomodPath, err)
@@ -1006,22 +1006,22 @@ func printUpdatedRequires(cmd *cobra.Command, name string, overrides map[string]
 			if !diff.new.Indirect {
 				if o := overrides[k]; o != nil {
 					_, requiredBy, _, _ := o.requireReplace()
-					warnLog(cmd, "%s: add require %s %s by %s", name, k, diff.new.Mod.Version, requiredBy)
+					warnLogf(cmd, "%s: add require %s %s by %s", name, k, diff.new.Mod.Version, requiredBy)
 				} else {
-					warnLog(cmd, "%s: add require %s %s", name, k, diff.new.Mod.Version)
+					warnLogf(cmd, "%s: add require %s %s", name, k, diff.new.Mod.Version)
 				}
 			}
 		case diff.new.Mod.Path == "":
 			if !diff.old.Indirect {
-				warnLog(cmd, "%s: remove require %s %s", name, k, diff.old.Mod.Version)
+				warnLogf(cmd, "%s: remove require %s %s", name, k, diff.old.Mod.Version)
 			}
 		case diff.old.Mod.Version != diff.new.Mod.Version:
 			if !diff.old.Indirect || !diff.new.Indirect {
 				if o := overrides[k]; o != nil {
 					_, requiredBy, _, _ := o.requireReplace()
-					warnLog(cmd, "%s: change require %s %s ==> %s by %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version, requiredBy)
+					warnLogf(cmd, "%s: change require %s %s ==> %s by %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version, requiredBy)
 				} else {
-					warnLog(cmd, "%s: change require %s %s ==> %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version)
+					warnLogf(cmd, "%s: change require %s %s ==> %s", name, k, diff.old.Mod.Version, diff.new.Mod.Version)
 				}
 			}
 		}
@@ -1059,21 +1059,21 @@ func printUpdatedReplaces(cmd *cobra.Command, name string, overrides map[string]
 				if replace != nil {
 					by = replaceBy
 				}
-				warnLog(cmd, "%s: add replace %s => %s by %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
+				warnLogf(cmd, "%s: add replace %s => %s by %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
 			} else {
-				warnLog(cmd, "%s: add replace %s => %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
+				warnLogf(cmd, "%s: add replace %s => %s", name, replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
 			}
 		case diff.new.Old.Path == "":
-			warnLog(cmd, "%s: remove replace %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version))
+			warnLogf(cmd, "%s: remove replace %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version))
 		case diff.old.New.Path != diff.new.New.Path || diff.old.New.Version != diff.new.New.Version:
 			if o := overrides[k]; o != nil {
 				_, by, replace, replaceBy := o.requireReplace()
 				if replace != nil {
 					by = replaceBy
 				}
-				warnLog(cmd, "%s: change replace %s => %s ==> %s => %s by %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
+				warnLogf(cmd, "%s: change replace %s => %s ==> %s => %s by %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version), by)
 			} else {
-				warnLog(cmd, "%s: change replace %s => %s ==> %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
+				warnLogf(cmd, "%s: change replace %s => %s ==> %s => %s", name, replacePathVersion(k, diff.old.Old.Version), replacePathVersion(diff.old.New.Path, diff.old.New.Version), replacePathVersion(k, diff.new.Old.Version), replacePathVersion(diff.new.New.Path, diff.new.New.Version))
 			}
 		}
 	}
@@ -1204,11 +1204,11 @@ func asVersionTooHighError(err error) (bool, *versionTooHighError) {
 	return false, nil
 }
 
-func warnLog(cmd *cobra.Command, format string, a ...any) {
+func warnLogf(cmd *cobra.Command, format string, a ...any) {
 	fmt.Fprintf(cmd.ErrOrStderr(), fmt.Sprintf("%s: %s\n", warnColor.Sprint("WARN"), format), a...)
 }
 
-func debugLog(cmd *cobra.Command, format string, a ...any) {
+func debugLogf(cmd *cobra.Command, format string, a ...any) {
 	if !verbose {
 		return
 	}

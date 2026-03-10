@@ -498,7 +498,7 @@ baz:
 }
 
 func TestConvert(t *testing.T) {
-	convertToStr := convert(reflect.TypeOf(""))
+	convertToStr := convert(reflect.TypeFor[string]())
 	t.Run("convert to string", func(t *testing.T) {
 		s := "test"
 		v, err := convertToStr(reflect.ValueOf(&s), nil)

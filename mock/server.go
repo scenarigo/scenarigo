@@ -100,8 +100,7 @@ func (s *Server) Stop(ctx context.Context) error {
 		wg   sync.WaitGroup
 	)
 	for name, s := range s.servers {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			if err := s.Stop(ctx); err != nil {
 				if !errors.Is(err, protocol.ErrServerClosed) {
 					m.Lock()
@@ -109,8 +108,7 @@ func (s *Server) Stop(ctx context.Context) error {
 					errs = append(errs, fmt.Errorf("failed to stop %s server: %w", name, err))
 				}
 			}
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 	if len(errs) > 0 {

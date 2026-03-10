@@ -86,14 +86,38 @@ func (r *reporter) ToSerializable(reporterMap map[string]*SerializableReporter) 
 	return id
 }
 
-// SetFromSerializable logs and other records are reflected in the current reporter.
+// SetFromSerializable restores all reporter state from a serialized reporter.
+// This is used to fully reconstruct a reporter from serialized data.
 func (r *reporter) SetFromSerializable(id string, srMap map[string]*SerializableReporter) {
 	sr, exists := srMap[id]
 	if !exists {
 		return
 	}
-	rMap := make(map[string]*reporter)
-	r.setFromSerializable(sr, rMap, srMap)
+	r.setFromSerializable(sr, map[string]*reporter{id: r}, srMap)
+}
+
+// SyncFromSerializable syncs logs and state from a serialized reporter to the current reporter.
+// This is used to sync changes made by WASM plugins back to the host's reporter.
+// Only logs and failed/skipped state are synced; other fields like parent, children,
+// and context are not overwritten to preserve the host's reporter hierarchy.
+func (r *reporter) SyncFromSerializable(id string, srMap map[string]*SerializableReporter) {
+	sr, exists := srMap[id]
+	if !exists {
+		return
+	}
+	// Only sync logs - don't overwrite other fields to preserve host's reporter hierarchy
+	if len(sr.Logs) > 0 {
+		for _, log := range sr.Logs {
+			r.logs.log(log)
+		}
+	}
+	// Sync failed/skipped state
+	if sr.Failed {
+		r.Fail()
+	}
+	if sr.Skipped {
+		r.skipped = 1
+	}
 }
 
 func (r *reporter) setFromSerializable(sr *SerializableReporter, reporterMap map[string]*reporter, serializedReporterMap map[string]*SerializableReporter) {

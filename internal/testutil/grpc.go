@@ -35,7 +35,7 @@ func StartTestGRPCServer(t *testing.T, srv testpb.TestServer, optFuncs ...TestGR
 		reflection.Register(s)
 	}
 
-	ln, err := net.Listen("tcp", "localhost:0")
+	ln, err := net.Listen("tcp", "localhost:0") //nolint:noctx // no context available in test helper
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
