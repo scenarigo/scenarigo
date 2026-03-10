@@ -50,3 +50,57 @@ expect:
     suffix: "plugin/src/main.go"
     startLine: 2
     startChar: 4
+---
+name: "function call syntax: cursor on function name jumps to Go source"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    myplugin: myplugin.so
+  steps:
+    - title: step1
+      request:
+        client: '{{plugins.myplugin.$0CreateClient(vars.endpoint)}}'
+operation: definition
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      myplugin.so:
+        src: ./plugin/src
+  plugin/src/main.go: |
+    package main
+
+    func CreateClient() {}
+expect:
+  definitionURI:
+    suffix: "plugin/src/main.go"
+    startLine: 2
+    startChar: 5
+---
+name: "function call syntax: cursor on argument resolves to vars definition"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    myplugin: myplugin.so
+  vars:
+    endpoint: https://example.com
+  steps:
+    - title: step1
+      request:
+        client: '{{plugins.myplugin.CreateClient(vars.$0endpoint)}}'
+operation: definition
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      myplugin.so:
+        src: ./plugin/src
+  plugin/src/main.go: |
+    package main
+
+    func CreateClient() {}
+expect:
+  definitionURI:
+    suffix: "test.yaml"
+    startLine: 4
+    startChar: 2
