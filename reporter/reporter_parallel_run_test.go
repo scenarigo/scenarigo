@@ -19,11 +19,9 @@ func TestRun_ParallelExecution(t *testing.T) {
 		var wg2 sync.WaitGroup
 		panics := make(chan any, 2)
 
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			wg1.Add(1)
-			wg2.Add(1)
-			go func() {
-				defer wg2.Done()
+			wg2.Go(func() {
 				defer func() {
 					if r := recover(); r != nil {
 						panics <- r
@@ -39,7 +37,7 @@ func TestRun_ParallelExecution(t *testing.T) {
 						<-running
 					})
 				}, WithWriter(&b))
-			}()
+			})
 		}
 
 		wg1.Wait()
@@ -72,7 +70,7 @@ func TestRun_ParallelExecution(t *testing.T) {
 	})
 
 	t.Run("sequential Run calls should succeed", func(t *testing.T) {
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			var b bytes.Buffer
 			success := Run(func(r Reporter) {
 				r.Run("test", func(r Reporter) {
@@ -95,7 +93,7 @@ func TestRun_ParallelExecution(t *testing.T) {
 		var wg2 sync.WaitGroup
 		errors := make(chan error, 2)
 
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			wg1.Add(1)
 			wg2.Add(1)
 			go func(id int) {
