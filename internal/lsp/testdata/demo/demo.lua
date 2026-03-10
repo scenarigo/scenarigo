@@ -495,7 +495,7 @@ enqueue(function(next)
   show("Plugin Export Completion + Jump → Go source → back")
   vim.defer_fn(function()
     next_line({ { t = "    req" }, { c = 1 } }, function()
-      next_line({ { t = "      cl" }, { c = 1 }, { t = "'{{plugins.myplugin." }, { c = 1 }, { t = "(vars.apiEndpoint)}}'" } }, function()
+      next_line({ { t = "      cl" }, { c = 1 }, { t = "'{{plugins.myplugin." }, { c = 1 }, { t = "(vars.api" }, { c = 1 }, { t = ")}}'" } }, function()
         -- Jump to Go source definition of CreateClient.
         local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
         for li, ll in ipairs(lines) do
@@ -656,24 +656,27 @@ enqueue(function(next)
   end, PAUSE)
 end)
 
--- 13. Diagnostics — introduce typo
+-- 13. Diagnostics — add invalid field
 enqueue(function(next)
-  show("Diagnostics — typo detection with underline and virtual text")
+  show("Diagnostics — unknown field detection")
   vim.defer_fn(function()
+    -- Find the expect block and insert an invalid field after it.
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     for i, l in ipairs(lines) do
-      if l:match("^    protocol:") then
-        demo_type(i, "    ", "protocl: http", function()
-          -- Wait for diagnostics to arrive from LSP server.
-          vim.wait(1000, function() return false end)
-          -- Force diagnostic display refresh after leaving insert mode.
+      if l:match("^    expect:") then
+        -- Insert an unknown field "tmeout" (typo of timeout) as a sibling of expect.
+        vim.api.nvim_buf_set_lines(bufnr, i - 1, i - 1, false, { "    tmeout: 30s" })
+        vim.cmd("redraw")
+        -- Wait for LSP to process didChange and return diagnostics.
+        vim.defer_fn(function()
           vim.diagnostic.show(nil, bufnr)
           vim.cmd("redraw")
           vim.defer_fn(function()
-            vim.api.nvim_buf_set_lines(bufnr, i - 1, i, false, { l })
+            -- Remove the invalid line.
+            vim.api.nvim_buf_set_lines(bufnr, i - 1, i, false, {})
             vim.defer_fn(next, 1000)
           end, LONG_PAUSE)
-        end)
+        end, 2000)
         return
       end
     end
