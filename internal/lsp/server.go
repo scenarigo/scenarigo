@@ -848,30 +848,33 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 	return s.findConfigDefinition(root, name)
 }
 
-// findConfigDefinition searches for a variable definition in scenarigo.yaml.
-func (s *Server) findConfigDefinition(blockName, keyName string) *Location {
+// readConfigText returns the text of scenarigo.yaml and its URI.
+// It checks the document store first, then falls back to reading from disk.
+func (s *Server) readConfigText() (text, uri string, ok bool) {
 	rootPath := uriToPath(s.rootURI)
 	if rootPath == "" {
-		return nil
+		return "", "", false
 	}
 	configPath := filepath.Join(rootPath, "scenarigo.yaml")
-
-	// Try document store first (if the file is open in the editor).
 	configURI := pathToURI(configPath)
 	if doc := s.docs.Get(configURI); doc != nil {
-		if r := findBlockKeyRange(doc.Text, blockName, keyName); r != nil {
-			return &Location{URI: configURI, Range: *r}
-		}
-		return nil
+		return doc.Text, configURI, true
 	}
-
-	// Fall back to reading from disk.
 	data, err := os.ReadFile(configPath)
 	if err != nil {
+		return "", "", false
+	}
+	return string(data), configURI, true
+}
+
+// findConfigDefinition searches for a variable definition in scenarigo.yaml.
+func (s *Server) findConfigDefinition(blockName, keyName string) *Location {
+	configText, configURI, ok := s.readConfigText()
+	if !ok {
 		return nil
 	}
-	if r := findBlockKeyRange(string(data), blockName, keyName); r != nil {
-		return &Location{URI: pathToURI(configPath), Range: *r}
+	if r := findBlockKeyRange(configText, blockName, keyName); r != nil {
+		return &Location{URI: configURI, Range: *r}
 	}
 	return nil
 }
@@ -1186,17 +1189,9 @@ func (s *Server) resolvePluginSourceDir(doc *document, pluginAlias string) strin
 	}
 
 	// Read config to find source path.
-	configPath := filepath.Join(rootPath, "scenarigo.yaml")
-	configText := ""
-	configURI := pathToURI(configPath)
-	if cdoc := s.docs.Get(configURI); cdoc != nil {
-		configText = cdoc.Text
-	} else {
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			return ""
-		}
-		configText = string(data)
+	configText, _, ok := s.readConfigText()
+	if !ok {
+		return ""
 	}
 
 	// Extract src value for this plugin binary from config.
@@ -1649,7 +1644,7 @@ func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext,
 			parentField := sch.FindField(ctx.Path[:len(ctx.Path)-1])
 			if parentField != nil && parentField.Type == schema.FieldTypeMap && parentField.IsFilePath {
 				if dir := s.resolvePluginBuildDir(); dir != "" {
-					return s.completeFilePathInDir(dir, ctx.PartialValue)
+					return completeFilePathInDir(dir, ctx.PartialValue)
 				}
 				return s.completeFilePath(docURI, ctx.PartialValue)
 			}
@@ -1707,85 +1702,16 @@ func (s *Server) completeFilePath(docURI, partial string) []CompletionItem {
 	if docPath == "" {
 		return nil
 	}
-	dir := filepath.Dir(docPath)
-
-	// Determine the search directory and prefix from the partial value.
-	searchDir := dir
-	prefix := partial
-	if partial != "" {
-		absPartial := filepath.Join(dir, partial)
-		info, err := os.Stat(absPartial)
-		if err == nil && info.IsDir() {
-			// Partial is a complete directory: list its contents.
-			searchDir = absPartial
-			prefix = ""
-		} else {
-			// Partial may be a partial filename in a directory.
-			searchDir = filepath.Dir(absPartial)
-			prefix = filepath.Base(absPartial)
-		}
-	}
-
-	entries, err := os.ReadDir(searchDir)
-	if err != nil {
-		return nil
-	}
-
-	// Build the relative path prefix from doc dir to searchDir.
-	relDir, err := filepath.Rel(dir, searchDir)
-	if err != nil {
-		return nil
-	}
-
-	var items []CompletionItem
-	for _, entry := range entries {
-		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
-			continue // skip hidden files
-		}
-		if prefix != "" && !strings.HasPrefix(name, prefix) {
-			continue
-		}
-
-		relPath := name
-		if relDir != "." {
-			relPath = filepath.Join(relDir, name)
-		}
-
-		kind := CompletionItemKindFile
-		if entry.IsDir() {
-			kind = CompletionItemKindFolder
-			relPath += "/"
-		}
-
-		items = append(items, CompletionItem{
-			Label:      relPath,
-			Kind:       kind,
-			InsertText: relPath,
-		})
-	}
-	return items
+	return completeFilePathInDir(filepath.Dir(docPath), partial)
 }
 
 // resolvePluginBuildDir returns the absolute path of pluginDirectory from config.
 func (s *Server) resolvePluginBuildDir() string {
-	rootPath := uriToPath(s.rootURI)
-	if rootPath == "" {
+	configText, _, ok := s.readConfigText()
+	if !ok {
 		return ""
 	}
-
-	configPath := filepath.Join(rootPath, "scenarigo.yaml")
-	configText := ""
-	configURI := pathToURI(configPath)
-	if cdoc := s.docs.Get(configURI); cdoc != nil {
-		configText = cdoc.Text
-	} else {
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			return ""
-		}
-		configText = string(data)
-	}
+	rootPath := uriToPath(s.rootURI)
 
 	dir := extractTopLevelValue(configText, "pluginDirectory")
 	if dir == "" {
@@ -1800,8 +1726,8 @@ func (s *Server) resolvePluginBuildDir() string {
 	return dir
 }
 
-// completeFilePathInDir lists files in the given directory for file path completion.
-func (s *Server) completeFilePathInDir(dir, partial string) []CompletionItem {
+// completeFilePathInDir lists files in the given base directory for file path completion.
+func completeFilePathInDir(dir, partial string) []CompletionItem {
 	searchDir := dir
 	prefix := partial
 	if partial != "" {
@@ -2746,18 +2672,6 @@ func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange
 		currentLine = lines[pos.Line]
 	}
 
-	// Case 1: Cursor on a key under "vars:" or "secrets:"
-	// ctx.Path would be ["vars"] or ["secrets"] and we're on a child key.
-	for i, key := range ctx.Path {
-		if (key == "vars" || key == "secrets") && i == len(ctx.Path)-1 {
-			// Cursor is on the "vars"/"secrets" key itself; check if this is a child key position.
-			if ctx.Type == yamlutil.CursorContextKey && ctx.PartialKey != "" {
-				// Cursor is on a key that IS under vars/secrets — but ctx.Path ends with "vars"
-				// which means the partial key IS the child. Actually let's check siblings.
-			}
-		}
-	}
-
 	// Check if cursor is on a child key of vars/secrets.
 	if len(ctx.Path) >= 1 {
 		parent := ctx.Path[len(ctx.Path)-1]
@@ -2973,24 +2887,11 @@ func extractStepIDs(text string) []string {
 
 // configBlockKeys reads keys from the given block in the config file (scenarigo.yaml).
 func (s *Server) configBlockKeys(blockName string) []string {
-	rootPath := uriToPath(s.rootURI)
-	if rootPath == "" {
+	configText, _, ok := s.readConfigText()
+	if !ok {
 		return nil
 	}
-	configPath := filepath.Join(rootPath, "scenarigo.yaml")
-
-	// Try document store first (if the file is open in the editor).
-	configURI := pathToURI(configPath)
-	if doc := s.docs.Get(configURI); doc != nil {
-		return extractBlockKeys(doc.Text, blockName)
-	}
-
-	// Fall back to reading from disk.
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil
-	}
-	return extractBlockKeys(string(data), blockName)
+	return extractBlockKeys(configText, blockName)
 }
 
 // keyRange returns a Range covering the key name on the given line.
