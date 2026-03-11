@@ -18,10 +18,14 @@ if vim.fn.executable(binary) ~= 1 then
 end
 
 -- ── Settings ──────────────────────────────────────────────────────────
-local PAUSE      = 2000  -- ms between steps
-local LONG_PAUSE = 3000
-local TYPE_DELAY = 60    -- ms per keystroke
-local NAV_DELAY  = 300   -- ms between completion menu navigation
+-- In headless mode, use reduced delays for faster CI-like execution.
+-- The LSP server still needs time to process didChange notifications,
+-- so delays can't be too aggressive.
+local is_headless = vim.fn.has("gui_running") == 0 and not vim.api.nvim_list_uis()[1]
+local PAUSE      = is_headless and 1000 or 2000  -- ms between steps
+local LONG_PAUSE = is_headless and 1500 or 3000
+local TYPE_DELAY = is_headless and 30   or 60    -- ms per keystroke
+local NAV_DELAY  = is_headless and 100  or 300   -- ms between completion menu navigation
 
 -- ── Helper: statusline ───────────────────────────────────────────────
 local demo_status = ""
@@ -33,9 +37,18 @@ end
 
 local TOTAL_STEPS = 14
 local step_num = 0
+-- Debug logging: set DEMO_DBG=1 to enable trace output.
+local dbg_file = nil
+if vim.env.DEMO_DBG == "1" then
+  dbg_file = io.open("/tmp/demo_trace.log", "w")
+end
+local function dbg(msg)
+  if dbg_file then dbg_file:write(os.clock() .. " " .. msg .. "\n"); dbg_file:flush() end
+end
 local function show(msg)
   step_num = step_num + 1
   demo_status = string.format("[%d/%d] %s", step_num, TOTAL_STEPS, msg)
+  dbg("STEP " .. step_num .. ": " .. msg)
   vim.cmd("redrawstatus")
   vim.cmd("redraw")
 end
@@ -52,10 +65,51 @@ local function run_queue()
     vim.cmd("redrawstatus")
     vim.cmd("redraw")
     if vim.fn.has("gui_running") == 0 and not vim.api.nvim_list_uis()[1] then
-      -- Headless mode: dump buffer and quit.
+      -- Headless mode: dump buffer and verify.
       local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
       for i, l in ipairs(lines) do
         io.stderr:write(string.format("%3d: %s\n", i, l))
+      end
+      -- When DEMO_CHECK=1, verify final buffer content.
+      if vim.env.DEMO_CHECK == "1" then
+        local errors = {}
+        local checks = {
+          { pattern = "^schemaVersion: scenario/v1$", desc = "schemaVersion on first line" },
+          { pattern = "^title: Feature Demo$",        desc = "title line" },
+          { pattern = "^plugins:",                      desc = "plugins section" },
+          { pattern = "    protocol: http",            desc = "protocol field" },
+          { pattern = "CreateClient%(vars%.apiEndpoint%)", desc = "CreateClient with vars.apiEndpoint" },
+          { pattern = "Bearer.*secrets%.token",        desc = "secrets.token in header" },
+          { pattern = "    timeout: 30s",              desc = "timeout field" },
+          { pattern = "    expect:",                   desc = "expect section" },
+        }
+        for _, chk in ipairs(checks) do
+          local found = false
+          for _, l in ipairs(lines) do
+            if l:match(chk.pattern) then found = true; break end
+          end
+          if not found then
+            table.insert(errors, "MISSING: " .. chk.desc .. " (" .. chk.pattern .. ")")
+          end
+        end
+        -- Verify timeout comes after expect (key ordering).
+        local expect_line, timeout_line
+        for i, l in ipairs(lines) do
+          if l:match("^    expect:") then expect_line = i end
+          if l:match("^    timeout:") then timeout_line = i end
+        end
+        if expect_line and timeout_line and timeout_line < expect_line then
+          table.insert(errors, "ORDER: timeout (line " .. timeout_line .. ") before expect (line " .. expect_line .. ")")
+        end
+        if #errors > 0 then
+          io.stderr:write("\nCHECK FAILED:\n")
+          for _, e in ipairs(errors) do
+            io.stderr:write("  " .. e .. "\n")
+          end
+          vim.cmd("cquit 1")
+        else
+          io.stderr:write("\nALL CHECKS PASSED\n")
+        end
       end
       vim.cmd("qall!")
     else
@@ -66,7 +120,9 @@ local function run_queue()
     return
   end
   local fn = table.remove(queue, 1)
+  dbg("queue: running next, " .. #queue .. " remaining")
   fn(function()
+    dbg("queue: step callback called")
     vim.defer_fn(run_queue, 200)
   end)
 end
@@ -174,6 +230,7 @@ end
 -- ── Helper: trigger LSP completion synchronously and show popup ──────
 -- Must be called in insert mode. Sends request, gets items, shows popup.
 local function lsp_complete(cb)
+  dbg("lsp_complete: start")
   -- Flush pending didChange notifications by processing the event loop.
   -- Longer wait gives the server time to process the change notification.
   vim.wait(200, function() return false end)
@@ -254,6 +311,7 @@ local function lsp_complete(cb)
     end
   end
   -- No results: clear stale state to prevent complete_accept from using old data.
+  dbg("lsp_complete: no results")
   _complete_items = {}
   cb()
 end
@@ -262,6 +320,7 @@ end
 -- action: {t = "text"} to type char-by-char,  {c = N} to complete.
 -- Exits insert mode at the end.
 local function insert_actions(actions, idx, cb)
+  dbg("insert_actions: idx=" .. idx .. "/" .. #actions)
   if idx > #actions then
     vim.cmd("stopinsert")
     vim.cmd("redraw")
@@ -270,12 +329,16 @@ local function insert_actions(actions, idx, cb)
   end
   local a = actions[idx]
   if a.t then
+    dbg("insert_actions: typing '" .. a.t .. "'")
     type_chars(a.t, 1, function()
       insert_actions(actions, idx + 1, cb)
     end)
   elseif a.c then
+    dbg("insert_actions: completing c=" .. a.c)
     lsp_complete(function()
+      dbg("insert_actions: lsp_complete done, accepting")
       complete_accept(a.c, 1, function()
+        dbg("insert_actions: complete_accept done")
         insert_actions(actions, idx + 1, cb)
       end)
     end)
@@ -298,10 +361,14 @@ end
 
 -- ── Helper: hover ────────────────────────────────────────────────────
 local function trigger_hover_at(line, col, cb)
-  vim.api.nvim_win_set_cursor(0, { line, col })
+  dbg("trigger_hover_at: line=" .. line .. " col=" .. col)
+  local ok1, err1 = pcall(vim.api.nvim_win_set_cursor, 0, { line, col })
+  dbg("trigger_hover_at: set_cursor ok=" .. tostring(ok1) .. " err=" .. tostring(err1))
   vim.cmd("redraw")
-  vim.lsp.buf.hover()
+  local ok2, err2 = pcall(vim.lsp.buf.hover)
+  dbg("trigger_hover_at: hover ok=" .. tostring(ok2) .. " err=" .. tostring(err2))
   vim.defer_fn(function()
+    dbg("trigger_hover_at: after LONG_PAUSE, closing windows")
     for _, win in ipairs(vim.api.nvim_list_wins()) do
       if vim.api.nvim_win_get_config(win).relative ~= "" then
         pcall(vim.api.nvim_win_close, win, true)
@@ -602,13 +669,18 @@ end)
 enqueue(function(next)
   show("Hover — field description, type, and enum values")
   vim.defer_fn(function()
+    dbg("hover step: reading buffer lines, bufnr=" .. tostring(bufnr) .. " cur_buf=" .. tostring(vim.api.nvim_get_current_buf()))
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    dbg("hover step: got " .. #lines .. " lines")
     for i, l in ipairs(lines) do
       if l:match("^    protocol:") then
+        dbg("hover step: found protocol at line " .. i)
         trigger_hover_at(i, 6, next)
         return
       end
     end
+    dbg("hover step: protocol line NOT FOUND, dumping buffer:")
+    for i, l in ipairs(lines) do dbg("  " .. i .. ": " .. l) end
     next()
   end, PAUSE)
 end)
