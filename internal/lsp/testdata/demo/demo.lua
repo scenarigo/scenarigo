@@ -656,25 +656,32 @@ enqueue(function(next)
   end, PAUSE)
 end)
 
--- 13. Diagnostics — add invalid field
+-- 13. Diagnostics — add invalid field, then fix it
 enqueue(function(next)
-  show("Diagnostics — unknown field detection")
+  show("Diagnostics — unknown field detection + fix")
   vim.defer_fn(function()
-    -- Find the expect block and insert an invalid field after it.
+    -- Find the expect block and insert an invalid field before it.
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     for i, l in ipairs(lines) do
       if l:match("^    expect:") then
         -- Insert an unknown field "tmeout" (typo of timeout) as a sibling of expect.
-        vim.api.nvim_buf_set_lines(bufnr, i - 1, i - 1, false, { "    tmeout: 30s" })
+        local typo_line = i - 1
+        vim.api.nvim_buf_set_lines(bufnr, typo_line, typo_line, false, { "    tmeout: 30s" })
         vim.cmd("redraw")
         -- Wait for LSP to process didChange and return diagnostics.
         vim.defer_fn(function()
           vim.diagnostic.show(nil, bufnr)
           vim.cmd("redraw")
           vim.defer_fn(function()
-            -- Remove the invalid line.
-            vim.api.nvim_buf_set_lines(bufnr, i - 1, i, false, {})
-            vim.defer_fn(next, 1000)
+            -- Fix the typo: tmeout → timeout (keep the line).
+            vim.api.nvim_buf_set_lines(bufnr, typo_line, typo_line + 1, false, { "    timeout: 30s" })
+            vim.cmd("redraw")
+            -- Wait for diagnostics to clear.
+            vim.defer_fn(function()
+              vim.diagnostic.show(nil, bufnr)
+              vim.cmd("redraw")
+              vim.defer_fn(next, PAUSE)
+            end, 1500)
           end, LONG_PAUSE)
         end, 2000)
         return
