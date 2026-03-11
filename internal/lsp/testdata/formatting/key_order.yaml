@@ -129,6 +129,56 @@ expect:
           url: http://example.com
           body: hello
 ---
+name: "reorder step-level keys: timeout before expect"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - title: Login
+      protocol: http
+      request:
+        method: POST
+      timeout: 30s
+      expect:
+        code: 200
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    steps:
+      - title: Login
+        protocol: http
+        request:
+          method: POST
+        expect:
+          code: 200
+        timeout: 30s
+---
+name: "multi-level reorder: top-level + step-level in single format"
+document: |
+  title: test
+  schemaVersion: scenario/v1
+  steps:
+    - title: Login
+      protocol: http
+      request:
+        method: POST
+      timeout: 30s
+      expect:
+        code: 200
+operation: formatting
+expect:
+  formattedText: |
+    schemaVersion: scenario/v1
+    title: test
+    steps:
+      - title: Login
+        protocol: http
+        request:
+          method: POST
+        expect:
+          code: 200
+        timeout: 30s
+---
 name: "block scalar as last entry does not lose content"
 document: |
   title: test

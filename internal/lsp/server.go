@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1790,16 +1791,61 @@ func (s *Server) formatDocument(doc *document, sch *schema.Schema) []TextEdit {
 		return nil
 	}
 
-	lines := strings.Split(doc.Text, "\n")
-	var edits []TextEdit
-
-	for _, d := range doc.Parsed.File.Docs {
-		if d.Body == nil {
-			continue
+	// Iteratively apply formatting passes.
+	//
+	// Why iterative: formatNode reorders out-of-order keys at a single
+	// mapping level and returns immediately — it cannot recurse into
+	// children because reordering invalidates the AST line numbers that
+	// child nodes rely on. By applying the edit, re-parsing to get a
+	// fresh AST, and running another pass, deeper levels get their turn.
+	//
+	// In practice this converges in 2–3 iterations (one per nesting
+	// level that needs reordering). Each pass is cheap: scenario files
+	// are small and goccy/go-yaml parsing takes sub-millisecond. The
+	// loop runs only on explicit textDocument/formatting requests, not
+	// on every keystroke, so performance is not a concern.
+	//
+	// An alternative single-pass approach would update the lines array
+	// in-place after reordering and recompute child positions, but the
+	// added complexity is not justified given the negligible cost of
+	// re-parsing.
+	text := doc.Text
+	parsed := doc.Parsed
+	for range 10 { // bounded iterations to prevent infinite loops
+		lines := strings.Split(text, "\n")
+		var edits []TextEdit
+		for _, d := range parsed.File.Docs {
+			if d.Body == nil {
+				continue
+			}
+			edits = append(edits, s.formatNode(d.Body, sch.Fields, lines)...)
 		}
-		edits = append(edits, s.formatNode(d.Body, sch.Fields, lines)...)
+		if len(edits) == 0 {
+			break
+		}
+		// Apply edits to text and re-parse for the next pass.
+		newText := applyEditsToText(text, edits)
+		newParsed := yamlutil.Parse(newText)
+		if newParsed == nil || newParsed.File == nil {
+			break
+		}
+		text = newText
+		parsed = newParsed
 	}
-	return edits
+
+	// If the text changed, return a single edit replacing the whole document.
+	if text == doc.Text {
+		return nil
+	}
+	origLines := strings.Split(doc.Text, "\n")
+	lastLine := len(origLines) - 1
+	return []TextEdit{{
+		Range: Range{
+			Start: Position{Line: 0, Character: 0},
+			End:   Position{Line: lastLine, Character: len(origLines[lastLine])},
+		},
+		NewText: text,
+	}}
 }
 
 // formatNode reorders keys in a mapping to match the schema field order.
@@ -1946,6 +1992,10 @@ func (s *Server) formatNode(node ast.Node, fields []*schema.FieldInfo, lines []s
 		NewText: strings.Join(newLines, "\n") + "\n",
 	}
 
+	// Return without recursing into children: the reorder changed line
+	// positions, so child AST nodes now point to wrong lines.
+	// formatDocument's iterative loop will re-parse and handle children
+	// in a subsequent pass.
 	return []TextEdit{edit}
 }
 
@@ -2003,6 +2053,42 @@ func (s *Server) formatChildren(mapping *ast.MappingNode, fields []*schema.Field
 		}
 	}
 	return edits
+}
+
+// applyEditsToText applies TextEdits to text, returning the modified text.
+// Edits must not overlap. They are applied in reverse order to preserve positions.
+func applyEditsToText(text string, edits []TextEdit) string {
+	lines := strings.Split(text, "\n")
+	lineOffset := func(line, char int) int {
+		off := 0
+		for i := 0; i < line && i < len(lines); i++ {
+			off += len(lines[i]) + 1
+		}
+		return off + char
+	}
+	// Apply in reverse order to preserve positions.
+	sorted := make([]TextEdit, len(edits))
+	copy(sorted, edits)
+	sort.Slice(sorted, func(i, j int) bool {
+		si, sj := sorted[i].Range.Start, sorted[j].Range.Start
+		if si.Line != sj.Line {
+			return si.Line > sj.Line
+		}
+		return si.Character > sj.Character
+	})
+	for _, e := range sorted {
+		start := lineOffset(e.Range.Start.Line, e.Range.Start.Character)
+		end := lineOffset(e.Range.End.Line, e.Range.End.Character)
+		if start > len(text) {
+			start = len(text)
+		}
+		if end > len(text) {
+			end = len(text)
+		}
+		text = text[:start] + e.NewText + text[end:]
+		lines = strings.Split(text, "\n")
+	}
+	return text
 }
 
 func (s *Server) findEntryEnd(lines []string, startLine, indent int) int {
