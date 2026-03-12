@@ -1,16 +1,39 @@
 # Plugin Build go.mod Parsing Error
 
-This example reproduces a bug in `updateRequireDirectives` (`cmd/scenarigo/cmd/plugin/build.go`) where a `replace` directive without a corresponding `require` causes an invalid entry to be written to `go.mod`, resulting in a `go mod tidy` parsing error.
+This example reproduces a bug in `scenarigo plugin build` where a `replace` directive with a local path and no corresponding `require` causes an invalid entry to be written to go.mod, resulting in a `go mod tidy` parsing error.
 
-## Description
+## Bug
 
-When `plugin/src/go.mod` has a `replace` directive for `google.golang.org/genproto` but does NOT `require` it, `selectUnifiedVersions` creates an override entry with `require: nil` and `replace: non-nil`.
+`plugin/src/go.mod` has the following replace directive:
 
-`updateRequireDirectives` then calls `requireReplace()`, which returns `&modfile.Require{Mod: replace.New}` (in this case `{Path: "./genproto-stub", Version: ""}`). This is passed to `AddRequire("./genproto-stub", "")`, writing an invalid require line to the generated `go.mod`.
+```
+replace google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217 => ./genproto-local
+```
 
-Note: `google.golang.org/genproto/googleapis/rpc` — the module involved in the original bug — cannot be used directly because it is part of scenarigo's own `go.mod`. `requiredModulesByScenarigo()` overwrites the overrides entry for that module before `updateRequireDirectives` runs. The parent module `google.golang.org/genproto` (a separate Go module) is used instead to demonstrate the identical code path.
+This module (`google.golang.org/genproto`) is **not** in the plugin's `require` section and is **not** in scenarigo's own `go.mod`.
 
-## Running
+During `scenarigo plugin build`, `selectUnifiedVersions()` creates an override entry with `require: nil` and `replace: non-nil`. Since the module is not in scenarigo's `go.mod`, `requiredModulesByScenarigo()` does not overwrite it.
+
+`updateRequireDirectives()` then calls `requireReplace()`, which returns `replace.New` (`{Path: "./genproto-local", Version: ""}`). This is passed to `AddRequire("./genproto-local", "")`, writing an invalid require line to go.mod.
+
+The relevant code in `cmd/scenarigo/cmd/plugin/build.go`:
+
+```go
+func (o *overrideModule) requireReplace() (*modfile.Require, string, *modfile.Replace, string) {
+    if o.replace != nil {
+        if o.require == nil || o.replace.Old.Path == o.replace.New.Path {
+            return &modfile.Require{
+                Mod:      o.replace.New, // {Path: "./genproto-local", Version: ""}
+                Indirect: false,
+                Syntax:   nil,
+            }, o.replacedBy, nil, ""
+        }
+    }
+    return o.require, o.requiredBy, o.replace, o.replacedBy
+}
+```
+
+## Reproduce
 
 ```bash
 cd examples/scenarigo-plugin-build-parsing-error
@@ -19,26 +42,23 @@ scenarigo plugin build
 
 ## Expected Output (after fix)
 
-```
-scenarigo plugin build succeeds (the invalid require is skipped)
-```
+Build succeeds (the invalid require is skipped or handled correctly).
 
 ## Actual Output (bug)
 
 ```
-failed to build plugin ...: failed to edit require directive: ...: "go mod tidy" failed: go: errors parsing go.mod:
+ERRO failed to build plugin plugin.so: failed to edit require directive: ...: "go mod tidy" failed: go: errors parsing go.mod:
 go.mod:...: usage: require module/path v1.2.3
 ```
 
 ## Fix
 
-Add a guard in `updateRequireDirectives` to skip entries where `require.Mod.Path` is empty or invalid:
+Add a guard in `updateRequireDirectives` to skip entries where the version is empty (local path replace without a corresponding require):
 
 ```go
-// build.go — updateRequireDirectives
 for _, o := range overrides {
     require, _, _, _ := o.requireReplace()
-    if require == nil || require.Mod.Path == "" {
+    if require.Mod.Version == "" {
         continue
     }
     if err := gomod.AddRequire(require.Mod.Path, require.Mod.Version); err != nil {
