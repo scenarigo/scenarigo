@@ -80,11 +80,12 @@ local function run_queue()
           { pattern = "    protocol: http",                desc = "protocol field" },
           { pattern = "CreateClient%(vars%.apiEndpoint%)", desc = "CreateClient with vars.apiEndpoint" },
           { pattern = "email: user@example.com",           desc = "login email in body" },
-          { pattern = "password:.*secrets%.token",         desc = "secrets.token as password" },
+          { pattern = "password:.*secrets%.password",       desc = "secrets.password as password" },
           { pattern = "token:.*assert%.notZero",           desc = "token assertion in login response" },
           { pattern = "    bind:",                         desc = "bind section" },
           { pattern = "Get Profile",                       desc = "second step title" },
-          { pattern = "Bearer.*vars%.token",               desc = "bound token in Authorization header" },
+          { pattern = "Bearer.*vars%.token",                desc = "bound token in Authorization header" },
+          { pattern = "response%.body%.token",               desc = "response.body.token in bind" },
           { pattern = "name: Alice",                       desc = "profile name in response" },
           { pattern = "    timeout: 30s",                  desc = "timeout field" },
           { pattern = "    expect:",                        desc = "expect section" },
@@ -169,6 +170,9 @@ local function word_start_col(line_text, cursor_col)
   -- Template variable: start after last "." inside {{ (e.g. "{{vars.api" → "api")
   local tmpl = prefix:match(".*{{.*%.()%w*$")
   if tmpl then return tmpl - 1 end
+  -- Template top-level: start after {{ (e.g. "{{res" → "res")
+  local tmpl_top = prefix:match(".*{{()%w*$")
+  if tmpl_top then return tmpl_top - 1 end
   -- Regular word boundary (after last whitespace)
   local m = prefix:match(".*%s()%S+$")
   if m then return m - 1 end
@@ -634,19 +638,19 @@ enqueue(function(next)
   vim.defer_fn(function()
     next_line({ { t = "      bo" }, { c = 1 } }, function()
       next_line({ { t = "        email: user@example.com" } }, function()
-        next_line({ { t = "        password: '{{secrets.to" }, { c = 1 }, { t = "}}'" } }, next)
+        next_line({ { t = "        password: '{{secrets.pa" }, { c = 1 }, { t = "}}'" } }, next)
       end)
     end)
   end, PAUSE)
 end)
 
--- 8. Definition jump: secrets.token → scenarigo.yaml → back
+-- 8. Definition jump: secrets.password → scenarigo.yaml → back
 enqueue(function(next)
-  show("Definition Jump — secrets.token → scenarigo.yaml → back")
+  show("Definition Jump — secrets.password → scenarigo.yaml → back")
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   for i, l in ipairs(lines) do
-    if l:match("secrets%.token") then
-      local col = l:find("token")
+    if l:match("secrets%.password") then
+      local col = l:find("password")
       definition_jump_back(i, (col or 16) - 1, next)
       return
     end
@@ -678,7 +682,7 @@ enqueue(function(next)
       -- so child completion doesn't work here. The bind: field name
       -- completion above is the demo point.
       next_line({ { t = "      vars:" } }, function()
-        next_line({ { t = "        token: '{{response.body.token}}'" } }, next)
+        next_line({ { t = "        token: '{{res" }, { c = 1 }, { t = ".body.token}}'" } }, next)
       end)
     end)
   end, PAUSE)
@@ -702,7 +706,7 @@ enqueue(function(next)
       next_line({ { t = "      me" }, { c = 1 }, { t = "GET" } }, function()
         next_line({ { t = "      url: '{{vars.api" }, { c = 1 }, { t = "}}/users/me'" } }, function()
           next_line({ { t = "      hea" }, { c = 1 } }, function()
-            next_line({ { t = "        Authorization: 'Bearer {{vars.token}}'" } }, next)
+            next_line({ { t = "        Authorization: 'Bearer {{vars.to" }, { c = 1 }, { t = "}}'" } }, next)
           end)
         end)
       end)
