@@ -87,7 +87,7 @@ local function run_queue()
           { pattern = "Bearer.*secrets%.token",              desc = "bound token in Authorization header" },
           { pattern = "response%.body%.token",               desc = "response.body.token in bind" },
           { pattern = "name: Alice",                         desc = "profile name in response" },
-          { pattern = "assert%.contains%(.*premium",          desc = "assert.contains on tags field" },
+          { pattern = "assert%.contains.*<%-.*premium",        desc = "assert.contains <- on tags field" },
           { pattern = "    timeout: 30s",                  desc = "timeout field" },
           { pattern = "    expect:",                        desc = "expect section" },
         }
@@ -725,7 +725,7 @@ enqueue(function(next)
       next_line({ { t = "      co" }, { c = 1 }, { t = "200" } }, function()
         next_line({ { t = "      bo" }, { c = 1 } }, function()
           next_line({ { t = "        name: Alice" } }, function()
-            next_line({ { t = "        tags: '{{assert.con" }, { c = 1 }, { t = '("premium")}}' .. "'" } }, next)
+            next_line({ { t = "        tags: '{{assert.con" }, { c = 1 }, { t = ' <- "premium"}}' .. "'" } }, next)
           end)
         end)
       end)
@@ -772,17 +772,17 @@ enqueue(function(next)
 end)
 
 
--- 16. Signature Help — show on the assert.contains( already in the buffer
+-- 16. Signature Help — show on the assert.contains <- already in the buffer
 enqueue(function(next)
   show("Signature Help — assert.contains signature")
   vim.defer_fn(function()
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     for i, l in ipairs(lines) do
-      if l:match("assert%.contains%(") then
-        -- Place cursor right after the "(" to trigger signature help.
-        local paren_pos = l:find("%(")
-        if paren_pos then
-          vim.api.nvim_win_set_cursor(0, { i, paren_pos })
+      if l:match("assert%.contains%s+<%-") then
+        -- Place cursor right after "<-" to trigger signature help.
+        local arrow_pos = l:find("<%-")
+        if arrow_pos then
+          vim.api.nvim_win_set_cursor(0, { i, arrow_pos + 1 })
           vim.cmd("redraw")
           vim.lsp.buf.signature_help()
           vim.defer_fn(function()
