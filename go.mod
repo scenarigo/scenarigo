@@ -24,7 +24,7 @@ require (
 	github.com/zoncoen/query-go v1.3.2
 	github.com/zoncoen/query-go/extractor/protobuf v0.1.4
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2
-	golang.org/x/mod v0.33.0
+	golang.org/x/mod v0.34.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/text v0.34.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217
