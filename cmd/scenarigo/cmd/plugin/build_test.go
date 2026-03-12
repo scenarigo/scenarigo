@@ -2022,6 +2022,115 @@ replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 `, goVersion),
 				expectStdout: "", // don't print the warn log if already replaced
 			},
+			"skip override with nil require": {
+				gomod: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
+				src: `package main
+
+import (
+	_ "google.golang.org/grpc"
+)
+`,
+				overrides: map[string]*overrideModule{
+					"google.golang.org/grpc": {
+						require: &modfile.Require{
+							Mod: module.Version{
+								Path:    "google.golang.org/grpc",
+								Version: "v1.37.1",
+							},
+						},
+						requiredBy: "test",
+					},
+					"": {
+						replace: &modfile.Replace{},
+					},
+				},
+				expect: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
+			},
+			"skip override with empty module path": {
+				gomod: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
+				src: `package main
+
+import (
+	_ "google.golang.org/grpc"
+)
+`,
+				overrides: map[string]*overrideModule{
+					"google.golang.org/grpc": {
+						require: &modfile.Require{
+							Mod: module.Version{
+								Path:    "google.golang.org/grpc",
+								Version: "v1.37.1",
+							},
+						},
+						requiredBy: "test",
+					},
+					"": {
+						require: &modfile.Require{
+							Mod: module.Version{
+								Path:    "",
+								Version: "",
+							},
+						},
+					},
+				},
+				expect: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
+			},
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {
