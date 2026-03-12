@@ -650,7 +650,9 @@ enqueue(function(next)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   for i, l in ipairs(lines) do
     if l:match("secrets%.password") then
-      local col = l:find("password")
+      -- Find "password" after "secrets." (not the YAML key "password:")
+      local col = l:find("secrets%.password")
+      if col then col = col + #"secrets." end
       definition_jump_back(i, (col or 16) - 1, next)
       return
     end
