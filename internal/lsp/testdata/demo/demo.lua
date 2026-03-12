@@ -84,7 +84,7 @@ local function run_queue()
           { pattern = "token:.*assert%.notZero",           desc = "token assertion in login response" },
           { pattern = "    bind:",                         desc = "bind section" },
           { pattern = "Get Profile",                       desc = "second step title" },
-          { pattern = "Bearer.*vars%.token",                desc = "bound token in Authorization header" },
+          { pattern = "Bearer.*secrets%.token",              desc = "bound token in Authorization header" },
           { pattern = "response%.body%.token",               desc = "response.body.token in bind" },
           { pattern = "name: Alice",                         desc = "profile name in response" },
           { pattern = "assert%.contains%(.*premium",          desc = "assert.contains on tags field" },
@@ -684,7 +684,7 @@ enqueue(function(next)
       -- for a child key under an empty mapping (no colon on partial text),
       -- so child completion doesn't work here. The bind: field name
       -- completion above is the demo point.
-      next_line({ { t = "      vars:" } }, function()
+      next_line({ { t = "      secrets:" } }, function()
         next_line({ { t = "        token: '{{res" }, { c = 1 }, { t = ".body.token}}'" } }, next)
       end)
     end)
@@ -709,7 +709,7 @@ enqueue(function(next)
       next_line({ { t = "      me" }, { c = 1 }, { t = "GET" } }, function()
         next_line({ { t = "      url: '{{vars.api" }, { c = 1 }, { t = "}}/users/me'" } }, function()
           next_line({ { t = "      hea" }, { c = 1 } }, function()
-            next_line({ { t = "        Authorization: 'Bearer {{vars.to" }, { c = 1 }, { t = "}}'" } }, next)
+            next_line({ { t = "        Authorization: 'Bearer {{secrets.to" }, { c = 1 }, { t = "}}'" } }, next)
           end)
         end)
       end)
