@@ -10,4 +10,4 @@ vars:
   apiEndpoint: https://api.example.com
 secrets:
   globalApiKey: secret-key-123
-  token: '{{env.API_TOKEN}}'
+  password: '{{env.EXAMPLE_PASSWORD}}'
