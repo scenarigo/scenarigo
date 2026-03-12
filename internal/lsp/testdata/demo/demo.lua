@@ -35,7 +35,7 @@ function DEMO_STATUS()
   return demo_status
 end
 
-local TOTAL_STEPS = 14
+local TOTAL_STEPS = 19
 local step_num = 0
 -- Debug logging: set DEMO_DBG=1 to enable trace output.
 local dbg_file = nil
@@ -74,14 +74,20 @@ local function run_queue()
       if vim.env.DEMO_CHECK == "1" then
         local errors = {}
         local checks = {
-          { pattern = "^schemaVersion: scenario/v1$", desc = "schemaVersion on first line" },
-          { pattern = "^title: Feature Demo$",        desc = "title line" },
-          { pattern = "^plugins:",                      desc = "plugins section" },
-          { pattern = "    protocol: http",            desc = "protocol field" },
+          { pattern = "^schemaVersion: scenario/v1$",      desc = "schemaVersion on first line" },
+          { pattern = "^title: API Integration Test$",     desc = "title line" },
+          { pattern = "^plugins:",                         desc = "plugins section" },
+          { pattern = "    protocol: http",                desc = "protocol field" },
           { pattern = "CreateClient%(vars%.apiEndpoint%)", desc = "CreateClient with vars.apiEndpoint" },
-          { pattern = "Bearer.*secrets%.token",        desc = "secrets.token in header" },
-          { pattern = "    timeout: 30s",              desc = "timeout field" },
-          { pattern = "    expect:",                   desc = "expect section" },
+          { pattern = "email: user@example.com",           desc = "login email in body" },
+          { pattern = "password:.*secrets%.token",         desc = "secrets.token as password" },
+          { pattern = "token:.*assert%.notZero",           desc = "token assertion in login response" },
+          { pattern = "    bind:",                         desc = "bind section" },
+          { pattern = "Get Profile",                       desc = "second step title" },
+          { pattern = "Bearer.*vars%.token",               desc = "bound token in Authorization header" },
+          { pattern = "name: Alice",                       desc = "profile name in response" },
+          { pattern = "    timeout: 30s",                  desc = "timeout field" },
+          { pattern = "    expect:",                        desc = "expect section" },
         }
         for _, chk in ipairs(checks) do
           local found = false
@@ -92,14 +98,15 @@ local function run_queue()
             table.insert(errors, "MISSING: " .. chk.desc .. " (" .. chk.pattern .. ")")
           end
         end
-        -- Verify timeout comes after expect (key ordering).
-        local expect_line, timeout_line
+        -- Verify timeout comes after bind within the Login step.
+        -- (After formatting, schema order is: expect, bind, timeout.)
+        local bind_line, timeout_line
         for i, l in ipairs(lines) do
-          if l:match("^    expect:") then expect_line = i end
+          if l:match("^    bind:") then bind_line = i end
           if l:match("^    timeout:") then timeout_line = i end
         end
-        if expect_line and timeout_line and timeout_line < expect_line then
-          table.insert(errors, "ORDER: timeout (line " .. timeout_line .. ") before expect (line " .. expect_line .. ")")
+        if bind_line and timeout_line and timeout_line < bind_line then
+          table.insert(errors, "ORDER: timeout (line " .. timeout_line .. ") before bind (line " .. bind_line .. ")")
         end
         if #errors > 0 then
           io.stderr:write("\nCHECK FAILED:\n")
@@ -521,7 +528,7 @@ end)
 enqueue(function(next)
   show("Key Completion — title")
   vim.defer_fn(function()
-    next_line({ { t = "ti" }, { c = 1 }, { t = "Feature Demo" } }, next)
+    next_line({ { t = "ti" }, { c = 1 }, { t = "API Integration Test" } }, next)
   end, PAUSE)
 end)
 
@@ -585,10 +592,8 @@ enqueue(function(next)
               if results then
                 for _, res in pairs(results) do
                   if res.result then
-                    -- Result may be a single Location {uri, range} or an array.
                     local loc = res.result
                     if loc.uri then
-                      -- Single Location object.
                       vim.lsp.util.show_document(loc, "utf-8", { focus = true })
                       jumped = true
                     elseif #loc > 0 then
@@ -623,12 +628,14 @@ enqueue(function(next)
   end, PAUSE)
 end)
 
--- 7. Header + template completion for secrets.token
+-- 7. Request body + template completion for secrets (login credentials)
 enqueue(function(next)
-  show("HTTP Field + Template Completion — header & secrets")
+  show("HTTP Body + Template Completion — login credentials")
   vim.defer_fn(function()
-    next_line({ { t = "      hea" }, { c = 1 } }, function()
-      next_line({ { t = "        Authorization: 'Bearer {{secrets.to" }, { c = 1 }, { t = "}}'" } }, next)
+    next_line({ { t = "      bo" }, { c = 1 } }, function()
+      next_line({ { t = "        email: user@example.com" } }, function()
+        next_line({ { t = "        password: '{{secrets.to" }, { c = 1 }, { t = "}}'" } }, next)
+      end)
     end)
   end, PAUSE)
 end)
@@ -647,14 +654,70 @@ enqueue(function(next)
   next()
 end)
 
--- 9. Expect block with field key completion
+-- 9. Expect block with assertion template
 enqueue(function(next)
-  show("HTTP Field Completion — expect")
+  show("HTTP Expect + Assertion — login response")
   vim.defer_fn(function()
     next_line({ { t = "    exp" }, { c = 1 } }, function()
       next_line({ { t = "      co" }, { c = 1 }, { t = "200" } }, function()
         next_line({ { t = "      bo" }, { c = 1 } }, function()
-          next_line({ { t = "        status: ok" } }, next)
+          next_line({ { t = "        token: '{{assert.notZ" }, { c = 1 }, { t = "}}'" } }, next)
+        end)
+      end)
+    end)
+  end, PAUSE)
+end)
+
+-- 10. Bind step results to variables
+enqueue(function(next)
+  show("Bind Completion — capture token from response")
+  vim.defer_fn(function()
+    next_line({ { t = "    bin" }, { c = 1 } }, function()
+      -- Type vars: directly — the YAML parser cannot determine context
+      -- for a child key under an empty mapping (no colon on partial text),
+      -- so child completion doesn't work here. The bind: field name
+      -- completion above is the demo point.
+      next_line({ { t = "      vars:" } }, function()
+        next_line({ { t = "        token: '{{response.body.token}}'" } }, next)
+      end)
+    end)
+  end, PAUSE)
+end)
+
+-- 11. Second step: Get Profile
+enqueue(function(next)
+  show("Second Step — Get Profile")
+  vim.defer_fn(function()
+    next_line({ { t = "  - title: Get Profile" } }, function()
+      next_line({ { t = "    pro" }, { c = 1 }, { c = 1 } }, next)
+    end)
+  end, PAUSE)
+end)
+
+-- 12. Request with header + Authorization using bound token
+enqueue(function(next)
+  show("HTTP Request + Header — Authorization with bound token")
+  vim.defer_fn(function()
+    next_line({ { t = "    req" }, { c = 1 } }, function()
+      next_line({ { t = "      me" }, { c = 1 }, { t = "GET" } }, function()
+        next_line({ { t = "      url: '{{vars.api" }, { c = 1 }, { t = "}}/users/me'" } }, function()
+          next_line({ { t = "      hea" }, { c = 1 } }, function()
+            next_line({ { t = "        Authorization: 'Bearer {{vars.token}}'" } }, next)
+          end)
+        end)
+      end)
+    end)
+  end, PAUSE)
+end)
+
+-- 13. Expect block for profile response
+enqueue(function(next)
+  show("HTTP Field Completion — expect (profile response)")
+  vim.defer_fn(function()
+    next_line({ { t = "    exp" }, { c = 1 } }, function()
+      next_line({ { t = "      co" }, { c = 1 }, { t = "200" } }, function()
+        next_line({ { t = "      bo" }, { c = 1 } }, function()
+          next_line({ { t = "        name: Alice" } }, next)
         end)
       end)
     end)
@@ -665,7 +728,7 @@ end)
 -- Phase 2: Feature demos
 -- ══════════════════════════════════════════════════════════════════════
 
--- 11. Hover on protocol
+-- 14. Hover on protocol
 enqueue(function(next)
   show("Hover — field description, type, and enum values")
   vim.defer_fn(function()
@@ -685,7 +748,7 @@ enqueue(function(next)
   end, PAUSE)
 end)
 
--- 10. Definition jump: global var → scenarigo.yaml → back
+-- 15. Definition jump: global var → scenarigo.yaml → back
 enqueue(function(next)
   show("Definition Jump — global var → scenarigo.yaml → back")
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -700,14 +763,14 @@ enqueue(function(next)
 end)
 
 
--- 12. Signature Help
+-- 16. Signature Help
 enqueue(function(next)
   show("Signature Help — assert function signature")
   vim.defer_fn(function()
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     for i, l in ipairs(lines) do
-      if l:match("status: ok") then
-        demo_type(i, '        status: "', "{{assert.contains <- ", function()
+      if l:match("name: Alice") then
+        demo_type(i, '        name: "', "{{assert.contains <- ", function()
           local cur_line = vim.api.nvim_buf_get_lines(bufnr, i - 1, i, false)[1]
           vim.api.nvim_win_set_cursor(0, { i, #cur_line - 1 })
           vim.lsp.buf.signature_help()
@@ -728,7 +791,7 @@ enqueue(function(next)
   end, PAUSE)
 end)
 
--- 13. Diagnostics — add invalid field, then fix it
+-- 17. Diagnostics — add invalid field, then fix it
 enqueue(function(next)
   show("Diagnostics — unknown field detection + fix")
   vim.defer_fn(function()
@@ -763,7 +826,7 @@ enqueue(function(next)
   end, PAUSE)
 end)
 
--- 14. Formatting — reorder keys
+-- 18. Formatting — reorder keys
 enqueue(function(next)
   show("Formatting — reorder keys to match schema order")
   vim.defer_fn(function()
