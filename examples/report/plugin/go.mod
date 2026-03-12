@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/report/plugin
 
 go 1.25.0
 
-toolchain go1.26.0
+toolchain go1.26.1
 
 require github.com/scenarigo/scenarigo v0.23.0
 
@@ -31,7 +31,7 @@ require (
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
-	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
