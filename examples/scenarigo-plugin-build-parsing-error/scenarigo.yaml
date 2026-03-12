@@ -4,3 +4,5 @@ pluginDirectory: ./plugin/gen
 plugins:
   plugin.so:
     src: ./plugin/src
+  shared-plugin.so:
+    src: ./shared-plugin/src
