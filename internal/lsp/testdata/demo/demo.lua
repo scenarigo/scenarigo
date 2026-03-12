@@ -86,7 +86,8 @@ local function run_queue()
           { pattern = "Get Profile",                       desc = "second step title" },
           { pattern = "Bearer.*vars%.token",                desc = "bound token in Authorization header" },
           { pattern = "response%.body%.token",               desc = "response.body.token in bind" },
-          { pattern = "name: Alice",                       desc = "profile name in response" },
+          { pattern = "name: Alice",                         desc = "profile name in response" },
+          { pattern = "assert%.contains%(.*premium",          desc = "assert.contains on tags field" },
           { pattern = "    timeout: 30s",                  desc = "timeout field" },
           { pattern = "    expect:",                        desc = "expect section" },
         }
@@ -723,7 +724,9 @@ enqueue(function(next)
     next_line({ { t = "    exp" }, { c = 1 } }, function()
       next_line({ { t = "      co" }, { c = 1 }, { t = "200" } }, function()
         next_line({ { t = "      bo" }, { c = 1 } }, function()
-          next_line({ { t = "        name: Alice" } }, next)
+          next_line({ { t = "        name: Alice" } }, function()
+            next_line({ { t = "        tags: '{{assert.con" }, { c = 1 }, { t = '("premium")}}' .. "'" } }, next)
+          end)
         end)
       end)
     end)
@@ -769,16 +772,18 @@ enqueue(function(next)
 end)
 
 
--- 16. Signature Help
+-- 16. Signature Help — show on the assert.contains( already in the buffer
 enqueue(function(next)
-  show("Signature Help — assert function signature")
+  show("Signature Help — assert.contains signature")
   vim.defer_fn(function()
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     for i, l in ipairs(lines) do
-      if l:match("name: Alice") then
-        demo_type(i, '        name: "', "{{assert.contains <- ", function()
-          local cur_line = vim.api.nvim_buf_get_lines(bufnr, i - 1, i, false)[1]
-          vim.api.nvim_win_set_cursor(0, { i, #cur_line - 1 })
+      if l:match("assert%.contains%(") then
+        -- Place cursor right after the "(" to trigger signature help.
+        local paren_pos = l:find("%(")
+        if paren_pos then
+          vim.api.nvim_win_set_cursor(0, { i, paren_pos })
+          vim.cmd("redraw")
           vim.lsp.buf.signature_help()
           vim.defer_fn(function()
             for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -786,11 +791,10 @@ enqueue(function(next)
                 pcall(vim.api.nvim_win_close, win, true)
               end
             end
-            vim.api.nvim_buf_set_lines(bufnr, i - 1, i, false, { l })
             vim.defer_fn(next, 500)
           end, LONG_PAUSE)
-        end)
-        return
+          return
+        end
       end
     end
     next()
