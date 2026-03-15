@@ -87,7 +87,9 @@ local function run_queue()
           { pattern = "Bearer.*secrets%.token",              desc = "bound token in Authorization header" },
           { pattern = "response%.body%.token",               desc = "response.body.token in bind" },
           { pattern = "name: Alice",                         desc = "profile name in response" },
-          { pattern = "assert%.contains.*<%-.*premium",        desc = "assert.contains <- on tags field" },
+          { pattern = "assert%.contains.*<%-",                  desc = "assert.contains <- on permissions" },
+          { pattern = "resource: users",                       desc = "permission resource in assert" },
+          { pattern = "action: read",                          desc = "permission action in assert" },
           { pattern = "    timeout: 30s",                  desc = "timeout field" },
           { pattern = "    expect:",                        desc = "expect section" },
         }
@@ -725,7 +727,13 @@ enqueue(function(next)
       next_line({ { t = "      co" }, { c = 1 }, { t = "200" } }, function()
         next_line({ { t = "      bo" }, { c = 1 } }, function()
           next_line({ { t = "        name: Alice" } }, function()
-            next_line({ { t = "        tags: '{{assert.con" }, { c = 1 }, { t = ' <- "premium"}}' .. "'" } }, next)
+            next_line({ { t = "        permissions:" } }, function()
+              next_line({ { t = "          '{{assert.con" }, { c = 1 }, { t = " <-}}':" } }, function()
+                next_line({ { t = "            resource: users" } }, function()
+                  next_line({ { t = "            action: read" } }, next)
+                end)
+              end)
+            end)
           end)
         end)
       end)
