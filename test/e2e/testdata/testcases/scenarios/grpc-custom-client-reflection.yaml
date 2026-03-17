@@ -1,0 +1,27 @@
+title: custom client with reflection API
+plugins:
+  grpcCustomClient: grpc-custom-client.so
+steps:
+- title: Echo
+  protocol: grpc
+  request:
+    client: '{{plugins.grpcCustomClient.TestClient}}'
+    service: scenarigo.testdata.test.Test
+    method: Echo
+    message:
+      messageId: aaa
+      messageBody: hello
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    status:
+      code: OK
+    header:
+      x-custom-client-verified:
+      - "true"
+    message:
+      messageId: '{{request.message.messageId}}'
+      messageBody: '{{request.message.messageBody}}'

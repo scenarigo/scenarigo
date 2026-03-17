@@ -1,0 +1,3 @@
+ok  	setup	0.000s
+ok  	testdata/testcases/scenarios/grpc-custom-client-reflection.yaml	0.000s
+ok  	teardown	0.000s

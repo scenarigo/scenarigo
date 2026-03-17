@@ -1,0 +1,8 @@
+title: grpc custom client reflection
+scenarios:
+- filename: grpc-custom-client-reflection.yaml
+  success: true
+  output:
+    stdout: grpc-custom-client-reflection.txt
+  plugins:
+  - grpc-custom-client.so
