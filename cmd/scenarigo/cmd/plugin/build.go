@@ -871,6 +871,9 @@ func (pb *pluginBuilder) updateRequireDirectives(cmd *cobra.Command, goCmd strin
 	if err := pb.editGoMod(cmd, goCmd, func(gomod *modfile.File) error {
 		for _, o := range overrides {
 			require, _, _, _ := o.requireReplace()
+			if require == nil || require.Mod.Path == "" {
+				continue
+			}
 			if err := gomod.AddRequire(require.Mod.Path, require.Mod.Version); err != nil {
 				return fmt.Errorf("%s: %w", pb.gomodPath, err)
 			}
