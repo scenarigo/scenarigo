@@ -12,9 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"text/template"
@@ -91,31 +89,6 @@ func TestParseGoVersion(t *testing.T) {
 
 func TestBuild(t *testing.T) {
 	goVersion := strings.TrimPrefix(goVer, "go")
-	// for tip version (e.g., go1.27-devel -> 1.25.0)
-	// tip is 2 minor versions ahead of the current stable release
-	if idx := strings.Index(runtime.Version(), "-devel"); idx != -1 {
-		tipVer := strings.TrimPrefix(runtime.Version()[:idx], "go") // "1.27"
-		parts := strings.Split(tipVer, ".")
-		if len(parts) >= 2 {
-			if minor, err := strconv.Atoi(parts[1]); err == nil {
-				goVersion = fmt.Sprintf("%s.%d.0", parts[0], minor-2) // "1.25.0"
-			}
-		}
-	}
-
-	// Go 1.26+ changed `go mod init` to default the go directive to 1.(N-1).0
-	// and adds a toolchain directive (see https://github.com/golang/go/issues/74748).
-	goModInitVer := goVersion
-	goModInitToolchain := ""
-	if idx := strings.Index(runtime.Version(), "-devel"); idx == -1 {
-		parts := strings.Split(goVersion, ".")
-		if len(parts) >= 2 {
-			if minor, err := strconv.Atoi(parts[1]); err == nil && minor >= 26 {
-				goModInitVer = fmt.Sprintf("%s.%d.0", parts[0], minor-1)
-				goModInitToolchain = "go" + goVersion
-			}
-		}
-	}
 
 	pluginCode := `package main
 
@@ -123,11 +96,10 @@ func Greet() string {
 	return "Hello, world!"
 }
 `
+	// After go mod init + go mod tidy, the go directive is always normalized
+	// to the current Go version regardless of the Go version used.
 	gomod := func(m string) string {
-		if goModInitToolchain != "" {
-			return fmt.Sprintf("module %s\n\ngo %s\n\ntoolchain %s\n", m, goModInitVer, goModInitToolchain)
-		}
-		return fmt.Sprintf("module %s\n\ngo %s\n", m, goModInitVer)
+		return fmt.Sprintf("module %s\n\ngo %s\n", m, goVersion)
 	}
 
 	tmpl, err := template.ParseFiles("testdata/go.mod.tmpl")
@@ -2021,6 +1993,115 @@ require (
 replace google.golang.org/grpc v1.46.0 => google.golang.org/grpc v1.40.0
 `, goVersion),
 				expectStdout: "", // don't print the warn log if already replaced
+			},
+			"skip override with nil require": {
+				gomod: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
+				src: `package main
+
+import (
+	_ "google.golang.org/grpc"
+)
+`,
+				overrides: map[string]*overrideModule{
+					"google.golang.org/grpc": {
+						require: &modfile.Require{
+							Mod: module.Version{
+								Path:    "google.golang.org/grpc",
+								Version: "v1.37.1",
+							},
+						},
+						requiredBy: "test",
+					},
+					"": {
+						replace: &modfile.Replace{},
+					},
+				},
+				expect: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
+			},
+			"skip override with empty module path": {
+				gomod: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
+				src: `package main
+
+import (
+	_ "google.golang.org/grpc"
+)
+`,
+				overrides: map[string]*overrideModule{
+					"google.golang.org/grpc": {
+						require: &modfile.Require{
+							Mod: module.Version{
+								Path:    "google.golang.org/grpc",
+								Version: "v1.37.1",
+							},
+						},
+						requiredBy: "test",
+					},
+					"": {
+						require: &modfile.Require{
+							Mod: module.Version{
+								Path:    "",
+								Version: "",
+							},
+						},
+					},
+				},
+				expect: fmt.Sprintf(`module plugin_module
+
+go %s
+
+require google.golang.org/grpc v1.37.1
+
+require (
+	github.com/golang/protobuf v1.4.2 // indirect
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a // indirect
+	golang.org/x/text v0.3.0 // indirect
+	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.25.0 // indirect
+)
+`, goVersion),
 			},
 		}
 		for name, test := range tests {
