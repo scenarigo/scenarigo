@@ -1,0 +1,28 @@
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml
+=== PAUSE testdata/testcases/scenarios/teardown-request-context.yaml
+=== CONT  testdata/testcases/scenarios/teardown-request-context.yaml
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext
+=== PAUSE testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext
+=== CONT  testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/setup
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/setup/teardownctx
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/step_1
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/step_2
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/teardown
+=== RUN   testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/teardown/teardownctx
+--- PASS: testdata/testcases/scenarios/teardown-request-context.yaml (0.00s)
+    --- PASS: testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext (0.00s)
+        --- PASS: testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/setup (0.00s)
+            --- PASS: testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/setup/teardownctx (0.00s)
+                    setup: RequestContext is valid
+        --- PASS: testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/step_1 (0.00s)
+                step: RequestContext is valid
+                Run {{plugins.teardownctx.CheckReqCtxStep}}: elapsed time: 0.000000 sec
+        --- PASS: testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/step_2 (0.00s)
+                step: RequestContext is valid
+                Run {{plugins.teardownctx.CheckReqCtxStep}}: elapsed time: 0.000000 sec
+        --- PASS: testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/teardown (0.00s)
+            --- PASS: testdata/testcases/scenarios/teardown-request-context.yaml/teardown_receives_valid_RequestContext/teardown/teardownctx (0.00s)
+                    teardown: RequestContext is valid
+PASS
+ok  	testdata/testcases/scenarios/teardown-request-context.yaml	0.000s

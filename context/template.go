@@ -1,10 +1,18 @@
 package context
 
-import (
-	"fmt"
+import "fmt"
 
-	"github.com/scenarigo/scenarigo/template"
-)
+// executeTemplateFunc is the function variable used to execute templates.
+// It is registered by the template package via RegisterExecuteTemplateFunc
+// to avoid a circular import from context → template.
+var executeTemplateFunc func(c *Context, i any) (any, error)
+
+// RegisterExecuteTemplateFunc registers the template execution function.
+// The template package calls this in its init() to break the
+// context → template circular import.
+func RegisterExecuteTemplateFunc(f func(c *Context, i any) (any, error)) {
+	executeTemplateFunc = f
+}
 
 // ExecuteTemplate executes template strings in context.
 func ExecuteTemplate[T any](c *Context, v T) (T, error) {
@@ -22,6 +30,8 @@ func ExecuteTemplate[T any](c *Context, v T) (T, error) {
 
 // ExecuteTemplate executes template strings in context.
 func (c *Context) ExecuteTemplate(i any) (any, error) {
-	ctx := template.WithExecutionContext(c.RequestContext(), c)
-	return template.Execute(ctx, i, c)
+	if executeTemplateFunc == nil {
+		return nil, fmt.Errorf("template execution not registered; import the template package")
+	}
+	return executeTemplateFunc(c, i)
 }

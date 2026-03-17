@@ -317,5 +317,7 @@ func RunWithRetry(c *Context, name string, f func(*Context), policy reporter.Ret
 
 // Teardown registers a named function to be called when all parallel subtests complete.
 func (c *Context) Teardown(name string, f func(*Context)) {
-	c.Reporter().Teardown(name, func(r reporter.Reporter) { f(c.WithReporter(r)) })
+	c.Reporter().Teardown(name, func(r reporter.Reporter) {
+		f(c.WithRequestContext(context.WithoutCancel(c.reqCtx)).WithReporter(r))
+	})
 }
