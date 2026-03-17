@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [v0.25.3](https://github.com/scenarigo/scenarigo/compare/v0.25.2...v0.25.3) - 2026-03-17
+### Bug Fixes
+- fix(plugin): skip overrides with empty module path in updateRequireDirectives by @utahta in https://github.com/scenarigo/scenarigo/pull/743
+
 ## [v0.25.2](https://github.com/scenarigo/scenarigo/compare/v0.25.1...v0.25.2) - 2026-03-01
 ### Bug Fixes
 - fix(plugin): fix FD leak, deadlock, and double-close in WasmPlugin by @zoncoen in https://github.com/scenarigo/scenarigo/pull/726
