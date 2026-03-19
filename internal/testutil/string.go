@@ -123,9 +123,11 @@ func ReplacePluginOpen(s string) string {
 }
 
 var scenarigoHeaderKeys = map[string]struct{}{
-	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioFilepathKey) + ":": {},
-	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioTitleKey) + ":":    {},
-	http.CanonicalHeaderKey(protocolmeta.ScenarigoStepFullNameKey) + ":":     {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioFilepathKey) + ":":    {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioTitleKey) + ":":       {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoStepFullNameKey) + ":":        {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioIdentifierKey) + ":":  {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoStepIdentifierKey) + ":":      {},
 }
 
 // RemoveScenarigoHeaders drops scenarigo-specific request headers from output.

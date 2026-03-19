@@ -245,6 +245,8 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, any, error)
 	setScenarigoHeader(header, protocolmeta.ScenarigoScenarioFilepathKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
 	setScenarigoHeader(header, protocolmeta.ScenarigoScenarioTitleKey, ctx.ScenarioTitle())
 	setScenarigoHeader(header, protocolmeta.ScenarigoStepFullNameKey, ctx.Reporter().Name())
+	setScenarigoHeader(header, protocolmeta.ScenarigoScenarioIdentifierKey, ctx.ScenarioIdentifier())
+	setScenarigoHeader(header, protocolmeta.ScenarigoStepIdentifierKey, ctx.StepIdentifier())
 
 	var reader io.Reader
 	var body any

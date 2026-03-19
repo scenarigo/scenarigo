@@ -398,6 +398,8 @@ func (r *Request) appendMetadata(ctx *context.Context) (*context.Context, error)
 	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioFilepathBinKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
 	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioTitleBinKey, ctx.ScenarioTitle())
 	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoStepFullNameBinKey, ctx.Reporter().Name())
+	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioIdentifierBinKey, ctx.ScenarioIdentifier())
+	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoStepIdentifierBinKey, ctx.StepIdentifier())
 	if len(pairs) == 0 {
 		return ctx, nil
 	}

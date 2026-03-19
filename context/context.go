@@ -12,17 +12,19 @@ import (
 )
 
 type (
-	keyScenarioName     struct{}
-	keyScenarioFilepath struct{}
-	keyPluginDir        struct{}
-	keyPlugins          struct{}
-	keyVars             struct{}
-	keySecrets          struct{}
-	keySteps            struct{}
-	keyRequest          struct{}
-	keyResponse         struct{}
-	keyYAMLNode         struct{}
-	keyColorConfig      struct{}
+	keyScenarioName       struct{}
+	keyScenarioFilepath   struct{}
+	keyScenarioIdentifier struct{}
+	keyStepIdentifier     struct{}
+	keyPluginDir          struct{}
+	keyPlugins            struct{}
+	keyVars               struct{}
+	keySecrets            struct{}
+	keySteps              struct{}
+	keyRequest            struct{}
+	keyResponse           struct{}
+	keyYAMLNode           struct{}
+	keyColorConfig        struct{}
 )
 
 // Context represents a scenarigo context.
@@ -110,6 +112,42 @@ func (c *Context) ScenarioFilepath() string {
 	path, ok := c.ctx.Value(keyScenarioFilepath{}).(string)
 	if ok {
 		return path
+	}
+	return ""
+}
+
+// WithScenarioIdentifier returns a copy of c with the scenario identifier.
+func (c *Context) WithScenarioIdentifier(id string) *Context {
+	return newContext(
+		context.WithValue(c.ctx, keyScenarioIdentifier{}, id),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+// ScenarioIdentifier returns the scenario identifier of the scenario executing in this context.
+func (c *Context) ScenarioIdentifier() string {
+	id, ok := c.ctx.Value(keyScenarioIdentifier{}).(string)
+	if ok {
+		return id
+	}
+	return ""
+}
+
+// WithStepIdentifier returns a copy of c with the step identifier.
+func (c *Context) WithStepIdentifier(id string) *Context {
+	return newContext(
+		context.WithValue(c.ctx, keyStepIdentifier{}, id),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+// StepIdentifier returns the step identifier of the step executing in this context.
+func (c *Context) StepIdentifier() string {
+	id, ok := c.ctx.Value(keyStepIdentifier{}).(string)
+	if ok {
+		return id
 	}
 	return ""
 }
