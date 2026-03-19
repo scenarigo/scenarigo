@@ -11,6 +11,8 @@
 PASS
 ok  	setup	0.000s
 === RUN   testdata/testcases/scenarios/setup.yaml
+=== PAUSE testdata/testcases/scenarios/setup.yaml
+=== CONT  testdata/testcases/scenarios/setup.yaml
 === RUN   testdata/testcases/scenarios/setup.yaml/scenario_with_setup
 === PAUSE testdata/testcases/scenarios/setup.yaml/scenario_with_setup
 === CONT  testdata/testcases/scenarios/setup.yaml/scenario_with_setup

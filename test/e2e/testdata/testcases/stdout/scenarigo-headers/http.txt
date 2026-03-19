@@ -1,0 +1,37 @@
+=== RUN   testdata/testcases/scenarios/scenarigo-headers/http.yaml
+=== PAUSE testdata/testcases/scenarios/scenarigo-headers/http.yaml
+=== CONT  testdata/testcases/scenarios/scenarigo-headers/http.yaml
+=== RUN   testdata/testcases/scenarios/scenarigo-headers/http.yaml/scenarigo_headers
+=== PAUSE testdata/testcases/scenarios/scenarigo-headers/http.yaml/scenarigo_headers
+=== CONT  testdata/testcases/scenarios/scenarigo-headers/http.yaml/scenarigo_headers
+=== RUN   testdata/testcases/scenarios/scenarigo-headers/http.yaml/scenarigo_headers/GET_/echo
+--- PASS: testdata/testcases/scenarios/scenarigo-headers/http.yaml (0.00s)
+    --- PASS: testdata/testcases/scenarios/scenarigo-headers/http.yaml/scenarigo_headers (0.00s)
+        --- PASS: testdata/testcases/scenarios/scenarigo-headers/http.yaml/scenarigo_headers/GET_/echo (0.00s)
+                request:
+                  method: GET
+                  url: http://[::]:12345/echo
+                  header:
+                    Scenarigo-Scenario-Filepath:
+                    - testdata%2Ftestcases%2Fscenarios%2Fscenarigo-headers%2Fhttp.yaml
+                    Scenarigo-Scenario-Title:
+                    - scenarigo%20headers
+                    Scenarigo-Step-Full-Name:
+                    - testdata%2Ftestcases%2Fscenarios%2Fscenarigo-headers%2Fhttp.yaml%2Fscenarigo_headers%2FGET_%2Fecho
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "21"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    message: hello
+                elapsed time: 0.000000 sec
+PASS
+ok  	testdata/testcases/scenarios/scenarigo-headers/http.yaml	0.000s

@@ -1,0 +1,3 @@
+schemaVersion: ytt/v1
+files:
+- not-found.ytt.yaml

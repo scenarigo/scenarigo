@@ -15,6 +15,6 @@ steps:
   expect:
     code: OK
     body:
-      messageId: "{{request.messageId}}"
+      messageId: "{{request.body.messageId}}"
     message:
-      messageId: "{{request.messageId}}"
+      messageId: "{{request.body.messageId}}"

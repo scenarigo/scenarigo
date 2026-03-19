@@ -16,8 +16,10 @@ func TestLoad(t *testing.T) {
 	if _, err := f.Write(defaultConfig); err != nil {
 		t.Fatalf("failed to create config file for testing: %s", err)
 	}
+
 	tests := map[string]struct {
 		filename string
+		root     string
 		cd       string
 		found    bool
 		fail     bool
@@ -31,6 +33,20 @@ func TestLoad(t *testing.T) {
 			filename: filepath.Join(tempDir, DefaultConfigFileName),
 			found:    true,
 		},
+		"specify file with root": {
+			filename: filepath.Join(tempDir, DefaultConfigFileName),
+			root:     tempDir,
+			found:    true,
+		},
+		"stdin": {
+			filename: "-",
+			found:    true,
+		},
+		"stdin with root": {
+			filename: "-",
+			root:     tempDir,
+			found:    true,
+		},
 		"specify file (not found)": {
 			filename: "testdata/not-found.yaml",
 			fail:     true,
@@ -41,23 +57,27 @@ func TestLoad(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if test.cd != "" {
-				wd, err := os.Getwd()
+				t.Chdir(test.cd)
+			}
+
+			ConfigPath = test.filename
+			if ConfigPath == "-" {
+				stdin := os.Stdin
+				t.Cleanup(func() {
+					os.Stdin = stdin
+				})
+				in, err := os.Open("default.scenarigo.yaml")
 				if err != nil {
 					t.Fatal(err)
 				}
-				t.Cleanup(func() {
-					if err := os.Chdir(wd); err != nil {
-						t.Fatal(err)
-					}
-				})
-				if err := os.Chdir(test.cd); err != nil {
-					t.Fatal(err)
-				}
+				defer in.Close()
+				os.Stdin = in
 			}
-			cfg, err := Load(test.filename)
+			Root = test.root
+
+			cfg, err := Load()
 			if test.fail && err == nil {
 				t.Fatal("no error")
 			}

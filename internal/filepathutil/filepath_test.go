@@ -20,7 +20,6 @@ func TestFrom(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if got, expect := From(test.base, test.path), test.expect; got != expect {
 				t.Errorf("expect %q but got %q", expect, got)

@@ -48,5 +48,5 @@ func Get(mediaType string) RequestMarshaler {
 // RequestMarshaler is the interface that marshals the HTTP request body.
 type RequestMarshaler interface {
 	MediaType() string
-	Marshal(v interface{}) ([]byte, error)
+	Marshal(v any) ([]byte, error)
 }

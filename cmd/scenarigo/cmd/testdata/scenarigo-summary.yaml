@@ -1,0 +1,16 @@
+schemaVersion: config/v1
+
+scenarios:
+  - ./scenarios/fail.yaml
+  - ./scenarios/pass.yaml
+pluginDirectory: ./ # Specify the root directory of plugins.
+
+output:
+  verbose: false          # Enable verbose output.
+  # colored: false        # Enable colored output with ANSI color escape codes. It is enabled by default but disabled when a NO_COLOR environment variable is set (regardless of its value).
+  summary: true           # Enable summary output.
+  # report:
+  #   json:
+  #     filename: ./report.json # Specify a filename for test report output in JSON.
+  #   junit:
+  #     filename: ./junit.xml # Specify a filename for test report output in JUnit XML format.

@@ -1,4 +1,4 @@
-// +build !race
+//go:build !race
 
 package scenarigo
 
@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -25,12 +24,12 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/zoncoen/scenarigo"
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/protocol"
-	"github.com/zoncoen/scenarigo/reporter"
-	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	"github.com/scenarigo/scenarigo"
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/protocol"
+	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
 
 type testProtocol struct {
@@ -41,6 +40,8 @@ type testProtocol struct {
 
 func (p *testProtocol) Name() string { return p.name }
 
+func (p *testProtocol) UnmarshalOption(_ []byte) error { return nil }
+
 func (p *testProtocol) UnmarshalRequest(_ []byte) (protocol.Invoker, error) {
 	return p.invoker, nil
 }
@@ -49,9 +50,9 @@ func (p *testProtocol) UnmarshalExpect(_ []byte) (protocol.AssertionBuilder, err
 	return p.builder, nil
 }
 
-type invoker func(*context.Context) (*context.Context, interface{}, error)
+type invoker func(*context.Context) (*context.Context, any, error)
 
-func (f invoker) Invoke(ctx *context.Context) (*context.Context, interface{}, error) {
+func (f invoker) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	return f(ctx)
 }
 
@@ -70,11 +71,9 @@ func (s *testGRPCServer) Echo(ctx gocontext.Context, req *test.EchoRequest) (*te
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 	}
-	ts := md.Get("token")
-	if len(ts) == 0 {
+	if ts := md.Get("token"); len(ts) == 0 {
 		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
-	}
-	if _, ok := s.users[ts[0]]; !ok {
+	} else if _, ok := s.users[ts[0]]; !ok {
 		sts, err := status.New(codes.Unauthenticated, "invalid token").
 			WithDetails(&errdetails.LocalizedMessage{
 				Locale:  "ja-JP",
@@ -91,9 +90,10 @@ func (s *testGRPCServer) Echo(ctx gocontext.Context, req *test.EchoRequest) (*te
 		return nil, sts.Err()
 	}
 	return &test.EchoResponse{
-		MessageId:   req.MessageId,
-		MessageBody: req.MessageBody,
+		MessageId:   req.GetMessageId(),
+		MessageBody: req.GetMessageBody(),
 		UserType:    test.UserType_CUSTOMER,
+		State:       test.State_ACTIVE,
 	}, nil
 }
 
@@ -101,24 +101,23 @@ func TestRunner_Run(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tests := map[string]struct {
 			scenario string
-			invoker  func(*context.Context) (*context.Context, interface{}, error)
+			invoker  func(*context.Context) (*context.Context, any, error)
 			builder  func(*context.Context) (assert.Assertion, error)
 		}{
 			"simple": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
+				invoker:  func(ctx *context.Context) (*context.Context, any, error) { return ctx, nil, nil },
 				builder: func(ctx *context.Context) (assert.Assertion, error) {
-					return assert.AssertionFunc(func(_ interface{}) error { return nil }), nil
+					return assert.AssertionFunc(func(_ any) error { return nil }), nil
 				},
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var invoked, built bool
 				p := &testProtocol{
 					name: "test",
-					invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
+					invoker: invoker(func(ctx *context.Context) (*context.Context, any, error) {
 						invoked = true
 						return test.invoker(ctx)
 					}),
@@ -154,35 +153,34 @@ func TestRunner_Run(t *testing.T) {
 	t.Run("failure", func(t *testing.T) {
 		tests := map[string]struct {
 			scenario string
-			invoker  func(*context.Context) (*context.Context, interface{}, error)
+			invoker  func(*context.Context) (*context.Context, any, error)
 			builder  func(*context.Context) (assert.Assertion, error)
 		}{
 			"failed to invoke": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker: func(ctx *context.Context) (*context.Context, interface{}, error) {
+				invoker: func(ctx *context.Context) (*context.Context, any, error) {
 					return nil, nil, errors.New("some error occurred")
 				},
 			},
 			"failed to build the assertion": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
+				invoker:  func(ctx *context.Context) (*context.Context, any, error) { return ctx, nil, nil },
 				builder:  func(ctx *context.Context) (assert.Assertion, error) { return nil, errors.New("some error occurred") },
 			},
 			"assertion error": {
 				scenario: "testdata/scenarios/simple.yaml",
-				invoker:  func(ctx *context.Context) (*context.Context, interface{}, error) { return ctx, nil, nil },
+				invoker:  func(ctx *context.Context) (*context.Context, any, error) { return ctx, nil, nil },
 				builder: func(ctx *context.Context) (assert.Assertion, error) {
-					return assert.AssertionFunc(func(_ interface{}) error { return errors.New("some error occurred") }), nil
+					return assert.AssertionFunc(func(_ any) error { return errors.New("some error occurred") }), nil
 				},
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				var invoked, built bool
 				p := &testProtocol{
 					name: "test",
-					invoker: invoker(func(ctx *context.Context) (*context.Context, interface{}, error) {
+					invoker: invoker(func(ctx *context.Context) (*context.Context, any, error) {
 						invoked = true
 						return test.invoker(ctx)
 					}),
@@ -247,12 +245,8 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 					t.Fatalf("unexpected error: %s", err)
 				}
 
-				if err := os.Setenv("TEST_ADDR", ln.Addr().String()); err != nil {
-					t.Fatalf("unexpected error: %s", err)
-				}
-				if err := os.Setenv("TEST_TOKEN", token); err != nil {
-					t.Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", ln.Addr().String())
+				t.Setenv("TEST_TOKEN", token)
 
 				go func() {
 					_ = s.Serve(ln)
@@ -260,8 +254,6 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 
 				return func() {
 					s.Stop()
-					os.Unsetenv("TEST_ADDR")
-					os.Unsetenv("TEST_TOKEN")
 				}
 			},
 		},
@@ -300,13 +292,10 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				})
 
 				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					t.Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", s.URL)
 
 				return func() {
 					s.Close()
-					os.Unsetenv("TEST_ADDR")
 				}
 			},
 		},
@@ -323,20 +312,16 @@ func TestRunner_Run_Scenarios(t *testing.T) {
 				})
 
 				s := httptest.NewServer(mux)
-				if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-					t.Fatalf("unexpected error: %s", err)
-				}
+				t.Setenv("TEST_ADDR", s.URL)
 
 				return func() {
 					s.Close()
-					os.Unsetenv("TEST_ADDR")
 				}
 			},
 		},
 	}
 
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			teardown := tc.setup(t)
 			defer teardown()
@@ -390,60 +375,62 @@ func TestRunner_GenerateTestReport(t *testing.T) {
 	ok := reporter.Run(func(rptr reporter.Reporter) {
 		r.Run(context.New(rptr).WithPluginDir("testdata/gen/plugins"))
 
-		report, err := reporter.GenerateTestReport(rptr)
-		if err != nil {
-			t.Fatalf("failed to generate report: %s", err)
-		}
+		rptr.Cleanup(func() {
+			report, err := reporter.GenerateTestReport(rptr)
+			if err != nil {
+				t.Fatalf("failed to generate report: %s", err)
+			}
 
-		if diff := cmp.Diff(
-			&reporter.TestReport{
-				Result: reporter.TestResultPassed,
-				Files: []reporter.ScenarioFileReport{
-					{
-						Name:   "testdata/scenarios/report.yaml",
-						Result: reporter.TestResultPassed,
-						Scenarios: []reporter.ScenarioReport{
-							{
-								Name:   "/echo",
-								File:   "testdata/scenarios/report.yaml",
-								Result: reporter.TestResultPassed,
-								Steps: []reporter.StepReport{
-									{
-										Name:   "include",
-										Result: reporter.TestResultPassed,
-										SubSteps: []reporter.SubStepReport{
-											{
-												Name:   "included.yaml",
-												Result: reporter.TestResultPassed,
-												SubSteps: []reporter.SubStepReport{
-													{
-														Name:   "step plugin",
-														Result: reporter.TestResultPassed,
+			if diff := cmp.Diff(
+				&reporter.TestReport{
+					Result: reporter.TestResultPassed,
+					Files: []reporter.ScenarioFileReport{
+						{
+							Name:   "testdata/scenarios/report.yaml",
+							Result: reporter.TestResultPassed,
+							Scenarios: []reporter.ScenarioReport{
+								{
+									Name:   "/echo",
+									File:   "testdata/scenarios/report.yaml",
+									Result: reporter.TestResultPassed,
+									Steps: []reporter.StepReport{
+										{
+											Name:   "include",
+											Result: reporter.TestResultPassed,
+											SubSteps: []reporter.SubStepReport{
+												{
+													Name:   "included.yaml",
+													Result: reporter.TestResultPassed,
+													SubSteps: []reporter.SubStepReport{
+														{
+															Name:   "step plugin",
+															Result: reporter.TestResultPassed,
+														},
 													},
 												},
 											},
 										},
-									},
-									{
-										Name:   "POST /echo",
-										Result: reporter.TestResultPassed,
+										{
+											Name:   "POST /echo",
+											Result: reporter.TestResultPassed,
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-			report,
-			cmp.FilterValues(func(_, _ reporter.TestDuration) bool {
-				return true
-			}, cmp.Ignore()),
-			cmp.FilterValues(func(_, _ reporter.ReportLogs) bool {
-				return true
-			}, cmp.Ignore()),
-		); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+				report,
+				cmp.FilterValues(func(_, _ reporter.TestDuration) bool {
+					return true
+				}, cmp.Ignore()),
+				cmp.FilterValues(func(_, _ reporter.ReportLogs) bool {
+					return true
+				}, cmp.Ignore()),
+			); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}, reporter.WithWriter(&b))
 	if !ok {
 		t.Fatalf("scenario failed:\n%s", b.String())
@@ -494,16 +481,10 @@ func startHTTPServer(t *testing.T) func() {
 	})
 
 	s := httptest.NewServer(mux)
-	if err := os.Setenv("TEST_ADDR", s.URL); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-	if err := os.Setenv("TEST_TOKEN", token); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
+	t.Setenv("TEST_ADDR", s.URL)
+	t.Setenv("TEST_TOKEN", token)
 
 	return func() {
 		s.Close()
-		os.Unsetenv("TEST_ADDR")
-		os.Unsetenv("TEST_TOKEN")
 	}
 }

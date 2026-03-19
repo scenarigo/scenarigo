@@ -5,140 +5,106 @@ import (
 	"errors"
 	"time"
 
-	"github.com/lestrrat-go/backoff"
-	"golang.org/x/xerrors"
+	"github.com/cenkalti/backoff/v4"
 )
 
 // RetryPolicy represents a retry policy.
 type RetryPolicy struct {
-	Constant    *RetryPolicyConstant    `yaml:"constant"`
-	Exponential *RetryPolicyExponential `yaml:"exponential"`
+	Constant    *RetryPolicyConstant    `yaml:"constant,omitempty"`
+	Exponential *RetryPolicyExponential `yaml:"exponential,omitempty"`
 }
 
-// Build returns p as backoff.Policy.
+// Build returns p as backoff.BackOff.
 // If p is nil, Build returns the policy which never retry.
-func (p *RetryPolicy) Build() (backoff.Policy, error) {
+func (p *RetryPolicy) Build(ctx context.Context) (context.Context, func(), backoff.BackOff, error) {
 	if p != nil {
 		if p.Constant != nil && p.Exponential != nil {
-			return nil, xerrors.New("ambiguous retry policy")
+			return nil, nil, nil, errors.New("ambiguous retry policy")
 		}
 		if p.Constant != nil {
-			return p.Constant.Build()
+			return p.Constant.Build(ctx)
 		}
 		if p.Exponential != nil {
-			return p.Exponential.Build()
+			return p.Exponential.Build(ctx)
 		}
 	}
-	return &retryPolicyNever{}, nil
+	return ctx, func() {}, &backoff.StopBackOff{}, nil
+}
+
+func maxElapsedTimeContextFunc(ctx context.Context, t *Duration, b backoff.BackOff) (context.Context, func(), backoff.BackOff) {
+	if t == nil || *t == 0 {
+		return ctx, func() {}, b
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(*t))
+	return ctx, cancel, backoff.WithContext(b, ctx)
 }
 
 // RetryPolicyConstant represents a constant retry policy.
 type RetryPolicyConstant struct {
-	Interval       string  `yaml:"interval"`
-	MaxElapsedTime *string `yaml:"maxElapsedTime"`
-	MaxRetries     *int    `yaml:"maxRetries"`
+	Interval       *Duration `yaml:"interval,omitempty"`       // default value is 1s
+	MaxRetries     *int      `yaml:"maxRetries,omitempty"`     // default value is 5, 0 means forever
+	MaxElapsedTime *Duration `yaml:"maxElapsedTime,omitempty"` // default value is 0, 0 means forever
 }
 
 // Build returns p as backoff.Policy.
-func (p *RetryPolicyConstant) Build() (backoff.Policy, error) {
-	if p.Interval == "" {
-		return nil, errors.New("interval must be specified")
+func (p *RetryPolicyConstant) Build(ctx context.Context) (context.Context, func(), backoff.BackOff, error) {
+	interval := time.Second
+	if p.Interval != nil {
+		interval = time.Duration(*p.Interval)
 	}
-	interval, err := time.ParseDuration(p.Interval)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to parse interval: %w", err)
+	var b backoff.BackOff = backoff.NewConstantBackOff(interval)
+
+	maxRetries := 5
+	if p.MaxRetries != nil && *p.MaxRetries >= 0 {
+		maxRetries = *p.MaxRetries
 	}
-	opts := []backoff.Option{}
-	if p.MaxElapsedTime != nil {
-		t, err := time.ParseDuration(*p.MaxElapsedTime)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to parse max elapsed time: %w", err)
-		}
-		opts = append(opts, backoff.WithMaxElapsedTime(t))
+	if maxRetries > 0 {
+		b = backoff.WithMaxRetries(b, uint64(maxRetries))
 	}
-	if p.MaxRetries != nil {
-		opts = append(opts, backoff.WithMaxRetries(*p.MaxRetries))
-	}
-	return backoff.NewConstant(interval, opts...), nil
+
+	ctx, cancel, b := maxElapsedTimeContextFunc(ctx, p.MaxElapsedTime, b)
+	return ctx, cancel, b, nil
 }
 
 // RetryPolicyExponential represents a exponential retry policy.
 type RetryPolicyExponential struct {
-	InitialInterval *string  `yaml:"initialInterval"`
-	Factor          *float64 `yaml:"factor"`
-	JitterFactor    *float64 `yaml:"jitterFactor"`
-	MaxInterval     *string  `yaml:"maxInterval"`
-	MaxElapsedTime  *string  `yaml:"maxElapsedTime"`
-	MaxRetries      *int     `yaml:"maxRetries"`
+	InitialInterval *Duration `yaml:"initialInterval,omitempty"` // default value is 500ms
+	Factor          *float64  `yaml:"factor,omitempty"`          // default value is 1.5
+	JitterFactor    *float64  `yaml:"jitterFactor,omitempty"`    // default value is 0.5
+	MaxInterval     *Duration `yaml:"maxInterval,omitempty"`     // default value is 60s
+	MaxRetries      *int      `yaml:"maxRetries,omitempty"`      // default value is 5, 0 means forever
+	MaxElapsedTime  *Duration `yaml:"maxElapsedTime,omitempty"`  // default value is 0, 0 means forever
 }
 
 // Build returns p as backoff.Policy.
-func (p *RetryPolicyExponential) Build() (backoff.Policy, error) {
-	opts := []backoff.Option{}
+func (p *RetryPolicyExponential) Build(ctx context.Context) (context.Context, func(), backoff.BackOff, error) {
+	eb := backoff.NewExponentialBackOff()
 	if p.InitialInterval != nil {
-		t, err := time.ParseDuration(*p.InitialInterval)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to parse max elapsed time: %w", err)
-		}
-		opts = append(opts, backoff.WithInterval(t))
+		eb.InitialInterval = time.Duration(*p.InitialInterval)
 	}
 	if p.Factor != nil {
-		opts = append(opts, backoff.WithFactor(*p.Factor))
+		eb.Multiplier = *p.Factor
 	}
 	if p.JitterFactor != nil {
-		opts = append(opts, backoff.WithJitterFactor(*p.JitterFactor))
+		eb.RandomizationFactor = *p.JitterFactor
 	}
 	if p.MaxInterval != nil {
-		t, err := time.ParseDuration(*p.MaxInterval)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to parse max interval: %w", err)
-		}
-		opts = append(opts, backoff.WithMaxInterval(t))
+		eb.MaxInterval = time.Duration(*p.MaxInterval)
 	}
+	eb.MaxElapsedTime = 0
 	if p.MaxElapsedTime != nil {
-		t, err := time.ParseDuration(*p.MaxElapsedTime)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to parse max elapsed time: %w", err)
-		}
-		opts = append(opts, backoff.WithMaxElapsedTime(t))
+		eb.MaxElapsedTime = time.Duration(*p.MaxElapsedTime)
 	}
-	if p.MaxRetries != nil {
-		opts = append(opts, backoff.WithMaxRetries(*p.MaxRetries))
+
+	var b backoff.BackOff = eb
+	maxRetries := 5
+	if p.MaxRetries != nil && *p.MaxRetries >= 0 {
+		maxRetries = *p.MaxRetries
 	}
-	return backoff.NewExponential(opts...), nil
-}
-
-type retryPolicyNever struct{}
-
-// Start implements backoff.Policy interface.
-func (*retryPolicyNever) Start(ctx context.Context) (backoff.Backoff, backoff.CancelFunc) {
-	ctx, cancel := context.WithCancel(ctx)
-	b := &retryBackoffNever{
-		ctx:    ctx,
-		cancel: cancel,
-		next:   make(chan struct{}),
+	if maxRetries > 0 {
+		b = backoff.WithMaxRetries(b, uint64(maxRetries))
 	}
-	go func() {
-		b.next <- struct{}{}
-		cancel()
-	}()
-	return b, backoff.CancelFunc(func() {
-		cancel()
-	})
-}
 
-type retryBackoffNever struct {
-	ctx    context.Context
-	cancel func()
-	next   chan struct{}
-}
-
-// Done implements backoff.Backoff interface.
-func (b *retryBackoffNever) Done() <-chan struct{} {
-	return b.ctx.Done()
-}
-
-// Next implements backoff.Backoff interface.
-func (b *retryBackoffNever) Next() <-chan struct{} {
-	return b.next
+	ctx, cancel, b := maxElapsedTimeContextFunc(ctx, p.MaxElapsedTime, b)
+	return ctx, cancel, b, nil
 }

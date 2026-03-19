@@ -1,0 +1,8 @@
+---
+title: included scenario fails
+steps:
+- title: include
+  include: './included.yaml'
+  bind:
+    vars:
+      message: '{{vars.message}}'

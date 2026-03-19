@@ -3,6 +3,7 @@ package unmarshaler
 import (
 	"errors"
 	"reflect"
+	"unicode/utf8"
 )
 
 func init() {
@@ -19,7 +20,7 @@ func (um *textUnmarshaler) MediaType() string {
 }
 
 // Unmarshal implements ResponseUnmarshaler interface.
-func (um *textUnmarshaler) Unmarshal(data []byte, v interface{}) error {
+func (um *textUnmarshaler) Unmarshal(data []byte, v any) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr {
 		return errors.New("v must be a pointer")
@@ -31,6 +32,10 @@ func (um *textUnmarshaler) Unmarshal(data []byte, v interface{}) error {
 	if !rv.CanSet() {
 		return errors.New("v is not settable")
 	}
-	rv.Set(reflect.ValueOf(string(data)))
+	if utf8.Valid(data) {
+		rv.Set(reflect.ValueOf(string(data)))
+	} else {
+		rv.Set(reflect.ValueOf(data))
+	}
 	return nil
 }

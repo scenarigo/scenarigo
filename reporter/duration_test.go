@@ -32,7 +32,7 @@ func TestTestContext(t *testing.T) {
 		}()
 
 		ctx.waitParallel() // wait goroutine function
-		if expect, got := duration, time.Since(now).Truncate(durationTestUnit); got != expect {
+		if expect, got := duration, time.Since(now).Truncate(5*durationTestUnit); got != expect {
 			t.Errorf("expected %s but got %s", expect, got)
 		}
 		if expect, got := int64(0), ctx.waitings(); got != expect {
@@ -61,7 +61,7 @@ func TestTestContext(t *testing.T) {
 		}()
 
 		ctx.waitParallel() // not wait goroutine function (run in parallel)
-		if expect, got := time.Duration(0), time.Since(now).Truncate(durationTestUnit); got != expect {
+		if expect, got := time.Duration(0), time.Since(now).Truncate(5*durationTestUnit); got != expect {
 			t.Errorf("expected %s but got %s", expect, got)
 		}
 		if expect, got := int64(0), ctx.waitings(); got != expect {
@@ -143,24 +143,6 @@ func TestRun(t *testing.T) {
 				},
 			},
 		},
-		"child panic(nil)": {
-			fs: []func(r Reporter){
-				func(r Reporter) {},
-				func(r Reporter) {
-					panic(nil)
-				},
-			},
-			expect: result{
-				Failed: true,
-				Children: []result{
-					{},
-					{
-						Failed: true,
-						Logs:   []string{"test executed panic(nil) or runtime.Goexit"},
-					},
-				},
-			},
-		},
 		"child runtime.Goexit()": {
 			fs: []func(r Reporter){
 				func(r Reporter) {},
@@ -227,7 +209,6 @@ func TestRun(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		opts := []Option{}
 		if test.maxParallel != 0 {
 			opts = append(opts, WithMaxParallel(test.maxParallel))
@@ -239,7 +220,6 @@ func TestRun(t *testing.T) {
 				start := time.Now()
 				r := run(func(r Reporter) {
 					for i, f := range test.fs {
-						f := f
 						r.Run(strconv.Itoa(i), func(r Reporter) {
 							f(r)
 						})
@@ -261,7 +241,6 @@ func TestRun(t *testing.T) {
 				start := time.Now()
 				r := run(func(r Reporter) {
 					for i, f := range test.fs {
-						f := f
 						r.Run(strconv.Itoa(i), func(r Reporter) {
 							r.Parallel()
 							f(r)

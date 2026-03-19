@@ -4,7 +4,19 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/scenarigo/scenarigo/protocol"
 )
+
+func TestHTTP(t *testing.T) {
+	Register()
+	p := protocol.Get("http")
+	if p == nil {
+		t.Fatal("http protocol not found")
+	}
+	if err := p.UnmarshalOption([]byte("")); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestHTTP_UnmarshalRequest(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
@@ -24,7 +36,6 @@ func TestHTTP_UnmarshalRequest(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				invoker, err := p.UnmarshalRequest(test.bytes)
@@ -52,7 +63,6 @@ method: GET`),
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				_, err := p.UnmarshalRequest(test.bytes)
@@ -82,7 +92,6 @@ func TestHTTP_UnmarshalExpect(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				builder, err := p.UnmarshalExpect(test.bytes)
@@ -108,7 +117,6 @@ func TestHTTP_UnmarshalExpect(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := &HTTP{}
 				_, err := p.UnmarshalExpect(test.bytes)

@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/plugin"
-	"github.com/zoncoen/scenarigo/reporter"
-	"github.com/zoncoen/scenarigo/schema"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 func TestRunScenario_Context_ScenarioFilepath(t *testing.T) {
@@ -29,7 +29,7 @@ steps:
 		log bytes.Buffer
 	)
 	ok := reporter.Run(func(rptr reporter.Reporter) {
-		ctx := context.New(rptr).WithPlugins(map[string]interface{}{
+		ctx := context.New(rptr).WithPlugins(map[string]any{
 			"getScenarioFilepath": plugin.StepFunc(func(ctx *context.Context, step *schema.Step) *context.Context {
 				got = ctx.ScenarioFilepath()
 				return ctx
@@ -45,9 +45,69 @@ steps:
 	}
 }
 
+// TestRunScenario_Context_ScenarioFilepath_AfterReset tests that ScenarioFilepath
+// is preserved after calling Reset() on a scenario with retry policy.
+// This simulates what happens during scenario-level retry in runner.go.
+// This is a regression test for issue #695.
+func TestRunScenario_Context_ScenarioFilepath_AfterReset(t *testing.T) {
+	path := createTempScenario(t, `
+retry:
+  constant:
+    interval: 1ms
+    maxRetries: 1
+steps:
+  - ref: '{{plugins.getScenarioFilepath}}'
+  `)
+	scenarios, err := schema.LoadScenarios(path)
+	if err != nil {
+		t.Fatalf("failed to load scenario: %s", err)
+	}
+	if len(scenarios) != 1 {
+		t.Fatalf("unexpected scenario length: %d", len(scenarios))
+	}
+
+	scn := scenarios[0]
+
+	// Verify filepath is set correctly before Reset
+	if scn.Filepath() != path {
+		t.Fatalf("filepath not set correctly: expected %q, got %q", path, scn.Filepath())
+	}
+
+	// Simulate scenario-level retry: Reset() is called before re-running the scenario
+	if err := scn.Reset(); err != nil {
+		t.Fatalf("Reset() failed: %s", err)
+	}
+
+	// Verify filepath is preserved after Reset (this is the fix for issue #695)
+	if scn.Filepath() != path {
+		t.Errorf("filepath not preserved after Reset: expected %q, got %q", path, scn.Filepath())
+	}
+
+	// Run the scenario and verify ScenarioFilepath in context is correct
+	var (
+		got string
+		log bytes.Buffer
+	)
+	ok := reporter.Run(func(rptr reporter.Reporter) {
+		ctx := context.New(rptr).WithPlugins(map[string]any{
+			"getScenarioFilepath": plugin.StepFunc(func(ctx *context.Context, step *schema.Step) *context.Context {
+				got = ctx.ScenarioFilepath()
+				return ctx
+			}),
+		})
+		RunScenario(ctx, scn)
+	}, reporter.WithWriter(&log))
+	if !ok {
+		t.Fatalf("scenario failed:\n%s", log.String())
+	}
+	if got != path {
+		t.Errorf("ScenarioFilepath in context is wrong after Reset: expected %q, got %q", path, got)
+	}
+}
+
 func createTempScenario(t *testing.T, scenario string) string {
 	t.Helper()
-	f, err := os.CreateTemp("", "*.yaml")
+	f, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %s", err)
 	}
@@ -56,4 +116,66 @@ func createTempScenario(t *testing.T, scenario string) string {
 		t.Fatalf("failed to write scenario: %s", err)
 	}
 	return f.Name()
+}
+
+func TestExecuteIf(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		tests := map[string]struct {
+			vars   map[string]any
+			expr   string
+			expect bool
+		}{
+			"empty": {
+				expect: true,
+			},
+			"no vars": {
+				expr:   "{{true}}",
+				expect: true,
+			},
+			"with vars": {
+				vars: map[string]any{
+					"foo": true,
+				},
+				expr:   "{{vars.foo}}",
+				expect: true,
+			},
+		}
+		for name, test := range tests {
+			t.Run(name, func(t *testing.T) {
+				ctx := context.FromT(t).WithVars(test.vars)
+				got, err := executeIf(ctx, test.expr)
+				if err != nil {
+					t.Fatalf("unexpected error: %s", err)
+				}
+				if expect := test.expect; got != expect {
+					t.Errorf("expected %t but got %t", expect, got)
+				}
+			})
+		}
+	})
+	t.Run("failure", func(t *testing.T) {
+		tests := map[string]struct {
+			expr        string
+			expectError string
+		}{
+			"invalid template": {
+				expr:        "{{",
+				expectError: `failed to execute: failed to parse "{{": col 3: expected '}}', found 'EOF'`,
+			},
+			"not bool": {
+				expr:        "{{1}}",
+				expectError: "must be bool but got int64",
+			},
+		}
+		for name, test := range tests {
+			t.Run(name, func(t *testing.T) {
+				ctx := context.FromT(t)
+				if _, err := executeIf(ctx, test.expr); err == nil {
+					t.Fatal("no error")
+				} else if got, expect := err.Error(), test.expectError; got != expect {
+					t.Errorf("expected %q but got %q", expect, got)
+				}
+			})
+		}
+	})
 }

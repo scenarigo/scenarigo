@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/logger"
-	"github.com/zoncoen/scenarigo/mock/protocol"
+	"github.com/scenarigo/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/mock/protocol"
 )
+
+func init() {
+	Register()
+}
 
 func TestHTTP_Server(t *testing.T) {
 	tests := map[string]struct {
@@ -22,10 +26,12 @@ func TestHTTP_Server(t *testing.T) {
 		"simple": {
 			filename: "testdata/http.yaml",
 			f: func(t *testing.T, addr string) {
+				t.Helper()
 				resp, err := http.Get(fmt.Sprintf("http://%s", addr))
 				if err != nil {
 					t.Fatal(err)
 				}
+				defer resp.Body.Close()
 				if got, expect := resp.StatusCode, http.StatusOK; got != expect {
 					t.Errorf("expect %d but got %d", expect, got)
 				}
@@ -35,10 +41,12 @@ func TestHTTP_Server(t *testing.T) {
 			filename: "testdata/http.yaml",
 			config:   "port: 8888",
 			f: func(t *testing.T, addr string) {
+				t.Helper()
 				resp, err := http.Get("http://localhost:8888")
 				if err != nil {
 					t.Fatal(err)
 				}
+				defer resp.Body.Close()
 				if got, expect := resp.StatusCode, http.StatusOK; got != expect {
 					t.Errorf("expect %d but got %d", expect, got)
 				}
@@ -46,7 +54,6 @@ func TestHTTP_Server(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			p := protocol.Get("http")
 			if p == nil {
@@ -101,6 +108,35 @@ func TestHTTP_Server(t *testing.T) {
 			defer cancel()
 			if err := srv.Stop(ctx); err != nil {
 				t.Fatalf("failed to stop server: %s", err)
+			}
+		})
+	}
+}
+
+func TestHTTP_Server_Start_Failure(t *testing.T) {
+	tests := map[string]struct {
+		server *server
+		expect string
+	}{
+		"server already started": {
+			server: &server{
+				srv: &http.Server{
+					ReadHeaderTimeout: time.Second,
+				},
+			},
+			expect: "server already started",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			err := test.server.Start(ctx)
+			if err == nil {
+				t.Fatal("no error")
+			}
+			if got, expect := err.Error(), test.expect; got != expect {
+				t.Fatalf("expect %q but got %q", expect, got)
 			}
 		})
 	}

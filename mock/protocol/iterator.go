@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/zoncoen/scenarigo/internal/yamlutil"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
 )
 
 // Mock represents a mock.
@@ -21,8 +21,9 @@ type MockIterator struct {
 	mocks []Mock
 }
 
-// New returns a new MockIterator.
+// NewMockIterator returns a new MockIterator.
 func NewMockIterator(mocks []Mock) *MockIterator {
+	//nolint:exhaustruct
 	return &MockIterator{
 		mocks: mocks,
 	}

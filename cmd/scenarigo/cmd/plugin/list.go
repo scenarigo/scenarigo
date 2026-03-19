@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
+	"github.com/scenarigo/scenarigo/internal/filepathutil"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
-	"github.com/zoncoen/scenarigo/internal/filepathutil"
 )
 
 var listCmd = &cobra.Command{
@@ -23,7 +23,7 @@ var listCmd = &cobra.Command{
 }
 
 func list(cmd *cobra.Command, args []string) error {
-	cfg, err := config.Load(config.ConfigPath)
+	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -36,8 +36,8 @@ func list(cmd *cobra.Command, args []string) error {
 	}
 	pluginDir := filepathutil.From(cfg.Root, cfg.PluginDirectory)
 	var plugins sort.StringSlice
-	for out := range cfg.Plugins {
-		rel, err := filepath.Rel(wd, filepathutil.From(pluginDir, out))
+	for _, item := range cfg.Plugins.ToSlice() {
+		rel, err := filepath.Rel(wd, filepathutil.From(pluginDir, item.Key))
 		if err != nil {
 			return fmt.Errorf("failed to get releative path: %w", err)
 		}

@@ -4,17 +4,17 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/assertutil"
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/assertutil"
 )
 
 // Expect represents expected response values.
 type Expect struct {
 	Code   string        `yaml:"code,omitempty"`
 	Header yaml.MapSlice `yaml:"header,omitempty"`
-	Body   interface{}   `yaml:"body,omitempty"`
+	Body   any           `yaml:"body,omitempty"`
 }
 
 // Build implements protocol.AssertionBuilder interface.
@@ -23,29 +23,28 @@ func (e *Expect) Build(ctx *context.Context) (assert.Assertion, error) {
 	if e.Code != "" {
 		expectCode = e.Code
 	}
-	executedCode, err := ctx.ExecuteTemplate(expectCode)
+
+	codeAssertion, err := assert.Build(ctx.RequestContext(), expectCode, assert.FromTemplate(ctx))
 	if err != nil {
-		return nil, errors.WrapPathf(err, "code", "invalid expect response: %s", err)
+		return nil, errors.WrapPathf(err, "code", "invalid expect status code")
 	}
-	codeAssertion := assert.Build(executedCode)
 
 	headerAssertion, err := assertutil.BuildHeaderAssertion(ctx, e.Header)
 	if err != nil {
 		return nil, errors.WrapPathf(err, "header", "invalid expect header")
 	}
 
-	expectBody, err := ctx.ExecuteTemplate(e.Body)
+	assertion, err := assert.Build(ctx.RequestContext(), e.Body, assert.FromTemplate(ctx))
 	if err != nil {
-		return nil, errors.WrapPathf(err, "body", "invalid expect response")
+		return nil, errors.WrapPathf(err, "body", "invalid expect response body")
 	}
-	assertion := assert.Build(expectBody)
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	return assert.AssertionFunc(func(v any) error {
 		res, ok := v.(response)
 		if !ok {
 			return errors.Errorf("expected response but got %T", v)
 		}
-		if err := assertCode(codeAssertion, res.status); err != nil {
+		if err := assertCode(codeAssertion, res.Status); err != nil {
 			return errors.WithPath(err, "code")
 		}
 		if err := headerAssertion.Assert(res.Header); err != nil {

@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/testutil"
-	"github.com/zoncoen/scenarigo/plugin"
-	"github.com/zoncoen/scenarigo/reporter"
 )
 
 func TestSetupMap_Setup(t *testing.T) {
 	tests := map[string]struct {
-		setups setupMap
+		setups setupFuncList
 		failed bool
 		expect string
 	}{
@@ -23,22 +23,31 @@ func TestSetupMap_Setup(t *testing.T) {
 			failed: false,
 		},
 		"empty": {
-			setups: setupMap{},
+			setups: setupFuncList{},
 			failed: false,
 		},
 		"no teardown": {
-			setups: setupMap{
-				"a": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup a")
-					return ctx, nil
+			setups: setupFuncList{
+				{
+					name: "a",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup a")
+						return ctx, nil
+					},
 				},
-				"b": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup b")
-					return ctx, nil
+				{
+					name: "b",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup b")
+						return ctx, nil
+					},
 				},
-				"c": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup c")
-					return ctx, nil
+				{
+					name: "c",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup c")
+						return ctx, nil
+					},
 				},
 			},
 			failed: false,
@@ -59,39 +68,48 @@ ok  	setup	0.000s
 `,
 		},
 		"with teardown": {
-			setups: setupMap{
-				"a": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup a")
-					ctx = ctx.WithVars(map[string]int{"a": 1})
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("a")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+			setups: setupFuncList{
+				{
+					name: "a",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup a")
+						ctx = ctx.WithVars(map[string]int{"a": 1})
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("a")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown a %v", v)
 						}
-						ctx.Reporter().Logf("teardown a %v", v)
-					}
+					},
 				},
-				"b": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup b")
-					ctx = ctx.WithVars(map[string]int{"b": 2})
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("b")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+				{
+					name: "b",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup b")
+						ctx = ctx.WithVars(map[string]int{"b": 2})
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("b")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown b %v", v)
 						}
-						ctx.Reporter().Logf("teardown b %v", v)
-					}
+					},
 				},
-				"c": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup c")
-					ctx = ctx.WithVars(map[string]int{"c": 3})
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("c")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+				{
+					name: "c",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup c")
+						ctx = ctx.WithVars(map[string]int{"c": 3})
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("c")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown c %v", v)
 						}
-						ctx.Reporter().Logf("teardown c %v", v)
-					}
+					},
 				},
 			},
 			failed: false,
@@ -125,32 +143,41 @@ ok  	teardown	0.000s
 `,
 		},
 		"setup failed": {
-			setups: setupMap{
-				"a": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup a")
-					ctx = ctx.WithVars(map[string]int{"a": 1})
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("a")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+			setups: setupFuncList{
+				{
+					name: "a",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup a")
+						ctx = ctx.WithVars(map[string]int{"a": 1})
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("a")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown a %v", v)
 						}
-						ctx.Reporter().Logf("teardown a %v", v)
-					}
+					},
 				},
-				"b": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Fatal("setup b failed")
-					return ctx, nil
+				{
+					name: "b",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Fatal("setup b failed")
+						return ctx, nil
+					},
 				},
-				"c": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup c")
-					ctx = ctx.WithVars(map[string]int{"c": 3})
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("c")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+				{
+					name: "c",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup c")
+						ctx = ctx.WithVars(map[string]int{"c": 3})
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("c")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown c %v", v)
 						}
-						ctx.Reporter().Logf("teardown c %v", v)
-					}
+					},
 				},
 			},
 			failed: true,
@@ -176,38 +203,47 @@ ok  	teardown	0.000s
 `,
 		},
 		"teardown failed": {
-			setups: setupMap{
-				"a": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup a")
-					ctx = ctx.WithVars(map[string]int{"a": 1})
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("a")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+			setups: setupFuncList{
+				{
+					name: "a",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup a")
+						ctx = ctx.WithVars(map[string]int{"a": 1})
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("a")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown a %v", v)
 						}
-						ctx.Reporter().Logf("teardown a %v", v)
-					}
+					},
 				},
-				"b": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup b")
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("b")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+				{
+					name: "b",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup b")
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("b")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown b %v", v)
 						}
-						ctx.Reporter().Logf("teardown b %v", v)
-					}
+					},
 				},
-				"c": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup c")
-					ctx = ctx.WithVars(map[string]int{"c": 3})
-					return ctx, func(ctx *plugin.Context) {
-						v, ok := ctx.Vars().ExtractByKey("c")
-						if !ok {
-							ctx.Reporter().Fatal("var not found")
+				{
+					name: "c",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup c")
+						ctx = ctx.WithVars(map[string]int{"c": 3})
+						return ctx, func(ctx *plugin.Context) {
+							v, ok := ctx.Vars().ExtractByKey("c")
+							if !ok {
+								ctx.Reporter().Fatal("var not found")
+							}
+							ctx.Reporter().Logf("teardown c %v", v)
 						}
-						ctx.Reporter().Logf("teardown c %v", v)
-					}
+					},
 				},
 			},
 			failed: true,
@@ -242,10 +278,13 @@ FAIL
 `,
 		},
 		"setup returns nil context": {
-			setups: setupMap{
-				"a": func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
-					ctx.Reporter().Log("setup a")
-					return nil, nil
+			setups: setupFuncList{
+				{
+					name: "a",
+					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
+						ctx.Reporter().Log("setup a")
+						return nil, nil
+					},
 				},
 			},
 			failed: false,
@@ -262,17 +301,16 @@ ok  	setup	0.000s
 	}
 
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
-			reporter.Run(func(r reporter.Reporter) {
+			failed := !reporter.Run(func(r reporter.Reporter) {
 				ctx := context.New(r)
 				ctx, teardown := test.setups.setup(ctx)
 				teardown(ctx)
-				if failed := ctx.Reporter().Failed(); failed != test.failed {
-					t.Fatalf("expect failed %t but got %t", test.failed, failed)
-				}
 			}, reporter.WithWriter(&b), reporter.WithVerboseLog())
+			if failed != test.failed {
+				t.Fatalf("expect failed %t but got %t", test.failed, failed)
+			}
 			if test.expect != "" {
 				if got, expect := testutil.ReplaceOutput(b.String()), strings.TrimPrefix(test.expect, "\n"); got != expect {
 					dmp := diffmatchpatch.New()

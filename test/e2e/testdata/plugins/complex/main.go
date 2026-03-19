@@ -2,12 +2,13 @@ package main
 
 import (
 	"errors"
+	"time"
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/plugin"
-	"github.com/zoncoen/scenarigo/schema"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/schema"
 )
 
 var (
@@ -46,4 +47,22 @@ func (_ *join) UnmarshalArg(unmarshal func(interface{}) error) (interface{}, err
 		return nil, err
 	}
 	return &arg, nil
+}
+
+func Sleep(s string) (plugin.Step, error) {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return nil, err
+	}
+	return plugin.StepFunc(func(ctx *context.Context, step *schema.Step) *context.Context {
+		time.Sleep(d)
+		ctx.Reporter().FailNow()
+		return ctx
+	}), nil
+}
+
+func SetVar(k string, v interface{}) (plugin.Step, error) {
+	return plugin.StepFunc(func(ctx *context.Context, step *schema.Step) *context.Context {
+		return ctx.WithVars(map[string]interface{}{k: v})
+	}), nil
 }

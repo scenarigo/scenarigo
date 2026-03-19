@@ -1,6 +1,7 @@
 package scenarigo
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -8,36 +9,48 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 
-	"github.com/fatih/color"
-	"github.com/pkg/errors"
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/scenarigo/scenarigo/color"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/plugin"
-	"github.com/zoncoen/scenarigo/reporter"
-	"github.com/zoncoen/scenarigo/schema"
-
-	// Register default protocols.
-	_ "github.com/zoncoen/scenarigo/protocol/grpc"
-	_ "github.com/zoncoen/scenarigo/protocol/http"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/deepcopy"
+	"github.com/scenarigo/scenarigo/internal/filepathutil"
+	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/protocol/grpc"
+	"github.com/scenarigo/scenarigo/protocol/http"
+	"github.com/scenarigo/scenarigo/protocolmeta"
+	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/schema"
 )
+
+func init() {
+	http.Register()
+	grpc.Register()
+}
 
 // Runner represents a test runner.
 type Runner struct {
+	vars            map[string]any
+	secrets         map[string]any
 	pluginDir       *string
-	plugins         map[string]schema.PluginConfig
+	plugins         schema.OrderedMap[string, schema.PluginConfig]
+	protocols       schema.ProtocolOptions
 	scenarioFiles   []string
 	scenarioReaders []io.Reader
-	enabledColor    bool
+	colorConfig     *color.Config
 	rootDir         string
+	inputConfig     schema.InputConfig
 	reportConfig    schema.ReportConfig
+	configNode      ast.Node
 }
 
 // NewRunner returns a new test runner.
 func NewRunner(opts ...func(*Runner) error) (*Runner, error) {
-	r := &Runner{}
-	r.enabledColor = !color.NoColor
+	r := &Runner{} //nolint:exhaustruct
+	r.colorConfig = color.New()
 	for _, opt := range opts {
 		if err := opt(r); err != nil {
 			return nil, err
@@ -60,6 +73,9 @@ func WithConfig(config *schema.Config) func(*Runner) error {
 			return nil
 		}
 
+		r.vars = config.Vars
+		r.secrets = config.Secrets
+
 		r.rootDir = config.Root
 		scenarios := make([]string, len(config.Scenarios))
 		for i, s := range config.Scenarios {
@@ -68,10 +84,8 @@ func WithConfig(config *schema.Config) func(*Runner) error {
 
 		var opts []func(r *Runner) error
 		opts = append(opts, WithScenarios(scenarios...))
-		pluginDir := r.rootDir
 		if config.PluginDirectory != "" {
-			pluginDir = filepath.Join(r.rootDir, config.PluginDirectory)
-			opts = append(opts, WithPluginDir(pluginDir))
+			opts = append(opts, WithPluginDir(filepath.Join(r.rootDir, config.PluginDirectory)))
 		}
 		for _, opt := range opts {
 			if err := opt(r); err != nil {
@@ -79,10 +93,13 @@ func WithConfig(config *schema.Config) func(*Runner) error {
 			}
 		}
 		r.plugins = config.Plugins
+		r.protocols = config.Protocols
 		if config.Output.Colored != nil {
-			r.enabledColor = *config.Output.Colored
+			r.colorConfig.SetEnabled(*config.Output.Colored)
 		}
+		r.inputConfig = config.Input
 		r.reportConfig = config.Output.Report
+		r.configNode = config.Node
 		return nil
 	}
 }
@@ -128,8 +145,7 @@ func WithScenariosFromReader(readers ...io.Reader) func(*Runner) error {
 
 // WithOptionsFromEnv returns a option which sets flag whether accepts configuration from ENV.
 // Currently Available ENV variables are the following.
-// - SCENARIGO_COLOR=(1|true|TRUE)
-// nolint:stylecheck
+//   - SCENARIGO_COLOR=(1|true|TRUE)
 func WithOptionsFromEnv(isEnv bool) func(*Runner) error {
 	return func(r *Runner) error {
 		if isEnv {
@@ -166,20 +182,8 @@ func getAllFiles(paths ...string) ([]string, error) {
 	return files, nil
 }
 
-const (
-	envScenarigoColor = "SCENARIGO_COLOR"
-)
-
 func (r *Runner) setOptionsFromEnv() {
-	r.setEnabledColor(os.Getenv(envScenarigoColor))
-}
-
-func (r *Runner) setEnabledColor(envColor string) {
-	if envColor == "" {
-		return
-	}
-	result, _ := strconv.ParseBool(envColor)
-	r.enabledColor = result
+	// do nothing. colorConfig is already reflected by SCENARIGO_COLOR.
 }
 
 // ScenarioFiles returns all scenario file paths.
@@ -190,113 +194,237 @@ func (r *Runner) ScenarioFiles() []string {
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
 	// setup context
+	ctx = ctx.WithColorConfig(r.colorConfig)
+	var baseVars any
+	if r.vars != nil {
+		vars, err := ctx.ExecuteTemplate(r.vars)
+		if err != nil {
+			ctx.Reporter().Fatalf(
+				"invalid vars: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, "vars"),
+					r.configNode,
+					r.colorConfig.IsEnabled(),
+				),
+			)
+		}
+		baseVars = vars
+	}
+	var baseSecrets any
+	if r.secrets != nil {
+		secrets, err := ctx.ExecuteTemplate(r.secrets)
+		if err != nil {
+			ctx.Reporter().Fatalf(
+				"invalid secrets: %s",
+				errors.WithNodeAndColored(
+					errors.WithPath(err, "secrets"),
+					r.configNode,
+					r.colorConfig.IsEnabled(),
+				),
+			)
+		}
+		baseSecrets = secrets
+	}
 	if r.pluginDir != nil {
 		ctx = ctx.WithPluginDir(*r.pluginDir)
 	}
-	ctx = ctx.WithEnabledColor(r.enabledColor)
 
 	// open plugins
 	pluginDir := r.rootDir
 	if dir := ctx.PluginDir(); dir != "" {
 		pluginDir = dir
 	}
-	sm := make(setupMap)
-	for out := range r.plugins {
-		p, err := plugin.Open(filepath.Join(pluginDir, out))
+	var setups setupFuncList
+	for _, item := range r.plugins.ToSlice() {
+		p, err := plugin.Open(filepath.Join(pluginDir, item.Key))
 		if err != nil {
-			sm[out] = func(ctx *context.Context) (*context.Context, func(*context.Context)) {
-				ctx.Reporter().Fatalf("failed to open plugin: %s", err)
-				return nil, nil
-			}
+			setups = append(setups, setupFunc{
+				name: item.Key,
+				f: func(ctx *context.Context) (*context.Context, func(*context.Context)) {
+					ctx.Reporter().Fatalf("failed to open plugin: %s", err)
+					return nil, nil
+				},
+			})
 			continue
 		}
 		if setup := p.GetSetup(); setup != nil {
-			sm[out] = setup
+			setups = append(setups, setupFunc{
+				name: item.Key,
+				f:    setup,
+			})
 		}
 	}
-	ctx, teardown := sm.setup(ctx)
+	// Register cleanup to close all plugins after all teardowns complete.
+	// Using Cleanup instead of defer ensures plugins remain open during teardown execution.
+	ctx.Reporter().Cleanup(func() { plugin.CloseAll() })
+
+	ctx, teardown := setups.setup(ctx)
 	if ctx.Reporter().Failed() {
 		teardown(ctx)
 		return
 	}
 
+	if err := r.protocols.Set(); err != nil {
+		ctx.Reporter().Error(err)
+		teardown(ctx)
+		return
+	}
+
+	opts := []schema.LoadOption{
+		schema.WithInputConfig(r.rootDir, r.inputConfig),
+		schema.WithColorConfig(r.colorConfig),
+	}
+
+FILE_LOOP:
 	for _, f := range r.scenarioFiles {
 		testName, err := filepath.Rel(r.rootDir, f)
 		if err != nil {
 			testName = f
 		}
+		for _, exclude := range r.inputConfig.Excludes {
+			if exclude.MatchString(testName) {
+				continue FILE_LOOP
+			}
+		}
 		ctx.Run(testName, func(ctx *context.Context) {
-			scns, err := schema.LoadScenarios(f)
+			ctx.Reporter().Parallel()
+			scns, err := schema.LoadScenarios(f, opts...)
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
-			for _, scn := range scns {
-				scn := scn
-				ctx = ctx.WithNode(scn.Node)
-				ctx.Run(scn.Title, func(ctx *context.Context) {
-					ctx.Reporter().Parallel()
-					_ = RunScenario(ctx, scn)
-				})
-			}
+			r.runScenarios(ctx, scns, baseVars, baseSecrets)
 		})
 	}
 	for i, reader := range r.scenarioReaders {
 		ctx.Run(fmt.Sprint(i), func(ctx *context.Context) {
-			scns, err := schema.LoadScenariosFromReader(reader)
+			ctx.Reporter().Parallel()
+			scns, err := schema.LoadScenariosFromReader(reader, schema.WithColorConfig(ctx.ColorConfig()))
 			if err != nil {
 				ctx.Reporter().Fatalf("failed to load scenarios: %s", err)
 			}
-			for _, scn := range scns {
-				scn := scn
-				ctx = ctx.WithNode(scn.Node)
-				ctx.Run(scn.Title, func(ctx *context.Context) {
-					ctx.Reporter().Parallel()
-					_ = RunScenario(ctx, scn)
-				})
-			}
+			r.runScenarios(ctx, scns, baseVars, baseSecrets)
 		})
 	}
 	teardown(ctx)
-	r.writeTestReport(ctx)
 }
 
-func (r *Runner) writeTestReport(ctx *context.Context) {
-	var report *reporter.TestReport
+func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, baseVars, baseSecrets any) {
+	for _, scn := range scns {
+		localCtx := ctx.WithNode(scn.Node)
+		scenarioCtx := localCtx
+		scenarioCtx = scenarioCtx.WithScenarioFilepath(scn.Filepath())
+		scenarioCtx = scenarioCtx.WithScenarioTitle(scn.Title)
+		normalizedPath := protocolmeta.NormalizeScenarioFilepath(scn.Filepath())
+		scenarioCtx = scenarioCtx.WithScenarioIdentifier(
+			protocolmeta.BuildScenarioIdentifier(normalizedPath, scn.ScenarioIndex(), scn.Title),
+		)
+		if baseVars != nil {
+			clonedVars, err := deepcopy.Copy(baseVars)
+			if err != nil {
+				scenarioCtx.Reporter().Fatalf("failed to copy global vars: %s", err)
+				continue
+			}
+			scenarioCtx = scenarioCtx.WithVars(clonedVars)
+		}
+		if baseSecrets != nil {
+			// Ensure each scenario owns its secrets snapshot to avoid template.Execute
+			// mutating shared maps when scenarios run in parallel.
+			clonedSecrets, err := deepcopy.Copy(baseSecrets)
+			if err != nil {
+				scenarioCtx.Reporter().Fatalf("failed to copy global secrets: %s", err)
+				continue
+			}
+			scenarioCtx = scenarioCtx.WithSecrets(clonedSecrets)
+		}
+
+		// Run scenario with retry policy
+		var attempts int
+		context.RunWithRetry(scenarioCtx, scn.Title, func(ctx *context.Context) {
+			ctx.Reporter().Parallel()
+
+			attempts++
+			if attempts > 1 {
+				if err := scn.Reset(); err != nil {
+					ctx.Reporter().Fatal(
+						errors.WithNodeAndColored(
+							errors.WithPath(err, ""),
+							ctx.Node(),
+							ctx.ColorConfig().IsEnabled(),
+						),
+					)
+				}
+			}
+
+			_ = RunScenario(ctx, scn)
+		}, scn.Retry)
+	}
+}
+
+// CreateTestReport creates test reports.
+func (r *Runner) CreateTestReport(rptr reporter.Reporter) error {
+	if r.reportConfig.JSON.Filename == "" && r.reportConfig.JUnit.Filename == "" {
+		return nil
+	}
+
+	report, err := reporter.GenerateTestReport(rptr)
+	if err != nil {
+		return fmt.Errorf("failed to generate test report: %w", err)
+	}
 	if r.reportConfig.JSON.Filename != "" {
-		report = r.generateTestReport(ctx, report)
-		f, err := os.Create(filepath.Join(r.rootDir, r.reportConfig.JSON.Filename))
+		f, err := os.Create(filepathutil.From(r.rootDir, r.reportConfig.JSON.Filename))
 		if err != nil {
-			ctx.Reporter().Fatalf("failed to write JSON test report: %s", err)
+			return fmt.Errorf("failed to write JSON test report: %w", err)
 		}
 		defer f.Close()
 		enc := json.NewEncoder(f)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(report); err != nil {
-			ctx.Reporter().Fatalf("failed to write JSON test report: %s", err)
+			return fmt.Errorf("failed to write JSON test report: %w", err)
 		}
 	}
 	if r.reportConfig.JUnit.Filename != "" {
-		report = r.generateTestReport(ctx, report)
-		f, err := os.Create(filepath.Join(r.rootDir, r.reportConfig.JUnit.Filename))
+		f, err := os.Create(filepathutil.From(r.rootDir, r.reportConfig.JUnit.Filename))
 		if err != nil {
-			ctx.Reporter().Fatalf("failed to write JUnit test report: %s", err)
+			return fmt.Errorf("failed to write JUnit test report: %w", err)
 		}
 		defer f.Close()
 		enc := xml.NewEncoder(f)
 		enc.Indent("", "  ")
 		if err := enc.Encode(report); err != nil {
-			ctx.Reporter().Fatalf("failed to write JUnit test report: %s", err)
+			return fmt.Errorf("failed to write JUnit test report: %w", err)
 		}
 	}
+	return nil
 }
 
-func (r *Runner) generateTestReport(ctx *context.Context, report *reporter.TestReport) *reporter.TestReport {
-	if report != nil {
-		return report
+// Dump dumps all test scenarios.
+func (r *Runner) Dump(ctx gocontext.Context, w io.Writer) error {
+	enc := yaml.NewEncoder(w)
+	defer enc.Close()
+	opts := []schema.LoadOption{
+		schema.WithInputConfig(r.rootDir, r.inputConfig),
+		schema.WithColorConfig(r.colorConfig),
 	}
-	report, err := reporter.GenerateTestReport(ctx.Reporter())
-	if err != nil {
-		ctx.Reporter().Fatalf("failed to generate test report: %s", err)
+FILE_LOOP:
+	for _, f := range r.scenarioFiles {
+		testName, err := filepath.Rel(r.rootDir, f)
+		if err != nil {
+			testName = f
+		}
+		for _, exclude := range r.inputConfig.Excludes {
+			if exclude.MatchString(testName) {
+				continue FILE_LOOP
+			}
+		}
+		scns, err := schema.LoadScenarios(f, opts...)
+		if err != nil {
+			return fmt.Errorf("failed to load scenarios: %w", err)
+		}
+		for _, scn := range scns {
+			if err := enc.EncodeContext(ctx, scn); err != nil {
+				return fmt.Errorf("failed to encode scenarios: %w", err)
+			}
+		}
 	}
-	return report
+	return nil
 }

@@ -1,0 +1,7 @@
+name: any
+yaml: '{{assert.any}}'
+ok:
+- true
+- false
+- 'aaa'
+- 1

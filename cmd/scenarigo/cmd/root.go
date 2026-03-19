@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
 )
 
 const appName = "scenarigo"
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&config.ConfigPath, "config", "c", "", "specify configuration file path")
+	rootCmd.PersistentFlags().StringVarP(&config.ConfigPath, "config", "c", "", `specify the configuration file path (default: scenarigo.yaml, use '-' for stdin)`)
+	rootCmd.PersistentFlags().StringVarP(&config.Root, "root", "", "", `specify root directory (default value is the directory of configuration file)`)
 }
 
 var rootCmd = &cobra.Command{

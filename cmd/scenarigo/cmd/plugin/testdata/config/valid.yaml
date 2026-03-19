@@ -2,6 +2,6 @@ schemaVersion: config/v1
 pluginDirectory: ./gen
 plugins:
   remote.so:
-    src: github.com/zoncoen/scenarigo
+    src: github.com/scenarigo/scenarigo
   local.so:
     src: .

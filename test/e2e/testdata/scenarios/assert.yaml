@@ -1,4 +1,24 @@
 ---
+title: equal
+steps:
+- protocol: http
+  vars:
+    id: 1
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      id: 1
+      message: 'hello'
+  expect:
+    code: '{{assert.and("OK")}}'
+    body:
+      id: '{{vars.id}}' # int from vars
+      message: hello
+
+---
 title: and
 steps:
 - protocol: http
@@ -29,11 +49,12 @@ steps:
     code: |-
       {{assert.and <-}}:
         - '200'
+        - '{{assert.notZero}}'
     body:
-      message: |-
-        {{assert.and <-}}:
-          - hello
-          - '{{assert.notZero}}'
+      message:
+        '{{assert.and <-}}':
+        - hello
+        - '{{assert.notZero}}'
 
 ---
 title: or
@@ -66,11 +87,12 @@ steps:
     code: |-
       {{assert.or <-}}:
         - '200'
+        - '400'
     body:
-      message: |-
-        {{assert.or <-}}:
-          - '{{"hello"}}'
-          - bye
+      message:
+        '{{assert.or <-}}':
+        - '{{"hello"}}'
+        - bye
 
 ---
 title: notZero
@@ -236,3 +258,21 @@ steps:
   expect:
     body:
       message: '{{assert.length(assert.greaterThan(2))}}'
+
+---
+title: use $
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: '{{env.TEST_ADDR}}'
+    header:
+      content-type: application/json
+    body:
+      message: 'hello'
+  expect:
+    code: '{{$ == string(2*100)}}'
+    header:
+      Content-Type: '{{$ == "application/json"}}'
+    body:
+      message: '{{$ == request.message}}'

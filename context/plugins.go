@@ -1,10 +1,10 @@
 package context
 
 // Plugins represents plugins.
-type Plugins []map[string]interface{}
+type Plugins []map[string]any
 
 // Append appends p to plugins.
-func (plugins Plugins) Append(ps map[string]interface{}) Plugins {
+func (plugins Plugins) Append(ps map[string]any) Plugins {
 	if ps == nil {
 		return plugins
 	}
@@ -13,9 +13,8 @@ func (plugins Plugins) Append(ps map[string]interface{}) Plugins {
 }
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (plugins Plugins) ExtractByKey(key string) (interface{}, bool) {
+func (plugins Plugins) ExtractByKey(key string) (any, bool) {
 	for _, ps := range plugins {
-		ps := ps
 		if p, ok := ps[key]; ok {
 			return p, true
 		}

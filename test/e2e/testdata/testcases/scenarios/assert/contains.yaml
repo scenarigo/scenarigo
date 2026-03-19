@@ -1,0 +1,28 @@
+title: contains
+steps:
+- title: GET /messages
+  protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/messages"
+  expect:
+    code: OK
+    body:
+      messages:
+        '{{assert.and <-}}':
+        - '{{size($) == 2}}'
+        - '{{assert.contains <-}}':
+            id: '1'
+        - '{{assert.contains <-}}':
+            id: '2'
+- title: GET /messages
+  protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/messages"
+  expect:
+    code: OK
+    body:
+      messages:
+        '{{assert.contains <-}}':
+          id: '1'

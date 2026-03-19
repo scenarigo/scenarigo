@@ -5,8 +5,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/context"
+	"github.com/zoncoen/query-go"
+
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
 )
 
 var (
@@ -19,6 +22,9 @@ func Register(p Protocol) {
 	m.Lock()
 	defer m.Unlock()
 	registry[strings.ToLower(p.Name())] = p
+	if pr, ok := p.(QueryOptionsProvider); ok {
+		queryutil.AppendOptions(pr.QueryOptions()...)
+	}
 }
 
 // Unregister unregisters the protocol from the registry.
@@ -42,16 +48,22 @@ func Get(name string) Protocol {
 // Protocol is the interface that creates Invoker and AssertionBuilder from YAML.
 type Protocol interface {
 	Name() string
+	UnmarshalOption([]byte) error
 	UnmarshalRequest([]byte) (Invoker, error)
 	UnmarshalExpect([]byte) (AssertionBuilder, error)
 }
 
 // Invoker is the interface that sends the request and returns response sent from the server.
 type Invoker interface {
-	Invoke(*context.Context) (*context.Context, interface{}, error)
+	Invoke(*context.Context) (*context.Context, any, error)
 }
 
 // AssertionBuilder builds the assertion for the result of Invoke.
 type AssertionBuilder interface {
 	Build(*context.Context) (assert.Assertion, error)
+}
+
+// QueryOptionsProvider is the interface that provides custom querying options.
+type QueryOptionsProvider interface {
+	QueryOptions() []query.Option
 }

@@ -48,5 +48,5 @@ func Get(mediaType string) ResponseUnmarshaler {
 // ResponseUnmarshaler is the interface that unmarshals the HTTP response body.
 type ResponseUnmarshaler interface {
 	MediaType() string
-	Unmarshal(data []byte, v interface{}) error
+	Unmarshal(data []byte, v any) error
 }

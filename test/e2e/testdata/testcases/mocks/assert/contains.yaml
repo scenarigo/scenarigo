@@ -1,0 +1,19 @@
+mocks:
+- protocol: http
+  expect:
+    path: /messages
+  response:
+    code: 200
+    body:
+      messages:
+      - id: 1
+        message: foo
+      - id: 2
+        message: bar
+- protocol: http
+  expect:
+    path: /messages
+  response:
+    code: 200
+    body:
+      messages: []

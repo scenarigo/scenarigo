@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	"github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestProtoMessage_Matches(t *testing.T) {
 	tests := map[string]struct {
 		msg   proto.Message
-		v     interface{}
+		v     any
 		match bool
 	}{
 		"match": {
@@ -43,7 +43,6 @@ func TestProtoMessage_Matches(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			m := ProtoMessage(test.msg)
 			if expect, got := test.match, m.Matches(test.v); expect != got {

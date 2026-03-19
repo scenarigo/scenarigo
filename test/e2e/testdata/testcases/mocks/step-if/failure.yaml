@@ -1,0 +1,16 @@
+mocks:
+- protocol: http
+  expect:
+    path: /foo
+  response:
+    code: 200
+- protocol: http
+  expect:
+    path: /bar
+  response:
+    code: 404
+- protocol: http
+  expect:
+    path: /hoge
+  response:
+    code: 404

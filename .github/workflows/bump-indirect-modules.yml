@@ -1,0 +1,57 @@
+name: bump indirect modules
+on:
+  schedule:
+  - cron: '0 3 * * *'
+  workflow_dispatch:
+jobs:
+  bump-indirect-modules:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Install Go
+      id: setup-go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: stable
+        check-latest: true
+        cache: false
+    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      id: go-cache
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-ubuntu-latest-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          go-${{ steps.setup-go.outputs.go-version }}-
+    - name: Bump indirect modules
+      run: |
+        ./scripts/bump-indirect-modules.sh || true && go mod tidy
+        cd plugin/testdata/wasm/src && go mod tidy
+    - name: Build
+      run: make build
+    - name: Run examples
+      env:
+        SCENARIGO_COLOR: true
+      run: make test/examples
+    - name: Show diff
+      run: git add -N . && git diff
+    - name: Generate token
+      id: generate_token
+      uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
+      with:
+        app_id: ${{ secrets.WRITE_APP_ID }}
+        private_key: ${{ secrets.WRITE_PRIVATE_KEY }}
+    - name: Create pull request
+      uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
+      with:
+        token: ${{ steps.generate_token.outputs.token }}
+        commit-message: 'chore(deps): bump indirect modules'
+        branch: bump-indirect-modules
+        base: main
+        sign-commits: true
+        title: 'chore(deps): bump indirect modules'
+        body: ''
+        labels: dependencies
+        reviewers: zoncoen

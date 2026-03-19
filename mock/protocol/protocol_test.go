@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/logger"
 )
 
 func TestRegistry(t *testing.T) {
@@ -27,13 +27,13 @@ func TestRegistry(t *testing.T) {
 
 type testProtocol struct{}
 
-func (_ *testProtocol) Name() string { return "test" }
+func (_ *testProtocol) Name() string { return "test" } //nolint:revive
 
-func (_ *testProtocol) UnmarshalConfig(b []byte) (interface{}, error) {
-	return nil, nil
+func (_ *testProtocol) UnmarshalConfig(b []byte) (any, error) { //nolint:revive
+	return nil, nil //nolint:nilnil
 }
 
-func (_ *testProtocol) NewServer(iter *MockIterator, l logger.Logger, cfg interface{}) (Server, error) {
+func (_ *testProtocol) NewServer(iter *MockIterator, l logger.Logger, cfg any) (Server, error) { //nolint:revive
 	if iter == nil {
 		return nil, errors.New("mock iterator is nil")
 	}
@@ -42,7 +42,7 @@ func (_ *testProtocol) NewServer(iter *MockIterator, l logger.Logger, cfg interf
 
 type testServer struct{}
 
-func (_ testServer) Start(ctx context.Context) error { return nil }
-func (_ testServer) Wait(ctx context.Context) error  { return nil }
-func (_ testServer) Stop(ctx context.Context) error  { return nil }
-func (_ testServer) Addr() (string, error)           { return "", nil }
+func (_ testServer) Start(ctx context.Context) error { return nil }     //nolint:revive
+func (_ testServer) Wait(ctx context.Context) error  { return nil }     //nolint:revive
+func (_ testServer) Stop(ctx context.Context) error  { return nil }     //nolint:revive
+func (_ testServer) Addr() (string, error)           { return "", nil } //nolint:revive

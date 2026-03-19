@@ -21,4 +21,4 @@ steps:
   expect:
     code: 200
     body:
-      message: "{{request.message}}"
+      message: "{{request.body.message}}"

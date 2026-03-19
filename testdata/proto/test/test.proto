@@ -2,12 +2,19 @@ syntax = "proto3";
 
 package scenarigo.testdata.test;
 
-option go_package = "github.com/zoncoen/scenarigo/testdata/gen/pb/test;test";
+option go_package = "github.com/scenarigo/scenarigo/testdata/gen/pb/test;test";
 
 enum UserType {
     USER_TYPE_UNSPECIFIED = 0;
     CUSTOMER = 1;
     STAFF = 2;
+
+    reserved 3;
+}
+
+enum State {
+    STATE_UNSPECIFIED = 0;
+    ACTIVE = 1;
 }
 
 service Test {
@@ -25,6 +32,11 @@ message EchoResponse {
     string message_body = 2;
     int64 received_at = 3;
     UserType user_type = 4;
+    oneof user_id {
+        string customer_id = 5;
+        string staff_id = 6;
+    }
+    State state = 7;
     StringValue nullable_string = 11;
 }
 

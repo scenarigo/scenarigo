@@ -13,4 +13,4 @@ steps:
         message: "{{vars.message}}"
     expect:
       body:
-        message: "{{request.body}}"
+        message: "{{request.body.body}}"

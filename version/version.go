@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	version  string = "0.12.1"
-	revision string = "dev"
-	info, ok        = debug.ReadBuildInfo()
+	version  = "0.25.3"
+	revision = "dev"
+	info, ok = debug.ReadBuildInfo()
 )
 
 // String returns scenarigo version as string.

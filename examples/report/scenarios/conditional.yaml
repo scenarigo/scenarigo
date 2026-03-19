@@ -1,0 +1,36 @@
+title: Conditional Test with Skip
+plugins:
+  server: server.so
+vars:
+  skipTest: true
+
+steps:
+- title: This step will run
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/1'
+  expect:
+    code: OK
+    body:
+      id: '{{assert.notZero}}'
+
+- id: conditional
+  title: This step will be skipped based on condition
+  if: '{{!vars.skipTest}}'  # This will evaluate to false, so step is skipped
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/999'
+  expect:
+    code: 404
+
+- title: This step runs after skip
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/1'
+  expect:
+    code: OK
+    body:
+      name: test-item

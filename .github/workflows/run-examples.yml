@@ -1,0 +1,92 @@
+name: run-examples
+on:
+  pull_request_target:
+    types:
+    - opened
+    - synchronize
+    - reopened
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go-version: [stable, oldstable]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: suzuki-shunsuke/get-pr-action@b002e41164d7a39586b41f17f9caca4e98a1efe4 # v0.1.0
+      id: pr
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        ref: ${{steps.pr.outputs.merge_commit_sha}}
+    - name: Install Go
+      id: setup-go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: ${{ matrix.go-version }}
+        check-latest: true
+        cache: false
+    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      if: matrix.os != 'macos-latest'
+      id: go-cache
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-${{ matrix.os }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          go-${{ steps.setup-go.outputs.go-version }}-
+    - name: Build
+      run: make build
+    - name: Run examples
+      run: make test/examples
+      env:
+        SCENARIGO_COLOR: true
+    - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      if: matrix.os == 'ubuntu-latest' && startsWith(matrix.go-version, 'stable')
+      with:
+        name: examples-go-mod-${{ github.event.number }}
+        path: examples/**/go.*
+        overwrite: true
+
+  update:
+    if: startsWith(github.head_ref, 'dependabot/') && github.actor == 'dependabot[bot]'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Generate token # required to trigger actions on the commit
+      id: generate_token
+      uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2.1.0
+      with:
+        app_id: ${{ secrets.WRITE_APP_ID }}
+        private_key: ${{ secrets.WRITE_PRIVATE_KEY }}
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+        token: ${{ steps.generate_token.outputs.token }}
+    - name: Install Go
+      id: setup-go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: stable
+        check-latest: true
+        cache: false
+    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      id: go-cache
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-ubuntu-latest-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          go-${{ steps.setup-go.outputs.go-version }}-
+    - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+      with:
+        name: examples-go-mod-${{ github.event.number }}
+        path: examples
+    - uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9.1.4
+      with:
+        add: .
+        default_author: github_actions
+        message: 'chore(examples): update go.mod'

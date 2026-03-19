@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +13,6 @@ import (
 func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...string) {
 	r.Helper()
 	for _, file := range files {
-		file := file
 		run(r, file, func(r Reporter) {
 			f, err := os.Open(file)
 			if err != nil {
@@ -22,14 +22,14 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 			for {
 				var p TestParameter
 				if err := dec.Decode(&p); err != nil {
-					if err == io.EOF {
+					if errors.Is(err, io.EOF) {
 						break
 					} else {
 						r.Fatalf("failed to decode test parameter: %s", err)
 					}
 				}
 				run(r, p.Name, func(r Reporter) {
-					exec := e(r, func(v interface{}) {
+					exec := e(r, func(v any) {
 						b, err := yaml.Marshal(p.YAML)
 						if err != nil {
 							r.Fatalf("failed to marshal YAML: %s", err)
@@ -40,7 +40,6 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 					})
 					run(r, "OK", func(r Reporter) {
 						for i, ok := range p.OKs {
-							ok := ok
 							run(r, fmt.Sprint(i), func(r Reporter) {
 								err := exec(r, ok)
 								if err != nil {
@@ -51,7 +50,6 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 					})
 					run(r, "NG", func(r Reporter) {
 						for i, ng := range p.NGs {
-							ng := ng
 							run(r, fmt.Sprint(i), func(r Reporter) {
 								err := exec(r, ng)
 								if err == nil {
@@ -68,11 +66,11 @@ func RunParameterizedTests(r Reporter, e ParameterizedTestExecutor, files ...str
 
 // TestParameter is a parameters for parameterized testing.
 type TestParameter struct {
-	Name string        `yaml:"name"`
-	YAML interface{}   `yaml:"yaml"`
-	OKs  []interface{} `yaml:"ok"`
-	NGs  []interface{} `yaml:"ng"`
+	Name string `yaml:"name"`
+	YAML any    `yaml:"yaml"`
+	OKs  []any  `yaml:"ok"`
+	NGs  []any  `yaml:"ng"`
 }
 
 // ParameterizedTestExecutor represents a executor for parameterized testing.
-type ParameterizedTestExecutor func(Reporter, func(interface{})) func(Reporter, interface{}) error
+type ParameterizedTestExecutor func(Reporter, func(any)) func(Reporter, any) error

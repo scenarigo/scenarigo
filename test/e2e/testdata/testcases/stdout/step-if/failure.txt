@@ -1,0 +1,79 @@
+=== RUN   testdata/testcases/scenarios/step-if/failure.yaml
+=== PAUSE testdata/testcases/scenarios/step-if/failure.yaml
+=== CONT  testdata/testcases/scenarios/step-if/failure.yaml
+=== RUN   testdata/testcases/scenarios/step-if/failure.yaml/step_if
+=== PAUSE testdata/testcases/scenarios/step-if/failure.yaml/step_if
+=== CONT  testdata/testcases/scenarios/step-if/failure.yaml/step_if
+=== RUN   testdata/testcases/scenarios/step-if/failure.yaml/step_if/foo
+=== RUN   testdata/testcases/scenarios/step-if/failure.yaml/step_if/bar
+=== RUN   testdata/testcases/scenarios/step-if/failure.yaml/step_if/baz
+=== RUN   testdata/testcases/scenarios/step-if/failure.yaml/step_if/hoge
+--- FAIL: testdata/testcases/scenarios/step-if/failure.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/step-if/failure.yaml/step_if (0.00s)
+        --- PASS: testdata/testcases/scenarios/step-if/failure.yaml/step_if/foo (0.00s)
+                request:
+                  method: GET
+                  url: http://[::]:12345/foo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "0"
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                elapsed time: 0.000000 sec
+        --- FAIL: testdata/testcases/scenarios/step-if/failure.yaml/step_if/bar (0.00s)
+                request:
+                  method: GET
+                  url: http://[::]:12345/bar
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 404 Not Found
+                  statusCode: 404
+                  header:
+                    Content-Length:
+                    - "0"
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                elapsed time: 0.000000 sec
+                expected "OK" but got "Not Found"
+                      19 |     method: GET
+                      20 |     url: "http://{{env.TEST_HTTP_ADDR}}/bar"
+                      21 |   expect:
+                    > 22 |     code: OK
+                                     ^
+                      23 | - id: baz
+                      24 |   title: baz
+                      25 |   if: '{{steps.bar.result != "failed"}}'
+        --- SKIP: testdata/testcases/scenarios/step-if/failure.yaml/step_if/baz (0.00s)
+        --- FAIL: testdata/testcases/scenarios/step-if/failure.yaml/step_if/hoge (0.00s)
+                request:
+                  method: GET
+                  url: http://[::]:12345/hoge
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 404 Not Found
+                  statusCode: 404
+                  header:
+                    Content-Length:
+                    - "0"
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                elapsed time: 0.000000 sec
+                expected "OK" but got "Not Found"
+                      36 |     method: GET
+                      37 |     url: "http://{{env.TEST_HTTP_ADDR}}/hoge"
+                      38 |   expect:
+                    > 39 |     code: OK
+                                     ^
+FAIL
+FAIL	testdata/testcases/scenarios/step-if/failure.yaml	0.000s
+FAIL

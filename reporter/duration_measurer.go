@@ -55,5 +55,9 @@ func (m *durationMeasurer) spawn() testDurationMeasurer {
 func (m *durationMeasurer) getDuration() time.Duration {
 	m.m.Lock()
 	defer m.m.Unlock()
+	// HACK: for FromT
+	if m.running > 0 {
+		return time.Since(m.startTime)
+	}
 	return m.duration
 }

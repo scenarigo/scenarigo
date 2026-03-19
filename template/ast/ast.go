@@ -2,15 +2,15 @@
 package ast
 
 import (
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
-// All node types implement the Node interface.
+// Node is an interface implemented by all node types.
 type Node interface {
 	Pos() int
 }
 
-// All expression nodes implement the Expr interface.
+// Expr is an interface implemented by all expression nodes.
 type Expr interface {
 	Node
 	exprNode()
@@ -22,6 +22,13 @@ type (
 		ValuePos int
 		Kind     token.Token
 		Value    string
+	}
+
+	// UnaryExpr node represents a unary expression.
+	UnaryExpr struct {
+		OpPos int
+		Op    token.Token
+		X     Expr
 	}
 
 	// BinaryExpr node represents a binary expression.
@@ -45,6 +52,22 @@ type (
 		X       Expr
 		Rdbrace int
 		Quoted  bool
+	}
+
+	// ParenExpr node represents a parenthesized expression.
+	ParenExpr struct {
+		Lparen int
+		X      Expr
+		Rparen int
+	}
+
+	// ConditionalExpr node represents a ternary conditional expression..
+	ConditionalExpr struct {
+		Condition Expr
+		Question  int
+		X         Expr
+		Colon     int
+		Y         Expr
 	}
 
 	// Ident node represents an identifier.
@@ -82,26 +105,42 @@ type (
 		Rdbrace int
 		Arg     Expr
 	}
+
+	// DefinedExpr node represents a defined() expression.
+	DefinedExpr struct {
+		DefinedPos int
+		Lparen     int
+		Arg        Expr
+		Rparen     int
+	}
 )
 
 // Pos implements Node.
-func (e *BadExpr) Pos() int       { return e.ValuePos }
-func (e *BinaryExpr) Pos() int    { return e.OpPos }
-func (e *BasicLit) Pos() int      { return e.ValuePos }
-func (e *ParameterExpr) Pos() int { return e.Ldbrace }
-func (e *Ident) Pos() int         { return e.NamePos }
-func (e *SelectorExpr) Pos() int  { return e.Sel.Pos() }
-func (e *IndexExpr) Pos() int     { return e.Lbrack }
-func (e *CallExpr) Pos() int      { return e.Lparen }
-func (e *LeftArrowExpr) Pos() int { return e.Larrow }
+func (e *BadExpr) Pos() int         { return e.ValuePos }
+func (e *UnaryExpr) Pos() int       { return e.OpPos }
+func (e *BinaryExpr) Pos() int      { return e.OpPos }
+func (e *BasicLit) Pos() int        { return e.ValuePos }
+func (e *ParameterExpr) Pos() int   { return e.Ldbrace }
+func (e *ParenExpr) Pos() int       { return e.Lparen }
+func (e *ConditionalExpr) Pos() int { return e.Question }
+func (e *Ident) Pos() int           { return e.NamePos }
+func (e *SelectorExpr) Pos() int    { return e.Sel.Pos() }
+func (e *IndexExpr) Pos() int       { return e.Lbrack }
+func (e *CallExpr) Pos() int        { return e.Lparen }
+func (e *LeftArrowExpr) Pos() int   { return e.Larrow }
+func (e *DefinedExpr) Pos() int     { return e.DefinedPos }
 
 // exprNode implements Expr.
-func (e *BadExpr) exprNode()       {}
-func (e *BinaryExpr) exprNode()    {}
-func (e *BasicLit) exprNode()      {}
-func (e *ParameterExpr) exprNode() {}
-func (e *Ident) exprNode()         {}
-func (e *SelectorExpr) exprNode()  {}
-func (e *IndexExpr) exprNode()     {}
-func (e *LeftArrowExpr) exprNode() {}
-func (e *CallExpr) exprNode()      {}
+func (e *BadExpr) exprNode()         {}
+func (e *UnaryExpr) exprNode()       {}
+func (e *BinaryExpr) exprNode()      {}
+func (e *BasicLit) exprNode()        {}
+func (e *ParameterExpr) exprNode()   {}
+func (e *ParenExpr) exprNode()       {}
+func (e *ConditionalExpr) exprNode() {}
+func (e *Ident) exprNode()           {}
+func (e *SelectorExpr) exprNode()    {}
+func (e *IndexExpr) exprNode()       {}
+func (e *LeftArrowExpr) exprNode()   {}
+func (e *DefinedExpr) exprNode()     {}
+func (e *CallExpr) exprNode()        {}

@@ -2,6 +2,7 @@
 package template
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -9,10 +10,11 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
-	"github.com/zoncoen/scenarigo/template/ast"
-	"github.com/zoncoen/scenarigo/template/parser"
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/template/ast"
+	"github.com/scenarigo/scenarigo/template/parser"
+	"github.com/scenarigo/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/val"
 )
 
 // Template is the representation of a parsed template.
@@ -43,55 +45,82 @@ func New(str string) (*Template, error) {
 }
 
 // Execute applies a parsed template to the specified data.
-func (t *Template) Execute(data interface{}) (ret interface{}, retErr error) {
+// If the Lazy isn't called, the context value should be canceled to avoid a goroutine leak.
+func (t *Template) Execute(ctx context.Context, data any) (any, error) {
+	return t.executeLazyTemplate(ctx, data)
+}
+
+func (t *Template) execute(ctx context.Context, data any) (_ any, retErr error) {
 	defer func() {
 		if err := recover(); err != nil {
 			retErr = fmt.Errorf("failed to execute: panic: %s", err)
 		}
 	}()
-	v, err := t.executeExpr(t.expr, data)
+	v, err := t.executeExpr(ctx, t.expr, data)
 	if err != nil {
 		if strings.Contains(t.str, "\n") {
-			return nil, errors.Wrapf(err, "failed to execute: \n%s\n", t.str)
+			return nil, errors.Wrapf(err, "failed to execute: \n%s\n", t.str) //nolint:revive
 		}
 		return nil, errors.Wrapf(err, "failed to execute: %s", t.str)
 	}
 	return v, nil
 }
 
-func (t *Template) executeExpr(expr ast.Expr, data interface{}) (interface{}, error) {
+func (t *Template) executeExpr(ctx context.Context, expr ast.Expr, data any) (any, error) {
 	switch e := expr.(type) {
 	case *ast.BasicLit:
 		return t.executeBasicLit(e)
 	case *ast.ParameterExpr:
-		return t.executeParameterExpr(e, data)
+		return t.executeParameterExpr(ctx, e, data)
+	case *ast.ParenExpr:
+		return t.executeExpr(ctx, e.X, data)
+	case *ast.UnaryExpr:
+		v, err := t.executeUnaryExpr(ctx, e, data)
+		if err != nil {
+			return nil, fmt.Errorf("invalid operation: %w", err)
+		}
+		return v, nil
 	case *ast.BinaryExpr:
-		return t.executeBinaryExpr(e, data)
+		v, err := t.executeBinaryExpr(ctx, e, data)
+		if err != nil {
+			return nil, fmt.Errorf("invalid operation: %w", err)
+		}
+		return v, nil
+	case *ast.ConditionalExpr:
+		return t.executeConditionalExpr(ctx, e, data)
 	case *ast.Ident:
-		return lookup(e, data)
+		return lookup(ctx, e, data)
 	case *ast.SelectorExpr:
-		return lookup(e, data)
+		return lookup(ctx, e, data)
 	case *ast.IndexExpr:
-		return lookup(e, data)
+		return lookup(ctx, e, data)
 	case *ast.CallExpr:
-		return t.executeFuncCall(e, data)
+		return t.executeFuncCall(ctx, e, data)
 	case *ast.LeftArrowExpr:
-		return t.executeLeftArrowExpr(e, data)
+		return t.executeLeftArrowExpr(ctx, e, data)
+	case *ast.DefinedExpr:
+		return t.executeDefinedExpr(e, data)
 	default:
 		return nil, errors.Errorf(`unknown expression "%T"`, e)
 	}
 }
 
-func (t *Template) executeBasicLit(lit *ast.BasicLit) (interface{}, error) {
+func (t *Template) executeBasicLit(lit *ast.BasicLit) (any, error) {
 	switch lit.Kind {
 	case token.STRING:
 		return lit.Value, nil
 	case token.INT:
-		i, err := strconv.Atoi(lit.Value)
+		i, err := strconv.ParseInt(lit.Value, 0, 64)
 		if err != nil {
-			return nil, errors.Wrapf(err, `invalid AST: "%s" is not a integer`, lit.Value)
+			return nil, errors.Wrapf(err, `invalid AST: "%s" is not an integer`, lit.Value)
 		}
 		return i, nil
+	case token.FLOAT:
+		f, err := strconv.ParseFloat(lit.Value, 64)
+		if err != nil {
+			return nil, errors.Wrapf(err, `invalid AST: "%s" is not a float`, lit.Value)
+		}
+		return f, nil
 	case token.BOOL:
 		switch lit.Value {
 		case "true":
@@ -101,16 +130,18 @@ func (t *Template) executeBasicLit(lit *ast.BasicLit) (interface{}, error) {
 		default:
 			return nil, errors.Errorf(`invalid bool literal "%s"`, lit.Value)
 		}
+	case token.NIL:
+		return nil, nil //nolint:nilnil
 	default:
 		return nil, errors.Errorf(`unknown basic literal "%s"`, lit.Kind.String())
 	}
 }
 
-func (t *Template) executeParameterExpr(e *ast.ParameterExpr, data interface{}) (interface{}, error) {
+func (t *Template) executeParameterExpr(ctx context.Context, e *ast.ParameterExpr, data any) (any, error) {
 	if e.X == nil {
 		return "", nil
 	}
-	v, err := t.executeExpr(e.X, data)
+	v, err := t.executeExpr(ctx, e.X, data)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +158,10 @@ func (t *Template) executeParameterExpr(e *ast.ParameterExpr, data interface{}) 
 		}
 
 		// Left arrow function arguments must be a string in YAML.
-		b, err := yaml.Marshal(v)
+		// If the `v` is a map or slice(array) instance, directly concatenating the output string would result in something like
+		// "a: key: value", which is invalid YAML.
+		// To resolve this problem, flow mode is used to create valid YAML, such as 'a: {key: value}'.
+		b, err := yaml.MarshalWithOptions(v, yaml.Flow(true))
 		if err != nil {
 			return nil, err
 		}
@@ -136,56 +170,246 @@ func (t *Template) executeParameterExpr(e *ast.ParameterExpr, data interface{}) 
 	return v, nil
 }
 
-func (t *Template) executeBinaryExpr(e *ast.BinaryExpr, data interface{}) (interface{}, error) {
-	x, err := t.executeExpr(e.X, data)
+func typeValue(v val.Value) string {
+	if _, ok := v.(val.Nil); ok {
+		return "nil"
+	}
+	return fmt.Sprintf("%s(%v)", v.Type().Name(), v.GoValue())
+}
+
+func (t *Template) executeUnaryExpr(ctx context.Context, e *ast.UnaryExpr, data any) (any, error) {
+	x, err := t.executeExpr(ctx, e.X, data)
 	if err != nil {
 		return nil, err
 	}
-	y, err := t.executeExpr(e.Y, data)
+	xv := val.NewValue(x)
+	v, err := t.executeUnaryOperation(e.Op, xv)
 	if err != nil {
+		if errors.Is(err, val.ErrOperationNotDefined) {
+			return nil, fmt.Errorf("operator %s not defined on %s", e.Op, typeValue(xv))
+		}
 		return nil, err
 	}
-	var withIndent bool
-	if t.executingLeftArrowExprArg {
-		if _, ok := (e.Y).(*ast.ParameterExpr); ok {
-			withIndent = true
+	return v.GoValue(), err
+}
+
+func (t *Template) executeUnaryOperation(op token.Token, x val.Value) (val.Value, error) {
+	switch op {
+	case token.SUB:
+		if o, ok := x.(val.Negator); ok {
+			return o.Neg()
+		}
+	case token.NOT:
+		if o, ok := x.(val.LogicalValue); ok {
+			return val.Bool(!o.IsTruthy()), nil
 		}
 	}
-	switch e.Op {
+	return nil, val.ErrOperationNotDefined
+}
+
+func (t *Template) executeBinaryExpr(ctx context.Context, e *ast.BinaryExpr, data any) (any, error) {
+	// coalescing expr allows undefined variables as the left-hand side expr
+	if e.Op == token.COALESCING {
+		return t.executeCoalescingExpr(ctx, e, data)
+	}
+
+	x, err := t.executeExpr(ctx, e.X, data)
+	if err != nil {
+		return nil, err
+	}
+	y, err := t.executeExpr(ctx, e.Y, data)
+	if err != nil {
+		return nil, err
+	}
+	xv, yv := val.NewValue(x), val.NewValue(y)
+	v, err := t.executeBinaryOperation(e.Op, xv, yv, e.Y)
+	if err != nil {
+		if errors.Is(err, val.ErrOperationNotDefined) {
+			return nil, fmt.Errorf("%s %s %s not defined", typeValue(xv), e.Op, typeValue(yv))
+		}
+		return nil, err
+	}
+	return v.GoValue(), nil
+}
+
+//nolint:gocyclo,cyclop,maintidx
+func (t *Template) executeBinaryOperation(op token.Token, x, y val.Value, yExpr ast.Expr) (val.Value, error) {
+	switch op {
+	case token.EQL:
+		if o, ok := x.(val.Equaler); ok {
+			return o.Equal(y)
+		}
+	case token.NEQ:
+		if o, ok := x.(val.Equaler); ok {
+			b, err := o.Equal(y)
+			if err != nil {
+				return nil, err
+			}
+			return val.Bool(!b.IsTruthy()), nil
+		}
+	case token.LSS:
+		if o, ok := x.(val.Comparer); ok {
+			i, err := o.Compare(y)
+			if err != nil {
+				return nil, err
+			}
+			return oneOf(i, val.Int(-1))
+		}
+	case token.LEQ:
+		if o, ok := x.(val.Comparer); ok {
+			i, err := o.Compare(y)
+			if err != nil {
+				return nil, err
+			}
+			return oneOf(i, val.Int(-1), val.Int(0))
+		}
+	case token.GTR:
+		if o, ok := x.(val.Comparer); ok {
+			i, err := o.Compare(y)
+			if err != nil {
+				return nil, err
+			}
+			return oneOf(i, val.Int(1))
+		}
+	case token.GEQ:
+		if o, ok := x.(val.Comparer); ok {
+			i, err := o.Compare(y)
+			if err != nil {
+				return nil, err
+			}
+			return oneOf(i, val.Int(1), val.Int(0))
+		}
+	case token.CONCAT:
+		if _, ok := x.(val.String); !ok {
+			if v, err := val.GetType("string").Convert(x); err == nil {
+				x = v
+			}
+		}
+		if _, ok := y.(val.String); !ok {
+			if v, err := val.GetType("string").Convert(y); err == nil {
+				y = v
+			}
+		}
+		fallthrough
 	case token.ADD:
-		return t.add(x, y, withIndent)
+		if o, ok := x.(val.Adder); ok {
+			// hack for strings of left arrow functions
+			if t.executingLeftArrowExprArg {
+				if _, ok := (yExpr).(*ast.ParameterExpr); ok {
+					if xs, ok := x.(val.String); ok {
+						if ys, ok := y.(val.String); ok {
+							var err error
+							s, err := t.addIndent(string(ys), string(xs))
+							if err != nil {
+								return nil, errors.Wrap(err, "failed to concat strings")
+							}
+							y = val.String(s)
+						}
+					}
+				}
+			}
+			return o.Add(y)
+		}
+	case token.SUB:
+		if o, ok := x.(val.Subtractor); ok {
+			return o.Sub(y)
+		}
+	case token.MUL:
+		if o, ok := x.(val.Multiplier); ok {
+			return o.Mul(y)
+		}
+	case token.QUO:
+		if o, ok := x.(val.Divider); ok {
+			return o.Div(y)
+		}
+	case token.REM:
+		if o, ok := x.(val.Modder); ok {
+			return o.Mod(y)
+		}
+	case token.LAND:
+		if o, ok := x.(val.LogicalValue); ok {
+			if ylv, ok := y.(val.LogicalValue); ok {
+				return val.Bool(o.IsTruthy() && ylv.IsTruthy()), nil
+			}
+		}
+	case token.LOR:
+		if o, ok := x.(val.LogicalValue); ok {
+			if ylv, ok := y.(val.LogicalValue); ok {
+				return val.Bool(o.IsTruthy() || ylv.IsTruthy()), nil
+			}
+		}
+	}
+	return nil, val.ErrOperationNotDefined
+}
+
+func (t *Template) executeCoalescingExpr(ctx context.Context, e *ast.BinaryExpr, data any) (any, error) {
+	switch e.X.(type) {
+	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
+		extracted, err := extract(e.X, data)
+		if err != nil {
+			var notDefined notDefinedError
+			if errors.As(err, &notDefined) {
+				return t.executeExpr(ctx, e.Y, data)
+			}
+			return nil, err
+		}
+		if extracted == nil || isNil(reflect.ValueOf(extracted)) {
+			return t.executeExpr(ctx, e.Y, data)
+		}
+		return extracted, nil
 	default:
-		return nil, errors.Errorf(`unknown operation "%s"`, e.Op.String())
+		x, err := t.executeExpr(ctx, e.X, data)
+		if err != nil {
+			return nil, err
+		}
+		if x == nil || isNil(reflect.ValueOf(x)) {
+			return t.executeExpr(ctx, e.Y, data)
+		}
+		return x, nil
 	}
 }
 
-func (t *Template) add(x, y interface{}, withIndent bool) (interface{}, error) {
-	strX, err := t.stringize(x)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to concat strings")
-	}
-	strY, err := t.stringize(y)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to concat strings")
-	}
-	if withIndent {
-		strY, err = t.addIndent(strY, strX)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to concat strings")
+func oneOf(x val.Value, ys ...val.Value) (val.Bool, error) {
+	if xv, ok := x.(val.Equaler); ok {
+		for _, yv := range ys {
+			b, err := xv.Equal(yv)
+			if err != nil {
+				return val.Bool(false), err
+			}
+			if b.IsTruthy() {
+				return val.Bool(true), nil
+			}
 		}
+		return val.Bool(false), nil
 	}
-	return strX + strY, nil
+	return val.Bool(false), val.ErrOperationNotDefined
+}
+
+func (t *Template) executeConditionalExpr(ctx context.Context, e *ast.ConditionalExpr, data any) (any, error) {
+	c, err := t.executeExpr(ctx, e.Condition, data)
+	if err != nil {
+		return nil, err
+	}
+	cv := val.NewValue(c)
+	cond, ok := cv.(val.LogicalValue)
+	if !ok {
+		return nil, fmt.Errorf("invalid operation: operator ? not defined on %s", typeValue(cv))
+	}
+	if cond.IsTruthy() {
+		return t.executeExpr(ctx, e.X, data)
+	}
+	return t.executeExpr(ctx, e.Y, data)
 }
 
 // align indents of marshaled texts
 //
-// example: addIndent("a: 1\nb:2", "- ")
-// === before ===
-// - a: 1
-// b: 2
-// === after ===
-// - a: 1
-//   b: 2
+//	example: addIndent("a: 1\nb:2", "- ")
+//	=== before ===
+//	- a: 1
+//	b: 2
+//	=== after ===
+//	- a: 1
+//	  b: 2
 func (t *Template) addIndent(str, preStr string) (string, error) {
 	if t.executingLeftArrowExprArg {
 		if strings.ContainsRune(str, '\n') && preStr != "" {
@@ -213,68 +437,53 @@ func (t *Template) addIndent(str, preStr string) (string, error) {
 	return str, nil
 }
 
-func (t *Template) stringize(v interface{}) (string, error) {
-	s, ok := v.(string)
-	if !ok {
-		return "", errors.Errorf("expect string but got %T", v)
-	}
-	return s, nil
-}
-
-func (t *Template) requiredFuncArgType(funcType reflect.Type, argIdx int) reflect.Type {
-	if !funcType.IsVariadic() {
-		return funcType.In(argIdx)
-	}
-
-	argNum := funcType.NumIn()
-	lastArgIdx := argNum - 1
-	if argIdx < lastArgIdx {
-		return funcType.In(argIdx)
-	}
-
-	return funcType.In(lastArgIdx).Elem()
-}
-
-func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interface{}, error) {
-	fun, err := t.executeExpr(call.Fun, data)
-	if err != nil {
-		return nil, err
-	}
-	funv := reflect.ValueOf(fun)
-	if funv.Kind() != reflect.Func {
-		return nil, errors.Errorf("not function")
-	}
-	funcType := funv.Type()
-	if funcType.IsVariadic() {
-		minArgNum := funcType.NumIn() - 1
-		if len(call.Args) < minArgNum {
-			return nil, errors.Errorf(
-				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
-				minArgNum, len(call.Args),
-			)
-		}
-	} else if funcType.NumIn() != len(call.Args) {
-		return nil, errors.Errorf(
-			"expected function argument number is %d. but specified %d arguments",
-			funv.Type().NumIn(), len(call.Args),
-		)
-	}
-
-	args := make([]reflect.Value, len(call.Args))
-	for i, arg := range call.Args {
-		a, err := t.executeExpr(arg, data)
+func (t *Template) executeFuncCall(ctx context.Context, call *ast.CallExpr, data any) (any, error) {
+	var fn reflect.Value
+	fnName := "function"
+	args := make([]reflect.Value, 0, len(call.Args)+1)
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if ok {
+		x, err := t.executeExpr(ctx, selector.X, data)
 		if err != nil {
 			return nil, err
 		}
-		requiredType := t.requiredFuncArgType(funcType, i)
-		v := reflect.ValueOf(a)
-		if v.IsValid() && v.Type().ConvertibleTo(requiredType) {
-			v = v.Convert(requiredType)
+		v, err := lookup(ctx, selector.Sel, x)
+		if err == nil {
+			fn = reflect.ValueOf(v)
+		} else {
+			r, m, ok := getMethod(reflect.ValueOf(x), selector.Sel.Name)
+			if !ok {
+				return nil, err
+			}
+			fn = m.Func
+			args = append(args, r)
 		}
-		args[i] = v
+		fnName = selector.Sel.Name
+	} else {
+		f, err := t.executeExpr(ctx, call.Fun, data)
+		if err != nil {
+			return nil, err
+		}
+		fn = reflect.ValueOf(f)
+		if id, ok := call.Fun.(*ast.Ident); ok {
+			fnName = id.Name
+		}
+	}
+	if fn.Kind() != reflect.Func {
+		if r, m, ok := getMethod(fn, "Call"); ok {
+			fn = m.Func
+			args = append(args, r)
+		} else {
+			return nil, errors.Errorf("not function")
+		}
+	}
+	fnType := fn.Type()
+	args, err := t.buildFuncCallArgs(ctx, data, fnName, fnType, args, call.Args)
+	if err != nil {
+		return nil, err
 	}
 
-	vs := funv.Call(args)
+	vs := fn.Call(args)
 	switch len(vs) {
 	case 1:
 		if !vs[0].IsValid() || !vs[0].CanInterface() {
@@ -283,16 +492,16 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 		return vs[0].Interface(), nil
 	case 2:
 		if !vs[0].IsValid() || !vs[0].CanInterface() {
-			return nil, errors.Errorf("first reruned value is invlid")
+			return nil, errors.Errorf("first reruned value is invalid")
 		}
 		if !vs[1].IsValid() || !vs[1].CanInterface() {
-			return nil, errors.Errorf("second reruned value is invlid")
+			return nil, errors.Errorf("second reruned value is invalid")
 		}
 		if vs[1].Type() != reflectutil.TypeError {
 			return nil, errors.Errorf("second returned value must be an error")
 		}
 		if !vs[1].IsNil() {
-			return nil, vs[1].Interface().(error)
+			return nil, vs[1].Interface().(error) //nolint:forcetypeassert
 		}
 		return vs[0].Interface(), nil
 	default:
@@ -300,8 +509,228 @@ func (t *Template) executeFuncCall(call *ast.CallExpr, data interface{}) (interf
 	}
 }
 
-func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) (interface{}, error) {
-	v, err := t.executeExpr(e.Fun, data)
+func getMethod(in reflect.Value, name string) (reflect.Value, *reflect.Method, bool) {
+	r := reflectutil.Elem(in)
+	m, ok := r.Type().MethodByName(name)
+	if ok {
+		return r, &m, true
+	}
+	if r.CanAddr() {
+		r = r.Addr()
+		m, ok := r.Type().MethodByName(name)
+		if ok {
+			return r, &m, true
+		}
+	} else {
+		ptr := makePtr(r)
+		m, ok := ptr.Type().MethodByName(name)
+		if ok {
+			return ptr, &m, true
+		}
+	}
+	return reflect.Value{}, nil, false
+}
+
+// buildFuncCallArgs builds the argument slice for a function call.
+//
+// Parameters:
+//   - baseArgs: Arguments already bound before this call, such as a method receiver.
+//     These are prepended to the final argument list and are not specified in the template.
+//   - callArgs: Argument expressions from the template's function call syntax (e.g., fn(a, b)).
+//     These are evaluated and appended after baseArgs.
+//
+// The function also handles automatic *Context injection when the user provides
+// fewer arguments than required and the parameter type is compatible with *Context.
+func (t *Template) buildFuncCallArgs(
+	ctx context.Context,
+	data any,
+	fnName string,
+	fnType reflect.Type,
+	baseArgs []reflect.Value,
+	callArgs []ast.Expr,
+) ([]reflect.Value, error) {
+	userValues := make([]reflect.Value, len(callArgs))
+	for i, arg := range callArgs {
+		a, err := t.executeExpr(ctx, arg, data)
+		if err != nil {
+			return nil, err
+		}
+		if a == nil {
+			userValues[i] = reflect.Value{}
+			continue
+		}
+		userValues[i] = reflect.ValueOf(a)
+	}
+
+	// Pull scenarigo context from template execution context so we can inject it
+	// into plugin helpers transparently.
+	ctxVal, _ := contextValueFromExecutionContext(ctx)
+
+	fixedParamCount := fnType.NumIn() - len(baseArgs)
+	isVariadic := fnType.IsVariadic()
+	if isVariadic {
+		fixedParamCount--
+	}
+
+	// Check if context injection is possible. Injection only applies when:
+	// - There are fixed parameters to fill
+	// - A valid context value is available
+	// - The first parameter can accept *Context
+	firstParamType := reflect.Type(nil)
+	if fixedParamCount > 0 {
+		firstParamType = fnType.In(len(baseArgs))
+	}
+	canInject := firstParamType != nil &&
+		ctxVal.IsValid() &&
+		ctxVal.Type().AssignableTo(firstParamType)
+
+	// Determine if we should inject context at the first parameter.
+	// Inject only if:
+	// - Injection is possible (canInject), AND
+	// - User did not provide enough arguments (for non-variadic), OR
+	// - User's first arg is not assignable to *Context (for variadic)
+	var shouldInject bool
+	if canInject {
+		if isVariadic {
+			// For variadic functions, check if the first user arg can be assigned to the first param.
+			// If not, we inject context (extra args go to variadic tail).
+			shouldInject = !isAssignable(firstUserValue(userValues), firstParamType)
+		} else {
+			// For non-variadic functions, inject only if user provided fewer args than params.
+			// This prevents injection when user passes nil explicitly (issue #690).
+			shouldInject = len(userValues) < fixedParamCount
+		}
+	}
+
+	return buildArgs(fnName, fnType, baseArgs, userValues, ctxVal, fixedParamCount, isVariadic, shouldInject)
+}
+
+func firstUserValue(userValues []reflect.Value) reflect.Value {
+	if len(userValues) == 0 {
+		return reflect.Value{}
+	}
+	return userValues[0]
+}
+
+func buildArgs(
+	fnName string,
+	fnType reflect.Type,
+	baseArgs, userValues []reflect.Value,
+	ctxVal reflect.Value,
+	fixedParamCount int,
+	isVariadic, injectContext bool,
+) ([]reflect.Value, error) {
+	// Calculate required user args: all fixed params minus 1 if we inject context.
+	requiredUserArgs := fixedParamCount
+	if injectContext {
+		requiredUserArgs--
+	}
+
+	// Validate argument count.
+	if isVariadic {
+		if len(userValues) < requiredUserArgs {
+			return nil, errors.Errorf(
+				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
+				requiredUserArgs, len(userValues),
+			)
+		}
+	} else {
+		if len(userValues) < requiredUserArgs {
+			return nil, errors.Errorf(
+				"too few arguments to function: expected minimum argument number is %d. but specified %d arguments",
+				requiredUserArgs, len(userValues),
+			)
+		}
+		if len(userValues) > requiredUserArgs {
+			return nil, errors.Errorf(
+				"expected function argument number is %d but specified %d arguments",
+				requiredUserArgs, len(userValues),
+			)
+		}
+	}
+
+	// Build the argument list.
+	args := make([]reflect.Value, 0, fnType.NumIn())
+	args = append(args, baseArgs...)
+
+	userIdx := 0
+	for i := range fixedParamCount {
+		paramType := fnType.In(len(baseArgs) + i)
+
+		if i == 0 && injectContext {
+			args = append(args, ctxVal)
+			continue
+		}
+
+		v, err := convertArgument(fnName, paramType, userValues[userIdx], userIdx)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, v)
+		userIdx++
+	}
+
+	// Handle variadic tail.
+	if isVariadic {
+		elemType := fnType.In(fnType.NumIn() - 1).Elem()
+		for ; userIdx < len(userValues); userIdx++ {
+			v, err := convertArgument(fnName, elemType, userValues[userIdx], userIdx)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, v)
+		}
+	}
+
+	return args, nil
+}
+
+func contextValueFromExecutionContext(ctx context.Context) (reflect.Value, bool) {
+	c := ExecutionContext(ctx)
+	if c == nil {
+		return reflect.Value{}, false
+	}
+	return reflect.ValueOf(c), true
+}
+
+func convertArgument(fnName string, requiredType reflect.Type, v reflect.Value, argIdx int) (reflect.Value, error) {
+	if !v.IsValid() {
+		if isNilable(requiredType) {
+			return reflect.Zero(requiredType), nil
+		}
+		return reflect.Value{}, errors.Errorf("can't use nil as %s in arguments[%d] to %s", requiredType, argIdx, fnName)
+	}
+	vv, ok, _ := reflectutil.Convert(requiredType, v)
+	if ok {
+		v = vv
+	}
+	if !v.IsValid() {
+		return reflect.Value{}, errors.Errorf("can't use nil as %s in arguments[%d] to %s", requiredType, argIdx, fnName)
+	}
+	if v.Type() != requiredType {
+		return reflect.Value{}, errors.Errorf("can't use %s as %s in arguments[%d] to %s", v.Type(), requiredType, argIdx, fnName)
+	}
+	return v, nil
+}
+
+func isNilable(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return true
+	default:
+		return false
+	}
+}
+
+func isAssignable(v reflect.Value, t reflect.Type) bool {
+	if !v.IsValid() {
+		return false
+	}
+	return v.Type().AssignableTo(t)
+}
+
+func (t *Template) executeLeftArrowExpr(ctx context.Context, e *ast.LeftArrowExpr, data any) (any, error) {
+	v, err := t.executeExpr(ctx, e.Fun, data)
 	if err != nil {
 		return nil, err
 	}
@@ -312,10 +741,10 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 
 	// without arg in map key
 	if e.Arg == nil {
-		return &lazyFunc{f}, nil
+		return &FuncCall{f}, nil
 	}
 
-	v, err = t.executeLeftArrowExprArg(e.Arg, data)
+	v, err = t.executeLeftArrowExprArg(ctx, e.Arg, data)
 	if err != nil {
 		return nil, err
 	}
@@ -323,13 +752,13 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 	if !ok {
 		return nil, errors.Errorf(`expect string but got %T`, v)
 	}
-	arg, err := f.UnmarshalArg(func(v interface{}) error {
+	arg, err := f.UnmarshalArg(func(v any) error {
 		if err := yaml.NewDecoder(strings.NewReader(argStr), yaml.UseOrderedMap(), yaml.Strict()).Decode(v); err != nil {
 			return err
 		}
 		// Restore functions that are replaced into strings.
 		// See the "HACK" comment of *Template.executeParameterExpr method.
-		arg, err := Execute(v, t.argFuncs)
+		arg, err := Execute(ctx, v, t.argFuncs)
 		if err != nil {
 			return err
 		}
@@ -348,19 +777,34 @@ func (t *Template) executeLeftArrowExpr(e *ast.LeftArrowExpr, data interface{}) 
 	return f.Exec(arg)
 }
 
-func (t *Template) executeLeftArrowExprArg(arg ast.Expr, data interface{}) (interface{}, error) {
+func (t *Template) executeDefinedExpr(e *ast.DefinedExpr, data any) (any, error) {
+	switch e.Arg.(type) {
+	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
+		if _, err := extract(e.Arg, data); err != nil {
+			var notDefined notDefinedError
+			if errors.As(err, &notDefined) {
+				return false, nil
+			}
+			return nil, err
+		}
+		return true, nil
+	}
+	return nil, errors.New("invalid argument to defined()")
+}
+
+func (t *Template) executeLeftArrowExprArg(ctx context.Context, arg ast.Expr, data any) (any, error) {
 	tt := &Template{
 		expr:                      arg,
 		executingLeftArrowExprArg: true,
 		argFuncs:                  t.argFuncs,
 	}
-	v, err := tt.Execute(data)
+	v, err := tt.Execute(ctx, data)
 	return v, err
 }
 
-type funcStash map[string]interface{}
+type funcStash map[string]any
 
-func (s *funcStash) save(f interface{}) string {
+func (s *funcStash) save(f any) string {
 	if *s == nil {
 		*s = funcStash{}
 	}
@@ -371,10 +815,24 @@ func (s *funcStash) save(f interface{}) string {
 
 // Func represents a left arrow function.
 type Func interface {
-	Exec(arg interface{}) (interface{}, error)
-	UnmarshalArg(unmarshal func(interface{}) error) (interface{}, error)
+	Exec(arg any) (any, error)
+	UnmarshalArg(unmarshal func(any) error) (any, error)
 }
 
-type lazyFunc struct {
-	f Func
+// FuncCall represents a left arrow function call like '{{func <-}}'.
+type FuncCall struct {
+	Func
+}
+
+// Do executes the function f.
+// This function executes templates of the argument v with data before calling the function f.
+func (f *FuncCall) Do(ctx context.Context, v, data any) (any, error) {
+	val, err := executeLeftArrowFunction(ctx, f.Func, reflect.ValueOf(v), data, "")
+	if err != nil {
+		return nil, err
+	}
+	if val.IsValid() && val.CanInterface() {
+		return val.Interface(), nil
+	}
+	return nil, nil //nolint:nilnil
 }

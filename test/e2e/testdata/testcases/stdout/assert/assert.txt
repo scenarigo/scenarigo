@@ -1,0 +1,42 @@
+--- FAIL: testdata/testcases/scenarios/assert/assert.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/assert/assert.yaml/assert (0.00s)
+        --- FAIL: testdata/testcases/scenarios/assert/assert.yaml/assert/POST_/echo (0.00s)
+                request:
+                  method: POST
+                  url: http://[::]:12345/echo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                  body:
+                    message: hello
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "28"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    id: "0"
+                    message: bye
+                elapsed time: 0.000000 sec
+                2 errors occurred: assertion error
+                      10 |   expect:
+                      11 |     code: 200
+                      12 |     body:
+                    > 13 |       id: '{{int($) != 0}}'
+                                     ^
+                      14 |       message: '{{request.body.message}}'
+                
+                expected "hello" but got "bye"
+                      11 |     code: 200
+                      12 |     body:
+                      13 |       id: '{{int($) != 0}}'
+                    > 14 |       message: '{{request.body.message}}'
+                                          ^
+FAIL
+FAIL	testdata/testcases/scenarios/assert/assert.yaml	0.000s
+FAIL

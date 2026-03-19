@@ -12,8 +12,8 @@ func TestNotZero(t *testing.T) {
 		name string
 	}
 	tests := []struct {
-		ok interface{}
-		ng interface{}
+		ok any
+		ng any
 	}{
 		{
 			ok: 1,
@@ -45,7 +45,6 @@ func TestNotZero(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		test := test
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			assertion := NotZero()
 			if err := assertion.Assert(test.ok); err != nil {

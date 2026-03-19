@@ -1,0 +1,40 @@
+---
+name: simple
+yaml: '{{assert.contains(1)}}'
+ok:
+- [1]
+ng:
+- not array
+- []
+- [0]
+- ['1']
+
+---
+name: w/ assertion
+yaml: '{{assert.contains(assert.notZero)}}'
+ok:
+- [1]
+- ['1']
+ng:
+- [0]
+- ['']
+
+---
+name: left arrow function
+yaml:
+  '{{assert.contains <-}}':
+    name: Alice
+    age: '{{int($) > 10}}'
+ok:
+-
+  - name: Alice
+    age: 20
+  - name: Bob
+ng:
+-
+  - name: Bob
+  - name: Charlie
+-
+  - name: Alice
+    age: 10
+  - name: Bob

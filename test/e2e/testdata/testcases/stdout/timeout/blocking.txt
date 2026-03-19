@@ -1,0 +1,14 @@
+--- FAIL: testdata/testcases/scenarios/timeout/blocking.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/timeout/blocking.yaml/step_timeout_but_blocking (0.00s)
+        --- FAIL: testdata/testcases/scenarios/timeout/blocking.yaml/step_timeout_but_blocking/ (0.00s)
+                timeout exceeded
+                       4 |   complex: complex.so
+                       5 | steps:
+                       6 | - ref: '{{plugins.complex.Sleep("2s")}}'
+                    >  7 |   timeout: 1ns
+                                      ^
+                       8 |   postTimeoutWaitingLimit: 1s
+                step hasn't finished in 1s despite the context canceled
+FAIL
+FAIL	testdata/testcases/scenarios/timeout/blocking.yaml	0.000s
+FAIL

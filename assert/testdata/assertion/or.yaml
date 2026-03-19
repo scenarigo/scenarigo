@@ -1,0 +1,38 @@
+---
+name: simple
+yaml: '{{assert.or("1")}}'
+ok:
+- '1'
+ng:
+- one
+
+---
+name: w/ assertion
+yaml: '{{assert.or(assert.notZero)}}'
+ok:
+- xxx
+ng:
+- ''
+
+---
+name: left arrow function
+yaml: |-
+  {{assert.or <-}}:
+  - yyy
+  - '{{assert.notZero}}'
+ok:
+- xxx
+ng:
+- ''
+
+---
+name: left arrow function w/ assertion
+yaml:
+  '{{assert.or <-}}':
+  - xxx
+  - '{{$ == "yyy"}}'
+ok:
+- xxx
+- yyy
+ng:
+- ''

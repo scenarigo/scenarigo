@@ -1,0 +1,14 @@
+title: include
+scenarios:
+- filename: include/scenario.yaml
+  mocks: include/success.yaml
+  success: true
+  output:
+    stdout: include/success.txt
+  verbose: false
+- filename: include/scenario.yaml
+  mocks: include/failure.yaml
+  success: false
+  output:
+    stdout: include/failure.txt
+  verbose: false

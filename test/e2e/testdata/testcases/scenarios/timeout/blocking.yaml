@@ -1,0 +1,8 @@
+---
+title: step timeout but blocking
+plugins:
+  complex: complex.so
+steps:
+- ref: '{{plugins.complex.Sleep("2s")}}'
+  timeout: 1ns
+  postTimeoutWaitingLimit: 1s

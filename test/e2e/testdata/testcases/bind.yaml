@@ -1,0 +1,9 @@
+title: bind
+scenarios:
+- filename: bind.yaml
+  success: false
+  output:
+    stdout: bind.txt
+  plugins:
+  - complex.so
+  verbose: true

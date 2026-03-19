@@ -13,8 +13,8 @@ type posCalculator struct {
 }
 
 // Write implements io.Writer interface.
-func (c *posCalculator) Write(p []byte) (n int, err error) {
-	n = len(p)
+func (c *posCalculator) Write(p []byte) (int, error) {
+	n := len(p)
 	c.buf = append(c.buf, p...)
 	var last int
 	for i, b := range c.buf {
@@ -25,7 +25,7 @@ func (c *posCalculator) Write(p []byte) (n int, err error) {
 		}
 	}
 	c.buf = c.buf[last:]
-	return
+	return n, nil
 }
 
 // Pos returns the Position value for the given offset.

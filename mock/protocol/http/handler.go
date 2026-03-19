@@ -9,16 +9,16 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/assertutil"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
-	"github.com/zoncoen/scenarigo/logger"
-	"github.com/zoncoen/scenarigo/mock/protocol"
-	httpprotocol "github.com/zoncoen/scenarigo/protocol/http"
-	"github.com/zoncoen/scenarigo/protocol/http/marshaler"
-	"github.com/zoncoen/scenarigo/protocol/http/unmarshaler"
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/assertutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/mock/protocol"
+	httpprotocol "github.com/scenarigo/scenarigo/protocol/http"
+	"github.com/scenarigo/scenarigo/protocol/http/marshaler"
+	"github.com/scenarigo/scenarigo/protocol/http/unmarshaler"
 )
 
 // NewHandler returns a handler sending mock responses.
@@ -52,7 +52,7 @@ func NewHandler(iter *protocol.MockIterator, l logger.Logger) http.Handler {
 			writeError(w, fmt.Errorf("failed to read request body: %w", err), l)
 			return
 		}
-		var body interface{}
+		var body any
 		if len(b) > 0 {
 			mt := r.Header.Get("Content-Type")
 			if mt == "" {
@@ -64,7 +64,7 @@ func NewHandler(iter *protocol.MockIterator, l logger.Logger) http.Handler {
 				return
 			}
 		}
-		newCtx := ctx.WithRequest(map[string]interface{}{
+		newCtx := ctx.WithRequest(map[string]any{
 			"header": r.Header,
 			"body":   body,
 		})
@@ -78,7 +78,7 @@ func NewHandler(iter *protocol.MockIterator, l logger.Logger) http.Handler {
 			return
 		}
 
-		var resp HTTPResponse
+		var resp Response
 		if err := mock.Response.Unmarshal(&resp); err != nil {
 			writeError(w, fmt.Errorf("failed to unmarshal response: %w", err), l)
 			return
@@ -89,11 +89,10 @@ func NewHandler(iter *protocol.MockIterator, l logger.Logger) http.Handler {
 			writeError(w, fmt.Errorf("failed to execute template of response body: %w", err), l)
 			return
 		}
-		if r, ok := v.(HTTPResponse); !ok {
+		resp, ok := v.(Response)
+		if !ok {
 			writeError(w, fmt.Errorf("failed to execute template of response body: %w", err), l)
 			return
-		} else {
-			resp = r
 		}
 		if err := resp.Write(w); err != nil {
 			l.Error(err, "failed to write response")
@@ -104,43 +103,47 @@ func NewHandler(iter *protocol.MockIterator, l logger.Logger) http.Handler {
 func writeError(w http.ResponseWriter, err error, l logger.Logger) {
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
-	w.Write([]byte(err.Error()))
+	if _, werr := w.Write([]byte(err.Error())); werr != nil {
+		err = fmt.Errorf("failed to write error response: %w", werr)
+	}
 	l.Error(err, "internal server error")
 }
 
 type request struct {
 	path   string
 	header http.Header
-	body   interface{}
+	body   any
 }
 
 type expect struct {
 	Path   *string       `yaml:"path"`
 	Header yaml.MapSlice `yaml:"header"`
-	Body   interface{}   `yaml:"body"`
+	Body   any           `yaml:"body"`
 }
 
 func (e *expect) build(ctx *context.Context) (assert.Assertion, error) {
-	var pathAssertion assert.Assertion = assert.AssertionFunc(func(_ interface{}) error {
+	var pathAssertion assert.Assertion = assert.AssertionFunc(func(_ any) error {
 		return nil
 	})
 	if e.Path != nil {
-		expectPath, err := ctx.ExecuteTemplate(*e.Path)
+		var err error
+		pathAssertion, err = assert.Build(ctx.RequestContext(), *e.Path, assert.FromTemplate(ctx))
 		if err != nil {
 			return nil, errors.WrapPathf(err, "path", "invalid expect path")
 		}
-		pathAssertion = assert.Build(expectPath)
 	}
 
 	headerAssertion, err := assertutil.BuildHeaderAssertion(ctx, e.Header)
-
-	expectBody, err := ctx.ExecuteTemplate(e.Body)
 	if err != nil {
-		return nil, errors.WrapPathf(err, "body", "invalid expect response")
+		return nil, errors.WrapPathf(err, "header", "invalid expect header")
 	}
-	assertion := assert.Build(expectBody)
 
-	return assert.AssertionFunc(func(v interface{}) error {
+	assertion, err := assert.Build(ctx.RequestContext(), e.Body, assert.FromTemplate(ctx))
+	if err != nil {
+		return nil, errors.WrapPathf(err, "body", "invalid expect response body")
+	}
+
+	return assert.AssertionFunc(func(v any) error {
 		req, ok := v.(*request)
 		if !ok {
 			return errors.Errorf("expected request but got %T", v)
@@ -158,15 +161,17 @@ func (e *expect) build(ctx *context.Context) (assert.Assertion, error) {
 	}), nil
 }
 
-// HTTPResponse represents an HTTP response.
-type HTTPResponse httpprotocol.Expect
+// Response represents an HTTP response.
+type Response httpprotocol.Expect
 
 // Write writes header and body.
-func (resp *HTTPResponse) Write(w http.ResponseWriter) error {
+func (resp *Response) Write(w http.ResponseWriter) error {
 	status, header, body, err := resp.extract()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		if _, werr := w.Write([]byte(err.Error())); werr != nil {
+			err = fmt.Errorf("failed to write error response: %w", werr)
+		}
 		return err
 	}
 	for k, vs := range header {
@@ -179,7 +184,7 @@ func (resp *HTTPResponse) Write(w http.ResponseWriter) error {
 	return err
 }
 
-func (resp *HTTPResponse) extract() (int, http.Header, []byte, error) {
+func (resp *Response) extract() (int, http.Header, []byte, error) {
 	status := http.StatusOK
 	if resp.Code != "" {
 		var err error

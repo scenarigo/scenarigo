@@ -3,19 +3,19 @@ package assert
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/errors"
 )
 
 func TestEqual(t *testing.T) {
 	s := "string"
 	type myString string
 	tests := map[string]struct {
-		expected interface{}
-		ok       interface{}
-		ng       interface{}
+		expected  any
+		customEqs []Equaler
+		ok        any
+		ng        any
 	}{
 		"nil": {
 			expected: nil,
@@ -52,6 +52,23 @@ func TestEqual(t *testing.T) {
 			ok:       myString("test"),
 			ng:       myString("develop"),
 		},
+		"custom equalers": {
+			expected: "test",
+			customEqs: []Equaler{
+				EqualerFunc(func(x, y any) (bool, error) {
+					return false, nil
+				}),
+				EqualerFunc(func(x, y any) (bool, error) {
+					s, ok := y.(string)
+					if !ok {
+						return false, nil
+					}
+					return s == "dev", nil
+				}),
+			},
+			ok: "dev",
+			ng: "prod",
+		},
 		"json.Number (string)": {
 			expected: "100",
 			ok:       json.Number("100"),
@@ -69,9 +86,8 @@ func TestEqual(t *testing.T) {
 		},
 	}
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
-			assertion := Equal(tc.expected)
+			assertion := Equal(tc.expected, tc.customEqs...)
 			if err := assertion.Assert(tc.ok); err != nil {
 				t.Errorf("unexpected error: %s", err)
 			}
@@ -83,7 +99,7 @@ func TestEqual(t *testing.T) {
 }
 
 func TestCustomEqualer(t *testing.T) {
-	RegisterCustomEqualer(EqualerFunc(func(a, b interface{}) (bool, error) {
+	RegisterCustomEqualer(EqualerFunc(func(a, b any) (bool, error) {
 		v, ok := a.(int)
 		if !ok {
 			return false, nil
@@ -94,7 +110,7 @@ func TestCustomEqualer(t *testing.T) {
 		}
 		return true, errors.New("custom equaler 1")
 	}))
-	RegisterCustomEqualer(EqualerFunc(func(a, b interface{}) (bool, error) {
+	RegisterCustomEqualer(EqualerFunc(func(a, b any) (bool, error) {
 		v, ok := a.(bool)
 		if !ok {
 			return false, nil
@@ -112,8 +128,8 @@ func TestCustomEqualer(t *testing.T) {
 	}()
 
 	tests := map[string]struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		error    error
 	}{
 		"equal": {
@@ -143,7 +159,6 @@ func TestCustomEqualer(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			gotError := Equal(test.expected).Assert(test.got)
 			if gotError == nil {
@@ -163,8 +178,8 @@ func TestCustomEqualer(t *testing.T) {
 
 func TestConvert(t *testing.T) {
 	tests := []struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		ok       bool
 	}{
 		{
@@ -179,9 +194,8 @@ func TestConvert(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		test := test
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			_, err := convert(test.expected, reflect.TypeOf(test.got))
+			_, err := convert(test.expected, test.got)
 			if test.ok && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -220,7 +234,7 @@ func TestConvert(t *testing.T) {
 func TestIsNil(t *testing.T) {
 	s := "string"
 	tests := map[string]struct {
-		v      interface{}
+		v      any
 		expect bool
 	}{
 		"nil": {
@@ -241,7 +255,6 @@ func TestIsNil(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if got, expect := isNil(test.v), test.expect; got != expect {
 				t.Fatalf("expect %t but got %t", expect, got)

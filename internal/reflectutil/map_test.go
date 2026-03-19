@@ -10,7 +10,7 @@ import (
 func TestConvertStringsMap(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tests := map[string]struct {
-			v      interface{}
+			v      any
 			expect map[string][]string
 		}{
 			"map[string]string": {
@@ -31,7 +31,6 @@ func TestConvertStringsMap(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := ConvertStringsMap(reflect.ValueOf(test.v))
 				if err != nil {
@@ -45,7 +44,7 @@ func TestConvertStringsMap(t *testing.T) {
 	})
 	t.Run("error", func(t *testing.T) {
 		tests := map[string]struct {
-			v interface{}
+			v any
 		}{
 			"nil": {
 				v: nil,
@@ -55,7 +54,6 @@ func TestConvertStringsMap(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, err := ConvertStringsMap(reflect.ValueOf(test.v)); err == nil {
 					t.Fatal("expected error but no error")
@@ -68,7 +66,7 @@ func TestConvertStringsMap(t *testing.T) {
 func TestConvertStrings(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tests := map[string]struct {
-			v      interface{}
+			v      any
 			expect []string
 		}{
 			"string": {
@@ -84,7 +82,7 @@ func TestConvertStrings(t *testing.T) {
 				expect: []string{"1"},
 			},
 			"[]interface": {
-				v: []interface{}{
+				v: []any{
 					true, false,
 					1, int8(2), int16(3), int32(4), int64(5),
 					uint(6), uint8(7), uint16(8), uint32(9), uint64(10),
@@ -97,7 +95,6 @@ func TestConvertStrings(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := ConvertStrings(reflect.ValueOf(test.v))
 				if err != nil {
@@ -111,7 +108,7 @@ func TestConvertStrings(t *testing.T) {
 	})
 	t.Run("error", func(t *testing.T) {
 		tests := map[string]struct {
-			v interface{}
+			v any
 		}{
 			"nil": {
 				v: nil,
@@ -123,11 +120,10 @@ func TestConvertStrings(t *testing.T) {
 				v: 1.2,
 			},
 			"[]interface{}": {
-				v: []interface{}{nil},
+				v: []any{nil},
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, err := ConvertStrings(reflect.ValueOf(test.v)); err == nil {
 					t.Fatal("expected error but no error")
@@ -140,7 +136,7 @@ func TestConvertStrings(t *testing.T) {
 func TestConvertString(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		tests := map[string]struct {
-			v      interface{}
+			v      any
 			expect string
 		}{
 			"string": {
@@ -161,7 +157,6 @@ func TestConvertString(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				got, err := ConvertString(reflect.ValueOf(test.v))
 				if err != nil {
@@ -175,7 +170,7 @@ func TestConvertString(t *testing.T) {
 	})
 	t.Run("error", func(t *testing.T) {
 		tests := map[string]struct {
-			v interface{}
+			v any
 		}{
 			"nil": {
 				v: nil,
@@ -188,7 +183,6 @@ func TestConvertString(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, err := ConvertString(reflect.ValueOf(test.v)); err == nil {
 					t.Fatal("expected error but no error")

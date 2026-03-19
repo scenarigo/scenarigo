@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 func TestScanner_Read(t *testing.T) {
@@ -31,7 +31,6 @@ func TestScanner_Read(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			s := newScanner(strings.NewReader(test.s))
 			s.buf = test.buf
@@ -185,6 +184,91 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
+			"just an INT": {
+				src: `{{123}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "123",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"just a negative INT": {
+				src: `{{-123}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.SUB,
+						lit: "-",
+					},
+					{
+						pos: 4,
+						tok: token.INT,
+						lit: "123",
+					},
+					{
+						pos: 7,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"just a FLOAT": {
+				src: `{{1.23}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.FLOAT,
+						lit: "1.23",
+					},
+					{
+						pos: 7,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"just a FLOAT (first disit is 0)": {
+				src: `{{0.123}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.FLOAT,
+						lit: "0.123",
+					},
+					{
+						pos: 8,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
 			"just a BOOL": {
 				src: `{{true}}`,
 				expected: []result{
@@ -197,6 +281,46 @@ func TestScanner_Scan(t *testing.T) {
 						pos: 3,
 						tok: token.BOOL,
 						lit: "true",
+					},
+					{
+						pos: 7,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"nil keyword": {
+				src: `{{nil}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.NIL,
+						lit: "nil",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"null keyword": {
+				src: `{{null}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.NIL,
+						lit: "null",
 					},
 					{
 						pos: 7,
@@ -240,6 +364,36 @@ func TestScanner_Scan(t *testing.T) {
 					},
 					{
 						pos: 8,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"$.a IDENT": {
+				src: "{{$.a}}",
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.IDENT,
+						lit: "$",
+					},
+					{
+						pos: 4,
+						tok: token.PERIOD,
+						lit: ".",
+					},
+					{
+						pos: 5,
+						tok: token.IDENT,
+						lit: "a",
+					},
+					{
+						pos: 6,
 						tok: token.RDBRACE,
 						lit: "}}",
 					},
@@ -649,9 +803,518 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
+			"sub": {
+				src: `{{1-2}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 4,
+						tok: token.SUB,
+						lit: "-",
+					},
+					{
+						pos: 5,
+						tok: token.INT,
+						lit: "2",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"mul": {
+				src: `{{1*2}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 4,
+						tok: token.MUL,
+						lit: "*",
+					},
+					{
+						pos: 5,
+						tok: token.INT,
+						lit: "2",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"quo": {
+				src: `{{2/1}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "2",
+					},
+					{
+						pos: 4,
+						tok: token.QUO,
+						lit: "/",
+					},
+					{
+						pos: 5,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"rem": {
+				src: `{{1%2}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 4,
+						tok: token.REM,
+						lit: "%",
+					},
+					{
+						pos: 5,
+						tok: token.INT,
+						lit: "2",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"&&": {
+				src: `{{true&&true}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 7,
+						tok: token.LAND,
+						lit: "&&",
+					},
+					{
+						pos: 9,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 13,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"||": {
+				src: `{{true||true}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 7,
+						tok: token.LOR,
+						lit: "||",
+					},
+					{
+						pos: 9,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 13,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"??": {
+				src: `{{a.b??"default"}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.IDENT,
+						lit: "a",
+					},
+					{
+						pos: 4,
+						tok: token.PERIOD,
+						lit: ".",
+					},
+					{
+						pos: 5,
+						tok: token.IDENT,
+						lit: "b",
+					},
+					{
+						pos: 6,
+						tok: token.COALESCING,
+						lit: "??",
+					},
+					{
+						pos: 8,
+						tok: token.STRING,
+						lit: "default",
+					},
+					{
+						pos: 17,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"==": {
+				src: `{{true==true}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 7,
+						tok: token.EQL,
+						lit: "==",
+					},
+					{
+						pos: 9,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 13,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"!": {
+				src: `{{!true}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.NOT,
+						lit: "!",
+					},
+					{
+						pos: 4,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 8,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"!=": {
+				src: `{{true!=true}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 7,
+						tok: token.NEQ,
+						lit: "!=",
+					},
+					{
+						pos: 9,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 13,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"<": {
+				src: `{{1<1}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 4,
+						tok: token.LSS,
+						lit: "<",
+					},
+					{
+						pos: 5,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"<=": {
+				src: `{{1<=1}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 4,
+						tok: token.LEQ,
+						lit: "<=",
+					},
+					{
+						pos: 6,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 7,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			">": {
+				src: `{{1>1}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 4,
+						tok: token.GTR,
+						lit: ">",
+					},
+					{
+						pos: 5,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 6,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			">=": {
+				src: `{{1>=1}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 4,
+						tok: token.GEQ,
+						lit: ">=",
+					},
+					{
+						pos: 6,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 7,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"conditional expression": {
+				src: `{{true ? 1 : 2}}`,
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.BOOL,
+						lit: "true",
+					},
+					{
+						pos: 8,
+						tok: token.QUESTION,
+						lit: "?",
+					},
+					{
+						pos: 10,
+						tok: token.INT,
+						lit: "1",
+					},
+					{
+						pos: 12,
+						tok: token.COLON,
+						lit: ":",
+					},
+					{
+						pos: 14,
+						tok: token.INT,
+						lit: "2",
+					},
+					{
+						pos: 15,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
+			"defined": {
+				src: "{{defined(a.b)}}",
+				expected: []result{
+					{
+						pos: 1,
+						tok: token.LDBRACE,
+						lit: "{{",
+					},
+					{
+						pos: 3,
+						tok: token.DEFINED,
+						lit: "defined",
+					},
+					{
+						pos: 10,
+						tok: token.LPAREN,
+						lit: "(",
+					},
+					{
+						pos: 11,
+						tok: token.IDENT,
+						lit: "a",
+					},
+					{
+						pos: 12,
+						tok: token.PERIOD,
+						lit: ".",
+					},
+					{
+						pos: 13,
+						tok: token.IDENT,
+						lit: "b",
+					},
+					{
+						pos: 14,
+						tok: token.RPAREN,
+						lit: ")",
+					},
+					{
+						pos: 15,
+						tok: token.RDBRACE,
+						lit: "}}",
+					},
+				},
+			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				s := newScanner(strings.NewReader(test.src))
 				for i, e := range test.expected {
@@ -695,9 +1358,23 @@ func TestScanner_Scan(t *testing.T) {
 				pos: 3,
 				lit: "01",
 			},
+			"invalid float": {
+				src: "{{01.2.3}}",
+				pos: 3,
+				lit: "01.2.3",
+			},
+			"invalid float (trailing period)": {
+				src: "{{1.}}",
+				pos: 3,
+				lit: "1.",
+			},
+			"invalid float (too many period)": {
+				src: "{{1.2.3}}",
+				pos: 3,
+				lit: "1.2.3",
+			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				s := newScanner(strings.NewReader(test.src))
 				for {

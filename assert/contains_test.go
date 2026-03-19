@@ -6,7 +6,7 @@ import (
 
 func TestContains(t *testing.T) {
 	tests := map[string]struct {
-		in          interface{}
+		in          any
 		contains    int
 		expectError bool
 	}{
@@ -31,7 +31,6 @@ func TestContains(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			assertion := Contains(Equal(test.contains))
 			err := assertion.Assert(test.in)
@@ -47,7 +46,7 @@ func TestContains(t *testing.T) {
 
 func TestNotContains(t *testing.T) {
 	tests := map[string]struct {
-		in          interface{}
+		in          any
 		notContains int
 		expectError bool
 	}{
@@ -71,7 +70,6 @@ func TestNotContains(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			assertion := NotContains(Equal(test.notContains))
 			err := assertion.Assert(test.in)

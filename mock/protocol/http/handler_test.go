@@ -10,8 +10,8 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/zoncoen/scenarigo/logger"
-	"github.com/zoncoen/scenarigo/mock/protocol"
+	"github.com/scenarigo/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/mock/protocol"
 )
 
 func TestHandler(t *testing.T) {
@@ -34,7 +34,7 @@ func TestHandler(t *testing.T) {
 				steps: []step{
 					{
 						request: func() *http.Request {
-							return httptest.NewRequest("GET", "/", nil)
+							return httptest.NewRequest(http.MethodGet, "/", nil)
 						},
 						expect: &expect{
 							code: 200,
@@ -51,7 +51,7 @@ func TestHandler(t *testing.T) {
 				steps: []step{
 					{
 						request: func() *http.Request {
-							return httptest.NewRequest("POST", "/echo", strings.NewReader(`{"message":"hello"}`))
+							return httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"message":"hello"}`))
 						},
 						expect: &expect{
 							code: 200,
@@ -65,7 +65,6 @@ func TestHandler(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				f, err := os.Open(test.filename)
 				if err != nil {
@@ -97,7 +96,7 @@ func TestHandler(t *testing.T) {
 			})
 		}
 	})
-	t.Run("faulure", func(t *testing.T) {
+	t.Run("failure", func(t *testing.T) {
 		tests := map[string]struct {
 			filename string
 			steps    []step
@@ -107,7 +106,7 @@ func TestHandler(t *testing.T) {
 				steps: []step{
 					{
 						request: func() *http.Request {
-							return httptest.NewRequest("GET", "/", nil)
+							return httptest.NewRequest(http.MethodGet, "/", nil)
 						},
 						expect: &expect{
 							code: 500,
@@ -124,7 +123,7 @@ func TestHandler(t *testing.T) {
 				steps: []step{
 					{
 						request: func() *http.Request {
-							return httptest.NewRequest("GET", "/", nil)
+							return httptest.NewRequest(http.MethodGet, "/", nil)
 						},
 						expect: &expect{
 							code: 200,
@@ -136,7 +135,7 @@ func TestHandler(t *testing.T) {
 					},
 					{
 						request: func() *http.Request {
-							return httptest.NewRequest("GET", "/", nil)
+							return httptest.NewRequest(http.MethodGet, "/", nil)
 						},
 						expect: &expect{
 							code: 500,
@@ -153,14 +152,14 @@ func TestHandler(t *testing.T) {
 				steps: []step{
 					{
 						request: func() *http.Request {
-							return httptest.NewRequest("POST", "/", strings.NewReader(`{"message":"hello"}`))
+							return httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"message":"hello"}`))
 						},
 						expect: &expect{
 							code: 500,
 							header: http.Header{
 								"Content-Type": []string{"text/plain; charset=utf-8"},
 							},
-							body: `assertion error: .path: expected /echo but got /`,
+							body: `assertion error: .path: expected "/echo" but got "/"`,
 						},
 					},
 				},
@@ -170,7 +169,7 @@ func TestHandler(t *testing.T) {
 				steps: []step{
 					{
 						request: func() *http.Request {
-							r := httptest.NewRequest("POST", "/echo", strings.NewReader("hello"))
+							r := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader("hello"))
 							r.Header.Add("Content-Type", "text/plain")
 							return r
 						},
@@ -179,7 +178,7 @@ func TestHandler(t *testing.T) {
 							header: http.Header{
 								"Content-Type": []string{"text/plain; charset=utf-8"},
 							},
-							body: `assertion error: .header.Content-Type: doesn't contain expected value: last error: expected application/json but got text/plain`,
+							body: `assertion error: .header.Content-Type: doesn't contain expected value: last error: expected "application/json" but got "text/plain"`,
 						},
 					},
 				},
@@ -189,7 +188,7 @@ func TestHandler(t *testing.T) {
 				steps: []step{
 					{
 						request: func() *http.Request {
-							return httptest.NewRequest("POST", "/echo", strings.NewReader(`{"message":""}`))
+							return httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"message":""}`))
 						},
 						expect: &expect{
 							code: 500,
@@ -203,7 +202,6 @@ func TestHandler(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				f, err := os.Open(test.filename)
 				if err != nil {
@@ -240,15 +238,15 @@ func TestHandler(t *testing.T) {
 func TestExtract(t *testing.T) {
 	t.Run("failure", func(t *testing.T) {
 		tests := map[string]struct {
-			resp *HTTPResponse
+			resp *Response
 		}{
 			"invalid status code": {
-				resp: &HTTPResponse{
+				resp: &Response{
 					Code: "OK",
 				},
 			},
 			"invalid header key": {
-				resp: &HTTPResponse{
+				resp: &Response{
 					Header: yaml.MapSlice{
 						yaml.MapItem{
 							Key: nil,
@@ -257,7 +255,7 @@ func TestExtract(t *testing.T) {
 				},
 			},
 			"failed to marshal response body": {
-				resp: &HTTPResponse{
+				resp: &Response{
 					Header: yaml.MapSlice{
 						yaml.MapItem{
 							Key:   "Content-Type",
@@ -269,7 +267,6 @@ func TestExtract(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				if _, _, _, err := test.resp.extract(); err == nil {
 					t.Fatalf("no error")

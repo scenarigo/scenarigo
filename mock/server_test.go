@@ -11,9 +11,9 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/zoncoen/scenarigo/logger"
-	"github.com/zoncoen/scenarigo/internal/yamlutil"
-	"github.com/zoncoen/scenarigo/mock/protocol"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
+	"github.com/scenarigo/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/mock/protocol"
 )
 
 func TestNewServer(t *testing.T) {
@@ -58,6 +58,7 @@ func TestNewServer(t *testing.T) {
 					t.Errorf("expect %d but got %d", expect, got)
 				}
 			}
+			defer resp.Body.Close()
 			if err := srv.Stop(ctx); err != nil {
 				t.Errorf("failed to stop: %s", err)
 			}
@@ -104,6 +105,7 @@ func TestNewServer(t *testing.T) {
 					t.Errorf("expect %d but got %d", expect, got)
 				}
 			}
+			defer resp.Body.Close()
 			if err := srv.Stop(ctx); err != nil {
 				t.Errorf("failed to stop: %s", err)
 			}
@@ -121,62 +123,63 @@ func TestNewServer(t *testing.T) {
 	})
 }
 
-func TestServer(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		srv := &Server{
-			servers: map[string]protocol.Server{
-				"1": &mockServer{
-					start: func(ctx context.Context) error {
-						<-ctx.Done()
-						return nil
-					},
-				},
-				"2": &mockServer{
-					start: func(ctx context.Context) error {
-						<-ctx.Done()
-						return nil
-					},
+func TestServer_Success(t *testing.T) {
+	srv := &Server{
+		servers: map[string]protocol.Server{
+			"1": &mockServer{
+				start: func(ctx context.Context) error {
+					<-ctx.Done()
+					return nil
 				},
 			},
+			"2": &mockServer{
+				start: func(ctx context.Context) error {
+					<-ctx.Done()
+					return nil
+				},
+			},
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan error)
+	go func() {
+		ch <- srv.Start(ctx)
+	}()
+	if err := srv.Wait(context.Background()); err != nil {
+		t.Fatalf("failed to wait: %s", err)
+	}
+	cancel()
+	if err := <-ch; err != nil {
+		t.Fatalf("failed to start: %s", err)
+	}
+	addrs, err := srv.Addrs()
+	if err != nil {
+		t.Fatalf("failed to get addresses: %s", err)
+	}
+	for name, s := range srv.servers {
+		ms, ok := s.(*mockServer)
+		if !ok {
+			t.Fatalf("unexpected type %T", s)
 		}
-		ctx, cancel := context.WithCancel(context.Background())
-		ch := make(chan error)
-		go func() {
-			ch <- srv.Start(ctx)
-		}()
-		if err := srv.Wait(context.Background()); err != nil {
-			t.Fatalf("failed to wait: %s", err)
+		if !ms.startCalled {
+			t.Errorf("%s server: Start() is not called", name)
 		}
-		cancel()
-		if err := <-ch; err != nil {
-			t.Fatalf("failed to start: %s", err)
+		if !ms.stopCalled {
+			t.Errorf("%s server: Stop() is not called", name)
 		}
-		addrs, err := srv.Addrs()
-		if err != nil {
-			t.Fatalf("failed to get addresses: %s", err)
+		if !ms.waitCalled {
+			t.Errorf("%s server: Wait() is not called", name)
 		}
-		for name, s := range srv.servers {
-			ms, ok := s.(*mockServer)
-			if !ok {
-				t.Fatalf("unexpected type %T", s)
-			}
-			if !ms.startCalled {
-				t.Errorf("%s server: Start() is not called", name)
-			}
-			if !ms.stopCalled {
-				t.Errorf("%s server: Stop() is not called", name)
-			}
-			if !ms.waitCalled {
-				t.Errorf("%s server: Wait() is not called", name)
-			}
-			if !ms.addrCalled {
-				t.Errorf("%s server: Addr() is not called", name)
-			}
-			if _, ok := addrs[name]; !ok {
-				t.Errorf("%s no address", name)
-			}
+		if !ms.addrCalled {
+			t.Errorf("%s server: Addr() is not called", name)
 		}
-	})
+		if _, ok := addrs[name]; !ok {
+			t.Errorf("%s no address", name)
+		}
+	}
+}
+
+func TestServer_Failure(t *testing.T) {
 	t.Run("Start() failed", func(t *testing.T) {
 		expect := errors.New("failed")
 		srv := &Server{

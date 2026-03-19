@@ -11,11 +11,12 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/zoncoen/scenarigo/logger"
-	"github.com/zoncoen/scenarigo/mock/protocol"
+	"github.com/scenarigo/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/mock/protocol"
 )
 
-func init() {
+// Register registers http protocol.
+func Register() {
 	protocol.Register(&HTTP{})
 }
 
@@ -25,10 +26,10 @@ const healthPath = "/_health"
 type HTTP struct{}
 
 // Name implements protocol.Protocol interface.
-func (_ HTTP) Name() string { return "http" }
+func (_ HTTP) Name() string { return "http" } //nolint:revive
 
 // UnmarshalConfig implements protocol.Protocol interface.
-func (_ HTTP) UnmarshalConfig(b []byte) (interface{}, error) {
+func (_ HTTP) UnmarshalConfig(b []byte) (any, error) { //nolint:revive
 	var config ServerConfig
 	if err := yaml.Unmarshal(b, &config); err != nil {
 		return nil, err
@@ -37,7 +38,7 @@ func (_ HTTP) UnmarshalConfig(b []byte) (interface{}, error) {
 }
 
 // NewServer implements protocol.Protocol interface.
-func (_ *HTTP) NewServer(iter *protocol.MockIterator, l logger.Logger, config interface{}) (protocol.Server, error) {
+func (_ *HTTP) NewServer(iter *protocol.MockIterator, l logger.Logger, config any) (protocol.Server, error) { //nolint:revive
 	if iter == nil {
 		return nil, errors.New("mock iterator is nil")
 	}
@@ -72,7 +73,7 @@ func (s *server) Start(ctx context.Context) error {
 	serve, err := s.setup()
 	if err != nil {
 		s.m.Unlock()
-		return nil
+		return err
 	}
 	s.m.Unlock()
 	return serve()
@@ -82,7 +83,7 @@ func (s *server) setup() (func() error, error) {
 	if s.srv != nil {
 		return nil, errors.New("server already started")
 	}
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.Port))
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.Port)) //nolint:noctx // no context available in setup
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen: %w", err)
 	}
@@ -95,6 +96,7 @@ func (s *server) setup() (func() error, error) {
 			}
 			s.handler.ServeHTTP(w, r)
 		}),
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return func() error {
 		if err := s.srv.Serve(ln); err != nil {
@@ -132,13 +134,16 @@ func (s *server) wait(ctx context.Context) error {
 		srv := s.srv
 		s.m.Unlock()
 		if srv != nil {
-			req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s%s", srv.Addr, healthPath), nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://%s%s", srv.Addr, healthPath), nil)
 			if err != nil {
 				return err
 			}
 			resp, err := client.Do(req)
-			if err == nil && resp.StatusCode == http.StatusOK {
-				return nil
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					return nil
+				}
 			}
 		}
 		time.Sleep(100 * time.Millisecond)

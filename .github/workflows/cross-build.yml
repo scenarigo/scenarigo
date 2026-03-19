@@ -1,0 +1,81 @@
+name: cross-build
+on:
+  push:
+    branches:
+      - cross-build
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      go-version: ${{ steps.matrix.outputs.versions }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        fetch-depth: 0
+    - name: Install Go
+      id: setup-go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: stable
+        check-latest: true
+        cache: false
+    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      id: go-cache
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-ubuntu-latest-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          go-${{ steps.setup-go.outputs.go-version }}-
+    - name: Generate matrix
+      id: matrix
+      working-directory: ${{ github.workspace }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -eu
+        versions=$(make matrix)
+        echo $versions
+        echo "versions=$versions" >> $GITHUB_OUTPUT
+  build:
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ${{ fromJson(needs.matrix.outputs.go-version) }}
+    env:
+      SNAPSHOT: true
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        fetch-depth: 0
+    - name: Install Go
+      id: setup-go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: stable
+        check-latest: true
+        cache: false
+    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      id: go-cache
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-ubuntu-latest-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          go-${{ steps.setup-go.outputs.go-version }}-
+    - name: Build
+      working-directory: ${{ github.workspace }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: GO_VERSION=${{ matrix.go-version }} make build/ci
+    - name: Upload artifacts
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: artifact-${{ matrix.go-version }}
+        path: ${{ github.workspace }}/dist/

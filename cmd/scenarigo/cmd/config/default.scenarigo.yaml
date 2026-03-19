@@ -1,17 +1,18 @@
 schemaVersion: config/v1
 
-scenarios: []               # Specify test scenario files and directories.
+scenarios: [] # Specify test scenario files and directories.
 
-pluginDirectory: ./         # Specify the root directory of plugins.
+pluginDirectory: ./gen      # Specify the root directory of plugins.
 # plugins:                  # Specify configurations to build plugins.
 #   plugin.so:              # Map keys specify plugin output file path from the root directory of plugins.
 #     src: ./path/to/plugin # Specify the source file, directory, or "go gettable" module path of the plugin.
 
 output:
-  verbose: false          # Enable verbose output.
-  # colored: false        # Enable colored output with ANSI color escape codes. It is enabled by default but disabled when a NO_COLOR environment variable is set (regardless of its value).
+  verbose: false   # Enable verbose output.
+  # colored: false # Enable colored output with ANSI color escape codes. It is enabled by default but disabled when a NO_COLOR environment variable is set (regardless of its value).
+  # summary: false # Enable summary output.
   # report:
   #   json:
   #     filename: ./report.json # Specify a filename for test report output in JSON.
   #   junit:
-  #     filename: ./junit.xml # Specify a filename for test report output in JUnit XML format.
+  #     filename: ./junit.xml   # Specify a filename for test report output in JUnit XML format.

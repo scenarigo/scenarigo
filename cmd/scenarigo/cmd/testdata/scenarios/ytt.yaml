@@ -1,0 +1,17 @@
+#@ msg = "hello ytt"
+---
+title: /echo
+steps:
+- title: POST /echo
+  vars:
+    message: hello
+  protocol: http
+  request:
+    method: POST
+    url: "{{env.TEST_ADDR}}/echo"
+    body:
+      message: #@ msg
+  expect:
+    code: 200
+    body:
+      message: "{{request.body.message}}"

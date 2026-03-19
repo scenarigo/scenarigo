@@ -35,6 +35,15 @@ func TestLogger(t *testing.T) {
 [ERROR] "error msg" "error"="omg" "count"="2"
 `, "\n"),
 		},
+		"no value": {
+			level: LogLevelAll,
+			f: func(l Logger) {
+				l.Info("info msg", "count")
+			},
+			expect: strings.TrimPrefix(`
+[INFO] "info msg" "count"="<no-value>"
+`, "\n"),
+		},
 		"none": {
 			level: LogLevelNone,
 			f: func(l Logger) {
@@ -44,7 +53,6 @@ func TestLogger(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
 			l := NewLogger(log.New(&b, "", 0), test.level)

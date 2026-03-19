@@ -1,0 +1,13 @@
+title: step if
+scenarios:
+- filename: step-if/success.yaml
+  mocks: step-if/success.yaml
+  success: true
+  output:
+    stdout: step-if/success.txt
+- filename: step-if/failure.yaml
+  mocks: step-if/failure.yaml
+  success: false
+  output:
+    stdout: step-if/failure.txt
+  verbose: true

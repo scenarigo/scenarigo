@@ -4,8 +4,8 @@ set -eu
 
 BASEDIR=`dirname $0`/..
 
-if [ "$(git symbolic-ref --short HEAD)" != "master" ]; then
-    echo "branch is not master"
+if [ "$(git symbolic-ref --short HEAD)" != "main" ]; then
+    echo "branch is not main"
     exit 1
 fi
 

@@ -1,0 +1,10 @@
+---
+title: no timeout
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+  expect:
+    code: OK
+  timeout: 0s # no timeout

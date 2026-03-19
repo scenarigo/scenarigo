@@ -27,7 +27,7 @@ func initRun(cmd *cobra.Command, args []string) error {
 	f, err := os.OpenFile(DefaultConfigFileName, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o666)
 	if err != nil {
 		if os.IsExist(err) {
-			return fmt.Errorf("%s already exists.", DefaultConfigFileName)
+			return fmt.Errorf("%s already exists", DefaultConfigFileName)
 		}
 		return err
 	}

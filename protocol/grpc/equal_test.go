@@ -7,18 +7,19 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	"github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
 
 func TestEqualEnum(t *testing.T) {
 	tests := map[string]struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		ok       bool
 	}{
 		"expected is not string": {
 			expected: 1,
 			got:      test.UserType_CUSTOMER,
+			ok:       true,
 		},
 		"got is not enum": {
 			expected: "CUSTOMER",
@@ -33,9 +34,16 @@ func TestEqualEnum(t *testing.T) {
 			expected: "CUSTOMER",
 			got:      test.UserType_STAFF,
 		},
+		"reserved": {
+			expected: "CUSTOMER",
+			got:      test.UserType(3), // reserved number.
+		},
+		"unknown": {
+			expected: "CUSTOMER",
+			got:      test.UserType(9999), // unknown value.
+		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ok, err := equalEnum(test.expected, test.got)
 			if ok != test.ok {
@@ -50,8 +58,8 @@ func TestEqualEnum(t *testing.T) {
 
 func TestEqualMessage(t *testing.T) {
 	tests := map[string]struct {
-		expected interface{}
-		got      interface{}
+		expected any
+		got      any
 		ok       bool
 	}{
 		"expected is not proto message": {
@@ -103,7 +111,6 @@ func TestEqualMessage(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ok, err := equalMessage(test.expected, test.got)
 			if ok != test.ok {
@@ -120,17 +127,17 @@ func echoResponse(t *testing.T, id, body string) *test.EchoResponse {
 	t.Helper()
 
 	var msg test.EchoResponse
-	if err := protojson.Unmarshal([]byte(fmt.Sprintf(`
+	if err := protojson.Unmarshal(fmt.Appendf(nil, `
 {
   "messageId": "%s",
   "messageBody": "%s"
 }
-`, id, body)), &msg); err != nil {
+`, id, body), &msg); err != nil {
 		t.Fatalf("failed to unmarshal: %s", err)
 	}
 
 	// Ensure at least one of the unexported fields is not zero value.
-	// nolint:govet
+	//nolint:govet
 	if reflect.DeepEqual(msg, test.EchoResponse{
 		MessageId:   id,
 		MessageBody: body,

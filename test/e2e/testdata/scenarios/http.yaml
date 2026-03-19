@@ -30,7 +30,7 @@ steps:
       Content-Length: 36
     body:
       id: "{{vars.id}}"
-      message: "{{request.message}}"
+      message: "{{request.body.message}}"
 
 ---
 title: /echo (application/x-www-form-urlencoded)

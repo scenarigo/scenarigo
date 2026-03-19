@@ -1,0 +1,10 @@
+#@data/values
+---
+scenarios:
+- title: 1
+  vars:
+    message: hello
+- title: 2
+  vars:
+    message: world
+  timeout: 10s

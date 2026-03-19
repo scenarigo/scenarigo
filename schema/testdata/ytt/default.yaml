@@ -1,0 +1,9 @@
+#@ load("@ytt:overlay", "overlay")
+#@overlay/match by=overlay.map_key("schemaVersion"), expects="0+"
+---
+schemaVersion: scenario/v1
+steps:
+#@overlay/match by=overlay.all, expects="0+"
+-
+  #@overlay/match when=0
+  timeout: 30s

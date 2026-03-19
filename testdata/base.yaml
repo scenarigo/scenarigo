@@ -4,7 +4,7 @@ steps:
 - title: POST /echo
   bind:
     vars:
-      message: "{{response.message}}"
+      message: "{{response.body.message}}"
   vars:
     message: hello
   protocol: http
@@ -18,4 +18,4 @@ steps:
   expect:
     code: 200
     body:
-      message: "{{request.message}}"
+      message: "{{request.body.message}}"

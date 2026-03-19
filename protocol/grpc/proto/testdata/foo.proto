@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package scenarigo.testdata.foo;
+
+service Foo {
+    rpc Ping(Empty) returns (Empty) {};
+}
+
+message Empty {}

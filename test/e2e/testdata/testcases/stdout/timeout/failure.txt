@@ -1,0 +1,29 @@
+--- FAIL: testdata/testcases/scenarios/timeout/failure.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/timeout/failure.yaml/step_timeout (0.00s)
+        --- FAIL: testdata/testcases/scenarios/timeout/failure.yaml/step_timeout/ (0.00s)
+                timeout exceeded
+                       7 |     url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+                       8 |   expect:
+                       9 |     code: OK
+                    > 10 |   timeout: 1ns
+                                      ^
+                request:
+                  method: GET
+                  url: http://[::]:12345/echo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                elapsed time: 0.000000 sec
+                failed to send request: Get "http://[::]:12345/echo": context deadline exceeded
+                       3 | steps:
+                       4 | - protocol: http
+                       5 |   request:
+                    >  6 |     method: GET
+                                     ^
+                       7 |     url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+                       8 |   expect:
+                       9 |     code: OK
+                      10 |
+FAIL
+FAIL	testdata/testcases/scenarios/timeout/failure.yaml	0.000s
+FAIL

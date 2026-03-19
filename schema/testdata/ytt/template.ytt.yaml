@@ -1,0 +1,21 @@
+#@ load("@ytt:library", "library")
+#@ repeat = library.get("mylib").export("repeat")
+#@ load("@ytt:data", "data")
+#@ for params in data.values.scenarios:
+---
+schemaVersion: scenario/v1
+title: #@ params.title
+vars:
+  message: #@ repeat(params.vars.message)
+steps:
+- title: POST /say
+  protocol: test
+  request:
+    body:
+      message: "{{vars.message}}"
+  expect:
+    body:
+      message: "{{request.body.message}}"
+  #@ if/end hasattr(params, "timeout"):
+  timeout: #@ params.timeout
+#@ end

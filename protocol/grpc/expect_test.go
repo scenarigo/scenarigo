@@ -1,69 +1,58 @@
 package grpc
 
 import (
-	"reflect"
 	"strconv"
 	"testing"
 
-	"github.com/goccy/go-yaml"
-	"github.com/golang/protobuf/proto" // nolint:staticcheck
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/protoadapt"
 
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
-	"github.com/zoncoen/scenarigo/testdata/gen/pb/test"
+	"github.com/goccy/go-yaml"
+
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
+	"github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
 
 func TestExpect_Build(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		tests := map[string]struct {
-			vars   interface{}
+			vars   any
 			expect *Expect
-			v      response
+			v      *response
 		}{
 			"default": {
 				expect: &Expect{},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+				v: &response{
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 			},
 			"code": {
 				expect: &Expect{
 					Code: strconv.Itoa(int(codes.InvalidArgument)),
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
-					},
+				v: &response{
+					Status: createStatus(t, codes.InvalidArgument, "invalid argument"),
 				},
 			},
 			"code string": {
 				expect: &Expect{
 					Code: "InvalidArgument",
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
-					},
+				v: &response{
+					Status: createStatus(t, codes.InvalidArgument, "invalid argument"),
 				},
 			},
 			"code template string": {
 				expect: &Expect{
 					Code: `{{"InvalidArgument"}}`,
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
-					},
+				v: &response{
+					Status: createStatus(t, codes.InvalidArgument, "invalid argument"),
 				},
 			},
 			"assert body": {
@@ -80,14 +69,11 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{
-							MessageId:   "1",
-							MessageBody: "hello",
-						}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+				v: &response{
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{
+						MessageId:   "1",
+						MessageBody: "hello",
+					}},
 				},
 			},
 			"assert metadata.header": {
@@ -100,16 +86,13 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					Header: metadata.MD{
+				v: &response{
+					Header: yamlutil.NewMDMarshaler(metadata.MD{
 						"content-type": []string{
 							"application/grpc",
 						},
-					},
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 			},
 			"assert metadata.trailer": {
@@ -122,23 +105,20 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					Trailer: metadata.MD{
+				v: &response{
+					Trailer: yamlutil.NewMDMarshaler(metadata.MD{
 						"content-type": []string{
 							"application/grpc",
 						},
-					},
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 			},
 			"assert in case of error": {
 				expect: &Expect{
 					Status: ExpectStatus{
-						Code:    "InvalidArgument",
-						Message: "invalid argument",
+						Code:    `{{"InvalidArgument"}}`,
+						Message: `{{"invalid argument"}}`,
 						Details: []map[string]yaml.MapSlice{
 							{
 								"google.rpc.LocalizedMessage": yaml.MapSlice{
@@ -149,9 +129,9 @@ func TestExpect_Build(t *testing.T) {
 								},
 							},
 							{
-								"google.rpc.DebugInfo": yaml.MapSlice{
+								`{{"google.rpc.DebugInfo"}}`: yaml.MapSlice{
 									yaml.MapItem{
-										Key:   "detail",
+										Key:   `{{"detail"}}`,
 										Value: "debug",
 									},
 								},
@@ -159,20 +139,17 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(mustWithDetails(
-							status.New(codes.InvalidArgument, "invalid argument"),
-							&errdetails.LocalizedMessage{
-								Locale:  "ja-JP",
-								Message: "エラー",
-							},
-							&errdetails.DebugInfo{
-								Detail: "debug",
-							},
-						).Err()),
-					},
+				v: &response{
+					Status: createStatus(
+						t, codes.InvalidArgument, "invalid argument",
+						&errdetails.LocalizedMessage{
+							Locale:  "ja-JP",
+							Message: "エラー",
+						},
+						&errdetails.DebugInfo{
+							Detail: "debug",
+						},
+					),
 				},
 			},
 			"assert in case of error with template string": {
@@ -182,13 +159,8 @@ func TestExpect_Build(t *testing.T) {
 						Message: `{{"invalid argument"}}`,
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(mustWithDetails(
-							status.New(codes.InvalidArgument, "invalid argument"),
-						).Err()),
-					},
+				v: &response{
+					Status: createStatus(t, codes.InvalidArgument, "invalid argument"),
 				},
 			},
 			"with vars": {
@@ -206,19 +178,78 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{
-							MessageId:   "1",
-							MessageBody: "hello",
-						}),
-						reflect.Zero(reflectutil.TypeError),
+				v: &response{
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{
+						MessageId:   "1",
+						MessageBody: "hello",
+					}},
+				},
+			},
+			"with $": {
+				vars: map[string]string{"body": "hello"},
+				expect: &Expect{
+					Status: ExpectStatus{
+						Code:    `{{$ == "InvalidArgument"}}`,
+						Message: `{{$ == "invalid argument"}}`,
+						Details: []map[string]yaml.MapSlice{
+							{
+								`{{$ == "google.rpc.LocalizedMessage"}}`: yaml.MapSlice{
+									{
+										Key:   "locale",
+										Value: `{{$ == "ja-JP"}}`,
+									},
+									{
+										Key:   "message",
+										Value: `{{$ == "エラー"}}`,
+									},
+								},
+							},
+						},
 					},
+					Message: yaml.MapSlice{
+						yaml.MapItem{
+							Key:   "messageBody",
+							Value: `{{$ == vars.body}}`,
+						},
+					},
+					Header: yaml.MapSlice{
+						{
+							Key:   "content-type",
+							Value: `{{$ == "application/grpc"}}`,
+						},
+					},
+					Trailer: yaml.MapSlice{
+						{
+							Key:   "version",
+							Value: `{{$ == "v1.0.0"}}`,
+						},
+					},
+				},
+				v: &response{
+					Status: createStatus(
+						t, codes.InvalidArgument, "invalid argument",
+						&errdetails.LocalizedMessage{
+							Locale:  "ja-JP",
+							Message: "エラー",
+						},
+					),
+					Header: yamlutil.NewMDMarshaler(metadata.MD{
+						"content-type": []string{
+							"application/grpc",
+						},
+					}),
+					Trailer: yamlutil.NewMDMarshaler(metadata.MD{
+						"version": []string{
+							"v1.0.0",
+						},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{
+						MessageBody: "hello",
+					}},
 				},
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				if test.vars != nil {
@@ -237,9 +268,10 @@ func TestExpect_Build(t *testing.T) {
 	t.Run("ng", func(t *testing.T) {
 		tests := map[string]struct {
 			expect            *Expect
-			v                 response
+			v                 *response
 			expectBuildError  bool
 			expectAssertError bool
+			expectError       string
 		}{
 			"failed to execute template": {
 				expect: &Expect{
@@ -279,48 +311,11 @@ func TestExpect_Build(t *testing.T) {
 				},
 				expectBuildError: true,
 			},
-
-			"return value must be []reflect.Value": {
-				expect:            &Expect{},
-				v:                 response{},
-				expectAssertError: true,
-			},
-			"the length of return values must be 2": {
-				expect: &Expect{},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-					},
-				},
-				expectAssertError: true,
-			},
-			"fist return value must be proto.Message": {
-				expect: &Expect{},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
-						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
-					},
-				},
-				expectAssertError: true,
-			},
-			"second return value must be error": {
-				expect: &Expect{},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.ValueOf(&test.EchoResponse{}),
-					},
-				},
-				expectAssertError: true,
-			},
 			"wrong code in case of default": {
 				expect: &Expect{},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
-					},
+				v: &response{
+					Status:  createStatus(t, codes.InvalidArgument, "invalid argument"),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -328,11 +323,9 @@ func TestExpect_Build(t *testing.T) {
 				expect: &Expect{
 					Code: "OK",
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(status.New(codes.InvalidArgument, "invalid argument").Err()),
-					},
+				v: &response{
+					Status:  createStatus(t, codes.InvalidArgument, "invalid argument"),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -350,14 +343,11 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{
-							MessageId:   "1",
-							MessageBody: "hell",
-						}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+				v: &response{
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{
+						MessageId:   "1",
+						MessageBody: "hell",
+					}},
 				},
 				expectAssertError: true,
 			},
@@ -371,16 +361,13 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					Header: metadata.MD{
+				v: &response{
+					Header: yamlutil.NewMDMarshaler(metadata.MD{
 						"content-type": []string{
 							"application/grpc",
 						},
-					},
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -394,16 +381,13 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					Header: metadata.MD{
+				v: &response{
+					Header: yamlutil.NewMDMarshaler(metadata.MD{
 						"content-type": []string{
 							"application/grpc",
 						},
-					},
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -417,16 +401,13 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					Header: metadata.MD{
+				v: &response{
+					Header: yamlutil.NewMDMarshaler(metadata.MD{
 						"content-type": []string{
 							"application/grpc",
 						},
-					},
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -440,16 +421,13 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					Trailer: metadata.MD{
+				v: &response{
+					Trailer: yamlutil.NewMDMarshaler(metadata.MD{
 						"content-type": []string{
 							"application/grpc",
 						},
-					},
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -463,16 +441,13 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					Trailer: metadata.MD{
+				v: &response{
+					Trailer: yamlutil.NewMDMarshaler(metadata.MD{
 						"content-type": []string{
 							"application/grpc",
 						},
-					},
-					rvalues: []reflect.Value{
-						reflect.ValueOf(&test.EchoResponse{}),
-						reflect.Zero(reflectutil.TypeError),
-					},
+					}),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -482,11 +457,9 @@ func TestExpect_Build(t *testing.T) {
 						Code: "Invalid Argument",
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(status.Error(codes.NotFound, "not found")),
-					},
+				v: &response{
+					Status:  createStatus(t, codes.NotFound, "not found"),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
@@ -497,17 +470,48 @@ func TestExpect_Build(t *testing.T) {
 						Message: "foo",
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(status.Error(codes.NotFound, "not found")),
-					},
+				v: &response{
+					Status:  createStatus(t, codes.NotFound, "not found"),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
 			},
-			"wrong status details: name is wrong": {
+
+			// status details
+			"wrong status details: type name is an invalid template": {
 				expect: &Expect{
 					Status: ExpectStatus{
+						Details: []map[string]yaml.MapSlice{
+							{
+								"{{google.rpc.LocalizedMessage": yaml.MapSlice{
+									yaml.MapItem{
+										Key:   "locale",
+										Value: "ja-JP",
+									},
+								},
+							},
+						},
+					},
+				},
+				v: &response{
+					Status: createStatus(
+						t, codes.InvalidArgument, "invalid argument",
+						&errdetails.LocalizedMessage{
+							Locale:  "ja-JP",
+							Message: "エラー",
+						},
+						&errdetails.DebugInfo{
+							Detail: "debug",
+						},
+					),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
+				},
+				expectBuildError: true,
+			},
+			"wrong status details: type name is wrong": {
+				expect: &Expect{
+					Status: ExpectStatus{
+						Code: "InvalidArgument",
 						Details: []map[string]yaml.MapSlice{
 							{
 								"google.rpc.Invalid": yaml.MapSlice{
@@ -520,63 +524,132 @@ func TestExpect_Build(t *testing.T) {
 						},
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(mustWithDetails(
-							status.New(codes.InvalidArgument, "invalid argument"),
-							&errdetails.LocalizedMessage{
-								Locale:  "ja-JP",
-								Message: "エラー",
-							},
-							&errdetails.DebugInfo{
-								Detail: "debug",
-							},
-						).Err()),
-					},
+				v: &response{
+					Status: createStatus(
+						t, codes.InvalidArgument, "invalid argument",
+						&errdetails.LocalizedMessage{
+							Locale:  "ja-JP",
+							Message: "エラー",
+						},
+						&errdetails.DebugInfo{
+							Detail: "debug",
+						},
+					),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
 				},
 				expectAssertError: true,
+				expectError:       `.status.details[0]: expected "google.rpc.Invalid" but got "google.rpc.LocalizedMessage"`,
 			},
-			"wrong status details: value is wrong": {
+			"wrong status details: key is an invalid template": {
 				expect: &Expect{
 					Status: ExpectStatus{
+						Code: "InvalidArgument",
 						Details: []map[string]yaml.MapSlice{
 							{
-								"google.rpc.DebugInfo": yaml.MapSlice{
+								"google.rpc.LocalizedMessage": yaml.MapSlice{
 									yaml.MapItem{
-										Key:   "detail",
-										Value: "unknown",
+										Key:   "{{locale",
+										Value: "ja-JP",
 									},
 								},
 							},
 						},
 					},
 				},
-				v: response{
-					rvalues: []reflect.Value{
-						reflect.Zero(reflect.TypeOf(&test.EchoResponse{})),
-						reflect.ValueOf(mustWithDetails(
-							status.New(codes.InvalidArgument, "invalid argument"),
-							&errdetails.LocalizedMessage{
-								Locale:  "ja-JP",
-								Message: "エラー",
+				v: &response{
+					Status: createStatus(
+						t, codes.InvalidArgument, "invalid argument",
+						&errdetails.LocalizedMessage{
+							Locale:  "ja-JP",
+							Message: "エラー",
+						},
+						&errdetails.DebugInfo{
+							Detail: "debug",
+						},
+					),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
+				},
+				expectBuildError: true,
+				expectError:      `.status.details[0].'google.rpc.LocalizedMessage': invalid expect status detail: failed to build assertion: failed to parse "{{locale": col 9: expected '}}', found 'EOF'`,
+			},
+			"wrong status details: key not found": {
+				expect: &Expect{
+					Status: ExpectStatus{
+						Code: "InvalidArgument",
+						Details: []map[string]yaml.MapSlice{
+							{
+								"google.rpc.LocalizedMessage": yaml.MapSlice{
+									yaml.MapItem{
+										Key:   "Loc",
+										Value: "ja-JP",
+									},
+								},
 							},
-							&errdetails.DebugInfo{
-								Detail: "debug",
-							},
-						).Err()),
+						},
 					},
 				},
+				v: &response{
+					Status: createStatus(
+						t, codes.InvalidArgument, "invalid argument",
+						&errdetails.LocalizedMessage{
+							Locale:  "ja-JP",
+							Message: "エラー",
+						},
+						&errdetails.DebugInfo{
+							Detail: "debug",
+						},
+					),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
+				},
 				expectAssertError: true,
+				expectError:       `.status.details[0].'google.rpc.LocalizedMessage': ".Loc" not found`,
+			},
+			"wrong status details: value is wrong": {
+				expect: &Expect{
+					Status: ExpectStatus{
+						Code: "InvalidArgument",
+						Details: []map[string]yaml.MapSlice{
+							{
+								"google.rpc.LocalizedMessage": yaml.MapSlice{
+									yaml.MapItem{
+										Key:   "Locale",
+										Value: "en-US",
+									},
+								},
+							},
+						},
+					},
+				},
+				v: &response{
+					Status: createStatus(
+						t, codes.InvalidArgument, "invalid argument",
+						&errdetails.LocalizedMessage{
+							Locale:  "ja-JP",
+							Message: "エラー",
+						},
+						&errdetails.DebugInfo{
+							Detail: "debug",
+						},
+					),
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
+				},
+				expectAssertError: true,
+				expectError:       `.status.details[0].'google.rpc.LocalizedMessage'.Locale: expected "en-US" but got "ja-JP"`,
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				assertion, err := test.expect.Build(ctx)
-				if test.expectBuildError && err == nil {
-					t.Fatal("succeeded building assertion")
+				if test.expectBuildError {
+					if err == nil {
+						t.Fatal("succeeded building assertion")
+					}
+					if test.expectError != "" {
+						if got, expect := err.Error(), test.expectError; got != expect {
+							t.Fatalf("expect %q but got %q", expect, got)
+						}
+					}
 				}
 				if !test.expectBuildError && err != nil {
 					t.Fatalf("failed to build assertion: %s", err)
@@ -586,11 +659,18 @@ func TestExpect_Build(t *testing.T) {
 				}
 
 				err = assertion.Assert(test.v)
-				if test.expectAssertError && err == nil {
-					t.Errorf("no assertion error")
+				if test.expectAssertError {
+					if err == nil {
+						t.Fatal("no assertion error")
+					}
+					if test.expectError != "" {
+						if got, expect := err.Error(), test.expectError; got != expect {
+							t.Fatalf("\nexpect: %s\ngot:    %s", expect, got)
+						}
+					}
 				}
 				if !test.expectAssertError && err != nil {
-					t.Errorf("got assertion error: %s", err)
+					t.Fatalf("got assertion error: %s", err)
 				}
 			})
 		}
@@ -598,21 +678,14 @@ func TestExpect_Build(t *testing.T) {
 	t.Run("invalid type for assertion.Assert", func(t *testing.T) {
 		tests := map[string]struct {
 			expect *Expect
-			v      interface{}
+			v      any
 		}{
 			"invalid type for assertion.Assert": {
 				expect: &Expect{},
 				v:      "string is unexpected value",
 			},
-			"invalid type for rvalues of response": {
-				expect: &Expect{},
-				v: response{
-					rvalues: []reflect.Value{},
-				},
-			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				assertion, err := test.expect.Build(ctx)
@@ -627,10 +700,19 @@ func TestExpect_Build(t *testing.T) {
 	})
 }
 
-func mustWithDetails(s *status.Status, details ...proto.Message) *status.Status {
-	ss, err := s.WithDetails(details...)
-	if err != nil {
-		panic(err)
+func createStatus(t *testing.T, c codes.Code, msg string, details ...proto.Message) *responseStatus {
+	t.Helper()
+	sts := status.New(c, msg)
+	if len(details) > 0 {
+		in := make([]protoadapt.MessageV1, len(details))
+		for i, d := range details {
+			in[i] = protoadapt.MessageV1Of(d)
+		}
+		var err error
+		sts, err = sts.WithDetails(in...)
+		if err != nil {
+			t.Fatalf("failed to create status with details: %s", err)
+		}
 	}
-	return ss
+	return &responseStatus{sts}
 }

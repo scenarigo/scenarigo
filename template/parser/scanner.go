@@ -9,7 +9,7 @@ import (
 
 	yamltoken "github.com/goccy/go-yaml/token"
 
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 // eof represents invalid code points.
@@ -59,7 +59,7 @@ func (s *scanner) unread(ch rune) {
 
 func (s *scanner) skipSpaces() {
 	for {
-		if ch := s.read(); ch != ' ' {
+		if ch := s.read(); ch != ' ' && ch != '\n' && ch != '\r' {
 			s.unread(ch)
 			return
 		}
@@ -127,19 +127,38 @@ scan:
 func (s *scanner) scanInt(head rune) (int, token.Token, string) {
 	var b strings.Builder
 	b.WriteRune(head)
+	tk := token.INT
 scan:
 	for {
 		ch := s.read()
 		if !isDigit(ch) {
-			s.unread(ch)
-			break scan
+			if ch != '.' {
+				s.unread(ch)
+				break scan
+			}
+			if tk == token.INT {
+				tk = token.FLOAT
+			} else {
+				tk = token.ILLEGAL
+			}
 		}
 		b.WriteRune(ch)
 	}
-	if head == '0' && b.Len() != 1 {
-		return s.pos - b.Len(), token.ILLEGAL, b.String()
+	switch tk {
+	case token.INT:
+		if head == '0' && b.Len() != 1 {
+			return s.pos - b.Len(), token.ILLEGAL, b.String()
+		}
+	case token.FLOAT:
+		runes := []rune(b.String())
+		if head == '0' && runes[1] != '.' {
+			return s.pos - b.Len(), token.ILLEGAL, b.String()
+		}
+		if runes[len(runes)-1] == '.' {
+			return s.pos - b.Len(), token.ILLEGAL, b.String()
+		}
 	}
-	return s.pos - b.Len(), token.INT, b.String()
+	return s.pos - b.Len(), tk, b.String()
 }
 
 func (s *scanner) scanIdent(head rune) (int, token.Token, string) {
@@ -165,6 +184,10 @@ scan:
 	switch str {
 	case "true", "false":
 		return s.pos - runesLen(str), token.BOOL, str
+	case "nil", "null":
+		return s.pos - runesLen(str), token.NIL, str
+	case "defined":
+		return s.pos - runesLen(str), token.DEFINED, str
 	}
 	return s.pos - runesLen(str), token.IDENT, str
 }
@@ -204,6 +227,11 @@ func (s *scanner) scan() (int, token.Token, string) {
 		return pos, tok, lit
 	}
 
+	return s.scanToken()
+}
+
+//nolint:cyclop,gocyclo
+func (s *scanner) scanToken() (int, token.Token, string) {
 	s.skipSpaces()
 	ch := s.read()
 	switch ch {
@@ -228,15 +256,70 @@ func (s *scanner) scan() (int, token.Token, string) {
 		return s.pos - 1, token.COMMA, ","
 	case '.':
 		return s.pos - 1, token.PERIOD, "."
+	case '?':
+		next := s.read()
+		if next == '?' {
+			return s.pos - 2, token.COALESCING, "??"
+		}
+		s.unread(next)
+		return s.pos - 1, token.QUESTION, "?"
+	case ':':
+		return s.pos - 1, token.COLON, ":"
 	case '+':
 		return s.pos - 1, token.ADD, "+"
+	case '-':
+		return s.pos - 1, token.SUB, "-"
+	case '*':
+		return s.pos - 1, token.MUL, "*"
+	case '/':
+		return s.pos - 1, token.QUO, "/"
+	case '%':
+		return s.pos - 1, token.REM, "%"
+	case '&':
+		next := s.read()
+		if next == '&' {
+			return s.pos - 2, token.LAND, "&&"
+		}
+		s.unread(next)
+	case '|':
+		next := s.read()
+		if next == '|' {
+			return s.pos - 2, token.LOR, "||"
+		}
+		s.unread(next)
+	case '=':
+		next := s.read()
+		if next == '=' {
+			return s.pos - 2, token.EQL, "=="
+		}
+		s.unread(next)
+	case '!':
+		next := s.read()
+		if next == '=' {
+			return s.pos - 2, token.NEQ, "!="
+		}
+		s.unread(next)
+		return s.pos - 1, token.NOT, "!"
 	case '<':
 		next := s.read()
-		if next == '-' {
+		switch next {
+		case '=':
+			return s.pos - 2, token.LEQ, "<="
+		case '-':
 			s.expectColon = true
 			return s.pos - 2, token.LARROW, "<-"
 		}
 		s.unread(next)
+		return s.pos - 1, token.LSS, "<"
+	case '>':
+		next := s.read()
+		if next == '=' {
+			return s.pos - 2, token.GEQ, ">="
+		}
+		s.unread(next)
+		return s.pos - 1, token.GTR, ">"
+	case '$':
+		return s.pos - 1, token.IDENT, string(ch)
 	default:
 		if ch == '"' {
 			return s.scanString()

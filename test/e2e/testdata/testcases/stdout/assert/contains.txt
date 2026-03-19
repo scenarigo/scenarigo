@@ -1,0 +1,31 @@
+--- FAIL: testdata/testcases/scenarios/assert/contains.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/assert/contains.yaml/contains (0.00s)
+        --- FAIL: testdata/testcases/scenarios/assert/contains.yaml/contains/GET_/messages (0.00s)
+                request:
+                  method: GET
+                  url: http://[::]:12345/messages
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "17"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    messages: []
+                elapsed time: 0.000000 sec
+                doesn't contain expected value: empty
+                      25 |     body:
+                      26 |       messages:
+                      27 |         '{{assert.contains <-}}':
+                    > 28 |           id: '1'
+                                       ^
+FAIL
+FAIL	testdata/testcases/scenarios/assert/contains.yaml	0.000s
+FAIL

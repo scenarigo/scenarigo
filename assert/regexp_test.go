@@ -8,8 +8,8 @@ func TestRegexp(t *testing.T) {
 	type myString string
 	tests := map[string]struct {
 		expr string
-		ok   interface{}
-		ng   interface{}
+		ok   any
+		ng   any
 	}{
 		"simple": {
 			expr: "a",
@@ -38,7 +38,6 @@ func TestRegexp(t *testing.T) {
 		},
 	}
 	for name, tc := range tests {
-		tc := tc
 		t.Run(name, func(t *testing.T) {
 			assertion := Regexp(tc.expr)
 			if err := assertion.Assert(tc.ok); err != nil {

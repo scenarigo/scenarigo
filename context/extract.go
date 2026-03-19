@@ -4,6 +4,8 @@ const (
 	nameContext  = "ctx"
 	namePlugins  = "plugins"
 	nameVars     = "vars"
+	nameSecrets  = "secrets"
+	nameSteps    = "steps"
 	nameRequest  = "request"
 	nameResponse = "response"
 	nameEnv      = "env"
@@ -11,7 +13,7 @@ const (
 )
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (c *Context) ExtractByKey(key string) (interface{}, bool) {
+func (c *Context) ExtractByKey(key string) (any, bool) {
 	switch key {
 	case nameContext:
 		return c, true
@@ -22,6 +24,16 @@ func (c *Context) ExtractByKey(key string) (interface{}, bool) {
 		}
 	case nameVars:
 		v := c.Vars()
+		if v != nil {
+			return v, true
+		}
+	case nameSecrets:
+		v := c.Secrets()
+		if v != nil {
+			return v, true
+		}
+	case nameSteps:
+		v := c.Steps()
 		if v != nil {
 			return v, true
 		}
@@ -38,7 +50,9 @@ func (c *Context) ExtractByKey(key string) (interface{}, bool) {
 	case nameEnv:
 		return env, true
 	case nameAssert:
-		return assertions, true
+		if newAssertionsFunc != nil {
+			return newAssertionsFunc(c.RequestContext()), true
+		}
 	}
 	return nil, false
 }

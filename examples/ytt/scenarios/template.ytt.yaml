@@ -1,0 +1,22 @@
+#@ load("@ytt:data", "data")
+#@ for params in data.values:
+---
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+title: #@ params.title
+vars: #@ params.vars
+steps:
+- title: #@ "{} /{}".format(params.request.method, params.request.path)
+  protocol: http
+  request:
+    method: #@ params.request.method
+    url: #@ "http://{{{{plugins.plugin.ServerAddr}}}}/{}".format(params.request.path)
+    header:
+      Content-Type: application/json
+    body:
+      message: "{{vars.message}}"
+  expect: #@ params.expect
+  #@ if/end hasattr(params, "timeout"):
+  timeout: #@ params.timeout
+#@ end

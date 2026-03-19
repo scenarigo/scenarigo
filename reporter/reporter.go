@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"runtime"
@@ -14,8 +15,19 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/fatih/color"
+	"github.com/cenkalti/backoff/v4"
+
+	"github.com/scenarigo/scenarigo/color"
 )
+
+// teardownFunc represents a named teardown function.
+type teardownFunc struct {
+	name string
+	f    func(r Reporter)
+}
+
+// cleanupFunc represents an unnamed cleanup function.
+type cleanupFunc func()
 
 // A Reporter is something that can be used to report test results.
 type Reporter interface {
@@ -23,18 +35,26 @@ type Reporter interface {
 	Fail()
 	Failed() bool
 	FailNow()
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Skip(args ...interface{})
-	Skipf(format string, args ...interface{})
+	Print(args ...any)
+	Printf(format string, args ...any)
+	Log(args ...any)
+	Logf(format string, args ...any)
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Skip(args ...any)
+	Skipf(format string, args ...any)
 	SkipNow()
 	Skipped() bool
 	Parallel()
 	Run(name string, f func(r Reporter)) bool
+	Teardown(name string, f func(r Reporter))
+	Cleanup(f func())
+
+	runWithRetry(string, func(t Reporter), RetryPolicy) bool
+	setNoFailurePropagation()
+	setLogReplacer(LogReplacer)
 
 	// for test reports
 	getName() string
@@ -42,21 +62,68 @@ type Reporter interface {
 	getLogs() *logRecorder
 	getChildren() []Reporter
 	isRoot() bool
+
+	// for test summary
+	printTestSummary()
 }
 
 // Run runs f with new Reporter which applied opts.
 // It reports whether f succeeded.
 func Run(f func(r Reporter), opts ...Option) bool {
-	r := run(f, opts...)
+	stopCapture, err := globalStdoutCapturer.start()
+	if err != nil {
+		panic(fmt.Sprintf("failed to start stdout capture: %v", err))
+	}
+	var r *reporter
+	defer func() {
+		captured, stopErr := stopCapture()
+		if stopErr != nil {
+			panic(fmt.Sprintf("failed to stop stdout capture: %v", stopErr))
+		}
+		if r != nil && strings.TrimSpace(captured) != "" {
+			printCapturedStdoutWarning(r, captured)
+		}
+	}()
+	r = run(f, opts...)
+
+	// print global errors (e.g., invalid config)
+	if (r.Failed() && !r.noFailurePropagation) || r.context.verbose {
+		c := r.passColor()
+		if r.Failed() {
+			c = r.failColor()
+		} else if r.Skipped() {
+			c = r.skipColor()
+		}
+		for _, l := range r.logs.all() {
+			r.context.printf("%s\n", c.Sprint(l))
+		}
+	}
+
+	r.printTestSummary()
 	return !r.Failed()
 }
 
 func run(f func(r Reporter), opts ...Option) *reporter {
-	r := new()
+	r := newReporter()
 	r.context = newTestContext(opts...)
 	go r.run(f)
 	<-r.done
 	return r
+}
+
+// TODO: Add internal logger.
+func printCapturedStdoutWarning(r *reporter, captured string) {
+	r.context.printf("\n%s: %s\n%s", r.context.colorConfig.Yellow().Sprint("WARN"), "detected output written directly to os.Stdout. Please use ctx.Reporter().Print() for logging to keep test output stable.\nCaptured os.Stdout output:", captured)
+}
+
+// NoFailurePropagation prevents propagation of the failure to the parent.
+func NoFailurePropagation(r Reporter) {
+	r.setNoFailurePropagation()
+}
+
+// SetLogReplacer sets a replacer to modify log outputs.
+func SetLogReplacer(r Reporter, rep LogReplacer) {
+	r.setLogReplacer(rep)
 }
 
 // reporter is an implementation of Reporter that
@@ -74,12 +141,20 @@ type reporter struct {
 	logs             *logRecorder
 	durationMeasurer testDurationMeasurer
 	children         []*reporter
+	teardowns        []teardownFunc
+	cleanups         []cleanupFunc
+	inCleanup        bool // Flag to indicate if cleanup is running
 
 	barrier chan bool // To signal parallel subtests they may start.
 	done    chan bool // To signal a test is done.
+
+	testing              bool
+	retryPolicy          RetryPolicy
+	retryable            bool
+	noFailurePropagation bool
 }
 
-func new() *reporter {
+func newReporter() *reporter {
 	return &reporter{
 		logs:             &logRecorder{},
 		durationMeasurer: &durationMeasurer{},
@@ -95,7 +170,7 @@ func (r *reporter) Name() string {
 
 // Fail marks the function as having failed but continues execution.
 func (r *reporter) Fail() {
-	if r.parent != nil {
+	if r.parent != nil && !r.retryable && !r.noFailurePropagation {
 		r.parent.Fail()
 	}
 	atomic.StoreInt32(&r.failed, 1)
@@ -114,52 +189,63 @@ func (r *reporter) FailNow() {
 	runtime.Goexit()
 }
 
+// Print always writes to the output, regardless of test result or verbosity.
+func (r *reporter) Print(args ...any) {
+	r.logs.print(fmt.Sprint(args...)) //nolint:forbidigo
+}
+
+// Printf always writes to the output, regardless of test result or verbosity.
+// It formats its arguments according to the format, analogous to fmt.Printf.
+func (r *reporter) Printf(format string, args ...any) {
+	r.logs.print(fmt.Sprintf(format, args...)) //nolint:forbidigo
+}
+
 // Log formats its arguments using default formatting, analogous to fmt.Print,
 // and records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
-func (r *reporter) Log(args ...interface{}) {
+func (r *reporter) Log(args ...any) {
 	r.logs.log(fmt.Sprint(args...))
 }
 
 // Logf formats its arguments according to the format, analogous to fmt.Printf, and
 // records the text in the log.
 // The text will be printed only if the test fails or the --verbose flag is set.
-func (r *reporter) Logf(format string, args ...interface{}) {
+func (r *reporter) Logf(format string, args ...any) {
 	r.logs.log(fmt.Sprintf(format, args...))
 }
 
 // Error is equivalent to Log followed by Fail.
-func (r *reporter) Error(args ...interface{}) {
+func (r *reporter) Error(args ...any) {
 	r.Fail()
 	r.logs.error(fmt.Sprint(args...))
 }
 
 // Errorf is equivalent to Logf followed by Fail.
-func (r *reporter) Errorf(format string, args ...interface{}) {
+func (r *reporter) Errorf(format string, args ...any) {
 	r.Fail()
 	r.logs.error(fmt.Sprintf(format, args...))
 }
 
 // Fatal is equivalent to Log followed by FailNow.
-func (r *reporter) Fatal(args ...interface{}) {
+func (r *reporter) Fatal(args ...any) {
 	r.Error(args...)
 	runtime.Goexit()
 }
 
 // Fatalf is equivalent to Logf followed by FailNow.
-func (r *reporter) Fatalf(format string, args ...interface{}) {
+func (r *reporter) Fatalf(format string, args ...any) {
 	r.Errorf(format, args...)
 	runtime.Goexit()
 }
 
 // Skip is equivalent to Log followed by SkipNow.
-func (r *reporter) Skip(args ...interface{}) {
+func (r *reporter) Skip(args ...any) {
 	r.logs.skip(fmt.Sprint(args...))
 	r.SkipNow()
 }
 
 // Skipf is equivalent to Logf followed by SkipNow.
-func (r *reporter) Skipf(format string, args ...interface{}) {
+func (r *reporter) Skipf(format string, args ...any) {
 	r.logs.skip(fmt.Sprintf(format, args...))
 	r.SkipNow()
 }
@@ -181,11 +267,22 @@ func (r *reporter) SkipNow() {
 func (r *reporter) Parallel() {
 	r.m.Lock()
 	if r.isParallel {
+		if r.retryPolicy != nil {
+			r.m.Unlock()
+			return
+		}
 		panic("reporter: Reporter.Parallel called multiple times")
 	}
 	r.isParallel = true
 	r.durationMeasurer.stop()
+	defer r.durationMeasurer.start()
 	r.m.Unlock()
+
+	// Retry attempts can not be executed in parallel.
+	if r.retryable {
+		r.parent.Parallel()
+		return
+	}
 
 	if r.context.verbose {
 		r.context.printf("=== PAUSE %s\n", r.goTestName)
@@ -197,12 +294,18 @@ func (r *reporter) Parallel() {
 	if r.context.verbose {
 		r.context.printf("=== CONT  %s\n", r.goTestName)
 	}
-	r.durationMeasurer.start()
 }
 
-func (r *reporter) appendChild(child *reporter) {
+func (r *reporter) printTestSummary() {
+	if !r.context.enabledTestSummary {
+		return
+	}
+	_, _ = r.context.print(r.context.testSummary.String(r.context.colorConfig)) //nolint:forbidigo
+}
+
+func (r *reporter) appendChildren(children ...*reporter) {
 	r.m.Lock()
-	r.children = append(r.children, child)
+	r.children = append(r.children, children...)
 	r.m.Unlock()
 }
 
@@ -234,33 +337,103 @@ func (r *reporter) isRoot() bool {
 // Run may be called simultaneously from multiple goroutines,
 // but all such calls must return before the outer test function for r returns.
 func (r *reporter) Run(name string, f func(t Reporter)) bool {
-	goTestName := rewrite(name)
-	if r.goTestName != "" {
-		goTestName = fmt.Sprintf("%s/%s", r.goTestName, goTestName)
+	if r.inCleanup {
+		panic("reporter: Run called during cleanup")
 	}
-	child := new()
-	child.context = r.context
-	child.parent = r
-	child.name = name
-	child.goTestName = goTestName
-	child.depth = r.depth + 1
-	child.durationMeasurer = r.durationMeasurer.spawn()
+	return r.runWithRetry(name, f, nil)
+}
+
+func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPolicy) bool {
+	if !r.context.matcher.match(r.goTestName, rewrite(name)) {
+		return true
+	}
+	child := r.spawn(name)
+	child.retryPolicy = policy
 	if r.context.verbose {
 		r.context.printf("=== RUN   %s\n", child.goTestName)
 	}
 	go child.run(f)
 	<-child.done
-	r.appendChild(child)
+	r.appendChildren(child)
 	if r.isRoot() {
-		print(child)
+		// Only print report immediately for non-parallel tests
+		// Parallel tests will be printed when the parent test completes
+		if !child.isParallel {
+			printReport(child)
+			child.context.testSummary.append(name, child)
+		}
 	}
 	return !child.Failed()
 }
 
+func (r *reporter) spawn(name string) *reporter {
+	goTestName := rewrite(name)
+	if r.goTestName != "" {
+		goTestName = fmt.Sprintf("%s/%s", r.goTestName, goTestName)
+	}
+	child := newReporter()
+	child.context = r.context
+	child.parent = r
+	child.name = name
+	child.goTestName = goTestName
+	child.depth = r.depth + 1
+	child.logs = r.logs.spawn()
+	child.durationMeasurer = r.durationMeasurer.spawn()
+	child.testing = r.testing
+	return child
+}
+
 func (r *reporter) run(f func(r Reporter)) {
+	stop := r.start()
+	defer stop()
+
+	if r.retryPolicy == nil {
+		r.runFunc(f)
+	} else {
+		_, cancel, b, err := r.retryPolicy.Build(context.Background())
+		if err != nil {
+			r.Fatalf("invalid retry policy: %s", err)
+		}
+		defer cancel()
+		var retried bool
+		child, err := backoff.RetryNotifyWithData(func() (*reporter, error) {
+			child := r.spawn("retryable")
+			child.name = r.name
+			child.goTestName = r.goTestName
+			child.depth = r.depth
+			child.retryable = true
+			// Children never run in parallel.
+			// See Parallel().
+			go child.run(f)
+			<-child.done
+			if child.Failed() {
+				return child, errors.New("failed")
+			}
+			return child, nil
+		}, b, func(err error, d time.Duration) {
+			retried = true
+			r.Logf("retry after %s", d)
+		})
+		r.noFailurePropagation = child.noFailurePropagation
+		if retried && err != nil {
+			r.Error("retry limit exceeded")
+		}
+		r.logs.append(child.logs)
+		r.appendChildren(child.children...)
+		if err != nil {
+			if child.Failed() {
+				r.FailNow()
+			}
+		}
+		if child.Skipped() {
+			r.SkipNow()
+		}
+	}
+}
+
+func (r *reporter) runFunc(f func(Reporter)) {
 	var finished bool
 	defer func() {
-		r.durationMeasurer.stop()
 		err := recover()
 		if !finished && err == nil {
 			err = errors.New("test executed panic(nil) or runtime.Goexit")
@@ -271,12 +444,44 @@ func (r *reporter) run(f func(r Reporter)) {
 				r.Error(string(debug.Stack()))
 			}
 		}
+	}()
+	f(r)
+	finished = true
+}
 
-		// Collect subtests which are running parallel.
+func (r *reporter) start() func() {
+	r.durationMeasurer.start()
+	return func() {
+		r.durationMeasurer.stop()
+		err := recover()
+		if err != nil {
+			if !r.Failed() && !r.Skipped() {
+				r.Error(err)
+				r.Error(string(debug.Stack()))
+			}
+		}
+
+		// Collect subtests which are running parallel (only original subtests, not teardowns).
 		subtests := make([]<-chan bool, 0, len(r.children))
-		for _, child := range r.children {
-			if child.isParallel {
-				subtests = append(subtests, child.done)
+		// No need to wait for retry attempts.
+		// They never run in parallel.
+		if r.retryPolicy == nil {
+			for _, child := range r.children {
+				if child.isParallel {
+					done := make(chan bool)
+					go func() {
+						<-child.done
+						// Print reports for parallel subtests after they complete
+						if r.isRoot() {
+							if child.isParallel {
+								printReport(child)
+								child.context.testSummary.append(child.name, child)
+							}
+						}
+						close(done)
+					}()
+					subtests = append(subtests, done)
+				}
 			}
 		}
 
@@ -299,49 +504,85 @@ func (r *reporter) run(f func(r Reporter)) {
 			r.context.release()
 		}
 
-		r.done <- true
-	}()
+		// Run teardown functions in reverse order (LIFO) as subtests.
+		// Each teardown runs as a normal subtest and can contain parallel subtests.
+		for i := len(r.teardowns) - 1; i >= 0; i-- {
+			teardown := r.teardowns[i]
+			func() {
+				defer func() {
+					if teardownErr := recover(); teardownErr != nil {
+						r.Errorf("panic in teardown: %v\n%s", teardownErr, debug.Stack())
+					}
+				}()
+				// Run teardown as a subtest using the existing Run method
+				r.Run(teardown.name, teardown.f)
+			}()
+		}
 
-	r.durationMeasurer.start()
-	f(r)
-	finished = true
+		// Run cleanup functions in reverse order (LIFO) directly without subtests.
+		if len(r.cleanups) > 0 {
+			r.inCleanup = true
+			for i := len(r.cleanups) - 1; i >= 0; i-- {
+				cleanup := r.cleanups[i]
+				func() {
+					defer func() {
+						if cleanupErr := recover(); cleanupErr != nil {
+							r.Errorf("panic in cleanup: %v\n%s", cleanupErr, debug.Stack())
+						}
+					}()
+					cleanup()
+				}()
+			}
+			r.inCleanup = false
+		}
+
+		r.done <- true
+	}
 }
 
-func print(r *reporter) {
+func printReport(r *reporter) {
 	results := collectOutput(r)
-	r.context.printf("%s\n", strings.Join(results, "\n"))
-	if r.Failed() {
-		r.context.printf(r.failColor().Sprintln("FAIL"))
+	var sb strings.Builder
+	for _, r := range results {
+		sb.WriteString(r)
+		sb.WriteString("\n")
 	}
+	if r.Failed() && !r.testing {
+		sb.WriteString(r.failColor().Sprintln("FAIL"))
+	}
+	r.context.print(sb.String()) //nolint:forbidigo
 }
 
 func collectOutput(r *reporter) []string {
 	var results []string
-	if r.Failed() || r.context.verbose {
-		prefix := strings.Repeat("    ", r.depth-1)
-		status := "PASS"
-		c := r.passColor()
-		if r.Failed() {
-			status = "FAIL"
-			c = r.failColor()
-		} else if r.Skipped() {
-			status = "SKIP"
-			c = r.skipColor()
-		}
-		results = []string{
-			c.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.goTestName, r.durationMeasurer.getDuration().Seconds()),
-		}
+	// For parallel tests, always show logs in verbose mode, regardless of failure status
+	shouldShowLogs := (r.Failed() && !r.noFailurePropagation) || r.context.verbose
+	prefix := strings.Repeat("    ", r.depth-1)
+	if shouldShowLogs {
 		for _, l := range r.logs.all() {
 			padding := fmt.Sprintf("%s    ", prefix)
 			results = append(results, pad(l, padding))
+		}
+	} else {
+		// Print() messages should be shown at all times.
+		logs := r.logs.printLogs()
+		if len(logs) > 0 {
+			for _, l := range logs {
+				padding := fmt.Sprintf("%s    ", prefix)
+				results = append(results, pad(l, padding))
+			}
 		}
 	}
 	for _, child := range r.children {
 		results = append(results, collectOutput(child)...)
 	}
-	if r.depth == 1 {
+	if shouldShowLogs || len(results) > 0 {
+		results = append([]string{r.buildStatusLine(prefix)}, results...)
+	}
+	if r.depth == 1 && !r.testing {
 		if r.Failed() {
 			results = append(results,
+				//nolint:dupword
 				r.failColor().Sprintf("FAIL\nFAIL\t%s\t%.3fs", r.goTestName, r.durationMeasurer.getDuration().Seconds()),
 			)
 		} else {
@@ -354,6 +595,19 @@ func collectOutput(r *reporter) []string {
 		}
 	}
 	return results
+}
+
+func (r *reporter) buildStatusLine(prefix string) string {
+	status := "PASS"
+	c := r.passColor()
+	if r.Failed() {
+		status = "FAIL"
+		c = r.failColor()
+	} else if r.Skipped() {
+		status = "SKIP"
+		c = r.skipColor()
+	}
+	return c.Sprintf("%s--- %s: %s (%.2fs)", prefix, status, r.goTestName, r.durationMeasurer.getDuration().Seconds())
 }
 
 func pad(s string, padding string) string {
@@ -370,6 +624,14 @@ func pad(s string, padding string) string {
 		b.WriteString(l)
 	}
 	return b.String()
+}
+
+func (r *reporter) setNoFailurePropagation() {
+	r.noFailurePropagation = true
+}
+
+func (r *reporter) setLogReplacer(rep LogReplacer) {
+	r.logs.setReplacer(rep)
 }
 
 func (r *reporter) getName() string {
@@ -393,22 +655,30 @@ func (r *reporter) getChildren() []Reporter {
 }
 
 func (r *reporter) passColor() *color.Color {
-	if r.context.noColor {
-		return color.New()
-	}
-	return color.New(color.FgGreen)
+	return r.context.colorConfig.Green()
 }
 
 func (r *reporter) failColor() *color.Color {
-	if r.context.noColor {
-		return color.New()
-	}
-	return color.New(color.FgHiRed)
+	return r.context.colorConfig.Red()
 }
 
 func (r *reporter) skipColor() *color.Color {
-	if r.context.noColor {
-		return color.New()
-	}
-	return color.New(color.FgYellow)
+	return r.context.colorConfig.Yellow()
+}
+
+// Teardown registers a named function to be called when all parallel subtests complete.
+// The teardown functions are called in reverse order of registration (LIFO) as subtests.
+func (r *reporter) Teardown(name string, f func(r Reporter)) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.teardowns = append(r.teardowns, teardownFunc{name: name, f: f})
+}
+
+// Cleanup registers a function to be called when the test completes.
+// This is similar to testing.T.Cleanup() in Go's standard testing package.
+// The cleanup functions are called in reverse order of registration (LIFO).
+func (r *reporter) Cleanup(f func()) {
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.cleanups = append(r.cleanups, cleanupFunc(f))
 }

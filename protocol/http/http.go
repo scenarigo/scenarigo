@@ -4,10 +4,11 @@ import (
 	"bytes"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/scenarigo/scenarigo/protocol"
 )
 
-func init() {
+// Register registers http protocol.
+func Register() {
 	protocol.Register(&HTTP{})
 }
 
@@ -17,6 +18,11 @@ type HTTP struct{}
 // Name implements protocol.Protocol interface.
 func (p *HTTP) Name() string {
 	return "http"
+}
+
+// UnmarshalOption implements protocol.Protocol interface.
+func (p *HTTP) UnmarshalOption(_ []byte) error {
+	return nil
 }
 
 // UnmarshalRequest implements protocol.Protocol interface.

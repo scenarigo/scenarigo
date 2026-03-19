@@ -1,3 +1,4 @@
+version: 2
 builds:
 - id: darwin-amd64
   env:
@@ -7,8 +8,8 @@ builds:
   main: ./cmd/scenarigo
   ldflags:
   - -s -w
-  - -X github.com/zoncoen/scenarigo/version.version={{.Version}}
-  - -X github.com/zoncoen/scenarigo/version.revision=
+  - -X github.com/scenarigo/scenarigo/version.version={{.Version}}
+  - -X github.com/scenarigo/scenarigo/version.revision=
   goos:
     - darwin
   goarch:
@@ -16,13 +17,13 @@ builds:
 - id: darwin-arm64
   env:
     - CGO_ENABLED=1
-    - CC=aarch64-apple-darwin20.2-clang
-    - CXX=aarch64-apple-darwin20.2-clang++
+    - CC=<< .CC >>
+    - CXX=<< .CC >>++
   main: ./cmd/scenarigo
   ldflags:
   - -s -w
-  - -X github.com/zoncoen/scenarigo/version.version={{.Version}}
-  - -X github.com/zoncoen/scenarigo/version.revision=
+  - -X github.com/scenarigo/scenarigo/version.version={{.Version}}
+  - -X github.com/scenarigo/scenarigo/version.revision=
   goos:
     - darwin
   goarch:
@@ -33,21 +34,22 @@ builds:
   main: ./cmd/scenarigo
   ldflags:
   - -s -w
-  - -X github.com/zoncoen/scenarigo/version.version={{.Version}}
-  - -X github.com/zoncoen/scenarigo/version.revision=
+  - -X github.com/scenarigo/scenarigo/version.version={{.Version}}
+  - -X github.com/scenarigo/scenarigo/version.revision=
   goos:
     - linux
   goarch:
     - amd64
 
 archives:
-- name_template: "{{ .ProjectName  }}_v{{ .Version }}_go<< .GoVersion >>_{{ .Os  }}_{{ .Arch  }}"
-  replacements:
-    darwin: Darwin
-    linux: Linux
-    windows: Windows
-    386: i386
-    amd64: x86_64
+- name_template: >-
+    {{- .ProjectName }}_
+    {{- printf "v%s" .Version }}_
+    {{- "go<< .GoVersion >>" }}_
+    {{- title .Os }}_
+    {{- if eq .Arch "amd64" }}x86_64
+    {{- else if eq .Arch "386" }}i386
+    {{- else }}{{ .Arch }}{{ end }}
   format_overrides:
   - goos: windows
     format: zip
@@ -59,6 +61,6 @@ archives:
 checksum:
   name_template: "{{ .ProjectName  }}_v{{ .Version }}_go<< .GoVersion >>_checksums.txt"
 snapshot:
-  name_template: "{{ .Version }}-snapshot"
+  version_template: "{{ .Version }}-snapshot"
 changelog:
-  skip: true
+  use: github-native

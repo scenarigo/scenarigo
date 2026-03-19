@@ -1,0 +1,31 @@
+#@data/values
+---
+- title: success
+  vars:
+    message: hello
+  request:
+    method: POST
+    path: echo
+  expect:
+    code: OK
+    body:
+      message: "{{request.body.message}}"
+  timeout: 10s
+
+- title: invalid method
+  vars:
+    message: hello
+  request:
+    method: GET
+    path: echo
+  expect:
+    code: Method Not Allowed
+
+- title: invalid path
+  vars:
+    message: hello
+  request:
+    method: POST
+    path: invalid
+  expect:
+    code: Not Found

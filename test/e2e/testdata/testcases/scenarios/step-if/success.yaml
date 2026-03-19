@@ -1,0 +1,21 @@
+schemaVersion: scenario/v1
+title: step if
+steps:
+- id: foo
+  title: foo
+  continueOnError: true
+  protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/foo"
+  expect:
+    code: OK
+- id: bar
+  title: bar
+  if: '{{steps.foo.result == "failed"}}'
+  protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/bar"
+  expect:
+    code: OK

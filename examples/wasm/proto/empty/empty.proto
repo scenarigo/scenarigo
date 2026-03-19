@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package scenarigo.examples.wasm.empty;
+
+option go_package = "github.com/scenarigo/scenarigo/examples/wasm/plugin/src/pb/empty;empty";
+
+message Empty {}

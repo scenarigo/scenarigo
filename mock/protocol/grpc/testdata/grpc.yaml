@@ -1,0 +1,15 @@
+- protocol: grpc
+  expect:
+    service: scenarigo.testdata.test.Test
+    method: Echo
+    metadata:
+      content-type: application/grpc
+    message:
+      messageId: '1'
+      messageBody: 'hello'
+  response:
+    status:
+      code: OK
+    message:
+      messageId: '1'
+      messageBody: 'hello'

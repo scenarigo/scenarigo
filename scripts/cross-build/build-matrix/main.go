@@ -6,21 +6,20 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/Yamashou/gqlgenc/clientv2"
 
-	"github.com/zoncoen/scenarigo/scripts/cross-build/gen"
+	"github.com/scenarigo/scenarigo/scripts/cross-build/gen"
 )
 
-var (
-	go117 *semver.Version
-)
+var minVer *semver.Version
 
 func init() {
 	var err error
-	go117, err = semver.NewVersion("1.17.0")
+	minVer, err = semver.NewVersion("1.25.0")
 	if err != nil {
 		panic(err)
 	}
@@ -38,6 +37,20 @@ func printVersions() error {
 	if err != nil {
 		return fmt.Errorf("failed to get Go versions: %w", err)
 	}
+
+	// Each major Go release is supported until there are two newer major releases.
+	// https://go.dev/doc/devel/release#policy
+	sort.Strings(vers)
+	latest := semver.MustParse(vers[len(vers)-1])
+	minSupportedVer := semver.MustParse(fmt.Sprintf("%d.%d.0", latest.Major(), latest.Minor()-1))
+	for i, s := range vers {
+		v := semver.MustParse(s)
+		if !v.LessThan(minSupportedVer) {
+			vers = vers[i:]
+			break
+		}
+	}
+
 	b, err := json.Marshal(vers)
 	if err != nil {
 		return fmt.Errorf("failed to marshal: %w", err)
@@ -71,7 +84,7 @@ func getVers(token string) ([]string, error) {
 		if err != nil {
 			continue
 		}
-		if !v.LessThan(go117) {
+		if !v.LessThan(minVer) {
 			vers = append(vers, v.Original())
 		}
 	}

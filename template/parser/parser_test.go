@@ -1,12 +1,13 @@
 package parser
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/zoncoen/scenarigo/template/ast"
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/ast"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 func TestParser_Parse(t *testing.T) {
@@ -42,6 +43,46 @@ func TestParser_Parse(t *testing.T) {
 					Rdbrace: 9,
 				},
 			},
+			"just an integer": {
+				src: `{{123}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BasicLit{
+						ValuePos: 3,
+						Kind:     token.INT,
+						Value:    "123",
+					},
+					Rdbrace: 6,
+				},
+			},
+			"just a negative integer": {
+				src: `{{-123}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.UnaryExpr{
+						OpPos: 3,
+						Op:    token.SUB,
+						X: &ast.BasicLit{
+							ValuePos: 4,
+							Kind:     token.INT,
+							Value:    "123",
+						},
+					},
+					Rdbrace: 7,
+				},
+			},
+			"just a float": {
+				src: `{{1.23}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BasicLit{
+						ValuePos: 3,
+						Kind:     token.FLOAT,
+						Value:    "1.23",
+					},
+					Rdbrace: 7,
+				},
+			},
 			"just a bool": {
 				src: `{{true}}`,
 				expected: &ast.ParameterExpr{
@@ -54,6 +95,62 @@ func TestParser_Parse(t *testing.T) {
 					Rdbrace: 7,
 				},
 			},
+			"nil keyword": {
+				src: `{{nil}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BasicLit{
+						ValuePos: 3,
+						Kind:     token.NIL,
+						Value:    "nil",
+					},
+					Rdbrace: 6,
+				},
+			},
+			"null keyword": {
+				src: `{{null}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BasicLit{
+						ValuePos: 3,
+						Kind:     token.NIL,
+						Value:    "null",
+					},
+					Rdbrace: 7,
+				},
+			},
+			"not bool": {
+				src: `{{!true}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.UnaryExpr{
+						OpPos: 3,
+						Op:    token.NOT,
+						X: &ast.BasicLit{
+							ValuePos: 4,
+							Kind:     token.BOOL,
+							Value:    "true",
+						},
+					},
+					Rdbrace: 8,
+				},
+			},
+			"parenthesized expression": {
+				src: "{{(1)}}",
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.ParenExpr{
+						Lparen: 3,
+						X: &ast.BasicLit{
+							ValuePos: 4,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						Rparen: 5,
+					},
+					Rdbrace: 6,
+				},
+			},
 			"just a parameter": {
 				src: "{{test}}",
 				expected: &ast.ParameterExpr{
@@ -63,6 +160,17 @@ func TestParser_Parse(t *testing.T) {
 						Name:    "test",
 					},
 					Rdbrace: 7,
+				},
+			},
+			"$ ident": {
+				src: "{{$}}",
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.Ident{
+						NamePos: 3,
+						Name:    "$",
+					},
+					Rdbrace: 4,
 				},
 			},
 			"multi parameter": {
@@ -78,7 +186,7 @@ func TestParser_Parse(t *testing.T) {
 							Rdbrace: 6,
 						},
 						OpPos: 8,
-						Op:    token.ADD,
+						Op:    token.CONCAT,
 						Y: &ast.ParameterExpr{
 							Ldbrace: 8,
 							X: &ast.Ident{
@@ -89,7 +197,7 @@ func TestParser_Parse(t *testing.T) {
 						},
 					},
 					OpPos: 15,
-					Op:    token.ADD,
+					Op:    token.CONCAT,
 					Y: &ast.ParameterExpr{
 						Ldbrace: 15,
 						X: &ast.Ident{
@@ -110,7 +218,7 @@ func TestParser_Parse(t *testing.T) {
 							Value:    "prefix-",
 						},
 						OpPos: 8,
-						Op:    token.ADD,
+						Op:    token.CONCAT,
 						Y: &ast.ParameterExpr{
 							Ldbrace: 8,
 							X: &ast.Ident{
@@ -121,7 +229,7 @@ func TestParser_Parse(t *testing.T) {
 						},
 					},
 					OpPos: 16,
-					Op:    token.ADD,
+					Op:    token.CONCAT,
 					Y: &ast.BasicLit{
 						ValuePos: 16,
 						Kind:     token.STRING,
@@ -229,7 +337,7 @@ func TestParser_Parse(t *testing.T) {
 								Value:    "\n  message: ",
 							},
 							OpPos: 26,
-							Op:    token.ADD,
+							Op:    token.CONCAT,
 							Y: &ast.ParameterExpr{
 								Ldbrace: 26,
 								X: &ast.Ident{
@@ -276,7 +384,7 @@ func TestParser_Parse(t *testing.T) {
     `,
 									},
 									OpPos: 47,
-									Op:    token.ADD,
+									Op:    token.CONCAT,
 									Y: &ast.ParameterExpr{
 										Ldbrace: 47,
 										X: &ast.LeftArrowExpr{
@@ -296,7 +404,7 @@ func TestParser_Parse(t *testing.T) {
       text: `,
 													},
 													OpPos: 94,
-													Op:    token.ADD,
+													Op:    token.CONCAT,
 													Y: &ast.ParameterExpr{
 														Ldbrace: 94,
 														X: &ast.Ident{
@@ -308,7 +416,7 @@ func TestParser_Parse(t *testing.T) {
 													},
 												},
 												OpPos: 103,
-												Op:    token.ADD,
+												Op:    token.CONCAT,
 												Y: &ast.BasicLit{
 													ValuePos: 103,
 													Kind:     token.STRING,
@@ -321,7 +429,7 @@ func TestParser_Parse(t *testing.T) {
 									},
 								},
 								OpPos: 124,
-								Op:    token.ADD,
+								Op:    token.CONCAT,
 								Y: &ast.BasicLit{
 									ValuePos: 124,
 									Kind:     token.STRING,
@@ -329,7 +437,7 @@ func TestParser_Parse(t *testing.T) {
 								},
 							},
 							OpPos: 127,
-							Op:    token.ADD,
+							Op:    token.CONCAT,
 							Y: &ast.BasicLit{
 								ValuePos: 127,
 								Kind:     token.STRING,
@@ -386,9 +494,308 @@ func TestParser_Parse(t *testing.T) {
 					Rdbrace: 16,
 				},
 			},
+			"sub": {
+				src: `{{1-2}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						OpPos: 4,
+						Op:    token.SUB,
+						Y: &ast.BasicLit{
+							ValuePos: 5,
+							Kind:     token.INT,
+							Value:    "2",
+						},
+					},
+					Rdbrace: 6,
+				},
+			},
+			"&&": {
+				src: `{{true&&true}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.BOOL,
+							Value:    "true",
+						},
+						OpPos: 7,
+						Op:    token.LAND,
+						Y: &ast.BasicLit{
+							ValuePos: 9,
+							Kind:     token.BOOL,
+							Value:    "true",
+						},
+					},
+					Rdbrace: 13,
+				},
+			},
+			"||": {
+				src: `{{true||true}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.BOOL,
+							Value:    "true",
+						},
+						OpPos: 7,
+						Op:    token.LOR,
+						Y: &ast.BasicLit{
+							ValuePos: 9,
+							Kind:     token.BOOL,
+							Value:    "true",
+						},
+					},
+					Rdbrace: 13,
+				},
+			},
+			"??": {
+				src: `{{a.b??"default"}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.SelectorExpr{
+							X: &ast.Ident{
+								NamePos: 3,
+								Name:    "a",
+							},
+							Sel: &ast.Ident{
+								NamePos: 5,
+								Name:    "b",
+							},
+						},
+						OpPos: 6,
+						Op:    token.COALESCING,
+						Y: &ast.BasicLit{
+							ValuePos: 8,
+							Kind:     token.STRING,
+							Value:    "default",
+						},
+					},
+					Rdbrace: 17,
+				},
+			},
+			"==": {
+				src: `{{1==1}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						OpPos: 4,
+						Op:    token.EQL,
+						Y: &ast.BasicLit{
+							ValuePos: 6,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+					},
+					Rdbrace: 7,
+				},
+			},
+			"!=": {
+				src: `{{1!=1}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						OpPos: 4,
+						Op:    token.NEQ,
+						Y: &ast.BasicLit{
+							ValuePos: 6,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+					},
+					Rdbrace: 7,
+				},
+			},
+			"<": {
+				src: `{{1<1}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						OpPos: 4,
+						Op:    token.LSS,
+						Y: &ast.BasicLit{
+							ValuePos: 5,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+					},
+					Rdbrace: 6,
+				},
+			},
+			"<=": {
+				src: `{{1<=1}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						OpPos: 4,
+						Op:    token.LEQ,
+						Y: &ast.BasicLit{
+							ValuePos: 6,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+					},
+					Rdbrace: 7,
+				},
+			},
+			">": {
+				src: `{{1>1}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						OpPos: 4,
+						Op:    token.GTR,
+						Y: &ast.BasicLit{
+							ValuePos: 5,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+					},
+					Rdbrace: 6,
+				},
+			},
+			">=": {
+				src: `{{1>=1}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.BinaryExpr{
+						X: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						OpPos: 4,
+						Op:    token.GEQ,
+						Y: &ast.BasicLit{
+							ValuePos: 6,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+					},
+					Rdbrace: 7,
+				},
+			},
+			"conditional expression": {
+				src: `{{true?1:2}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.ConditionalExpr{
+						Condition: &ast.BasicLit{
+							ValuePos: 3,
+							Kind:     token.BOOL,
+							Value:    "true",
+						},
+						Question: 7,
+						X: &ast.BasicLit{
+							ValuePos: 8,
+							Kind:     token.INT,
+							Value:    "1",
+						},
+						Colon: 9,
+						Y: &ast.BasicLit{
+							ValuePos: 10,
+							Kind:     token.INT,
+							Value:    "2",
+						},
+					},
+					Rdbrace: 11,
+				},
+			},
+			"defined()": {
+				src: `{{defined(a.b)}}`,
+				expected: &ast.ParameterExpr{
+					Ldbrace: 1,
+					X: &ast.DefinedExpr{
+						DefinedPos: 3,
+						Lparen:     10,
+						Arg: &ast.SelectorExpr{
+							X: &ast.Ident{
+								NamePos: 11,
+								Name:    "a",
+							},
+							Sel: &ast.Ident{
+								NamePos: 13,
+								Name:    "b",
+							},
+						},
+						Rparen: 14,
+					},
+					Rdbrace: 15,
+				},
+			},
+			"expr with new-line-char": {
+				src: `
+{{foo(
+  1,
+  3
+  -
+  2)}}
+`,
+				expected: &ast.BinaryExpr{
+					X: &ast.BinaryExpr{
+						X:     &ast.BasicLit{ValuePos: 1, Kind: token.STRING, Value: "\n"},
+						OpPos: 2,
+						Op:    token.CONCAT,
+						Y: &ast.ParameterExpr{
+							Ldbrace: 2,
+							X: &ast.CallExpr{
+								Fun:    &ast.Ident{NamePos: 4, Name: "foo"},
+								Lparen: 7,
+								Args: []ast.Expr{
+									&ast.BasicLit{ValuePos: 11, Kind: token.INT, Value: "1"},
+									&ast.BinaryExpr{
+										X:     &ast.BasicLit{ValuePos: 16, Kind: token.INT, Value: "3"},
+										OpPos: 20,
+										Op:    token.SUB,
+										Y:     &ast.BasicLit{ValuePos: 24, Kind: token.INT, Value: "2"},
+									},
+								},
+								Rparen: 25,
+							},
+							Rdbrace: 26,
+						},
+					},
+					OpPos: 28,
+					Op:    token.CONCAT,
+					Y:     &ast.BasicLit{ValuePos: 28, Kind: token.STRING, Value: "\n"},
+				},
+			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := NewParser(strings.NewReader(test.src))
 				got, err := p.Parse()
@@ -426,17 +833,28 @@ func TestParser_Parse(t *testing.T) {
 				src: "{{ test.[0] }}",
 				pos: 9,
 			},
+			"invalid $$ ident": {
+				src: "{{$$}}",
+				pos: 4,
+			},
+			"invalid $a ident": {
+				src: "{{$a}}",
+				pos: 4,
+			},
+			"invalid a$ ident": {
+				src: "{{a$}}",
+				pos: 4,
+			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				p := NewParser(strings.NewReader(test.src))
 				_, err := p.Parse()
 				if err == nil {
 					t.Fatal("expected error")
 				}
-				errs, ok := err.(Errors)
-				if !ok {
+				var errs Errors
+				if ok := errors.As(err, &errs); !ok {
 					t.Fatalf("expected parse errors: %s", err)
 				}
 				if got, expected := errs[0].pos, test.pos; got != expected {

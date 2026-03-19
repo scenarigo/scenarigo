@@ -1,0 +1,13 @@
+schemaVersion: scenario/v1
+title: echo
+vars:
+  message: #@ msg
+steps:
+- title: POST /say
+  protocol: http
+  request:
+    body:
+      message: "{{vars.message}}"
+  expect:
+    body:
+      message: "{{request.body.message}}"

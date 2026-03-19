@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
-	"github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/config"
 )
 
 func TestList(t *testing.T) {
@@ -45,16 +45,12 @@ config/gen/remote.so
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			wd, err := os.Getwd()
 			if err != nil {
 				t.Fatalf("failed to get current directory: %s", err)
 			}
-			t.Cleanup(func() { os.Chdir(wd) })
-			if err := os.Chdir(filepath.Join(wd, test.wd)); err != nil {
-				t.Fatalf("failed to change working directory: %s", err)
-			}
+			t.Chdir(filepath.Join(wd, test.wd))
 
 			cmd := &cobra.Command{}
 			var buf bytes.Buffer

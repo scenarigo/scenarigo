@@ -6,7 +6,7 @@ func TestText_Marshal(t *testing.T) {
 	m := textMarshaler{}
 	t.Run("success", func(t *testing.T) {
 		tests := map[string]struct {
-			v      interface{}
+			v      any
 			expect string
 		}{
 			"[]byte": {
@@ -19,7 +19,6 @@ func TestText_Marshal(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				b, err := m.Marshal(test.v)
 				if err != nil {
@@ -33,7 +32,7 @@ func TestText_Marshal(t *testing.T) {
 	})
 	t.Run("failure", func(t *testing.T) {
 		tests := map[string]struct {
-			v      interface{}
+			v      any
 			expect string
 		}{
 			"nil": {
@@ -46,7 +45,6 @@ func TestText_Marshal(t *testing.T) {
 			},
 		}
 		for name, test := range tests {
-			test := test
 			m := textMarshaler{}
 			t.Run(name, func(t *testing.T) {
 				_, err := m.Marshal(test.v)

@@ -1,0 +1,18 @@
+schemaVersion: config/v1
+
+scenarios:
+- scenarios
+
+pluginDirectory: ./plugin/gen
+plugins:
+  plugin.wasm:
+    src: ./plugin/src
+
+protocols:
+  grpc:
+    request:
+      proto:
+        imports:
+        - ../proto
+      auth:
+        insecure: true

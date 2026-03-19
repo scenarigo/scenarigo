@@ -1,0 +1,55 @@
+---
+name: simple
+yaml: '{{assert.and("1")}}'
+ok:
+- '1'
+ng:
+- one
+
+---
+name: w/ assertion
+yaml: '{{assert.and(assert.notZero)}}'
+ok:
+- xxx
+ng:
+- ''
+
+---
+name: left arrow function
+yaml: |-
+  {{assert.and <-}}:
+  - xxx
+  - '{{assert.notZero}}'
+ok:
+- xxx
+ng:
+- yyy
+
+---
+name: left arrow function w/ assertion
+yaml:
+  '{{assert.and <-}}':
+  - '{{assert.contains <-}}':
+      name: Alice
+      age: '{{int($) >= 20}}'
+  - '{{assert.contains <-}}':
+      name: '{{"Bob"}}'
+ok:
+-
+  - name: Alice
+    age: 20
+  - name: Bob
+    age: 10
+ng:
+-
+  - name: Bob
+    age: 10
+  - name: Charlie
+    age: 20
+-
+  - name: Alice
+    age: 10
+  - name: Bob
+    age: 10
+  - name: Charlie
+    age: 20

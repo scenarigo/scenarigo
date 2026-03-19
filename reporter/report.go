@@ -24,14 +24,12 @@ func GenerateTestReport(r Reporter) (*TestReport, error) {
 		Result: testResult(r),
 	}
 	for _, file := range r.getChildren() {
-		file := file
 		fileReport := ScenarioFileReport{
 			Name:     file.getName(),
 			Result:   testResult(file),
 			Duration: TestDuration(file.getDuration()),
 		}
 		for _, scenario := range file.getChildren() {
-			scenario := scenario
 			scenarioReport := ScenarioReport{
 				Name:     scenario.getName(),
 				File:     file.getName(),
@@ -39,7 +37,6 @@ func GenerateTestReport(r Reporter) (*TestReport, error) {
 				Duration: TestDuration(scenario.getDuration()),
 			}
 			for _, step := range scenario.getChildren() {
-				step := step
 				logs := step.getLogs()
 				stepReport := StepReport{
 					Name:     step.getName(),
@@ -68,7 +65,6 @@ func generateSubStepReports(r Reporter) []SubStepReport {
 	}
 	reports := make([]SubStepReport, len(children))
 	for i, child := range children {
-		child := child
 		logs := child.getLogs()
 		reports[i] = SubStepReport{
 			Name:     child.getName(),
@@ -83,6 +79,10 @@ func generateSubStepReports(r Reporter) []SubStepReport {
 		}
 	}
 	return reports
+}
+
+func TestResultString(r Reporter) string {
+	return testResult(r).String()
 }
 
 func testResult(r Reporter) TestResult {
@@ -104,20 +104,19 @@ This struct can be marshalled as JUnit-like format XML.
 		panic(err)
 	}
 	fmt.Println(b)
-
 */
 type TestReport struct {
-	XMLName xml.Name             `json:"-" xml:"testsuites"`
+	XMLName xml.Name             `json:"-"              xml:"testsuites"`
 	Name    string               `json:"name,omitempty" xml:"name,attr,omitempty"`
-	Result  TestResult           `json:"result" xml:"-"`
-	Files   []ScenarioFileReport `json:"files" xml:"testsuite"`
+	Result  TestResult           `json:"result"         xml:"-"`
+	Files   []ScenarioFileReport `json:"files"          xml:"testsuite"`
 }
 
 // ScenarioFileReport represents a result report of a test scenario file.
 type ScenarioFileReport struct {
-	Name      string           `json:"name" xml:"name,attr,omitempty"`
-	Result    TestResult       `json:"result" xml:"-"`
-	Duration  TestDuration     `json:"duration" xml:"time,attr"`
+	Name      string           `json:"name"      xml:"name,attr,omitempty"`
+	Result    TestResult       `json:"result"    xml:"-"`
+	Duration  TestDuration     `json:"duration"  xml:"time,attr"`
 	Scenarios []ScenarioReport `json:"scenarios" xml:"testcase"`
 }
 
@@ -127,7 +126,6 @@ type xmlScenarioFileReport ScenarioFileReport
 func (r ScenarioFileReport) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	var failures int
 	for _, scenario := range r.Scenarios {
-		scenario := scenario
 		if scenario.Result == TestResultFailed {
 			failures++
 		}
@@ -248,7 +246,9 @@ const (
 	TestResultPassed
 	TestResultFailed
 	TestResultSkipped
+)
 
+const (
 	testResultUndefinedString = "undefined"
 	testResultPassedString    = "passed"
 	testResultFailedString    = "failed"
@@ -271,7 +271,7 @@ func (r TestResult) String() string {
 
 // MarshalJSON implements json.Marshaler interface.
 func (r TestResult) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%q", r.String())), nil
+	return fmt.Appendf(nil, "%q", r.String()), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
@@ -326,7 +326,7 @@ type TestDuration time.Duration
 
 // MarshalJSON implements json.Marshaler interface.
 func (d TestDuration) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%q", time.Duration(d).String())), nil
+	return fmt.Appendf(nil, "%q", time.Duration(d).String()), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
@@ -362,7 +362,7 @@ func (d *TestDuration) UnmarshalYAML(b []byte) error {
 	return nil
 }
 
-// MarshalYAML implements xml.Marshaler interface.
+// MarshalXMLAttr implements xml.MarshalerAttr interface.
 func (d TestDuration) MarshalXMLAttr(name xml.Name) (xml.Attr, error) {
 	return xml.Attr{
 		Name:  name,

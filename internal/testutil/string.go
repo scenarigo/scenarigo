@@ -2,10 +2,14 @@ package testutil
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
-	"github.com/zoncoen/scenarigo/version"
+	"github.com/scenarigo/scenarigo/internal/protocolmeta"
+	"github.com/scenarigo/scenarigo/version"
 )
 
 var (
@@ -18,14 +22,40 @@ var (
 	dateHeaderPattern  = regexp.MustCompile(`Date:\n\s*- (.+)`)
 )
 
+// ReplaceOption is an option for ReplaceOutput.
+type ReplaceOption func(*replaceConfig)
+
+type replaceConfig struct {
+	keepScenarigoHeaders bool
+}
+
+// KeepScenarigoHeaders keeps scenarigo headers in the output.
+func KeepScenarigoHeaders() ReplaceOption {
+	return func(c *replaceConfig) {
+		c.keepScenarigoHeaders = true
+	}
+}
+
 // ReplaceOutput replaces result output.
-func ReplaceOutput(s string) string {
-	for _, f := range []func(string) string{
+func ReplaceOutput(s string, opts ...ReplaceOption) string {
+	cfg := &replaceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	funcs := []func(string) string{
 		ResetDuration,
 		ReplaceAddr,
 		ReplaceUserAgent,
 		ReplaceDateHeader,
-	} {
+		ReplaceFilepath,
+		ReplacePluginOpen,
+	}
+	if !cfg.keepScenarigoHeaders {
+		funcs = append(funcs, RemoveScenarigoHeaders)
+	}
+
+	for _, f := range funcs {
 		s = f(s)
 	}
 	return s
@@ -53,10 +83,72 @@ func ReplaceUserAgent(s string) string {
 func ReplaceDateHeader(s string) string {
 	found := dateHeaderPattern.FindAllStringSubmatch(s, -1)
 	for _, subs := range found {
-		subs := subs
 		if len(subs) > 1 {
-			s = strings.Replace(s, subs[1], "Mon, 01 Jan 0001 00:00:00 GMT", -1)
+			s = strings.ReplaceAll(s, subs[1], "Mon, 01 Jan 0001 00:00:00 GMT")
 		}
 	}
 	return s
+}
+
+// ReplaceFilepath replaces filepaths.
+func ReplaceFilepath(s string) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return s
+	}
+	root := wd
+	parts := strings.Split(filepath.ToSlash(wd), "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] == "scenarigo" {
+			root = filepath.FromSlash(strings.Join(parts[:i+1], "/"))
+			break
+		}
+	}
+	result := strings.ReplaceAll(s, root, filepath.FromSlash("/go/src/github.com/scenarigo/scenarigo"))
+
+	// Additional pattern-based replacement for any scenarigo path that wasn't caught
+	// This uses regex to find any path ending with "scenarigo" and normalize it
+	// Only match actual file paths (starting with / or containing filesystem separators)
+	scenarigoPathRe := regexp.MustCompile(`(/[^/\s]*)+/scenarigo\b`)
+	result = scenarigoPathRe.ReplaceAllString(result, "/go/src/github.com/scenarigo/scenarigo")
+
+	return result
+}
+
+// ReplacePluginOpen normalizes plugin.Open error messages to open error messages.
+func ReplacePluginOpen(s string) string {
+	// Only replace plugin.Open errors for WASM files, not .so files
+	wasmPluginOpenPattern := regexp.MustCompile(`plugin\.Open\("([^"]*\.wasm)"\): realpath failed`)
+	return wasmPluginOpenPattern.ReplaceAllString(s, "open ${1}: no such file or directory")
+}
+
+var scenarigoHeaderKeys = map[string]struct{}{
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioFilepathKey) + ":":    {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioTitleKey) + ":":       {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoStepFullNameKey) + ":":        {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioIdentifierKey) + ":":  {},
+	http.CanonicalHeaderKey(protocolmeta.ScenarigoStepIdentifierKey) + ":":      {},
+}
+
+// RemoveScenarigoHeaders drops scenarigo-specific request headers from output.
+func RemoveScenarigoHeaders(s string) string {
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	skipValue := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if skipValue {
+			if strings.HasPrefix(trimmed, "- ") {
+				skipValue = false
+				continue
+			}
+			skipValue = false
+		}
+		if _, ok := scenarigoHeaderKeys[trimmed]; ok {
+			skipValue = true
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }

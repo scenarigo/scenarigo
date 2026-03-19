@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"reflect"
 
-	"github.com/zoncoen/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/errors"
 )
 
 // NotZero returns an assertion to ensure a value is not zero value.
 func NotZero() Assertion {
-	return AssertionFunc(func(v interface{}) error {
+	return AssertionFunc(func(v any) error {
 		if n, ok := v.(json.Number); ok {
 			if i, err := n.Int64(); err == nil {
 				if i == 0 {

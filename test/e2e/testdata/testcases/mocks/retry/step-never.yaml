@@ -1,0 +1,4 @@
+mocks:
+- protocol: http
+  response:
+    code: 500

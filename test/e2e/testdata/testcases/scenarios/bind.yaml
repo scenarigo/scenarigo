@@ -1,0 +1,19 @@
+title: bind
+plugins:
+  complex: "complex.so"
+steps:
+- title: set
+  ref: '{{plugins.complex.SetVar("key", "value")}}'
+  bind:
+    vars:
+      key: '{{vars.key}}'
+- title: dump
+  vars:
+    foo: '{{vars.key}}'
+  ref: '{{plugins.complex.DumpVarsStep}}'
+- title: no bind
+  ref: '{{plugins.complex.SetVar("KEY", "VALUE")}}'
+- title: dump
+  vars:
+    bar: '{{vars.KEY}}'
+  ref: '{{plugins.complex.DumpVarsStep}}'

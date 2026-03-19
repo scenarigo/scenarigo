@@ -1,7 +1,8 @@
 schemaVersion: config/v1
 
 scenarios:
-  - ./scenarios
+  - ./scenarios/fail.yaml
+  - ./scenarios/pass.yaml
 pluginDirectory: ./ # Specify the root directory of plugins.
 
 output:

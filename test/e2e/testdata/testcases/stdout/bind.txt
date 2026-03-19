@@ -1,0 +1,30 @@
+=== RUN   testdata/testcases/scenarios/bind.yaml
+=== PAUSE testdata/testcases/scenarios/bind.yaml
+=== CONT  testdata/testcases/scenarios/bind.yaml
+=== RUN   testdata/testcases/scenarios/bind.yaml/bind
+=== PAUSE testdata/testcases/scenarios/bind.yaml/bind
+=== CONT  testdata/testcases/scenarios/bind.yaml/bind
+=== RUN   testdata/testcases/scenarios/bind.yaml/bind/set
+=== RUN   testdata/testcases/scenarios/bind.yaml/bind/dump
+=== RUN   testdata/testcases/scenarios/bind.yaml/bind/no_bind
+=== RUN   testdata/testcases/scenarios/bind.yaml/bind/dump
+--- FAIL: testdata/testcases/scenarios/bind.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/bind.yaml/bind (0.00s)
+        --- PASS: testdata/testcases/scenarios/bind.yaml/bind/set (0.00s)
+                Run {{plugins.complex.SetVar("key", "value")}}: elapsed time: 0.000000 sec
+        --- PASS: testdata/testcases/scenarios/bind.yaml/bind/dump (0.00s)
+                foo: value
+                Run {{plugins.complex.DumpVarsStep}}: elapsed time: 0.000000 sec
+        --- PASS: testdata/testcases/scenarios/bind.yaml/bind/no_bind (0.00s)
+                Run {{plugins.complex.SetVar("KEY", "VALUE")}}: elapsed time: 0.000000 sec
+        --- FAIL: testdata/testcases/scenarios/bind.yaml/bind/dump (0.00s)
+                invalid vars: failed to execute: {{vars.KEY}}: ".vars.KEY" not found
+                      15 |   ref: '{{plugins.complex.SetVar("KEY", "VALUE")}}'
+                      16 | - title: dump
+                      17 |   vars:
+                    > 18 |     bar: '{{vars.KEY}}'
+                                    ^
+                      19 |   ref: '{{plugins.complex.DumpVarsStep}}'
+FAIL
+FAIL	testdata/testcases/scenarios/bind.yaml	0.000s
+FAIL

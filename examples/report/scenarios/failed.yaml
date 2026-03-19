@@ -1,0 +1,30 @@
+title: Failed API Tests (intentional failures for demonstration)
+plugins:
+  server: server.so
+
+steps:
+- title: This step will pass
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/1'
+  expect:
+    code: OK
+    body:
+      id: 1
+
+- title: This step will fail - wrong status code
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/1'
+  expect:
+    code: 404  # This will fail because the actual response is 200
+
+- title: This step will be skipped
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/1'
+  expect:
+    code: OK

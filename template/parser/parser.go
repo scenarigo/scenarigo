@@ -4,8 +4,8 @@ package parser
 import (
 	"io"
 
-	"github.com/zoncoen/scenarigo/template/ast"
-	"github.com/zoncoen/scenarigo/template/token"
+	"github.com/scenarigo/scenarigo/template/ast"
+	"github.com/scenarigo/scenarigo/template/token"
 )
 
 // Parser represents a parser.
@@ -50,7 +50,7 @@ func (p *Parser) parseExpr() ast.Expr {
 }
 
 func (p *Parser) parseBinaryExpr(prec int) ast.Expr {
-	x := p.parseOperand()
+	x := p.parseUnaryExpr()
 L:
 	for {
 		if p.tok == token.LINEBREAK {
@@ -63,14 +63,17 @@ L:
 		}
 
 		switch p.tok {
-		case token.ADD:
+		case token.ADD, token.SUB, token.MUL, token.QUO, token.REM,
+			token.LAND, token.LOR, token.COALESCING,
+			token.EQL, token.NEQ, token.LSS, token.LEQ, token.GTR, token.GEQ:
 			pos := p.pos
+			tok := p.tok
 			p.next()
 			y := p.parseBinaryExpr(oprec + 1)
 			x = &ast.BinaryExpr{
 				X:     x,
 				OpPos: pos,
-				Op:    token.ADD,
+				Op:    tok,
 				Y:     y,
 			}
 		case token.CALL:
@@ -109,8 +112,20 @@ L:
 			x = &ast.BinaryExpr{
 				X:     x,
 				OpPos: pos,
-				Op:    token.ADD,
+				Op:    token.CONCAT,
 				Y:     y,
+			}
+		case token.QUESTION:
+			cond := x
+			question := p.pos
+			p.next()
+			expr1 := p.parseExpr()
+			x = &ast.ConditionalExpr{
+				Condition: cond,
+				Question:  question,
+				X:         expr1,
+				Colon:     p.expect(token.COLON),
+				Y:         p.parseExpr(),
 			}
 		default:
 			break L
@@ -131,16 +146,24 @@ func (p *Parser) parseIdent() *ast.Ident {
 	return &ast.Ident{NamePos: pos, Name: name}
 }
 
-func (p *Parser) parseOperand() ast.Expr {
+func (p *Parser) parseUnaryExpr() ast.Expr {
 	var e ast.Expr
 	switch p.tok {
-	case token.STRING, token.INT, token.BOOL:
+	case token.STRING, token.INT, token.FLOAT, token.BOOL, token.NIL:
 		e = &ast.BasicLit{
 			ValuePos: p.pos,
 			Kind:     p.tok,
 			Value:    p.lit,
 		}
 		p.next()
+	case token.LPAREN:
+		pos := p.pos
+		p.next()
+		e = &ast.ParenExpr{
+			Lparen: pos,
+			X:      p.parseExpr(),
+			Rparen: p.expect(token.RPAREN),
+		}
 	case token.IDENT:
 		e = p.parseIdent()
 	L:
@@ -177,6 +200,31 @@ func (p *Parser) parseOperand() ast.Expr {
 		}
 	case token.LDBRACE:
 		e = p.parseParameter()
+	case token.SUB:
+		pos := p.pos
+		p.next()
+		e = &ast.UnaryExpr{
+			OpPos: pos,
+			Op:    token.SUB,
+			X:     p.parseUnaryExpr(),
+		}
+	case token.NOT:
+		pos := p.pos
+		p.next()
+		e = &ast.UnaryExpr{
+			OpPos: pos,
+			Op:    token.NOT,
+			X:     p.parseUnaryExpr(),
+		}
+	case token.DEFINED:
+		pos := p.pos
+		p.next()
+		e = &ast.DefinedExpr{
+			DefinedPos: pos,
+			Lparen:     p.expect(token.LPAREN),
+			Arg:        p.parseExpr(),
+			Rparen:     p.expect(token.RPAREN),
+		}
 	default:
 		return nil
 	}

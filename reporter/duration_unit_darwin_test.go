@@ -1,8 +1,8 @@
 // NOTE: Increase the duration unit to avoid failing tests on macos-latest of GitHub Actions.
-// +build darwin
+//go:build darwin
 
 package reporter
 
 import "time"
 
-const durationTestUnit = 1000 * time.Millisecond
+const durationTestUnit = 50 * time.Millisecond

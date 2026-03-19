@@ -1,0 +1,62 @@
+name: test on tip
+on:
+  schedule:
+  - cron: '3 * * * *'
+  pull_request:
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Install Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: stable
+        check-latest: true
+        cache: false
+    - name: Install Go tip
+      run: |
+        go install golang.org/dl/gotip@latest
+        gotip download
+    - name: Generate codes and plugins
+      env:
+        GO: gotip
+      run: make gen
+    - name: Test
+      env:
+        GO: gotip
+        SCENARIGO_GO_MOD_TIDY_RETRY: 1
+      run: make test/ci
+
+  run-examples:
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: stable
+        check-latest: true
+        cache: false
+    - name: Install Go tip
+      run: |
+        go install golang.org/dl/gotip@latest
+        gotip download
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Build
+      env:
+        GO: gotip
+      run: make build
+    - name: Run examples
+      env:
+        GO: gotip
+        SCENARIGO_GO: gotip
+      run: make test/examples

@@ -1,0 +1,38 @@
+# comment1
+# comment2
+schemaVersion: config/v1
+scenarios:
+- scenarios/a.yaml
+- scenarios/b.yaml
+pluginDirectory: gen
+plugins:
+  local.so:
+    src: ./plugin
+  remote.so:
+    src: github.com/scenarigo/scenarigo
+  remote-with-version.so:
+    src: github.com/scenarigo/scenarigo@v1.0.0 # comment3
+protocols:
+  grpc:
+    request:
+      proto:
+        imports:
+        - proto
+      auth:
+        insecure: true
+input:
+  excludes:
+  - .ytt.yaml$
+  yaml:
+    ytt:
+      enabled: true
+      defaultFiles:
+      - default.yaml
+output:
+  verbose: true
+  colored: true
+  report:
+    json:
+      filename: report.json
+    junit:
+      filename: junit.xml

@@ -1,11 +1,12 @@
 package assert
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/errors"
 )
 
 func TestBuild(t *testing.T) {
@@ -18,8 +19,8 @@ deps:
     patch: 3
   tags:
     - go
-    - test`
-	var in interface{}
+    - '{{$ == "test"}}'`
+	var in any
 	if err := yaml.NewDecoder(strings.NewReader(str), yaml.UseOrderedMap()).Decode(&in); err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -31,36 +32,42 @@ deps:
 		".deps[0].tags[0]",
 		".deps[0].tags[1]",
 	}
-	assertion := Build(in)
+	assertion, err := Build(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	type info struct {
-		Deps []map[string]interface{} `yaml:"deps"`
+		Deps []map[string]any `yaml:"deps"`
 	}
 
 	t.Run("no assertion", func(t *testing.T) {
-		assertion := Build(nil)
+		assertion, err := Build(t.Context(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		v := info{}
 		if err := assertion.Assert(v); err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
 	})
 	t.Run("compare", func(t *testing.T) {
-		if err := Build(Greater(1)).Assert(2); err != nil {
+		if err := MustBuild(context.Background(), Greater(1)).Assert(2); err != nil {
 			t.Fatal(err)
 		}
-		if err := Build(GreaterOrEqual(1)).Assert(1); err != nil {
+		if err := MustBuild(context.Background(), GreaterOrEqual(1)).Assert(1); err != nil {
 			t.Fatal(err)
 		}
-		if err := Build(Less(2)).Assert(1); err != nil {
+		if err := MustBuild(context.Background(), Less(2)).Assert(1); err != nil {
 			t.Fatal(err)
 		}
-		if err := Build(LessOrEqual(1)).Assert(1); err != nil {
+		if err := MustBuild(context.Background(), LessOrEqual(1)).Assert(1); err != nil {
 			t.Fatal(err)
 		}
 	})
 	t.Run("ok", func(t *testing.T) {
 		v := info{
-			Deps: []map[string]interface{}{
+			Deps: []map[string]any{
 				{
 					"name": "scenarigo",
 					"version": map[string]int{
@@ -78,7 +85,7 @@ deps:
 	})
 	t.Run("ng", func(t *testing.T) {
 		v := info{
-			Deps: []map[string]interface{}{
+			Deps: []map[string]any{
 				{
 					"name": "Ruby on Rails",
 					"version": map[string]int{
@@ -94,11 +101,14 @@ deps:
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
-		errs := err.(*errors.MultiPathError).Errs
-		if got, expect := len(errs), len(qs); got != expect {
+		var mperr *errors.MultiPathError
+		if ok := errors.As(err, &mperr); !ok {
+			t.Fatalf("expected errors.MultiPathError: %s", err)
+		}
+		if got, expect := len(mperr.Errs), len(qs); got != expect {
 			t.Fatalf("expected %d but got %d", expect, got)
 		}
-		for i, e := range errs {
+		for i, e := range mperr.Errs {
 			q := qs[i]
 			if !strings.Contains(e.Error(), q) {
 				t.Errorf(`"%s" does not contain "%s"`, e.Error(), q)
@@ -110,15 +120,235 @@ deps:
 		if err == nil {
 			t.Fatalf("expected error but no error")
 		}
-		errs := err.(*errors.MultiPathError).Errs
-		if got, expect := len(errs), len(qs); got != expect {
+		var mperr *errors.MultiPathError
+		if ok := errors.As(err, &mperr); !ok {
+			t.Fatalf("expected errors.MultiPathError: %s", err)
+		}
+		if got, expect := len(mperr.Errs), len(qs); got != expect {
 			t.Fatalf("expected %d but got %d", expect, got)
 		}
-		for i, e := range errs {
+		for i, e := range mperr.Errs {
 			q := qs[i]
 			if !strings.Contains(e.Error(), q) {
 				t.Errorf(`"%s" does not contain "%s"`, e.Error(), q)
 			}
 		}
 	})
+	t.Run("options", func(t *testing.T) {
+		assertion, err := Build(
+			t.Context(), `{{aaa}}`,
+			FromTemplate(map[string]string{"aaa": "foo"}),
+			WithEqualers(EqualerFunc(func(a, b any) (bool, error) {
+				return true, nil
+			})),
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if err := assertion.Assert("bar"); err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+	})
+	t.Run("use $", func(t *testing.T) {
+		assertion, err := Build(t.Context(), `{{$ == "foo"}}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if err := assertion.Assert("foo"); err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+		// call Assert twice
+		if err := assertion.Assert("bar"); err == nil {
+			t.Error("no error")
+		} else if got, expect := err.Error(), "assertion error"; got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+	t.Run("use $ twice", func(t *testing.T) {
+		assertion, err := Build(t.Context(), `{{$ == $}}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if err := assertion.Assert("test"); err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+	})
+	t.Run("assertion result is not boolean", func(t *testing.T) {
+		assertion, err := Build(t.Context(), `{{$ + $}}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if err := assertion.Assert(1); err == nil {
+			t.Error("no error")
+		} else if got, expect := err.Error(), "assertion result must be a boolean value but got int64"; got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+	t.Run("left arrow function", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			assertion, err := Build(t.Context(), yaml.MapSlice{
+				yaml.MapItem{
+					Key: "{{call <-}}",
+					Value: yaml.MapSlice{
+						yaml.MapItem{
+							Key:   "f",
+							Value: `{{toUpper}}`,
+						},
+						yaml.MapItem{
+							Key:   "arg",
+							Value: `{{"foo"}}`,
+						},
+					},
+				},
+			},
+				FromTemplate(map[string]any{
+					"call":    &callFunc{},
+					"toUpper": strings.ToUpper,
+				}),
+			)
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			if err := assertion.Assert("FOO"); err != nil {
+				t.Errorf("unexpected error: %s", err)
+			}
+		})
+		t.Run("failure", func(t *testing.T) {
+			t.Run("build error: left arrow function not found", func(t *testing.T) {
+				_, err := Build(t.Context(), yaml.MapSlice{
+					yaml.MapItem{
+						Key: "{{call <-}}",
+						Value: yaml.MapSlice{
+							yaml.MapItem{
+								Key:   "f",
+								Value: `{{toUpper}}`,
+							},
+							yaml.MapItem{
+								Key:   "arg",
+								Value: `{{"foo"}}`,
+							},
+						},
+					},
+				})
+				if err == nil {
+					t.Error("no error")
+				} else if got, expect := err.Error(), `failed to build assertion: failed to execute: {{call <-}}: ".call" not found`; got != expect {
+					t.Errorf("expect %q but got %q", expect, got)
+				}
+			})
+			t.Run("build error: faild to unmarshal left arrow function arg", func(t *testing.T) {
+				_, err := Build(t.Context(), yaml.MapSlice{
+					yaml.MapItem{
+						Key: "{{call <-}}",
+						Value: yaml.MapSlice{
+							yaml.MapItem{
+								Key:   "func",
+								Value: `{{toUpper}}`,
+							},
+							yaml.MapItem{
+								Key:   "arg",
+								Value: `{{"foo"}}`,
+							},
+						},
+					},
+				},
+					FromTemplate(map[string]any{
+						"call":    &callFunc{},
+						"toUpper": strings.ToUpper,
+					}),
+				)
+				if err == nil {
+					t.Error("no error")
+				} else if got, expect := err.Error(), `failed to build assertion: .'{{call <-}}': failed to execute left arrow function: failed to unmarshal argument: [1:1] unknown field "func"
+>  1 | func: "{{func-0}}"
+       ^
+   2 | arg: foo`; got != expect {
+					t.Errorf("expect %q but got %q", expect, got)
+				}
+			})
+			t.Run("build error: invalid left arrow function arg", func(t *testing.T) {
+				_, err := Build(t.Context(), yaml.MapSlice{
+					yaml.MapItem{
+						Key: "{{call <-}}",
+						Value: yaml.MapSlice{
+							yaml.MapItem{
+								Key:   "f",
+								Value: `{{toUpper}}`,
+							},
+							yaml.MapItem{
+								Key:   "arg",
+								Value: `{{"foo"}}`,
+							},
+						},
+					},
+				},
+					FromTemplate(map[string]any{
+						"call": &callFunc{},
+					}),
+				)
+				if err == nil {
+					t.Error("no error")
+				} else if got, expect := err.Error(), `failed to build assertion: .'{{call <-}}'.'f': failed to execute left arrow function: failed to execute: {{toUpper}}: ".toUpper" not found`; got != expect {
+					t.Errorf("expect %q but got %q", expect, got)
+				}
+			})
+			t.Run("assertion error", func(t *testing.T) {
+				assertion, err := Build(t.Context(), yaml.MapSlice{
+					yaml.MapItem{
+						Key: "{{call <-}}",
+						Value: yaml.MapSlice{
+							yaml.MapItem{
+								Key:   "f",
+								Value: `{{toUpper}}`,
+							},
+							yaml.MapItem{
+								Key:   "arg",
+								Value: `{{"foo"}}`,
+							},
+						},
+					},
+				},
+					FromTemplate(map[string]any{
+						"call":    &callFunc{},
+						"toUpper": strings.ToUpper,
+					}),
+				)
+				if err != nil {
+					t.Fatalf("unexpected error: %s", err)
+				}
+				if err := assertion.Assert("foo"); err == nil {
+					t.Error("no error")
+				} else if got, expect := err.Error(), `.'{{call <-}}': expected "FOO" but got "foo"`; got != expect {
+					t.Errorf("expect %q but got %q", expect, got)
+				}
+			})
+		})
+	})
+}
+
+type callFunc struct{}
+
+type callArg struct {
+	F   any    `yaml:"f"`
+	Arg string `yaml:"arg"`
+}
+
+func (*callFunc) Exec(in any) (any, error) {
+	arg, ok := in.(*callArg)
+	if !ok {
+		return nil, errors.New("arg must be a callArg")
+	}
+	f, ok := arg.F.(func(string) string)
+	if !ok {
+		return nil, errors.New("arg.f must be a func(string) string")
+	}
+	return f(arg.Arg), nil
+}
+
+func (*callFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
+	var arg callArg
+	if err := unmarshal(&arg); err != nil {
+		return nil, err
+	}
+	return &arg, nil
 }

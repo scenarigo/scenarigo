@@ -2,7 +2,10 @@ package reporter
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,12 +13,12 @@ import (
 )
 
 func TestReporter(t *testing.T) {
-	var _ Reporter = new()
+	var _ Reporter = newReporter()
 }
 
 func TestReporter_Name(t *testing.T) {
 	name := "testname"
-	r := new()
+	r := newReporter()
 	r.goTestName = name
 	if expect, got := name, r.Name(); got != expect {
 		t.Errorf(`expected "%s" but got "%s"`, expect, got)
@@ -23,15 +26,32 @@ func TestReporter_Name(t *testing.T) {
 }
 
 func TestReporter_Fail(t *testing.T) {
-	r := new()
-	r.Fail()
-	if expect, got := true, r.Failed(); got != expect {
-		t.Errorf("expected %t but got %t", expect, got)
-	}
+	Run(func(root Reporter) {
+		root.Run("no propagation", func(r Reporter) {
+			NoFailurePropagation(r)
+			r.Fail()
+			if expect, got := true, r.Failed(); got != expect {
+				t.Errorf("expected %t but got %t", expect, got)
+			}
+		})
+		if expect, got := false, root.Failed(); got != expect {
+			t.Errorf("expected %t but got %t", expect, got)
+		}
+
+		root.Run("propagation", func(r Reporter) {
+			r.Fail()
+			if expect, got := true, r.Failed(); got != expect {
+				t.Errorf("expected %t but got %t", expect, got)
+			}
+		})
+		if expect, got := true, root.Failed(); got != expect {
+			t.Errorf("expected %t but got %t", expect, got)
+		}
+	})
 }
 
 func TestReporter_Failed(t *testing.T) {
-	r := new()
+	r := newReporter()
 	if expect, got := false, r.Failed(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
@@ -42,7 +62,7 @@ func TestReporter_Failed(t *testing.T) {
 }
 
 func TestReporter_FailNow(t *testing.T) {
-	r := new()
+	r := newReporter()
 	done := make(chan bool)
 	var reached bool
 	go func() {
@@ -61,9 +81,87 @@ func TestReporter_FailNow(t *testing.T) {
 	}
 }
 
+func TestReporter_Print(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Print("always shown")
+				r.Log("hidden log")
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+--- PASS: test (0.00s)
+        always shown
+ok  	test	0.000s
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+	t.Run("failure", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Print("always shown")
+				r.Log("hidden log")
+				r.FailNow()
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+--- FAIL: test (0.00s)
+        always shown
+        hidden log
+FAIL
+FAIL	test	0.000s
+FAIL
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+}
+
+func TestReporter_Printf(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Printf("always %s", "shown")
+				r.Log("hidden log")
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+--- PASS: test (0.00s)
+        always shown
+ok  	test	0.000s
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+	t.Run("failure", func(t *testing.T) {
+		var b bytes.Buffer
+		Run(func(r Reporter) {
+			r.Run("test", func(r Reporter) {
+				r.Printf("always %s", "shown")
+				r.Log("hidden log")
+				r.FailNow()
+			})
+		}, WithWriter(&b))
+		if got, expect := b.String(), strings.TrimPrefix(`
+--- FAIL: test (0.00s)
+        always shown
+        hidden log
+FAIL
+FAIL	test	0.000s
+FAIL
+`, "\n"); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
+		}
+	})
+}
+
 func TestReporter_Log(t *testing.T) {
 	str := "log"
-	r := new()
+	r := newReporter()
 	r.Log(str)
 	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
@@ -76,7 +174,7 @@ func TestReporter_Log(t *testing.T) {
 func TestReporter_Logf(t *testing.T) {
 	format := "%s failed"
 	name := "testname"
-	r := new()
+	r := newReporter()
 	r.Errorf(format, name)
 	if expect, got := 1, len(r.logs.all()); got != expect {
 		t.Fatalf("expected length %d but got %d", expect, got)
@@ -88,7 +186,7 @@ func TestReporter_Logf(t *testing.T) {
 
 func TestReporter_Error(t *testing.T) {
 	name := "testname"
-	r := new()
+	r := newReporter()
 	r.Error(name)
 	if expect, got := true, r.Failed(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
@@ -104,7 +202,7 @@ func TestReporter_Error(t *testing.T) {
 func TestReporter_Errorf(t *testing.T) {
 	format := "%s failed"
 	name := "testname"
-	r := new()
+	r := newReporter()
 	r.Errorf(format, name)
 	if expect, got := true, r.Failed(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
@@ -119,7 +217,7 @@ func TestReporter_Errorf(t *testing.T) {
 
 func TestReporter_Fatal(t *testing.T) {
 	name := "testname"
-	r := new()
+	r := newReporter()
 	done := make(chan bool)
 	var reached bool
 	go func() {
@@ -147,7 +245,7 @@ func TestReporter_Fatal(t *testing.T) {
 func TestReporter_Fatalf(t *testing.T) {
 	format := "%s failed"
 	name := "testname"
-	r := new()
+	r := newReporter()
 	done := make(chan bool)
 	var reached bool
 	go func() {
@@ -174,7 +272,7 @@ func TestReporter_Fatalf(t *testing.T) {
 
 func TestReporter_Skip(t *testing.T) {
 	name := "testname"
-	r := new()
+	r := newReporter()
 	done := make(chan bool)
 	var reached bool
 	go func() {
@@ -202,7 +300,7 @@ func TestReporter_Skip(t *testing.T) {
 func TestReporter_Skipf(t *testing.T) {
 	format := "%s skipped"
 	name := "testname"
-	r := new()
+	r := newReporter()
 	done := make(chan bool)
 	var reached bool
 	go func() {
@@ -228,7 +326,7 @@ func TestReporter_Skipf(t *testing.T) {
 }
 
 func TestReporter_SkipNow(t *testing.T) {
-	r := new()
+	r := newReporter()
 	done := make(chan bool)
 	var reached bool
 	go func() {
@@ -248,7 +346,7 @@ func TestReporter_SkipNow(t *testing.T) {
 }
 
 func TestReporter_Skipped(t *testing.T) {
-	r := new()
+	r := newReporter()
 	if expect, got := false, r.Skipped(); got != expect {
 		t.Errorf("expected %t but got %t", expect, got)
 	}
@@ -274,6 +372,11 @@ func TestPrint(t *testing.T) {
 		}
 		return rptr
 	}
+	ctx := context.Background()
+	retryPolicy := &constantRetryPolicy{
+		interval:   time.Microsecond,
+		maxRetries: 1,
+	}
 
 	tests := map[string]struct {
 		f      func(*testing.T, *reporter)
@@ -281,6 +384,7 @@ func TestPrint(t *testing.T) {
 	}{
 		"ok": {
 			f: func(t *testing.T, r *reporter) {
+				t.Helper()
 				r.Run("a", func(r Reporter) {
 					rptr := pr(t, r)
 					rptr.durationMeasurer = &fixedDurationMeasurer{
@@ -294,6 +398,7 @@ ok  	a	1.234s
 		},
 		"FAIL": {
 			f: func(t *testing.T, r *reporter) {
+				t.Helper()
 				r.Run("a", func(r Reporter) {
 					rptr := pr(t, r)
 					rptr.Error("error!")
@@ -312,6 +417,7 @@ FAIL
 		},
 		"ok nest": {
 			f: func(t *testing.T, r *reporter) {
+				t.Helper()
 				r.Run("a", func(r Reporter) {
 					r.Run("b", func(r Reporter) {
 						r.Run("c", func(r Reporter) {
@@ -324,8 +430,24 @@ FAIL
 ok  	a	0.000s
 `,
 		},
+		"ok nest (retry)": {
+			f: func(t *testing.T, r *reporter) {
+				t.Helper()
+				RunWithRetry(ctx, r, "a", func(r Reporter) {
+					RunWithRetry(ctx, r, "b", func(r Reporter) {
+						RunWithRetry(ctx, r, "c", func(r Reporter) {
+							r.Log("ok!")
+						}, retryPolicy)
+					}, retryPolicy)
+				}, retryPolicy)
+			},
+			expect: `
+ok  	a	0.000s
+`,
+		},
 		"FAIL nest": {
 			f: func(t *testing.T, r *reporter) {
+				t.Helper()
 				r.Run("a", func(r Reporter) {
 					r.Run("b", func(r Reporter) {
 						r.Run("c", func(r Reporter) {
@@ -348,8 +470,36 @@ FAIL	a	0.000s
 FAIL
 `,
 		},
+		"FAIL nest (retry)": {
+			f: func(t *testing.T, r *reporter) {
+				t.Helper()
+				RunWithRetry(ctx, r, "a", func(r Reporter) {
+					RunWithRetry(ctx, r, "b", func(r Reporter) {
+						RunWithRetry(ctx, r, "c", func(r Reporter) {
+							r.Error("error!")
+						}, retryPolicy)
+					}, retryPolicy)
+				}, retryPolicy)
+			},
+			expect: `
+--- FAIL: a (0.00s)
+        retry after 1µs
+        retry limit exceeded
+    --- FAIL: a/b (0.00s)
+            retry after 1µs
+            retry limit exceeded
+        --- FAIL: a/b/c (0.00s)
+                retry after 1µs
+                retry limit exceeded
+                error!
+FAIL
+FAIL	a	0.000s
+FAIL
+`,
+		},
 		"ok nest verbose": {
 			f: func(t *testing.T, r *reporter) {
+				t.Helper()
 				r.context.verbose = true
 				r.Run("a", func(r Reporter) {
 					r.Run("b", func(r Reporter) {
@@ -373,6 +523,7 @@ ok  	a	0.000s
 		},
 		"FAIL nest verbose": {
 			f: func(t *testing.T, r *reporter) {
+				t.Helper()
 				r.context.verbose = true
 				r.Run("a", func(r Reporter) {
 					r.Run("b", func(r Reporter) {
@@ -401,6 +552,7 @@ FAIL
 		},
 		"multi line log": {
 			f: func(t *testing.T, r *reporter) {
+				t.Helper()
 				r.Run("a", func(r Reporter) {
 					r.Run("b", func(r Reporter) {
 						r.Run("c", func(r Reporter) {
@@ -425,7 +577,6 @@ FAIL
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var b bytes.Buffer
 			Run(func(r Reporter) {
@@ -445,20 +596,21 @@ func TestReporter_PrivateMethods(t *testing.T) {
 		run      func(t *testing.T, f func(Reporter))
 		rootName string
 	}{
-		"reporter": {
+		"Run": {
 			run: func(t *testing.T, f func(Reporter)) {
+				t.Helper()
 				Run(f)
 			},
 		},
-		"testReporter": {
+		"FromT": {
 			run: func(t *testing.T, f func(Reporter)) {
+				t.Helper()
 				f(FromT(t))
 			},
-			rootName: "TestReporter_PrivateMethods/testReporter",
+			rootName: "TestReporter_PrivateMethods/FromT",
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var r Reporter
 			test.run(t, func(rptr Reporter) {
@@ -539,5 +691,23 @@ func TestReporter_PrivateMethods(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func TestRunCapturesStdout(t *testing.T) {
+	var b bytes.Buffer
+	ok := Run(func(r Reporter) {
+		fmt.Fprintln(os.Stdout, "plugin output")
+		r.Log("normal log")
+	}, WithWriter(&b))
+	if !ok {
+		t.Fatal("reporter run failed")
+	}
+	out := b.String()
+	if !strings.Contains(out, "WARN: detected output written directly to os.Stdout") {
+		t.Fatalf("warning not found in output:\n%s", out)
+	}
+	if !strings.Contains(out, "plugin output") {
+		t.Fatalf("captured stdout not printed:\n%s", out)
 	}
 }

@@ -1,0 +1,17 @@
+title: assert
+scenarios:
+- filename: assert/assert.yaml
+  mocks: assert/assert.yaml
+  success: false
+  output:
+    stdout: assert/assert.txt
+- filename: assert/contains.yaml
+  mocks: assert/contains.yaml
+  success: false
+  output:
+    stdout: assert/contains.txt
+- filename: assert/not-contains.yaml
+  mocks: assert/not-contains.yaml
+  success: false
+  output:
+    stdout: assert/not-contains.txt

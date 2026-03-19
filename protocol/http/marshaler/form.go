@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"reflect"
 
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 func init() {
@@ -21,7 +21,7 @@ func (m *formURLEncodedMarshaler) MediaType() string {
 }
 
 // Marshal implements RequestMarshaler interface.
-func (m *formURLEncodedMarshaler) Marshal(v interface{}) ([]byte, error) {
+func (m *formURLEncodedMarshaler) Marshal(v any) ([]byte, error) {
 	form, err := reflectutil.ConvertStringsMap(reflect.ValueOf(v))
 	if err != nil {
 		return nil, err

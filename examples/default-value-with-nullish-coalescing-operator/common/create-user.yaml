@@ -1,0 +1,24 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+vars:
+  params:
+    name: '{{ vars.params.name }}' # required
+    age: '{{ vars.params.age ?? 20 }}' # optional. default value is 20
+title: create user
+steps:
+- title: POST /echo
+  protocol: http
+  request:
+    method: POST
+    url: 'http://{{plugins.plugin.ServerAddr}}/createUser'
+    header:
+      Content-Type: application/json
+    body:
+      name: '{{ vars.params.name }}'
+      age: '{{ vars.params.age }}'
+  expect:
+    code: OK
+    body:
+      name: '{{ vars.params.name }}'
+      age: '{{ int(vars.params.age) }}' # vars.params.age cannot be null because of the default value

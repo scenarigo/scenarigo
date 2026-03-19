@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/zoncoen/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/errors"
 )
 
 type compareType int
@@ -19,7 +19,7 @@ const (
 
 // compareNumber compares expected with actual based on compareType.
 // If the comparison fails, an error will be returned.
-func compareNumber(expected, actual interface{}, typ compareType) error {
+func compareNumber(expected, actual any, typ compareType) error {
 	if !reflect.ValueOf(expected).IsValid() {
 		return errors.Errorf("expected value %v is invalid", expected)
 	}
@@ -57,7 +57,7 @@ func compareNumber(expected, actual interface{}, typ compareType) error {
 	return compareByType(f1.Cmp(f2), f2.String(), typ)
 }
 
-func toNumber(v interface{}) (interface{}, error) {
+func toNumber(v any) (any, error) {
 	if n, ok := v.(json.Number); ok {
 		if i, err := n.Int64(); err == nil {
 			return i, nil
@@ -73,7 +73,7 @@ func toNumber(v interface{}) (interface{}, error) {
 	return v, nil
 }
 
-func isKindOfInt(v interface{}) bool {
+func isKindOfInt(v any) bool {
 	switch reflect.TypeOf(v).Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
@@ -84,7 +84,7 @@ func isKindOfInt(v interface{}) bool {
 	}
 }
 
-func isKindOfFloat(v interface{}) bool {
+func isKindOfFloat(v any) bool {
 	switch reflect.TypeOf(v).Kind() {
 	case reflect.Float32, reflect.Float64:
 		return true
@@ -93,7 +93,7 @@ func isKindOfFloat(v interface{}) bool {
 	}
 }
 
-func isKindOfNumber(v interface{}) bool {
+func isKindOfNumber(v any) bool {
 	return isKindOfInt(v) || isKindOfFloat(v)
 }
 
@@ -124,7 +124,21 @@ func compareByType(result int, expValue string, typ compareType) error {
 	}
 }
 
-func convert(v interface{}, t reflect.Type) (interface{}, error) {
+func convert[T any](v any, t T) (T, error) {
+	vv, err := convertToType(v, reflect.TypeOf(t))
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	vvv, ok := vv.(T)
+	if !ok {
+		var zero T
+		return zero, errors.Errorf("%T is not convertible to %T", v, t)
+	}
+	return vvv, nil
+}
+
+func convertToType(v any, t reflect.Type) (any, error) {
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
 		return nil, errors.Errorf("value is invalid")
@@ -135,31 +149,31 @@ func convert(v interface{}, t reflect.Type) (interface{}, error) {
 	return nil, errors.Errorf("%T is not convertible to %s", v, t)
 }
 
-func convertToInt64(v interface{}) (int64, error) {
-	vv, err := convert(v, reflect.TypeOf(int64(0)))
+func convertToInt64(v any) (int64, error) {
+	vv, err := convert(v, int64(0))
 	if err != nil {
 		return 0, err
 	}
-	return vv.(int64), nil
+	return vv, nil
 }
 
-func convertToUint64(v interface{}) (uint64, error) {
-	vv, err := convert(v, reflect.TypeOf(uint64(0)))
+func convertToUint64(v any) (uint64, error) {
+	vv, err := convert(v, uint64(0))
 	if err != nil {
 		return 0, err
 	}
-	return vv.(uint64), nil
+	return vv, nil
 }
 
-func convertToFloat64(v interface{}) (float64, error) {
-	vv, err := convert(v, reflect.TypeOf(float64(0)))
+func convertToFloat64(v any) (float64, error) {
+	vv, err := convert(v, float64(0))
 	if err != nil {
 		return 0, err
 	}
-	return vv.(float64), nil
+	return vv, nil
 }
 
-func convertToBigInt(v interface{}) (*big.Int, error) {
+func convertToBigInt(v any) (*big.Int, error) {
 	switch reflect.TypeOf(v).Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i64, err := convertToInt64(v)
@@ -178,7 +192,7 @@ func convertToBigInt(v interface{}) (*big.Int, error) {
 	}
 }
 
-func convertToBigFloat(v interface{}) (*big.Float, error) {
+func convertToBigFloat(v any) (*big.Float, error) {
 	switch reflect.TypeOf(v).Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i64, err := convertToInt64(v)

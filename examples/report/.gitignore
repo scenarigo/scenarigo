@@ -1,0 +1,6 @@
+# Generated test reports
+report.json
+junit.xml
+
+# Built plugins
+gen/

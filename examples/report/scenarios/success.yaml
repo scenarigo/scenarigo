@@ -1,0 +1,39 @@
+title: Successful API Tests
+plugins:
+  server: server.so
+
+steps:
+- title: Get Item by ID
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/1'
+  expect:
+    code: OK
+    body:
+      id: 1
+      name: test-item
+
+- title: Get Item Details
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items/1'
+  expect:
+    code: OK
+    body:
+      id: '{{assert.notZero}}'
+      name: '{{assert.regexp("^test-")}}'
+
+- title: List All Items
+  protocol: http
+  request:
+    method: GET
+    url: '{{plugins.server.ServerAddr()}}/api/items'
+  expect:
+    code: OK
+    body:
+      - id: 1
+        name: test-item
+      - id: 2
+        name: another-item

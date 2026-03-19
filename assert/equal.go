@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/zoncoen/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/errors"
 )
 
 var (
@@ -17,7 +17,7 @@ var (
 type Equaler interface {
 	// Equal checks two values are equal or not.
 	// If the ok is true, the err should be used as result.
-	Equal(expected, got interface{}) (ok bool, err error)
+	Equal(expected, got any) (ok bool, err error)
 }
 
 // RegisterCustomEqualer appends eq as a custom equaler.
@@ -29,20 +29,20 @@ func RegisterCustomEqualer(eq Equaler) {
 }
 
 // EqualerFunc is an adaptor to allow the use of ordinary functions as Equaler.
-func EqualerFunc(eq func(interface{}, interface{}) (bool, error)) Equaler {
+func EqualerFunc(eq func(any, any) (bool, error)) Equaler {
 	return equaler(eq)
 }
 
-type equaler func(interface{}, interface{}) (bool, error)
+type equaler func(any, any) (bool, error)
 
 // Equal implements Equaler interface.
-func (eq equaler) Equal(expected, got interface{}) (bool, error) {
+func (eq equaler) Equal(expected, got any) (bool, error) {
 	return eq(expected, got)
 }
 
 // Equal returns an assertion to ensure a value equals the expected value.
-func Equal(expected interface{}) Assertion {
-	return AssertionFunc(func(v interface{}) error {
+func Equal(expected any, customEqs ...Equaler) Assertion {
+	return AssertionFunc(func(v any) error {
 		if n, ok := v.(json.Number); ok {
 			switch expected.(type) {
 			case int, int8, int16, int32, int64,
@@ -67,6 +67,13 @@ func Equal(expected interface{}) Assertion {
 			return nil
 		}
 
+		for _, eq := range customEqs {
+			ok, err := eq.Equal(expected, v)
+			if ok {
+				return err
+			}
+		}
+
 		m.RLock()
 		defer m.RUnlock()
 		for _, eq := range equalers {
@@ -78,19 +85,21 @@ func Equal(expected interface{}) Assertion {
 
 		if t := reflect.TypeOf(v); t != reflect.TypeOf(expected) {
 			// try type conversion
-			converted, err := convert(expected, t)
+			converted, err := convertToType(expected, t)
 			if err == nil {
 				if reflect.DeepEqual(v, converted) {
 					return nil
 				}
 			}
 			return errors.Errorf("expected %T (%+v) but got %T (%+v)", expected, expected, v, v)
+		} else if t.Kind() == reflect.String {
+			return errors.Errorf("expected %q but got %q", expected, v)
 		}
 		return errors.Errorf("expected %+v but got %+v", expected, v)
 	})
 }
 
-func isNil(i interface{}) bool {
+func isNil(i any) bool {
 	defer func() {
 		// return false if IsNil panics
 		_ = recover()

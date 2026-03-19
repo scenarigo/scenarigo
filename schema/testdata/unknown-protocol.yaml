@@ -4,11 +4,11 @@ vars:
   message: hello
 steps:
   - title: POST /say
+    protocol: unknown
     description: check to respond same message
     request:
       body:
         message: "{{vars.message}}"
     expect:
       body:
-        message: "{{request.body}}"
-
+        message: "{{request.body.body}}"

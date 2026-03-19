@@ -1,0 +1,18 @@
+title: timeout
+scenarios:
+- filename: timeout/success.yaml
+  mocks: timeout/success.yaml
+  success: true
+  output:
+    stdout: timeout/success.txt
+- filename: timeout/failure.yaml
+  mocks: timeout/failure.yaml
+  success: false
+  output:
+    stdout: timeout/failure.txt
+- filename: timeout/blocking.yaml
+  success: false
+  output:
+    stdout: timeout/blocking.txt
+  plugins:
+  - complex.so

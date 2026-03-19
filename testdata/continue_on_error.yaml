@@ -1,0 +1,10 @@
+---
+title: /echo
+steps:
+- id: error
+  title: POST /echo by include
+  continueOnError: true
+  include: base_error.yaml
+- title: POST /echo by include
+  if: '{{steps.error.result == "failed"}}'
+  include: base.yaml

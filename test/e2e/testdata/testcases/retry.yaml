@@ -1,7 +1,20 @@
 title: retry
 scenarios:
+# scenario-level retry
+- filename: retry/scenario-constant.yaml
+  mocks: retry/scenario.yaml
+  success: true
+  output:
+    stdout: retry/scenario-constant-success.txt
+- filename: retry/scenario-constant.yaml
+  mocks: retry/scenario-failure.yaml
+  success: false
+  output:
+    stdout: retry/scenario-constant-failure.txt
+
+# step-level retry
 - filename: retry/step-never.yaml
-  mocks: retry/step.yaml
+  mocks: retry/step-never.yaml
   success: false
   output:
     stdout: retry/step-never.txt
@@ -9,9 +22,40 @@ scenarios:
   mocks: retry/step.yaml
   success: true
   output:
-    stdout: retry/step-constant.txt
+    stdout: retry/step-constant-success.txt
+- filename: retry/step-constant.yaml
+  mocks: retry/step-failure.yaml
+  success: false
+  output:
+    stdout: retry/step-constant-failure.txt
 - filename: retry/step-exponential.yaml
   mocks: retry/step.yaml
   success: true
   output:
     stdout: retry/step-exponential.txt
+- filename: retry/step-include.yaml
+  mocks: retry/step.yaml
+  success: true
+  output:
+    stdout: retry/step-include-success.txt
+- filename: retry/step-include.yaml
+  mocks: retry/step-failure.yaml
+  success: false
+  output:
+    stdout: retry/step-include-failure.txt
+- filename: retry/laf.yaml
+  mocks: retry/laf.yaml
+  success: false
+  output:
+    stdout: retry/laf.txt
+
+# composite
+- filename: retry/composite-constant.yaml
+  mocks: retry/composite-constant.yaml
+  success: true
+  output:
+    stdout: retry/composite-constant.txt
+  plugins:
+  - counter.so
+  # TODO: fix wasm plugin mechanism
+  skipWasm: true

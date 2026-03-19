@@ -1,0 +1,9 @@
+- protocol: grpc
+  expect:
+    service: scenarigo.testdata.test.Test
+    method: Echo
+    metadata:
+      content-type: application/json
+    message:
+      messageId: '1'
+      messageBody: 'hello'

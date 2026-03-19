@@ -1,0 +1,34 @@
+title: not contains
+steps:
+- title: GET /messages
+  protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/messages"
+  expect:
+    code: OK
+    body:
+      messages:
+        '{{assert.and <-}}':
+        - '{{assert.notContains <-}}':
+            id: '1'
+            message: bar
+        - '{{assert.notContains <-}}':
+            id: '2'
+            message: foo
+- title: GET /messages
+  protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/messages"
+  expect:
+    code: OK
+    body:
+      messages:
+        '{{assert.and <-}}':
+        - '{{assert.notContains <-}}':
+            id: '1'
+            message: foo
+        - '{{assert.notContains <-}}':
+            id: '2'
+            message: bar

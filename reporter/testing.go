@@ -1,191 +1,81 @@
 package reporter
 
 import (
-	"fmt"
+	"errors"
+	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
-	"time"
 	"unsafe"
 )
 
 // FromT creates Reporter from t.
-func FromT(t *testing.T) Reporter {
-	r := fromT(t, t.Name())
-	r.root = true
+func FromT(t *testing.T, opts ...Option) Reporter {
+	t.Helper()
+
+	var m *matcher
+	defaultOpts := []Option{
+		WithWriter(&testingWriter{t: t}),
+	}
+	for _, arg := range os.Args {
+		if strings.HasPrefix(arg, "-test.run=") {
+			var err error
+			m, err = newMatcher(strings.TrimPrefix(arg, "-test.run="))
+			if err != nil {
+				t.Fatalf("failed to parse -run flag: %s", err)
+			}
+		}
+		if arg == "-test.v=true" {
+			defaultOpts = append(defaultOpts, WithVerboseLog())
+		}
+	}
+
+	r := newReporter()
+	r.context = newTestContext(append(defaultOpts, opts...)...)
+	r.context.matcher = m
+	r.name = t.Name()
+	r.goTestName = t.Name()
+	r.testing = true
+
+	stop := r.start()
+	t.Cleanup(func() {
+		go stop()
+		<-r.done
+		if r.Failed() {
+			t.Fail()
+		}
+	})
+
 	return r
 }
 
-func fromT(t *testing.T, name string) *testReporter {
-	return &testReporter{
-		T:                t,
-		name:             name,
-		logs:             &logRecorder{},
-		durationMeasurer: &durationMeasurer{},
-	}
+// testingWriter is a wrapper to provide Reporter interface for *testing.T.
+type testingWriter struct {
+	m sync.Mutex
+	t *testing.T
 }
 
-// testReporter is a wrapper to provide Reporter interface for *testing.T.
-type testReporter struct {
-	*testing.T
-	name             string
-	logs             *logRecorder
-	durationMeasurer testDurationMeasurer
-	root             bool
-	children         []Reporter
-	mu               sync.Mutex
-}
+func (w *testingWriter) Write(b []byte) (int, error) {
+	w.m.Lock()
+	defer w.m.Unlock()
 
-func (r *testReporter) addBufferDirectly(b []byte) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	t := reflect.ValueOf(r.T).Elem()
+	t := reflect.ValueOf(w.t).Elem()
 	common := t.FieldByName("common")
 	if !common.IsValid() {
-		return false
+		return 0, errors.New("failed to write to *testing.T")
 	}
 	output := common.FieldByName("output")
 	if !output.IsValid() {
-		return false
+		return 0, errors.New("failed to write to *testing.T")
 	}
 	if output.Type().Kind() != reflect.Slice {
-		return false
+		return 0, errors.New("failed to write to *testing.T")
 	}
 	if output.Type().Elem().Kind() != reflect.Uint8 {
-		return false
+		return 0, errors.New("failed to write to *testing.T")
 	}
 	rawOutput := (*[]byte)(unsafe.Pointer(output.UnsafeAddr()))
 	*rawOutput = append(*rawOutput, b...)
-	return true
-}
-
-func (r *testReporter) logBuffer(s string) []byte {
-	return append([]byte(pad(s, "")), '\n')
-}
-
-func (r *testReporter) log(log string) {
-	if ok := r.addBufferDirectly(r.logBuffer(log)); !ok {
-		r.T.Log(log)
-	}
-}
-
-func (r *testReporter) fatal(log string) {
-	if ok := r.addBufferDirectly(r.logBuffer(log)); !ok {
-		r.T.Fatal(log)
-	} else {
-		r.T.FailNow()
-	}
-}
-
-// Log formats its arguments using default formatting, analogous to fmt.Print,
-// and records the text in the log.
-// The text will be printed only if the test fails or the --verbose flag is set.
-func (r *testReporter) Log(args ...interface{}) {
-	s := fmt.Sprint(args...)
-	r.logs.log(s)
-	r.log(s)
-}
-
-// Logf formats its arguments according to the format, analogous to fmt.Printf, and
-// records the text in the log.
-// The text will be printed only if the test fails or the --verbose flag is set.
-func (r *testReporter) Logf(format string, args ...interface{}) {
-	s := fmt.Sprintf(format, args...)
-	r.logs.log(s)
-	r.log(s)
-}
-
-// Error is equivalent to Log followed by Fail.
-func (r *testReporter) Error(args ...interface{}) {
-	r.Fail()
-	s := fmt.Sprint(args...)
-	r.logs.error(s)
-	r.log(s)
-}
-
-// Errorf is equivalent to Logf followed by Fail.
-func (r *testReporter) Errorf(format string, args ...interface{}) {
-	r.Fail()
-	s := fmt.Sprintf(format, args...)
-	r.logs.error(s)
-	r.log(s)
-}
-
-// Fatal is equivalent to Log followed by FailNow.
-func (r *testReporter) Fatal(args ...interface{}) {
-	s := fmt.Sprint(args...)
-	r.logs.error(s)
-	r.fatal(s)
-}
-
-// Fatalf is equivalent to Logf followed by FailNow.
-func (r *testReporter) Fatalf(format string, args ...interface{}) {
-	s := fmt.Sprintf(format, args...)
-	r.logs.error(s)
-	r.fatal(s)
-}
-
-// Skip is equivalent to Log followed by SkipNow.
-func (r *testReporter) Skip(args ...interface{}) {
-	s := fmt.Sprint(args...)
-	r.logs.skip(s)
-	r.log(s)
-	r.SkipNow()
-}
-
-// Skipf is equivalent to Logf followed by SkipNow.
-func (r *testReporter) Skipf(format string, args ...interface{}) {
-	s := fmt.Sprintf(format, args...)
-	r.logs.skip(s)
-	r.log(s)
-	r.SkipNow()
-}
-
-// Parallel signals that this test is to be run in parallel with (and only with)
-// other parallel tests.
-func (r *testReporter) Parallel() {
-	r.durationMeasurer.stop()
-	r.T.Parallel()
-	r.durationMeasurer.start()
-}
-
-// Run runs f as a subtest of r called name.
-func (r *testReporter) Run(name string, f func(t Reporter)) bool {
-	return r.T.Run(name, func(t *testing.T) {
-		child := fromT(t, name)
-		child.durationMeasurer = r.durationMeasurer.spawn()
-		r.mu.Lock()
-		r.children = append(r.children, child)
-		r.mu.Unlock()
-		defer func() {
-			err := recover()
-			child.durationMeasurer.stop()
-			if err != nil {
-				panic(err)
-			}
-		}()
-		child.durationMeasurer.start()
-		f(child)
-	})
-}
-
-func (r *testReporter) getName() string {
-	return r.name
-}
-
-func (r *testReporter) getDuration() time.Duration {
-	return r.durationMeasurer.getDuration()
-}
-
-func (r *testReporter) getLogs() *logRecorder {
-	return r.logs
-}
-
-func (r *testReporter) getChildren() []Reporter {
-	return r.children
-}
-
-func (r *testReporter) isRoot() bool {
-	return r.root
+	return len(b), nil
 }

@@ -1,19 +1,16 @@
 package context
 
 import (
-	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/reporter"
 )
 
 func TestContext_ExtractKey(t *testing.T) {
-	if err := os.Setenv("TEST_PORT", "5000"); err != nil {
-		t.Fatalf("unexpected error: %s", err)
-	}
-	defer os.Unsetenv("TEST_PORT")
+	t.Setenv("TEST_PORT", "5000")
 
 	vars := map[string]string{
 		"foo": "bar",
@@ -21,11 +18,11 @@ func TestContext_ExtractKey(t *testing.T) {
 	tests := map[string]struct {
 		ctx    func(*Context) *Context
 		query  string
-		expect interface{}
+		expect any
 	}{
 		"plugins": {
 			ctx: func(ctx *Context) *Context {
-				return ctx.WithPlugins(map[string]interface{}{
+				return ctx.WithPlugins(map[string]any{
 					"key": "value",
 				})
 			},
@@ -38,6 +35,24 @@ func TestContext_ExtractKey(t *testing.T) {
 			},
 			query:  "vars.foo",
 			expect: "bar",
+		},
+		"secrets": {
+			ctx: func(ctx *Context) *Context {
+				return ctx.WithSecrets(vars)
+			},
+			query:  "secrets.foo",
+			expect: "bar",
+		},
+		"steps": {
+			ctx: func(ctx *Context) *Context {
+				steps := NewSteps()
+				steps.Add("foo", &Step{
+					Result: "passed",
+				})
+				return ctx.WithSteps(steps)
+			},
+			query:  "steps.foo.result",
+			expect: "passed",
 		},
 		"request": {
 			ctx: func(ctx *Context) *Context {
@@ -59,13 +74,12 @@ func TestContext_ExtractKey(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			ctx := New(reporter.FromT(t))
 			if test.ctx != nil {
 				ctx = test.ctx(ctx)
 			}
-			q, err := query.ParseString(test.query)
+			q, err := query.ParseString(test.query, queryutil.Options()...)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

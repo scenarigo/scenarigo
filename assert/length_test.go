@@ -6,9 +6,9 @@ import (
 
 func TestLength(t *testing.T) {
 	tests := map[string]struct {
-		expect interface{}
-		ok     interface{}
-		ng     interface{}
+		expect any
+		ok     any
+		ng     any
 	}{
 		"string": {
 			expect: 1,
@@ -39,7 +39,6 @@ func TestLength(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			assertion := Length(test.expect)
 			t.Run("ok", func(t *testing.T) {

@@ -1,0 +1,10 @@
+schemaVersion: config/v1
+scenarios:
+- ./scenarios/pass.yaml
+- ./scenarios/ytt.yaml
+input:
+  yaml:
+    ytt:
+      enabled: true
+output:
+  verbose: false

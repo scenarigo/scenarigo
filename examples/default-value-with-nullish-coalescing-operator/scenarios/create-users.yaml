@@ -1,0 +1,35 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+title: create users
+steps:
+- title: create user of any age
+  include: ../common/create-user.yaml
+  vars:
+    params:
+      name: foo
+
+- title: create user who is 42 years old
+  include: ../common/create-user.yaml
+  vars:
+    params:
+      name: bar
+      age: 42
+
+- title: create user with null age
+  description: |
+    optional parameter can be undefined or null
+  include: ../common/create-user.yaml
+  vars:
+    params:
+      name: baz
+      age: null
+
+- title: create user with nil age
+  description: |
+    optional parameter can also be nil in Go
+  include: ../common/create-user.yaml
+  vars:
+    params:
+      name: foobar
+      age: '{{ plugins.plugin.Nil }}'

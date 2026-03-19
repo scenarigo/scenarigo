@@ -1,0 +1,13 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.wasm
+title: http
+steps:
+- title: GET example.com
+  protocol: http
+  request:
+    client: '{{ plugins.plugin.HTTPClient() }}'
+    method: GET
+    url: "http://example.com"
+  expect:
+    code: 200

@@ -1,0 +1,46 @@
+--- FAIL: testdata/testcases/scenarios/assert/not-contains.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/assert/not-contains.yaml/not_contains (0.00s)
+        --- FAIL: testdata/testcases/scenarios/assert/not-contains.yaml/not_contains/GET_/messages (0.00s)
+                request:
+                  method: GET
+                  url: http://[::]:12345/messages
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "73"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    messages:
+                    - id: "1"
+                      message: foo
+                    - id: "2"
+                      message: bar
+                elapsed time: 0.000000 sec
+                2 errors occurred: contains the value
+                      27 |       messages:
+                      28 |         '{{assert.and <-}}':
+                      29 |         - '{{assert.notContains <-}}':
+                    > 30 |             id: '1'
+                                         ^
+                      31 |             message: foo
+                      32 |         - '{{assert.notContains <-}}':
+                      33 |             id: '2'
+                
+                contains the value
+                      30 |             id: '1'
+                      31 |             message: foo
+                      32 |         - '{{assert.notContains <-}}':
+                    > 33 |             id: '2'
+                                         ^
+                      34 |             message: bar
+FAIL
+FAIL	testdata/testcases/scenarios/assert/not-contains.yaml	0.000s
+FAIL

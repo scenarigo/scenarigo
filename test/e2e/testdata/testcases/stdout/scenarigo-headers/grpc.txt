@@ -1,0 +1,34 @@
+=== RUN   testdata/testcases/scenarios/scenarigo-headers/grpc.yaml
+=== PAUSE testdata/testcases/scenarios/scenarigo-headers/grpc.yaml
+=== CONT  testdata/testcases/scenarios/scenarigo-headers/grpc.yaml
+=== RUN   testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc
+=== PAUSE testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc
+=== CONT  testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc
+=== RUN   testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc/Echo
+--- PASS: testdata/testcases/scenarios/scenarigo-headers/grpc.yaml (0.00s)
+    --- PASS: testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc (0.00s)
+        --- PASS: testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc/Echo (0.00s)
+                request:
+                  method: Echo
+                  metadata:
+                    scenarigo-scenario-filepath-bin:
+                    - testdata/testcases/scenarios/scenarigo-headers/grpc.yaml
+                    scenarigo-scenario-title-bin:
+                    - scenarigo headers grpc
+                    scenarigo-step-full-name-bin:
+                    - testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc/Echo
+                    token:
+                    - XXXXX
+                  message: {}
+                response:
+                  status:
+                    code: OK
+                  header:
+                    content-type:
+                    - application/grpc
+                  message:
+                    userType: CUSTOMER
+                    state: ACTIVE
+                elapsed time: 0.000000 sec
+PASS
+ok  	testdata/testcases/scenarios/scenarigo-headers/grpc.yaml	0.000s

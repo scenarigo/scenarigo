@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package scenarigo.testdata.bar;
+
+import "empty.proto";
+
+service Bar {
+    rpc Ping(scenarigo.testdata.empty.Empty) returns (scenarigo.testdata.empty.Empty) {};
+}

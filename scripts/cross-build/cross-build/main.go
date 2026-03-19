@@ -9,19 +9,22 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
+	"slices"
 	"strings"
 
+	"github.com/Masterminds/semver"
 	"github.com/Yamashou/gqlgenc/clientv2"
 
-	"github.com/zoncoen/scenarigo/scripts/cross-build/gen"
+	"github.com/scenarigo/scenarigo/scripts/cross-build/gen"
 )
 
 var (
 	token            = os.Getenv("GITHUB_TOKEN")
-	releaseVer       = os.Getenv("RELEASE_VERSION")
 	ver              = os.Getenv("GO_VERSION")
 	rootDir          = os.Getenv("PJ_ROOT")
 	errImageNotFound = errors.New("image not found")
+	go1_22_2         = semver.MustParse("1.22.2")
 )
 
 func main() {
@@ -40,17 +43,23 @@ func release() error {
 		}
 		return fmt.Errorf("failed to get image tag: %w", err)
 	}
-	if err := build(ver, tag); err != nil {
+
+	v, err := semver.NewVersion(ver)
+	if err != nil {
+		return fmt.Errorf("failed to parse version: %w", err)
+	}
+	cc := "aarch64-apple-darwin23-clang"
+	if v.LessThan(go1_22_2) {
+		cc = "aarch64-apple-darwin22-clang"
+	}
+
+	if err := build(ver, tag, cc); err != nil {
 		return fmt.Errorf("failed to build: %w", err)
 	}
 	return nil
 }
 
 func imageTag(ver, token string) (string, error) {
-	// HACK: golang-cross:v1.17.5-4 does not work
-	if ver == "1.17.5" {
-		return "v1.17.5-0", nil
-	}
 	github := &gen.Client{
 		Client: clientv2.NewClient(http.DefaultClient, "https://api.github.com/graphql", func(ctx context.Context, req *http.Request, gqlInfo *clientv2.GQLRequestInfo, res interface{}, next clientv2.RequestInterceptorFunc) error {
 			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
@@ -67,15 +76,36 @@ func imageTag(ver, token string) (string, error) {
 		}
 		return "", fmt.Errorf("unhandled error: %s", err.Error())
 	}
+
 	v := fmt.Sprintf("v%s", ver)
 	prefix := fmt.Sprintf("%s-", v)
+	var sv *semver.Version
+	tags := []*semver.Version{}
 	for _, node := range getTags.Repository.Refs.Nodes {
 		if node.Name == v {
-			return node.Name, nil
+			sv = semver.MustParse(node.Name)
 		}
 		if strings.HasPrefix(node.Name, prefix) {
-			return node.Name, nil
+			tags = append(tags, semver.MustParse(node.Name))
 		}
+	}
+	slices.SortFunc(tags, func(a, b *semver.Version) int {
+		return -a.Compare(b)
+	})
+	if sv != nil {
+		tags = append(tags, sv)
+	}
+
+	for _, tag := range tags {
+		v := tag.Original()
+		if err := exec.Command(
+			"docker", "manifest", "inspect",
+			fmt.Sprintf("ghcr.io/gythialy/golang-cross:%s", v),
+		).Run(); err != nil {
+			fmt.Println(v, "not found")
+			continue
+		}
+		return v, nil
 	}
 
 	return "", errImageNotFound
@@ -84,7 +114,7 @@ func imageTag(ver, token string) (string, error) {
 //go:embed templates/goreleaser.yml.tmpl
 var tmplBytes []byte
 
-func build(ver, tag string) error {
+func build(ver, tag, cc string) error {
 	if err := os.Mkdir(fmt.Sprintf("%s/assets", rootDir), 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
@@ -102,6 +132,7 @@ func build(ver, tag string) error {
 	defer f.Close()
 	if err := tmpl.Execute(f, map[string]interface{}{
 		"GoVersion": ver,
+		"CC":        cc,
 	}); err != nil {
 		return fmt.Errorf("failed to create .goreleaser.yml: %w", err)
 	}
@@ -113,13 +144,28 @@ func build(ver, tag string) error {
 }
 
 func goreleaser(ver, tag string) error {
-	out, err := exec.Command(
-		"docker", "run", "--rm", "--privileged",
+	args := []string{
+		"run",
+		"--rm", "--privileged",
 		"-v", fmt.Sprintf("%s:/scenarigo", rootDir),
 		"-v", "/var/run/docker.sock:/var/run/docker.sock",
 		"-w", "/scenarigo",
-		fmt.Sprintf("ghcr.io/gythialy/golang-cross:%s", tag),
-		"--skip-publish", "--rm-dist",
+		"-e", fmt.Sprintf("SNAPSHOT=%s", os.Getenv("SNAPSHOT")),
+		"-e", fmt.Sprintf("GITHUB_TOKEN=%s", token),
+		"--entrypoint", "bash",
+	}
+
+	// golang-cross has no matching manifest for linux/arm64/v8 in the manifest list entries.
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		args = append(args, "--platform", "linux/x86_64")
+	}
+
+	out, err := exec.Command(
+		"docker",
+		append(args,
+			fmt.Sprintf("ghcr.io/gythialy/golang-cross:%s", tag),
+			"/scenarigo/scripts/cross-build.sh",
+		)...,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s:\n%s", err, out)

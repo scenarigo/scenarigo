@@ -1,0 +1,8 @@
+title: teardown receives valid RequestContext
+plugins:
+  teardownctx: teardownctx.so
+steps:
+- title: step 1
+  ref: '{{plugins.teardownctx.CheckReqCtxStep}}'
+- title: step 2
+  ref: '{{plugins.teardownctx.CheckReqCtxStep}}'

@@ -8,9 +8,9 @@ import (
 func TestElem(t *testing.T) {
 	s := "test"
 	p := &s
-	var i interface{}
+	var i any
 	tests := map[string]struct {
-		v      interface{}
+		v      any
 		expect reflect.Kind
 	}{
 		"string": {
@@ -31,7 +31,6 @@ func TestElem(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := Elem(reflect.ValueOf(test.v))
 			if k := got.Kind(); k != test.expect {

@@ -1,50 +1,38 @@
 package template
 
 import (
+	"context"
 	"fmt"
 	"go/token"
 	"reflect"
-	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/query-go"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
+//nolint:exhaustruct
 var (
-	yamlMapItemType  = reflect.TypeOf(yaml.MapItem{})
-	yamlMapSliceType = reflect.TypeOf(yaml.MapSlice{})
-	lazyFuncType     = reflect.TypeOf(lazyFunc{})
+	yamlMapItemType = reflect.TypeFor[yaml.MapItem]()
+	funcCallType    = reflect.TypeFor[FuncCall]()
 )
 
 // Execute executes templates of i with data.
-func Execute(i, data interface{}) (interface{}, error) {
-	v, err := execute(reflect.ValueOf(i), data)
+func Execute(ctx context.Context, i, data any) (any, error) {
+	v, err := execute(ctx, reflect.ValueOf(i), data)
 	if err != nil {
 		return nil, err
 	}
 	if v.IsValid() {
 		return v.Interface(), nil
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil
 }
 
-func structFieldName(field reflect.StructField) string {
-	fieldName := field.Name
-	tag := field.Tag.Get("yaml")
-	if tag == "" {
-		return fieldName
-	}
-
-	tagValues := strings.Split(tag, ",")
-	if len(tagValues) > 0 && tagValues[0] != "" {
-		return tagValues[0]
-	}
-	return fieldName
-}
-
-func execute(in reflect.Value, data interface{}) (reflect.Value, error) {
+//nolint:gocyclo,cyclop,maintidx
+func execute(ctx context.Context, in reflect.Value, data any) (reflect.Value, error) {
 	v := reflectutil.Elem(in)
 	switch v.Kind() {
 	case reflect.Invalid:
@@ -53,41 +41,34 @@ func execute(in reflect.Value, data interface{}) (reflect.Value, error) {
 		for _, k := range v.MapKeys() {
 			e := v.MapIndex(k)
 			if !isNil(e) {
-				keyStr := fmt.Sprint(k.Interface())
-				key, err := execute(k, data)
+				keyStr := fmt.Sprintf(".'%s'", k.Interface())
+				key, err := execute(ctx, k, data)
 				if err != nil {
-					return reflect.Value{}, errors.WithPath(err, keyStr)
+					return reflect.Value{}, err
 				}
 				// left arrow function
-				if ke := reflectutil.Elem(key); ke.IsValid() && ke.Type() == lazyFuncType && ke.CanInterface() {
+				if ke := reflectutil.Elem(key); ke.IsValid() && ke.Type() == funcCallType && ke.CanInterface() {
 					if len(v.MapKeys()) != 1 {
 						return reflect.Value{}, errors.New("invalid left arrow function call")
 					}
-					if !isNil(e) {
-						x, err := execute(e, data)
-						if err != nil {
-							return reflect.Value{}, errors.WithPath(err, keyStr)
-						}
-						e = x
-					}
-					f := ke.Interface().(lazyFunc)
-					res, err := executeLeftArrowFunction(f.f, e)
+					f := ke.Interface().(FuncCall) //nolint:forcetypeassert
+					res, err := executeLeftArrowFunction(ctx, f.Func, e, data, keyStr)
 					if err != nil {
-						return reflect.Value{}, fmt.Errorf("failed to execute left arrow function: %w", err)
+						return reflect.Value{}, errors.WithPath(fmt.Errorf("failed to execute left arrow function: %w", err), keyStr)
 					}
 					v = res
 					break
 				}
-				x, err := convert(e.Type())(execute(e, data))
+				x, err := convert(e.Type())(execute(ctx, e, data))
 				if err != nil {
 					return reflect.Value{}, errors.WithPath(err, keyStr)
 				}
-				v.SetMapIndex(k, reflect.Value{}) //delete old value
+				v.SetMapIndex(k, reflect.Value{}) // delete old value
 				v.SetMapIndex(key, x)
 			}
 		}
 	case reflect.Slice:
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			e := v.Index(i)
 			if !isNil(e) {
 				if !e.CanSet() {
@@ -95,39 +76,38 @@ func execute(in reflect.Value, data interface{}) (reflect.Value, error) {
 				}
 				if e.Type() == yamlMapItemType {
 					key := e.FieldByName("Key")
-					keyStr := fmt.Sprint(key.Interface())
+					keyStr := fmt.Sprintf(".'%s'", key.Interface())
 					value := e.FieldByName("Value")
 					if !isNil(key) {
-						k, err := execute(key, data)
+						k, err := execute(ctx, key, data)
 						if err != nil {
-							return reflect.Value{}, errors.WithPath(err, keyStr)
+							return reflect.Value{}, err
 						}
-						key = k
+						key.Set(k)
 					}
 					// left arrow function
-					if ke := reflectutil.Elem(key); ke.IsValid() && ke.Type() == lazyFuncType && ke.CanInterface() {
+					if ke := reflectutil.Elem(key); ke.IsValid() && ke.Type() == funcCallType && ke.CanInterface() {
 						if v.Len() != 1 {
 							return reflect.Value{}, errors.New("invalid left arrow function call")
 						}
-						if !isNil(value) {
-							x, err := execute(value, data)
-							if err != nil {
-								return reflect.Value{}, errors.WithPath(err, keyStr)
-							}
-							value = x
-						}
-						f := ke.Interface().(lazyFunc)
-						res, err := executeLeftArrowFunction(f.f, value)
+						f := ke.Interface().(FuncCall) //nolint:forcetypeassert
+						res, err := executeLeftArrowFunction(ctx, f.Func, value, data, keyStr)
 						if err != nil {
-							return reflect.Value{}, fmt.Errorf("failed to execute left arrow function: %w", err)
+							return reflect.Value{}, errors.WithPath(fmt.Errorf("failed to execute left arrow function: %w", err), keyStr)
 						}
 						v = res
 						break
 					}
+					val, err := convert(value.Type())(execute(ctx, value, data))
+					if err != nil {
+						return reflect.Value{}, errors.WithPath(err, keyStr)
+					}
+					value.Set(val)
+					continue
 				}
-				x, err := convert(e.Type())(execute(e, data))
+				x, err := convert(e.Type())(execute(ctx, e, data))
 				if err != nil {
-					return reflect.Value{}, errors.WithQuery(err, query.New().Index(i))
+					return reflect.Value{}, errors.WithQuery(err, queryutil.New().Index(i))
 				}
 				e.Set(x)
 			}
@@ -136,18 +116,18 @@ func execute(in reflect.Value, data interface{}) (reflect.Value, error) {
 		if !v.CanSet() {
 			v = makePtr(v).Elem() // create pointer to enable to set values
 		}
-		for i := 0; i < v.NumField(); i++ {
+		for i := range v.NumField() {
 			if !token.IsExported(v.Type().Field(i).Name) {
 				continue // skip unexported field
 			}
 			field := v.Field(i)
-			x, err := convert(field.Type())(execute(field, data))
+			x, err := convert(field.Type())(execute(ctx, field, data))
 			if err != nil {
-				fieldName := structFieldName(v.Type().Field(i))
+				fieldName := reflectutil.StructFieldToKey(v.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
 			}
 			if err := reflectutil.Set(field, x); err != nil {
-				fieldName := structFieldName(v.Type().Field(i))
+				fieldName := reflectutil.StructFieldToKey(v.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
 			}
 		}
@@ -156,7 +136,7 @@ func execute(in reflect.Value, data interface{}) (reflect.Value, error) {
 		if err != nil {
 			return reflect.Value{}, err
 		}
-		x, err := tmpl.Execute(data)
+		x, err := tmpl.Execute(ctx, data)
 		if err != nil {
 			return reflect.Value{}, err
 		}
@@ -172,7 +152,9 @@ func execute(in reflect.Value, data interface{}) (reflect.Value, error) {
 		// keep the original address
 		if in.Type().Kind() == reflect.Ptr && v.Type().Kind() == reflect.Ptr {
 			if v.Elem().Type().AssignableTo(in.Elem().Type()) {
-				reflectutil.Set(in.Elem(), v.Elem())
+				if err := reflectutil.Set(in.Elem(), v.Elem()); err != nil {
+					return reflect.Value{}, err
+				}
 				v = in
 			}
 		}
@@ -180,7 +162,14 @@ func execute(in reflect.Value, data interface{}) (reflect.Value, error) {
 	return v, nil
 }
 
-func executeLeftArrowFunction(f Func, v reflect.Value) (reflect.Value, error) {
+func executeLeftArrowFunction(ctx context.Context, f Func, v reflect.Value, data any, str string) (reflect.Value, error) {
+	if !isNil(v) {
+		x, err := execute(ctx, v, data)
+		if err != nil {
+			return reflect.Value{}, err
+		}
+		v = x
+	}
 	s := new(funcStash)
 	x, err := replaceFuncs(v, s)
 	if err != nil {
@@ -190,14 +179,14 @@ func executeLeftArrowFunction(f Func, v reflect.Value) (reflect.Value, error) {
 	if err != nil {
 		return reflect.Value{}, fmt.Errorf("failed to marshal argument to YAML: %w", err)
 	}
-	arg, err := f.UnmarshalArg(func(v interface{}) error {
+	arg, err := f.UnmarshalArg(func(v any) error {
 		if err := yaml.UnmarshalWithOptions(b, v, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
 			return err
 		}
 
 		// Restore functions that are replaced into strings.
 		// See the "HACK" comment of *Template.executeParameterExpr method.
-		arg, err := Execute(v, s)
+		arg, err := Execute(ctx, v, s)
 		if err != nil {
 			return fmt.Errorf("failed to restore functions: %w", err)
 		}
@@ -218,6 +207,21 @@ func executeLeftArrowFunction(f Func, v reflect.Value) (reflect.Value, error) {
 	if err != nil {
 		return reflect.Value{}, fmt.Errorf("failed to execute function: %w", err)
 	}
+
+	// HACK: return error with path
+	if str != "" {
+		if as, ok := res.(interface {
+			Assert(v any) error
+		}); ok {
+			res = assertionFunc(func(v any) error {
+				if err := as.Assert(v); err != nil {
+					return errors.WithPath(err, str)
+				}
+				return nil
+			})
+		}
+	}
+
 	return reflect.ValueOf(res), nil
 }
 
@@ -226,6 +230,7 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 
 	switch v.Kind() {
 	case reflect.Map:
+		vv := reflect.MakeMapWithSize(v.Type(), v.Len())
 		for _, k := range v.MapKeys() {
 			e := v.MapIndex(k)
 			if !isNil(e) {
@@ -233,25 +238,26 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 				if err != nil {
 					return reflect.Value{}, err
 				}
-				v.SetMapIndex(k, x)
+				vv.SetMapIndex(k, x)
 			}
 		}
+		v = vv
 	case reflect.Slice:
-		for i := 0; i < v.Len(); i++ {
+		vv := reflect.MakeSlice(v.Type(), v.Len(), v.Len())
+		for i := range v.Len() {
 			e := v.Index(i)
 			if !isNil(e) {
 				x, err := replaceFuncs(e, s)
 				if err != nil {
 					return reflect.Value{}, err
 				}
-				e.Set(x)
+				vv.Index(i).Set(x)
 			}
 		}
+		v = vv
 	case reflect.Struct:
-		if !v.CanSet() {
-			v = makePtr(v).Elem() // create pointer to enable to set values
-		}
-		for i := 0; i < v.NumField(); i++ {
+		vv := reflect.New(v.Type()).Elem()
+		for i := range v.NumField() {
 			if !token.IsExported(v.Type().Field(i).Name) {
 				continue // skip unexported field
 			}
@@ -260,11 +266,12 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 			if err != nil {
 				return reflect.Value{}, err
 			}
-			if err := reflectutil.Set(field, x); err != nil {
-				fieldName := structFieldName(v.Type().Field(i))
+			if err := reflectutil.Set(vv.Field(i), x); err != nil {
+				fieldName := reflectutil.StructFieldToKey(vv.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
 			}
 		}
+		v = vv
 	case reflect.Func:
 		return reflect.ValueOf(fmt.Sprintf("{{%s}}", s.save(v.Interface()))), nil
 	default:
@@ -275,13 +282,6 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 	if in.IsValid() && v.IsValid() {
 		if converted, err := convert(in.Type())(v, nil); err == nil {
 			v = converted
-		}
-		// keep the original address
-		if in.Type().Kind() == reflect.Ptr && v.Type().Kind() == reflect.Ptr {
-			if v.Elem().Type().AssignableTo(in.Elem().Type()) {
-				reflectutil.Set(in.Elem(), v.Elem())
-				v = in
-			}
 		}
 	}
 	return v, nil
@@ -298,7 +298,7 @@ func isNil(v reflect.Value) bool {
 
 // convert returns a function that converts a value to the given type t.
 func convert(t reflect.Type) func(reflect.Value, error) (reflect.Value, error) {
-	return func(v reflect.Value, err error) (result reflect.Value, resErr error) {
+	return func(v reflect.Value, err error) (reflect.Value, error) {
 		if err != nil {
 			return v, err
 		}
@@ -314,4 +314,10 @@ func makePtr(v reflect.Value) reflect.Value {
 	ptr := reflect.New(v.Type())
 	ptr.Elem().Set(v)
 	return ptr
+}
+
+type assertionFunc func(v any) error
+
+func (f assertionFunc) Assert(v any) error {
+	return f(v)
 }

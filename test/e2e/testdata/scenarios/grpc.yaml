@@ -6,7 +6,7 @@ steps:
 - title: Echo
   bind:
     vars:
-      mid: '{{response.messageId}}'
+      mid: '{{response.message.messageId}}'
   vars:
     id: xxx
     message: hello
@@ -22,8 +22,9 @@ steps:
   expect:
     code: OK
     message:
-      messageId: "{{request.messageId}}"
-      messageBody: "{{request.messageBody}}"
+      messageId: "{{request.message.messageId}}"
+      messageBody: "{{request.message.messageBody}}"
+      state: ACTIVE
       nullableString: null
     header:
       content-type: '{{assert.notZero}}'
@@ -64,7 +65,7 @@ steps:
       details:
         - google.rpc.LocalizedMessage:
             locale: ja-JP
-        - google.rpc.LocalizedMessage:
-            locale: en-US
+        - '{{"google.rpc.LocalizedMessage"}}':
+            locale: '{{"en-US"}}'
             message: NG
         - google.rpc.DebugInfo:

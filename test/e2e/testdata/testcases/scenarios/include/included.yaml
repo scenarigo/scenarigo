@@ -1,0 +1,14 @@
+---
+title: included scenario
+steps:
+- protocol: http
+  request:
+    method: GET
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+  expect:
+    code: OK
+    body:
+      message: '{{vars.global}}'
+  bind:
+    vars:
+      message: '{{response.body.message}}'

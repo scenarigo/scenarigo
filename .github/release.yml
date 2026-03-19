@@ -1,0 +1,30 @@
+changelog:
+  exclude:
+    labels:
+      - tagpr
+      - chore
+  categories:
+    - title: New Features
+      labels:
+        - enhancement
+    - title: Behavior Changes
+      labels:
+        - behavior change
+    - title: Bug Fixes
+      labels:
+        - bug fix
+    - title: Code Refactoring
+      labels:
+        - refactoring
+    - title: Dependency Upgrades
+      labels:
+        - dependencies
+    - title: Testing
+      labels:
+        - testing
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Other Changes
+      labels:
+        - "*"

@@ -1,0 +1,33 @@
+--- FAIL: testdata/testcases/scenarios/retry/scenario-constant.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/retry/scenario-constant.yaml/constant_retry_scenario (0.00s)
+            retry after 10ms
+            retry limit exceeded
+        --- FAIL: testdata/testcases/scenarios/retry/scenario-constant.yaml/constant_retry_scenario/ (0.00s)
+                request:
+                  method: GET
+                  url: http://[::]:12345/echo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 500 Internal Server Error
+                  statusCode: 500
+                  header:
+                    Content-Length:
+                    - "0"
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                elapsed time: 0.000000 sec
+                expected "OK" but got "Internal Server Error"
+                      11 |     method: GET
+                      12 |     url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+                      13 |   expect:
+                    > 14 |     code: OK
+                                     ^
+                      15 | retry:
+                      16 |   constant:
+                      17 |     interval: 10ms
+                      18 |
+FAIL
+FAIL	testdata/testcases/scenarios/retry/scenario-constant.yaml	0.000s
+FAIL

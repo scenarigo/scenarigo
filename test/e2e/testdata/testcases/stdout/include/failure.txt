@@ -1,0 +1,32 @@
+--- FAIL: testdata/testcases/scenarios/include/scenario.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/include/scenario.yaml/included_scenario_fails (0.00s)
+        --- FAIL: testdata/testcases/scenarios/include/scenario.yaml/included_scenario_fails/include (0.00s)
+            --- FAIL: testdata/testcases/scenarios/include/scenario.yaml/included_scenario_fails/include/included.yaml (0.00s)
+                --- FAIL: testdata/testcases/scenarios/include/scenario.yaml/included_scenario_fails/include/included.yaml/ (0.00s)
+                        request:
+                          method: GET
+                          url: http://[::]:12345/echo
+                          header:
+                            User-Agent:
+                            - scenarigo/v1.0.0
+                        response:
+                          status: 400 Bad Request
+                          statusCode: 400
+                          header:
+                            Content-Length:
+                            - "0"
+                            Date:
+                            - Mon, 01 Jan 0001 00:00:00 GMT
+                        elapsed time: 0.000000 sec
+                        expected "OK" but got "Bad Request"
+                               6 |     method: GET
+                               7 |     url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+                               8 |   expect:
+                            >  9 |     code: OK
+                                             ^
+                              10 |     body:
+                              11 |       message: '{{vars.global}}'
+                              12 |   bind:
+FAIL
+FAIL	testdata/testcases/scenarios/include/scenario.yaml	0.000s
+FAIL

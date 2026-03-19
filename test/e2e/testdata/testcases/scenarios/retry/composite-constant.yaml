@@ -1,0 +1,24 @@
+title: constant retry scenario
+plugins:
+  counter: counter.so
+steps:
+- protocol: http
+  vars:
+    count: '{{vars.counter.Increment()}}'
+  request:
+    method: POST
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+    body:
+      count: '{{vars.count}}'
+  expect:
+    code: OK
+    body:
+      count: 4
+  retry:
+    constant:
+      interval: 10ms
+      maxRetries: 1
+retry:
+  constant:
+    interval: 10ms
+    maxRetries: 1

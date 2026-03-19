@@ -1,0 +1,14 @@
+title: assert
+steps:
+- title: POST /echo
+  protocol: http
+  request:
+    method: POST
+    url: "http://{{env.TEST_HTTP_ADDR}}/echo"
+    body:
+      message: hello
+  expect:
+    code: 200
+    body:
+      id: '{{int($) != 0}}'
+      message: '{{request.body.message}}'

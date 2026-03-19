@@ -1,0 +1,59 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+title: create item if not found
+vars:
+  itemName: foo
+  itemPrice: 100
+steps:
+- id: find # need to set id to access the result of this step
+  title: find by name
+  continueOnError: true # the errors of this step don't fail the test scenario
+  protocol: http
+  request:
+    method: GET
+    url: 'http://{{plugins.plugin.ServerAddr}}/items?name={{vars.itemName}}'
+  expect:
+    code: OK
+    body:
+      name: '{{vars.itemName}}'
+  bind:
+    vars:
+      itemId: '{{response.body.id}}'
+- title: create
+  if: '{{steps.find.result == "failed"}}' # this step will be executed when the find step fails only
+  protocol: http
+  request:
+    method: POST
+    url: 'http://{{plugins.plugin.ServerAddr}}/items'
+    header:
+      Content-Type: application/json
+    body:
+      name: '{{vars.itemName}}'
+      price: '{{vars.itemPrice}}'
+  expect:
+    code: OK
+    body:
+      name: '{{vars.itemName}}'
+  bind:
+    vars:
+      itemId: '{{response.body.id}}'
+- title: find by id
+  protocol: http
+  request:
+    method: GET
+    url: 'http://{{plugins.plugin.ServerAddr}}/items/{{vars.itemId}}'
+  expect:
+    code: OK
+    body:
+      id: '{{vars.itemId}}'
+      name: '{{vars.itemName}}'
+      price: '{{uint($) == vars.itemPrice}}'
+- title: get all items
+  protocol: http
+  request:
+    method: GET
+    url: 'http://{{plugins.plugin.ServerAddr}}/items'
+  expect:
+    code: OK
+    body: '{{size($) == 1}}'

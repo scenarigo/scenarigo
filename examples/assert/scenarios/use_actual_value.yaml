@@ -1,0 +1,18 @@
+schemaVersion: scenario/v1
+plugins:
+  plugin: plugin.so
+title: echo
+steps:
+- title: POST /echo
+  protocol: http
+  request:
+    method: POST
+    url: 'http://{{plugins.plugin.ServerAddr}}/echo'
+    header:
+      Content-Type: application/json
+    body:
+      message: hello
+  expect:
+    body:
+      message: '{{request.body.message}}'
+      recievedAt: '{{time($) > time("2023-01-01T00:00:00+09:00")}}'

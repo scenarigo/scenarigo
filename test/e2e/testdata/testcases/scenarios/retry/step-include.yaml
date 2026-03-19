@@ -1,0 +1,9 @@
+---
+title: include a scenario with retry
+steps:
+- title: include
+  include: './step-include-echo.yaml'
+  retry:
+    constant:
+      interval: 10ms
+      maxRetries: 1

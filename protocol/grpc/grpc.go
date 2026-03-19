@@ -3,21 +3,49 @@ package grpc
 import (
 	"bytes"
 	"errors"
+	"sync"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/zoncoen/query-go"
+	protobufextractor "github.com/zoncoen/query-go/extractor/protobuf"
+
+	"github.com/scenarigo/scenarigo/protocol"
 )
 
-func init() {
-	protocol.Register(&GRPC{})
+var grpcProtocol = &GRPC{}
+
+// Register registers grpc protocol.
+func Register() {
+	protocol.Register(grpcProtocol)
 }
 
 // GRPC is a protocol type for the scenarigo step.
-type GRPC struct{}
+type GRPC struct {
+	m      sync.Mutex
+	option Option
+}
+
+// Option represents a Option for gRPC.
+type Option struct {
+	Request *RequestOptions `yaml:"request,omitempty"`
+}
 
 // Name implements protocol.Protocol interface.
 func (p *GRPC) Name() string {
 	return "grpc"
+}
+
+// UnmarshalOption implements protocol.Protocol interface.
+func (p *GRPC) UnmarshalOption(b []byte) error {
+	p.m.Lock()
+	defer p.m.Unlock()
+	return yaml.UnmarshalWithOptions(b, &p.option, yaml.Strict())
+}
+
+func (p *GRPC) getOption() *Option {
+	p.m.Lock()
+	defer p.m.Unlock()
+	return &p.option
 }
 
 // UnmarshalRequest implements protocol.Protocol interface.
@@ -60,4 +88,12 @@ func (p *GRPC) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, error) {
 	}
 
 	return &e, nil
+}
+
+// QueryOptions implements the QueryOptionsProvider interface.
+func (p *GRPC) QueryOptions() []query.Option {
+	return []query.Option{
+		query.CustomExtractFunc(protobufextractor.ExtractFunc()),
+		query.CustomIsInlineStructFieldFunc(protobufextractor.OneofIsInlineStructFieldFunc()),
+	}
 }

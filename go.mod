@@ -1,37 +1,52 @@
-module github.com/zoncoen/scenarigo
+module github.com/scenarigo/scenarigo
 
-go 1.17
+go 1.25.0
 
 require (
-	github.com/fatih/color v1.13.0
-	github.com/goccy/go-yaml v1.9.5
-	github.com/golang/mock v1.6.0
-	github.com/golang/protobuf v1.5.2
-	github.com/google/go-cmp v0.5.8
+	carvel.dev/ytt v0.50.0
+	dario.cat/mergo v1.0.2
+	github.com/bufbuild/protocompile v0.14.1
+	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/fatih/color v1.18.0
+	github.com/goccy/go-yaml v1.19.2
+	github.com/goccy/wasi-go v0.3.2
+	github.com/golang/mock v1.7.0-rc.1
+	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/lestrrat-go/backoff v1.0.1
+	github.com/jhump/protoreflect v1.18.0
+	github.com/mattn/go-encoding v0.0.2
+	github.com/mitchellh/copystructure v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/sergi/go-diff v1.2.0
-	github.com/sosedoff/gitkit v0.3.0
-	github.com/spf13/cobra v1.5.0
-	github.com/zoncoen/query-go v1.1.0
-	golang.org/x/mod v0.5.1
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
-	google.golang.org/genproto v0.0.0-20220413183235-5e96e2839df9
-	google.golang.org/grpc v1.47.0
-	google.golang.org/protobuf v1.28.0
+	github.com/sergi/go-diff v1.4.0
+	github.com/sosedoff/gitkit v0.4.0
+	github.com/spf13/cobra v1.10.2
+	github.com/tetratelabs/wazero v1.11.0
+	github.com/zoncoen/query-go v1.3.2
+	github.com/zoncoen/query-go/extractor/protobuf v0.1.4
+	github.com/zoncoen/query-go/extractor/yaml v0.2.2
+	golang.org/x/mod v0.33.0
+	golang.org/x/sync v0.19.0
+	golang.org/x/text v0.34.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217
+	google.golang.org/grpc v1.79.1
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
-	github.com/gofrs/uuid v4.0.0+incompatible // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
-	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d // indirect
-	golang.org/x/sys v0.0.0-20211205182925-97ca703d548d // indirect
-	golang.org/x/text v0.3.7 // indirect
+	github.com/goccy/wasi-go-net v0.3.0 // indirect
+	github.com/gofrs/uuid v4.4.0+incompatible // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/hashicorp/go-version v1.8.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jhump/protoreflect/v2 v2.0.0-beta.2 // indirect
+	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mitchellh/reflectwalk v1.0.2 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/stealthrocket/wazergo v0.19.1 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 )

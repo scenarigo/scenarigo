@@ -2,27 +2,73 @@
 package schema
 
 import (
-	"github.com/goccy/go-yaml/ast"
-	"github.com/pkg/errors"
+	"fmt"
+	"regexp"
 
-	"github.com/zoncoen/scenarigo/protocol"
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+
+	"github.com/scenarigo/scenarigo/color"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/protocol"
 )
+
+const stepIDPattern = `^[a-zA-Z0-9\-_]+$`
+
+var stepIDRegexp = regexp.MustCompile(stepIDPattern)
 
 // Scenario represents a test scenario.
 type Scenario struct {
-	Title       string                 `yaml:"title,omitempty"`
-	Description string                 `yaml:"description,omitempty"`
-	Plugins     map[string]string      `yaml:"plugins,omitempty"`
-	Vars        map[string]interface{} `yaml:"vars,omitempty"`
-	Steps       []*Step                `yaml:"steps,omitempty"`
+	SchemaVersion string            `yaml:"schemaVersion,omitempty"`
+	Title         string            `yaml:"title,omitempty"`
+	Description   string            `yaml:"description,omitempty"`
+	Plugins       map[string]string `yaml:"plugins,omitempty"`
+	Vars          map[string]any    `yaml:"vars,omitempty"`
+	Secrets       map[string]any    `yaml:"secrets,omitempty"`
+	Steps         []*Step           `yaml:"steps,omitempty"`
+	Retry         *RetryPolicy      `yaml:"retry,omitempty"`
 
 	// The strict YAML decoder fails to decode if finds an unknown field.
 	// Anchors is the field for enabling to define YAML anchors by avoiding the error.
 	// This field doesn't need to hold some data because anchors expand by the decoder.
 	Anchors anchors `yaml:"anchors,omitempty"`
 
-	filepath string   // YAML filepath
-	Node     ast.Node `yaml:"-"`
+	filepath      string        // YAML filepath
+	scenarioIndex int           // 0-based index of this scenario within the YAML file
+	Node          ast.Node      `yaml:"-"`
+	colorConfig   *color.Config // Color configuration for error reporting
+
+	yamlBytes []byte
+}
+
+type scenarioUnmarshaler Scenario
+
+func (s *Scenario) UnmarshalYAML(b []byte) error {
+	var unm scenarioUnmarshaler
+	if err := yaml.UnmarshalWithOptions(b, &unm, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
+		return err
+	}
+	*s = Scenario(unm)
+	if s.Retry != nil {
+		s.yamlBytes = b
+	}
+	return nil
+}
+
+func (s *Scenario) Reset() error {
+	// Preserve metadata that should be kept across reset.
+	filepath := s.filepath
+	scenarioIndex := s.scenarioIndex
+	node := s.Node
+	colorConfig := s.colorConfig
+
+	if err := yaml.UnmarshalWithOptions(s.yamlBytes, s, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
+		return err
+	}
+
+	// Restore metadata lost by unmarshalling.
+	s.setMetadata(filepath, scenarioIndex, node, colorConfig)
+	return nil
 }
 
 // Filepath returns YAML filepath of s.
@@ -30,58 +76,155 @@ func (s *Scenario) Filepath() string {
 	return s.filepath
 }
 
-// Step represents a step of scenario.
-type Step struct {
-	Title       string                    `yaml:"title,omitempty"`
-	Description string                    `yaml:"description,omitempty"`
-	Vars        map[string]interface{}    `yaml:"vars,omitempty"`
-	Protocol    string                    `yaml:"protocol,omitempty"`
-	Request     protocol.Invoker          `yaml:"request,omitempty"`
-	Expect      protocol.AssertionBuilder `yaml:"expect,omitempty"`
-	Include     string                    `yaml:"include,omitempty"`
-	Ref         interface{}               `yaml:"ref,omitempty"`
-	Bind        Bind                      `yaml:"bind,omitempty"`
-	Retry       *RetryPolicy              `yaml:"retry,omitempty"`
+// ScenarioIndex returns the 0-based index of this scenario within the YAML file.
+func (s *Scenario) ScenarioIndex() int {
+	return s.scenarioIndex
 }
 
-type rawMessage []byte
+// setMetadata sets metadata fields that are not part of YAML.
+func (s *Scenario) setMetadata(filepath string, scenarioIndex int, node ast.Node, colorConfig *color.Config) {
+	s.filepath = filepath
+	s.scenarioIndex = scenarioIndex
+	s.Node = node
+	s.setColorConfig(colorConfig)
+}
+
+// setColorConfig sets the color configuration for error reporting.
+func (s *Scenario) setColorConfig(config *color.Config) {
+	s.colorConfig = config
+}
+
+// getColorEnabled returns whether color is enabled for error reporting.
+func (s *Scenario) getColorEnabled() bool {
+	if s.colorConfig == nil {
+		s.colorConfig = color.New()
+	}
+	return s.colorConfig.IsEnabled()
+}
+
+// Validate validates a scenario.
+func (s *Scenario) Validate() error {
+	ids := map[string]struct{}{}
+	for i, stp := range s.Steps {
+		if stp.ID != "" {
+			if !stepIDRegexp.MatchString(stp.ID) {
+				return errors.WithNodeAndColored(
+					errors.ErrorPath(fmt.Sprintf("steps[%d].id", i), "step id must contain only alphanumeric characters, -, or _"),
+					s.Node,
+					s.getColorEnabled(),
+				)
+			}
+			if _, ok := ids[stp.ID]; ok {
+				return errors.WithNodeAndColored(
+					errors.ErrorPathf(fmt.Sprintf("steps[%d].id", i), "step id %q is duplicated", stp.ID),
+					s.Node,
+					s.getColorEnabled(),
+				)
+			}
+			ids[stp.ID] = struct{}{}
+		}
+
+		if stp.Include == "" && stp.Ref == nil {
+			if stp.Protocol == "" {
+				return errors.WithNodeAndColored(
+					errors.ErrorPath(fmt.Sprintf("steps[%d]", i), "no protocol"),
+					s.Node,
+					s.getColorEnabled(),
+				)
+			} else if protocol.Get(stp.Protocol) == nil {
+				return errors.WithNodeAndColored(
+					errors.ErrorPathf(fmt.Sprintf("steps[%d].protocol", i), "protocol %q not found", stp.Protocol),
+					s.Node,
+					s.getColorEnabled(),
+				)
+			}
+		}
+	}
+	return nil
+}
+
+// Step represents a step of scenario.
+type Step struct {
+	ID                      string                    `validate:"alphanum"                      yaml:"id,omitempty"`
+	Title                   string                    `yaml:"title,omitempty"`
+	Description             string                    `yaml:"description,omitempty"`
+	If                      string                    `yaml:"if,omitempty"`
+	ContinueOnError         bool                      `yaml:"continueOnError,omitempty"`
+	Vars                    map[string]any            `yaml:"vars,omitempty"`
+	Secrets                 map[string]any            `yaml:"secrets,omitempty"`
+	Protocol                string                    `yaml:"protocol,omitempty"`
+	Request                 protocol.Invoker          `yaml:"request,omitempty"`
+	Expect                  protocol.AssertionBuilder `yaml:"expect,omitempty"`
+	Include                 string                    `yaml:"include,omitempty"`
+	Ref                     any                       `yaml:"ref,omitempty"`
+	Bind                    Bind                      `yaml:"bind,omitempty"`
+	Timeout                 *Duration                 `yaml:"timeout,omitempty"`
+	PostTimeoutWaitingLimit *Duration                 `yaml:"postTimeoutWaitingLimit,omitempty"`
+	Retry                   *RetryPolicy              `yaml:"retry,omitempty"`
+
+	yamlBytes []byte
+}
+
+// RawMessage is a raw encoded YAML value.
+type RawMessage []byte
+
+// MarshalYAML implements yaml.BytesMarshaler interface.
+func (r RawMessage) MarshalYAML() ([]byte, error) {
+	return []byte(r), nil
+}
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (r *rawMessage) UnmarshalYAML(b []byte) error {
+func (r *RawMessage) UnmarshalYAML(b []byte) error {
 	*r = b
 	return nil
 }
 
 type stepUnmarshaller struct {
-	Title       string                 `yaml:"title,omitempty"`
-	Description string                 `yaml:"description,omitempty"`
-	Vars        map[string]interface{} `yaml:"vars,omitempty"`
-	Protocol    string                 `yaml:"protocol,omitempty"`
-	Include     string                 `yaml:"include,omitempty"`
-	Ref         interface{}            `yaml:"ref,omitempty"`
-	Bind        Bind                   `yaml:"bind,omitempty"`
-	Retry       *RetryPolicy           `yaml:"retry,omitempty"`
+	ID                      string         `yaml:"id,omitempty"`
+	Title                   string         `yaml:"title,omitempty"`
+	Description             string         `yaml:"description,omitempty"`
+	If                      string         `yaml:"if,omitempty"`
+	ContinueOnError         bool           `yaml:"continueOnError,omitempty"`
+	Vars                    map[string]any `yaml:"vars,omitempty"`
+	Secrets                 map[string]any `yaml:"secrets,omitempty"`
+	Protocol                string         `yaml:"protocol,omitempty"`
+	Include                 string         `yaml:"include,omitempty"`
+	Ref                     any            `yaml:"ref,omitempty"`
+	Bind                    Bind           `yaml:"bind,omitempty"`
+	Timeout                 *Duration      `yaml:"timeout,omitempty"`
+	PostTimeoutWaitingLimit *Duration      `yaml:"postTimeoutWaitingLimit,omitempty"`
+	Retry                   *RetryPolicy   `yaml:"retry,omitempty"`
 
-	Request rawMessage `yaml:"request,omitempty"`
-	Expect  rawMessage `yaml:"expect,omitempty"`
+	Request RawMessage `yaml:"request,omitempty"`
+	Expect  RawMessage `yaml:"expect,omitempty"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (s *Step) UnmarshalYAML(b []byte) error {
 	// unmarshal into stepUnmarshaller instead of Step for dynamic unmarshalling Request/Expect
 	var unmarshaled stepUnmarshaller
-	if err := unmarshal(&unmarshaled); err != nil {
+	if err := yaml.UnmarshalWithOptions(b, &unmarshaled, yaml.UseOrderedMap(), yaml.Strict()); err != nil {
 		return err
 	}
 
+	s.ID = unmarshaled.ID
 	s.Title = unmarshaled.Title
 	s.Description = unmarshaled.Description
+	s.If = unmarshaled.If
+	s.ContinueOnError = unmarshaled.ContinueOnError
 	s.Vars = unmarshaled.Vars
+	s.Secrets = unmarshaled.Secrets
 	s.Protocol = unmarshaled.Protocol
 	s.Include = unmarshaled.Include
 	s.Ref = unmarshaled.Ref
 	s.Bind = unmarshaled.Bind
+	s.Timeout = unmarshaled.Timeout
+	s.PostTimeoutWaitingLimit = unmarshaled.PostTimeoutWaitingLimit
 	s.Retry = unmarshaled.Retry
+
+	if s.Retry != nil {
+		s.yamlBytes = b
+	}
 
 	p := protocol.Get(s.Protocol)
 	if p == nil {
@@ -106,14 +249,19 @@ func (s *Step) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+func (s *Step) Reset() error {
+	return yaml.UnmarshalWithOptions(s.yamlBytes, s, yaml.UseOrderedMap(), yaml.Strict())
+}
+
 // Bind represents bindings of variables.
 type Bind struct {
-	Vars map[string]interface{} `yaml:"vars"`
+	Vars    map[string]any `yaml:"vars,omitempty"`
+	Secrets map[string]any `yaml:"secrets,omitempty"`
 }
 
 type anchors struct{}
 
 // UnmarshalYAML implements yaml.Unmarshaler interface.
-func (a anchors) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (a anchors) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }

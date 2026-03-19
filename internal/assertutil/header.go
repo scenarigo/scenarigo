@@ -6,49 +6,54 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/context"
-	"github.com/zoncoen/scenarigo/errors"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 // BuildHeaderAssertion builds an assertion for headers.
 func BuildHeaderAssertion(ctx *context.Context, in yaml.MapSlice) (assert.Assertion, error) {
 	expects := make(yaml.MapSlice, len(in))
+	opts := []assert.BuildOpt{
+		assert.FromTemplate(ctx),
+		assert.WithEqualers(assert.EqualerFunc(func(x, y any) (bool, error) {
+			// Convert boolean and integer values to strings for ease of use.
+			// All header values are strings.
+			x = stringify(x)
+
+			return true, assert.Equal(x).Assert(y)
+		})),
+	}
 	for i, elem := range in {
-		name, ok := stringify(elem.Key).(string)
+		k, ok := stringify(elem.Key).(string)
 		if !ok {
 			return nil, errors.Errorf("name must be string but %T", elem.Key)
 		}
-
-		v, err := ctx.ExecuteTemplate(elem.Value)
+		valAssertion, err := assert.Build(ctx.RequestContext(), elem.Value, opts...)
 		if err != nil {
-			return nil, errors.WrapPath(err, name, "failed to execute template")
+			return nil, errors.WithPath(err, k)
 		}
-
-		// Convert boolean and integer values to strings for ease of use.
-		// All header values are strings.
-		v = stringify(v)
 
 		// Wrap with the "Contains" function to allow using not only an array but also just a string.
-		if reflect.ValueOf(v).Kind() != reflect.Slice {
-			v = assert.Contains(assert.Build(v))
+		if reflect.ValueOf(elem.Value).Kind() != reflect.Slice {
+			valAssertion = assert.Contains(valAssertion)
 		}
 
-		elem.Value = v
+		elem.Value = valAssertion
 		expects[i] = elem
 	}
-	return assert.Build(expects), nil
+	return assert.Build(ctx.RequestContext(), expects, opts...)
 }
 
-func stringify(i interface{}) interface{} {
+func stringify(i any) any {
 	switch v := i.(type) {
 	case yaml.MapSlice:
 		for i, item := range v {
 			v[i].Value = stringify(item.Value)
 		}
 		return v
-	case []interface{}:
+	case []any:
 		for i, elm := range v {
 			v[i] = stringify(elm)
 		}

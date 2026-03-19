@@ -1,0 +1,13 @@
+title: scenarigo headers grpc
+plugins:
+  grpc: "grpc.so"
+steps:
+- title: Echo
+  protocol: grpc
+  request:
+    client: '{{plugins.grpc.CreateClient(ctx, env.TEST_GRPC_SERVER_ADDR)}}'
+    method: Echo
+    metadata:
+      token: "{{env.TEST_TOKEN}}"
+  expect:
+    code: OK

@@ -1,4 +1,4 @@
-// +build !race
+//go:build !race
 
 package plugin
 
@@ -12,7 +12,7 @@ func TestOpen(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		wd, err := os.Getwd()
 		if err != nil {
-			t.Fatalf("failed to get current direcotry: %s", err)
+			t.Fatalf("failed to get current directory: %s", err)
 		}
 
 		tests := map[string]struct {
@@ -27,7 +27,6 @@ func TestOpen(t *testing.T) {
 		}
 
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				resetCache()
 

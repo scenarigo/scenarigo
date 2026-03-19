@@ -1,0 +1,33 @@
+--- FAIL: testdata/testcases/scenarios/error/bind-vars.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/error/bind-vars.yaml/invalid_bind_vars (0.00s)
+        --- FAIL: testdata/testcases/scenarios/error/bind-vars.yaml/invalid_bind_vars/POST_/echo (0.00s)
+                request:
+                  method: POST
+                  url: http://[::]:12345/echo
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                  body:
+                    message: hello
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "21"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    message: hello
+                elapsed time: 0.000000 sec
+                invalid bind: failed to parse "{{": col 3: expected '}}', found 'EOF'
+                      14 |       message: '{{request.body.message}}'
+                      15 |   bind:
+                      16 |     vars:
+                    > 17 |       message: '{{'
+                                          ^
+FAIL
+FAIL	testdata/testcases/scenarios/error/bind-vars.yaml	0.000s
+FAIL

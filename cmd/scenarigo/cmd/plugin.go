@@ -1,8 +1,8 @@
 package cmd
 
 import (
+	sub "github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/plugin"
 	"github.com/spf13/cobra"
-	sub "github.com/zoncoen/scenarigo/cmd/scenarigo/cmd/plugin"
 )
 
 var pluginCmd = &cobra.Command{

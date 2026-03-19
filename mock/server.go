@@ -9,12 +9,15 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/zoncoen/scenarigo/logger"
-	"github.com/zoncoen/scenarigo/internal/yamlutil"
-	"github.com/zoncoen/scenarigo/mock/protocol"
-
-	_ "github.com/zoncoen/scenarigo/mock/protocol/http"
+	"github.com/scenarigo/scenarigo/internal/yamlutil"
+	"github.com/scenarigo/scenarigo/logger"
+	"github.com/scenarigo/scenarigo/mock/protocol"
+	"github.com/scenarigo/scenarigo/mock/protocol/http"
 )
+
+func init() {
+	http.Register()
+}
 
 // NewServer returns a new mock server.
 func NewServer(config *ServerConfig, l logger.Logger) (*Server, error) {
@@ -25,7 +28,6 @@ func NewServer(config *ServerConfig, l logger.Logger) (*Server, error) {
 	protocols := protocol.All()
 	servers := map[string]protocol.Server{}
 	for name, p := range protocols {
-		p := p
 		var b []byte
 		if config.Protocols != nil {
 			if msg, ok := config.Protocols[p.Name()]; ok {
@@ -65,10 +67,10 @@ type ServerConfig struct {
 func (s *Server) Start(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, s := range s.servers {
-		name := name
-		s := s
 		eg.Go(func() error {
-			defer s.Stop(context.Background())
+			defer func() {
+				_ = s.Stop(context.Background())
+			}()
 			if err := s.Start(ctx); err != nil {
 				return fmt.Errorf("failed to start %s server: %w", name, err)
 			}
@@ -81,8 +83,6 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) Wait(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	for name, s := range s.servers {
-		name := name
-		s := s
 		eg.Go(func() error {
 			if err := s.Wait(ctx); err != nil {
 				return fmt.Errorf("failed to wait %s server: %w", name, err)
@@ -100,10 +100,7 @@ func (s *Server) Stop(ctx context.Context) error {
 		wg   sync.WaitGroup
 	)
 	for name, s := range s.servers {
-		name := name
-		s := s
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			if err := s.Stop(ctx); err != nil {
 				if !errors.Is(err, protocol.ErrServerClosed) {
 					m.Lock()
@@ -111,15 +108,16 @@ func (s *Server) Stop(ctx context.Context) error {
 					errs = append(errs, fmt.Errorf("failed to stop %s server: %w", name, err))
 				}
 			}
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 	if len(errs) > 0 {
 		return multierror.Append(nil, errs...)
 	}
-	if err := s.iter.Stop(); err != nil {
-		return err
+	if s.iter != nil {
+		if err := s.iter.Stop(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -127,8 +125,6 @@ func (s *Server) Stop(ctx context.Context) error {
 func (s *Server) Addrs() (map[string]string, error) {
 	addrs := map[string]string{}
 	for name, s := range s.servers {
-		name := name
-		s := s
 		addr, err := s.Addr()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get %s server address: %w", name, err)

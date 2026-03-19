@@ -59,7 +59,6 @@ test
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			p := NewParser(strings.NewReader(test.in))
 			if _, err := p.Parse(); err != nil {

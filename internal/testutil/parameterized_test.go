@@ -10,11 +10,11 @@ import (
 )
 
 func TestRunParameterizedTests_Success(t *testing.T) {
-	var yml interface{}
-	values := []interface{}{}
-	executor := func(r Reporter, decode func(interface{})) func(Reporter, interface{}) error {
+	var yml any
+	values := []any{}
+	executor := func(r Reporter, decode func(any)) func(Reporter, any) error {
 		decode(&yml)
-		return func(r Reporter, v interface{}) error {
+		return func(r Reporter, v any) error {
 			values = append(values, v)
 			if s, ok := v.(string); ok {
 				if strings.HasPrefix(s, "ok-") {
@@ -40,7 +40,7 @@ func TestRunParameterizedTests_Success(t *testing.T) {
 		t.Errorf("(-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff(
-		[]interface{}{
+		[]any{
 			"ok-1", "ok-2", "ng-1", "ng-2",
 		},
 		values,
@@ -52,8 +52,8 @@ func TestRunParameterizedTests_Success(t *testing.T) {
 func TestRunParameterizedTests_Failure(t *testing.T) {
 	t.Run("file not found", func(t *testing.T) {
 		r := &reporter{}
-		executor := func(r Reporter, decode func(interface{})) func(Reporter, interface{}) error {
-			return func(r Reporter, v interface{}) error {
+		executor := func(r Reporter, decode func(any)) func(Reporter, any) error {
+			return func(r Reporter, v any) error {
 				return nil
 			}
 		}
@@ -65,8 +65,8 @@ func TestRunParameterizedTests_Failure(t *testing.T) {
 
 	t.Run("invalid YAML", func(t *testing.T) {
 		r := &reporter{}
-		executor := func(r Reporter, decode func(interface{})) func(Reporter, interface{}) error {
-			return func(r Reporter, v interface{}) error {
+		executor := func(r Reporter, decode func(any)) func(Reporter, any) error {
+			return func(r Reporter, v any) error {
 				return nil
 			}
 		}
@@ -77,9 +77,9 @@ func TestRunParameterizedTests_Failure(t *testing.T) {
 	})
 
 	t.Run("failed parameter", func(t *testing.T) {
-		values := []interface{}{}
-		executor := func(r Reporter, decode func(interface{})) func(Reporter, interface{}) error {
-			return func(r Reporter, v interface{}) error {
+		values := []any{}
+		executor := func(r Reporter, decode func(any)) func(Reporter, any) error {
+			return func(r Reporter, v any) error {
 				values = append(values, v)
 				if s, ok := v.(string); ok {
 					if s == "ok" {
@@ -97,7 +97,7 @@ func TestRunParameterizedTests_Failure(t *testing.T) {
 		}
 
 		if diff := cmp.Diff(
-			[]interface{}{
+			[]any{
 				"ng", "ok",
 			},
 			values,

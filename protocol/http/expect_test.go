@@ -4,20 +4,20 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/context"
+	"github.com/scenarigo/scenarigo/context"
 )
 
 func TestExpect_Build(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		tests := map[string]struct {
-			vars     interface{}
+			vars     any
 			expect   *Expect
 			response response
 		}{
 			"default": {
 				expect: &Expect{},
 				response: response{
-					status: "200 OK",
+					Status: "200 OK",
 				},
 			},
 			"status code": {
@@ -25,7 +25,7 @@ func TestExpect_Build(t *testing.T) {
 					Code: "404",
 				},
 				response: response{
-					status: "404 Not Found",
+					Status: "404 Not Found",
 				},
 			},
 			"status code string": {
@@ -33,7 +33,7 @@ func TestExpect_Build(t *testing.T) {
 					Code: "Not Found",
 				},
 				response: response{
-					status: "404 Not Found",
+					Status: "404 Not Found",
 				},
 			},
 			"status code (template)": {
@@ -41,7 +41,7 @@ func TestExpect_Build(t *testing.T) {
 					Code: `{{"Not Found"}}`,
 				},
 				response: response{
-					status: "404 Not Found",
+					Status: "404 Not Found",
 				},
 			},
 			"header": {
@@ -57,10 +57,10 @@ func TestExpect_Build(t *testing.T) {
 					Header: map[string][]string{
 						"Content-Type": {"application/json"},
 					},
-					status: "200 OK",
+					Status: "200 OK",
 				},
 			},
-			"assert body": {
+			"response body": {
 				expect: &Expect{
 					Body: yaml.MapSlice{
 						yaml.MapItem{
@@ -70,7 +70,7 @@ func TestExpect_Build(t *testing.T) {
 					},
 				},
 				response: response{
-					status: "200 OK",
+					Status: "200 OK",
 					Body:   map[string]string{"foo": "bar"},
 				},
 			},
@@ -85,13 +85,40 @@ func TestExpect_Build(t *testing.T) {
 					},
 				},
 				response: response{
-					status: "200 OK",
+					Status: "200 OK",
 					Body:   map[string]string{"foo": "bar"},
+				},
+			},
+			"with $": {
+				vars: map[string]string{
+					"type": "application/json",
+					"foo":  "bar",
+				},
+				expect: &Expect{
+					Code: "{{$ == string(2*100)}}",
+					Header: yaml.MapSlice{
+						{
+							Key:   "Content-Type",
+							Value: `{{$ == vars.type}}`,
+						},
+					},
+					Body: yaml.MapSlice{
+						yaml.MapItem{
+							Key:   "foo",
+							Value: "{{$ == vars.foo}}",
+						},
+					},
+				},
+				response: response{
+					Header: map[string][]string{
+						"Content-Type": {"application/json"},
+					},
+					Body:   map[string]string{"foo": "bar"},
+					Status: "200 OK",
 				},
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				if test.vars != nil {
@@ -114,14 +141,9 @@ func TestExpect_Build(t *testing.T) {
 			expectBuildError  bool
 			expectAssertError bool
 		}{
-			"failed to execute template": {
+			"invalid code assertion": {
 				expect: &Expect{
-					Body: yaml.MapSlice{
-						yaml.MapItem{
-							Key:   "foo",
-							Value: "{{vars.foo}}",
-						},
-					},
+					Code: `{{foo}}`,
 				},
 				expectBuildError: true,
 			},
@@ -136,11 +158,22 @@ func TestExpect_Build(t *testing.T) {
 				},
 				expectBuildError: true,
 			},
+			"failed to execute template": {
+				expect: &Expect{
+					Body: yaml.MapSlice{
+						yaml.MapItem{
+							Key:   "foo",
+							Value: "{{vars.foo}}",
+						},
+					},
+				},
+				expectBuildError: true,
+			},
 
 			"wrong status code": {
 				expect: &Expect{},
 				response: response{
-					status: "404 Not Found",
+					Status: "404 Not Found",
 				},
 				expectAssertError: true,
 			},
@@ -154,7 +187,7 @@ func TestExpect_Build(t *testing.T) {
 					},
 				},
 				response: response{
-					status: "200 OK",
+					Status: "200 OK",
 				},
 				expectAssertError: true,
 			},
@@ -173,7 +206,7 @@ func TestExpect_Build(t *testing.T) {
 							"application/json",
 						},
 					},
-					status: "200 OK",
+					Status: "200 OK",
 				},
 				expectAssertError: true,
 			},
@@ -192,13 +225,12 @@ func TestExpect_Build(t *testing.T) {
 							"application/json",
 						},
 					},
-					status: "200 OK",
+					Status: "200 OK",
 				},
 				expectAssertError: true,
 			},
 		}
 		for name, test := range tests {
-			test := test
 			t.Run(name, func(t *testing.T) {
 				ctx := context.FromT(t)
 				assertion, err := test.expect.Build(ctx)

@@ -1,0 +1,51 @@
+--- FAIL: testdata/testcases/scenarios/retry/laf.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/retry/laf.yaml/retry_with_laf (0.00s)
+        --- FAIL: testdata/testcases/scenarios/retry/laf.yaml/retry_with_laf/ (0.00s)
+                retry after 10ms
+                retry limit exceeded
+                request:
+                  method: GET
+                  url: http://[::]:12345/messages
+                  header:
+                    User-Agent:
+                    - scenarigo/v1.0.0
+                response:
+                  status: 200 OK
+                  statusCode: 200
+                  header:
+                    Content-Length:
+                    - "73"
+                    Content-Type:
+                    - application/json
+                    Date:
+                    - Mon, 01 Jan 0001 00:00:00 GMT
+                  body:
+                    messages:
+                    - id: "1"
+                      message: bar
+                    - id: "2"
+                      message: foo
+                elapsed time: 0.000000 sec
+                2 errors occurred: doesn't contain expected value: last error: expected "1" but got "2"
+                      12 |         '{{assert.and <-}}':
+                      13 |         - '{{size($) == 2}}'
+                      14 |         - '{{assert.contains <-}}':
+                    > 15 |             id: '1'
+                                           ^
+                      16 |             message: foo
+                      17 |         - '{{assert.contains <-}}':
+                      18 |             id: '2'
+                
+                doesn't contain expected value: last error: expected "bar" but got "foo"
+                      16 |             message: foo
+                      17 |         - '{{assert.contains <-}}':
+                      18 |             id: '2'
+                    > 19 |             message: bar
+                                                ^
+                      20 |   retry:
+                      21 |     constant:
+                      22 |       interval: 10ms
+                      23 |
+FAIL
+FAIL	testdata/testcases/scenarios/retry/laf.yaml	0.000s
+FAIL

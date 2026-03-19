@@ -3,11 +3,11 @@ package grpc
 import (
 	"reflect"
 
-	"github.com/golang/protobuf/proto" // nolint:staticcheck
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/zoncoen/scenarigo/assert"
-	"github.com/zoncoen/scenarigo/internal/reflectutil"
+	"github.com/scenarigo/scenarigo/assert"
+	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
 func init() {
@@ -15,24 +15,38 @@ func init() {
 	assert.RegisterCustomEqualer(assert.EqualerFunc(equalMessage))
 }
 
-var protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
+var (
+	protoMessage = reflect.TypeFor[proto.Message]()
+	uint64Type   = reflect.TypeFor[uint64]()
+)
 
-func equalEnum(expected interface{}, got interface{}) (bool, error) {
-	s, ok := expected.(string)
-	if !ok {
-		return false, nil
-	}
+func equalEnum(expected any, got any) (bool, error) {
 	enum, ok := got.(protoreflect.Enum)
 	if !ok {
 		return false, nil
 	}
-	if string(enum.Descriptor().Values().ByNumber(enum.Number()).Name()) == s {
+	number := enum.Descriptor().Values().ByNumber(enum.Number())
+	if number == nil {
+		// If enum.Number() is a reserved value or unknown value, the number variable will be nil.
+		return false, nil
+	}
+	rexp := reflect.ValueOf(expected)
+	if rexp.CanConvert(uint64Type) {
+		// specified direct number.
+		exp := rexp.Convert(uint64Type).Uint()
+		return exp == uint64(enum.Number()), nil
+	}
+	s, ok := expected.(string)
+	if !ok {
+		return false, nil
+	}
+	if string(number.Name()) == s {
 		return true, nil
 	}
 	return false, nil
 }
 
-func equalMessage(expected interface{}, got interface{}) (bool, error) {
+func equalMessage(expected any, got any) (bool, error) {
 	// use the pointer to the value if the pointer type implements proto.Message
 	e, ok, _ := reflectutil.ConvertInterface(protoMessage, expected)
 	if ok {

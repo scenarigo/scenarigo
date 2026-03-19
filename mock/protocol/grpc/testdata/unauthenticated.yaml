@@ -1,0 +1,7 @@
+- protocol: grpc
+  expect:
+    service: scenarigo.testdata.test.Test
+    method: Echo
+  response:
+    status:
+      code: Unauthenticated

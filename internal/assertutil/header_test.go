@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/scenarigo/context"
+	"github.com/scenarigo/scenarigo/context"
 )
 
 func Test_BuildHeaderAssertion(t *testing.T) {
@@ -15,7 +15,6 @@ func Test_BuildHeaderAssertion(t *testing.T) {
 		ok map[string][]string
 		ng map[string][]string
 	}{
-
 		"simple": {
 			in: `
 foo:
@@ -78,9 +77,23 @@ foo: '{{assert.notZero}}'
 				},
 			},
 		},
+		"not array (with $)": {
+			in: `
+foo: '{{$ != ""}}'
+`,
+			ok: map[string][]string{
+				"foo": {
+					"bar",
+				},
+			},
+			ng: map[string][]string{
+				"foo": {
+					"",
+				},
+			},
+		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			var expect yaml.MapSlice
 			if err := yaml.NewDecoder(strings.NewReader(test.in)).Decode(&expect); err != nil {
@@ -90,8 +103,10 @@ foo: '{{assert.notZero}}'
 			if err != nil {
 				t.Fatalf("failed to build assertion: %s", err)
 			}
-			if err := assertion.Assert(test.ok); err != nil {
-				t.Errorf("unexpected error: %s", err)
+			if test.ok != nil {
+				if err := assertion.Assert(test.ok); err != nil {
+					t.Errorf("unexpected error: %s", err)
+				}
 			}
 			if err := assertion.Assert(test.ng); err == nil {
 				t.Error("no error")
@@ -122,7 +137,6 @@ func Test_BuildHeaderAssertion_Error(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			if _, err := BuildHeaderAssertion(context.FromT(t), test.expect); err == nil {
 				t.Error("no error")
@@ -133,8 +147,8 @@ func Test_BuildHeaderAssertion_Error(t *testing.T) {
 
 func Test_Stringify(t *testing.T) {
 	tests := map[string]struct {
-		in     interface{}
-		expect interface{}
+		in     any
+		expect any
 	}{
 		"bool": {
 			in:     true,
@@ -199,12 +213,11 @@ func Test_Stringify(t *testing.T) {
 			},
 		},
 		"[]interface{}": {
-			in:     []interface{}{123},
-			expect: []interface{}{"123"},
+			in:     []any{123},
+			expect: []any{"123"},
 		},
 	}
 	for name, test := range tests {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			got := stringify(test.in)
 			if !reflect.DeepEqual(got, test.expect) {

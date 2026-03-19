@@ -1,0 +1,4 @@
+schemaVersion: ytt/v1
+files:
+- template.ytt.yaml
+- values.ytt.yaml

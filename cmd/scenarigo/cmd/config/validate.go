@@ -17,7 +17,7 @@ var validateCmd = &cobra.Command{
 }
 
 func validate(cmd *cobra.Command, args []string) error {
-	cfg, err := Load(ConfigPath)
+	cfg, err := Load()
 	if err != nil {
 		return err
 	}
