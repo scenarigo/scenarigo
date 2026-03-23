@@ -21,7 +21,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+    - uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       if: matrix.os != 'macos-latest'
       id: go-cache
       with:
@@ -37,7 +37,7 @@ jobs:
       env:
         SCENARIGO_GO_MOD_TIDY_RETRY: 1
       run: make test/ci
-    - uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+    - uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       if: github.ref_name == 'main' && matrix.os != 'macos-latest'
       with:
         path: |
@@ -46,7 +46,7 @@ jobs:
         key: ${{ steps.go-cache.outputs.cache-primary-key }}
     - name: Upload cmd coverage
       if: matrix.os == 'ubuntu-latest' && startsWith(matrix.go-version, 'stable')
-      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         disable_search: true
@@ -55,7 +55,7 @@ jobs:
         fail_ci_if_error: true
     - name: Upload module coverage
       if: matrix.os == 'ubuntu-latest' && startsWith(matrix.go-version, 'stable')
-      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         disable_search: true
@@ -75,7 +75,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+    - uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       id: go-cache
       with:
         path: |
