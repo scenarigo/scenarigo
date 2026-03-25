@@ -29,14 +29,14 @@ type SerializableContext struct {
 	ScenarioTitle      string                         `json:"scenarioTitle,omitempty"`
 	ScenarioIdentifier string                         `json:"scenarioIdentifier,omitempty"`
 	PluginDir          string                         `json:"pluginDir,omitempty"`
-	Plugins          []map[string]any               `json:"plugins,omitempty"`
-	Vars             []any                          `json:"vars,omitempty"`
-	Secrets          *SerializableSecrets           `json:"secrets,omitempty"`
-	Steps            *Steps                         `json:"steps,omitempty"`
-	Request          any                            `json:"request,omitempty"`
-	Response         any                            `json:"response,omitempty"`
-	ColorEnabled     bool                           `json:"colorEnabled"`
-	Reporter         *reporter.SerializableReporter `json:"reporter,omitempty"`
+	Plugins            []map[string]any               `json:"plugins,omitempty"`
+	Vars               []any                          `json:"vars,omitempty"`
+	Secrets            *SerializableSecrets           `json:"secrets,omitempty"`
+	Steps              *Steps                         `json:"steps,omitempty"`
+	Request            any                            `json:"request,omitempty"`
+	Response           any                            `json:"response,omitempty"`
+	ColorEnabled       bool                           `json:"colorEnabled"`
+	Reporter           *reporter.SerializableReporter `json:"reporter,omitempty"`
 	// ReporterID is used to look up the reference to the reporter from the ReporterMap.
 	// The value of ReporterID is determined in the reporter's ToSerializable method.
 	ReporterID string `json:"reporterId"`

@@ -1,17 +1,16 @@
 package protocolmeta
 
-import public "github.com/scenarigo/scenarigo/protocolmeta"
-
 const (
-	ScenarigoScenarioFilepathKey    = public.ScenarigoScenarioFilepathKey
-	ScenarigoScenarioTitleKey       = public.ScenarigoScenarioTitleKey
-	ScenarigoStepFullNameKey        = public.ScenarigoStepFullNameKey
-	ScenarigoScenarioFilepathBinKey = public.ScenarigoScenarioFilepathBinKey
-	ScenarigoScenarioTitleBinKey    = public.ScenarigoScenarioTitleBinKey
-	ScenarigoStepFullNameBinKey     = public.ScenarigoStepFullNameBinKey
+	ScenarigoScenarioFilepathKey = "scenarigo-scenario-filepath"
+	ScenarigoScenarioTitleKey    = "scenarigo-scenario-title"
+	ScenarigoStepFullNameKey     = "scenarigo-step-full-name"
 
-	ScenarigoScenarioIdentifierKey    = public.ScenarigoScenarioIdentifierKey
-	ScenarigoScenarioIdentifierBinKey = public.ScenarigoScenarioIdentifierBinKey
-	ScenarigoStepIdentifierKey        = public.ScenarigoStepIdentifierKey
-	ScenarigoStepIdentifierBinKey     = public.ScenarigoStepIdentifierBinKey
+	ScenarigoScenarioFilepathBinKey = "scenarigo-scenario-filepath-bin"
+	ScenarigoScenarioTitleBinKey    = "scenarigo-scenario-title-bin"
+	ScenarigoStepFullNameBinKey     = "scenarigo-step-full-name-bin"
+
+	ScenarigoScenarioIdentifierKey    = "scenarigo-scenario-identifier"
+	ScenarigoScenarioIdentifierBinKey = "scenarigo-scenario-identifier-bin"
+	ScenarigoStepIdentifierKey        = "scenarigo-step-identifier"
+	ScenarigoStepIdentifierBinKey     = "scenarigo-step-identifier-bin"
 )
