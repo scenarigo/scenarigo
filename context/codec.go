@@ -25,8 +25,10 @@ type SerializableSecrets struct {
 // It contains all the necessary context data that can be marshaled to JSON
 // for communication between host and WASM plugins.
 type SerializableContext struct {
-	ScenarioFilepath string                         `json:"scenarioFilepath,omitempty"`
-	PluginDir        string                         `json:"pluginDir,omitempty"`
+	ScenarioFilepath   string                         `json:"scenarioFilepath,omitempty"`
+	ScenarioTitle      string                         `json:"scenarioTitle,omitempty"`
+	ScenarioIdentifier string                         `json:"scenarioIdentifier,omitempty"`
+	PluginDir          string                         `json:"pluginDir,omitempty"`
 	Plugins          []map[string]any               `json:"plugins,omitempty"`
 	Vars             []any                          `json:"vars,omitempty"`
 	Secrets          *SerializableSecrets           `json:"secrets,omitempty"`
@@ -47,8 +49,10 @@ type SerializableContext struct {
 // This method serializes the context data for transmission to WASM plugins.
 func (c *Context) ToSerializable() *SerializableContext {
 	sc := &SerializableContext{
-		ScenarioFilepath: c.ScenarioFilepath(),
-		PluginDir:        c.PluginDir(),
+		ScenarioFilepath:   c.ScenarioFilepath(),
+		ScenarioTitle:      c.ScenarioTitle(),
+		ScenarioIdentifier: c.ScenarioIdentifier(),
+		PluginDir:          c.PluginDir(),
 	}
 
 	// Store ColorConfig enabled state for WASM plugins
@@ -126,6 +130,16 @@ func FromSerializableWithContext(ctx *Context, sc *SerializableContext) (*Contex
 	// Set scenario filepath.
 	if sc.ScenarioFilepath != "" {
 		ctx = ctx.WithScenarioFilepath(sc.ScenarioFilepath)
+	}
+
+	// Set scenario title.
+	if sc.ScenarioTitle != "" {
+		ctx = ctx.WithScenarioTitle(sc.ScenarioTitle)
+	}
+
+	// Set scenario identifier.
+	if sc.ScenarioIdentifier != "" {
+		ctx = ctx.WithScenarioIdentifier(sc.ScenarioIdentifier)
 	}
 
 	// Set plugin directory.

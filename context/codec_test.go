@@ -15,6 +15,8 @@ func TestContextSerializationRoundtrip(t *testing.T) {
 
 	// Use public API to set context properties
 	originalContext = originalContext.WithScenarioFilepath("/test/scenario.yaml")
+	originalContext = originalContext.WithScenarioTitle("Test Scenario")
+	originalContext = originalContext.WithScenarioIdentifier("/test/scenario.yaml#scenario=0&title=Test+Scenario")
 	originalContext = originalContext.WithPluginDir("/test/plugins")
 	originalContext = originalContext.WithVars("testVar1")
 	originalContext = originalContext.WithVars(42)
@@ -46,6 +48,16 @@ func TestContextSerializationRoundtrip(t *testing.T) {
 	if restored.ScenarioFilepath() != originalContext.ScenarioFilepath() {
 		t.Errorf("ScenarioFilepath mismatch: expected %s, got %s",
 			originalContext.ScenarioFilepath(), restored.ScenarioFilepath())
+	}
+
+	if restored.ScenarioTitle() != originalContext.ScenarioTitle() {
+		t.Errorf("ScenarioTitle mismatch: expected %s, got %s",
+			originalContext.ScenarioTitle(), restored.ScenarioTitle())
+	}
+
+	if restored.ScenarioIdentifier() != originalContext.ScenarioIdentifier() {
+		t.Errorf("ScenarioIdentifier mismatch: expected %s, got %s",
+			originalContext.ScenarioIdentifier(), restored.ScenarioIdentifier())
 	}
 
 	if restored.PluginDir() != originalContext.PluginDir() {
