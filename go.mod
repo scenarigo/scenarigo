@@ -7,7 +7,7 @@ require (
 	dario.cat/mergo v1.0.2
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/cenkalti/backoff/v4 v4.3.0
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/goccy/wasi-go v0.3.2
 	github.com/golang/mock v1.7.0-rc.1
@@ -48,5 +48,5 @@ require (
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 )
