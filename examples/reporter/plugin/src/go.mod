@@ -15,7 +15,7 @@ require (
 require (
 	carvel.dev/ytt v0.50.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/fatih/color v1.18.0 // indirect
+	github.com/fatih/color v1.19.0 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/goccy/wasi-go v0.3.2 // indirect
 	github.com/goccy/wasi-go-net v0.3.0 // indirect
@@ -33,7 +33,7 @@ require (
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
 	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.3 // indirect
