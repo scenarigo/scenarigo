@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.26.0](https://github.com/scenarigo/scenarigo/compare/v0.25.3...v0.26.0) - 2026-04-02
+### New Features
+- Add WithoutStdoutCapture option to allow concurrent Run calls by @vvakame in https://github.com/scenarigo/scenarigo/pull/706
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/sync from 0.19.0 to 0.20.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/737
+- chore(deps): bump google.golang.org/grpc from 1.79.1 to 1.79.2 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/739
+- chore(deps): bump the github-actions group across 1 directory with 6 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/755
+- chore(deps): bump golang.org/x/mod from 0.33.0 to 0.34.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/740
+- chore(deps): bump golang.org/x/text from 0.34.0 to 0.35.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/741
+- chore(deps): bump google.golang.org/grpc from 1.79.1 to 1.79.3 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/746
+- chore(deps): bump github.com/fatih/color from 1.18.0 to 1.19.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/753
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/734
+
 ## [v0.25.3](https://github.com/scenarigo/scenarigo/compare/v0.25.2...v0.25.3) - 2026-03-17
 ### Bug Fixes
 - fix(plugin): skip overrides with empty module path in updateRequireDirectives by @utahta in https://github.com/scenarigo/scenarigo/pull/743
