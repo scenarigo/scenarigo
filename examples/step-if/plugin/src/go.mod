@@ -6,7 +6,7 @@ toolchain go1.26.1
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/scenarigo/scenarigo v0.25.3
+	github.com/scenarigo/scenarigo v0.26.0
 )
 
 require (
