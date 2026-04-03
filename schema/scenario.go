@@ -33,9 +33,10 @@ type Scenario struct {
 	// This field doesn't need to hold some data because anchors expand by the decoder.
 	Anchors anchors `yaml:"anchors,omitempty"`
 
-	filepath    string        // YAML filepath
-	Node        ast.Node      `yaml:"-"`
-	colorConfig *color.Config // Color configuration for error reporting
+	filepath      string        // YAML filepath
+	scenarioIndex int           // 0-based index of this scenario within the YAML file
+	Node          ast.Node      `yaml:"-"`
+	colorConfig   *color.Config // Color configuration for error reporting
 
 	yamlBytes []byte
 }
@@ -57,6 +58,7 @@ func (s *Scenario) UnmarshalYAML(b []byte) error {
 func (s *Scenario) Reset() error {
 	// Preserve metadata that should be kept across reset.
 	filepath := s.filepath
+	scenarioIndex := s.scenarioIndex
 	node := s.Node
 	colorConfig := s.colorConfig
 
@@ -65,7 +67,7 @@ func (s *Scenario) Reset() error {
 	}
 
 	// Restore metadata lost by unmarshalling.
-	s.setMetadata(filepath, node, colorConfig)
+	s.setMetadata(filepath, scenarioIndex, node, colorConfig)
 	return nil
 }
 
@@ -74,9 +76,15 @@ func (s *Scenario) Filepath() string {
 	return s.filepath
 }
 
+// ScenarioIndex returns the 0-based index of this scenario within the YAML file.
+func (s *Scenario) ScenarioIndex() int {
+	return s.scenarioIndex
+}
+
 // setMetadata sets metadata fields that are not part of YAML.
-func (s *Scenario) setMetadata(filepath string, node ast.Node, colorConfig *color.Config) {
+func (s *Scenario) setMetadata(filepath string, scenarioIndex int, node ast.Node, colorConfig *color.Config) {
 	s.filepath = filepath
+	s.scenarioIndex = scenarioIndex
 	s.Node = node
 	s.setColorConfig(colorConfig)
 }

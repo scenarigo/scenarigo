@@ -21,6 +21,7 @@ import (
 	"github.com/scenarigo/scenarigo/plugin"
 	"github.com/scenarigo/scenarigo/protocol/grpc"
 	"github.com/scenarigo/scenarigo/protocol/http"
+	"github.com/scenarigo/scenarigo/protocolmeta"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/schema"
 )
@@ -313,6 +314,10 @@ func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, bas
 		scenarioCtx := localCtx
 		scenarioCtx = scenarioCtx.WithScenarioFilepath(scn.Filepath())
 		scenarioCtx = scenarioCtx.WithScenarioTitle(scn.Title)
+		normalizedPath := protocolmeta.NormalizeScenarioFilepath(scn.Filepath())
+		scenarioCtx = scenarioCtx.WithScenarioIdentifier(
+			protocolmeta.BuildScenarioIdentifier(normalizedPath, scn.ScenarioIndex(), scn.Title),
+		)
 		if baseVars != nil {
 			clonedVars, err := deepcopy.Copy(baseVars)
 			if err != nil {

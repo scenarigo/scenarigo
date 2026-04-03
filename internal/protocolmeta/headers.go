@@ -8,4 +8,9 @@ const (
 	ScenarigoScenarioFilepathBinKey = "scenarigo-scenario-filepath-bin"
 	ScenarigoScenarioTitleBinKey    = "scenarigo-scenario-title-bin"
 	ScenarigoStepFullNameBinKey     = "scenarigo-step-full-name-bin"
+
+	ScenarigoScenarioIdentifierKey    = "scenarigo-scenario-identifier"
+	ScenarigoScenarioIdentifierBinKey = "scenarigo-scenario-identifier-bin"
+	ScenarigoStepIdentifierKey        = "scenarigo-step-identifier"
+	ScenarigoStepIdentifierBinKey     = "scenarigo-step-identifier-bin"
 )
