@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/reporter/plugin
 
 go 1.25.0
 
-toolchain go1.26.1
+toolchain go1.26.2
 
 require github.com/scenarigo/scenarigo v0.26.0
 
