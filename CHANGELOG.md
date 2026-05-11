@@ -5,6 +5,14 @@
 - fix(assert): prevent panic when actual value is nil by @utahta in https://github.com/scenarigo/scenarigo/pull/768
 ### Dependency Upgrades
 - chore(deps): bump google.golang.org/grpc from 1.79.3 to 1.80.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/758
+### Other Changes
+- Release for v0.26.1 by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/760
+
+## [v0.26.1](https://github.com/scenarigo/scenarigo/compare/v0.26.0...v0.26.1) - 2026-05-11
+### Bug Fixes
+- fix(assert): prevent panic when actual value is nil by @utahta in https://github.com/scenarigo/scenarigo/pull/768
+### Dependency Upgrades
+- chore(deps): bump google.golang.org/grpc from 1.79.3 to 1.80.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/758
 
 ## [v0.26.0](https://github.com/scenarigo/scenarigo/compare/v0.25.3...v0.26.0) - 2026-04-02
 ### New Features
