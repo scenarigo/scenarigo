@@ -139,6 +139,9 @@ func convert[T any](v any, t T) (T, error) {
 }
 
 func convertToType(v any, t reflect.Type) (any, error) {
+	if t == nil {
+		return nil, errors.Errorf("target type is nil")
+	}
 	rv := reflect.ValueOf(v)
 	if !rv.IsValid() {
 		return nil, errors.Errorf("value is invalid")
