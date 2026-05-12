@@ -64,6 +64,10 @@ func (p *GRPC) UnmarshalRequest(b []byte) (protocol.Invoker, error) {
 		r.Body = nil
 	}
 
+	if r.Message != nil && len(r.Messages) > 0 {
+		return nil, errors.New("message and messages are exclusive")
+	}
+
 	return &r, nil
 }
 
@@ -85,6 +89,10 @@ func (p *GRPC) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, error) {
 		}
 		e.Message = e.Body
 		e.Body = nil
+	}
+
+	if e.Message != nil && len(e.Messages) > 0 {
+		return nil, errors.New("message and messages are exclusive")
 	}
 
 	return &e, nil

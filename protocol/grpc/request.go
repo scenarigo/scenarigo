@@ -47,6 +47,7 @@ type Request struct {
 	Method   string          `yaml:"method,omitempty"`
 	Metadata any             `yaml:"metadata,omitempty"`
 	Message  any             `yaml:"message,omitempty"`
+	Messages []any           `yaml:"messages,omitempty"`
 	Options  *RequestOptions `yaml:"options,omitempty"`
 
 	// for backward compatibility
@@ -156,13 +157,17 @@ func (r RequestExtractor) ExtractByKey(key string) (any, bool) {
 	if v, err := q.Extract(r.Message); err == nil {
 		return v, true
 	}
+	if v, err := q.Extract(r.Messages); err == nil {
+		return v, true
+	}
 	return nil, false
 }
 
 type request struct {
-	Method   string                     `yaml:"method,omitempty"`
-	Metadata any                        `yaml:"metadata,omitempty"`
-	Message  *ProtoMessageYAMLMarshaler `yaml:"message,omitempty"`
+	Method   string                       `yaml:"method,omitempty"`
+	Metadata any                          `yaml:"metadata,omitempty"`
+	Message  *ProtoMessageYAMLMarshaler   `yaml:"message,omitempty"`
+	Messages []*ProtoMessageYAMLMarshaler `yaml:"messages,omitempty"`
 }
 
 type ProtoMessageYAMLMarshaler struct {
@@ -180,10 +185,11 @@ func (m *ProtoMessageYAMLMarshaler) MarshalYAML(_ gocontext.Context) ([]byte, er
 }
 
 type response struct {
-	Status  *responseStatus            `yaml:"status,omitempty"`
-	Header  *yamlutil.MDMarshaler      `yaml:"header,omitempty"`
-	Trailer *yamlutil.MDMarshaler      `yaml:"trailer,omitempty"`
-	Message *ProtoMessageYAMLMarshaler `yaml:"message,omitempty"`
+	Status   *responseStatus              `yaml:"status,omitempty"`
+	Header   *yamlutil.MDMarshaler        `yaml:"header,omitempty"`
+	Trailer  *yamlutil.MDMarshaler        `yaml:"trailer,omitempty"`
+	Message  *ProtoMessageYAMLMarshaler   `yaml:"message,omitempty"`
+	Messages []*ProtoMessageYAMLMarshaler `yaml:"messages,omitempty"`
 }
 
 type responseStatus struct {
@@ -277,6 +283,9 @@ func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any,
 	if v, err := q.Extract(r.Message); err == nil {
 		return v, true
 	}
+	if v, err := q.Extract(r.Messages); err == nil {
+		return v, true
+	}
 	return nil, false
 }
 
@@ -318,11 +327,27 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	if err != nil {
 		return ctx, nil, err
 	}
+
+	sc, _ := client.(streamingServiceClient)
+	isStreamClient := sc != nil && sc.isStreamingClient()
+	isStreamServer := sc != nil && sc.isStreamingServer()
+
+	if err := r.validateMessageFields(isStreamClient, isStreamServer); err != nil {
+		return ctx, nil, err
+	}
+
+	if isStreamClient || isStreamServer {
+		return r.invokeStreaming(ctx, sc)
+	}
+	return r.invokeUnary(ctx, client)
+}
+
+func (r *Request) invokeUnary(ctx *context.Context, client serviceClient) (*context.Context, any, error) {
 	reqMsg, err := client.buildRequestMessage(ctx)
 	if err != nil {
 		return ctx, nil, err
 	}
-	ctx = r.dumpRequest(ctx, reqMsg)
+	ctx = r.dumpRequest(ctx, reqMsg, nil)
 
 	var header, trailer metadata.MD
 	callOpts := []grpc.CallOption{
@@ -333,11 +358,99 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	if err != nil {
 		return ctx, nil, err
 	}
+
+	resp := buildResponse(respMsg, nil, header, trailer, sts)
+	return r.logResponse(ctx, resp)
+}
+
+func (r *Request) validateMessageFields(isStreamClient, isStreamServer bool) error {
+	if !isStreamClient && !isStreamServer {
+		if len(r.Messages) > 0 {
+			return errors.ErrorPath("messages", "messages can only be used with streaming methods")
+		}
+	}
+	if isStreamServer && !isStreamClient {
+		if len(r.Messages) > 0 {
+			return errors.ErrorPath("messages", "messages cannot be used for server streaming request (use message instead)")
+		}
+	}
+	if isStreamClient && !isStreamServer {
+		if r.Message != nil {
+			return errors.ErrorPath("message", "message cannot be used for client streaming request (use messages instead)")
+		}
+	}
+	return nil
+}
+
+func (r *Request) invokeStreaming(ctx *context.Context, client streamingServiceClient) (*context.Context, any, error) {
+	switch {
+	case client.isStreamingClient() && client.isStreamingServer():
+		return r.invokeBidiStream(ctx, client)
+	case client.isStreamingServer():
+		return r.invokeServerStream(ctx, client)
+	default:
+		return r.invokeClientStream(ctx, client)
+	}
+}
+
+func (r *Request) invokeServerStream(ctx *context.Context, client streamingServiceClient) (*context.Context, any, error) {
+	reqMsg, err := client.buildRequestMessage(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	ctx = r.dumpRequest(ctx, reqMsg, nil)
+
+	respMsgs, header, trailer, sts, err := client.invokeServerStream(ctx.RequestContext(), reqMsg)
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	resp := buildResponse(nil, respMsgs, header, trailer, sts)
+	return r.logResponse(ctx, resp)
+}
+
+func (r *Request) invokeClientStream(ctx *context.Context, client streamingServiceClient) (*context.Context, any, error) {
+	reqMsgs, err := client.buildRequestMessages(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	ctx = r.dumpRequest(ctx, nil, reqMsgs)
+
+	respMsg, header, trailer, sts, err := client.invokeClientStream(ctx.RequestContext(), reqMsgs)
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	resp := buildResponse(respMsg, nil, header, trailer, sts)
+	return r.logResponse(ctx, resp)
+}
+
+func (r *Request) invokeBidiStream(ctx *context.Context, client streamingServiceClient) (*context.Context, any, error) {
+	respMsgs, header, trailer, sts, err := client.invokeBidiStream(ctx.RequestContext(), ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+
+	ctx = r.dumpRequest(ctx, nil, nil)
+
+	resp := buildResponse(nil, respMsgs, header, trailer, sts)
+	return r.logResponse(ctx, resp)
+}
+
+func buildResponse(respMsg proto.Message, respMsgs []proto.Message, header, trailer metadata.MD, sts *status.Status) *response {
 	resp := &response{
 		Status: &responseStatus{
 			status.New(codes.OK, ""),
 		},
-		Message: &ProtoMessageYAMLMarshaler{respMsg},
+	}
+	if respMsg != nil {
+		resp.Message = &ProtoMessageYAMLMarshaler{respMsg}
+	}
+	if len(respMsgs) > 0 {
+		resp.Messages = make([]*ProtoMessageYAMLMarshaler, len(respMsgs))
+		for i, m := range respMsgs {
+			resp.Messages[i] = &ProtoMessageYAMLMarshaler{m}
+		}
 	}
 	if sts != nil {
 		resp.Status = &responseStatus{sts}
@@ -348,19 +461,32 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	if len(trailer) > 0 {
 		resp.Trailer = yamlutil.NewMDMarshaler(trailer)
 	}
+	return resp
+}
+
+func (r *Request) logResponse(ctx *context.Context, resp *response) (*context.Context, any, error) {
 	ctx = ctx.WithResponse((*ResponseExtractor)(resp))
 	if b, err := ctx.ColorConfig().MarshalYAML(map[string]*response{"response": resp}); err == nil {
 		ctx.Reporter().Log(string(b))
 	} else {
 		ctx.Reporter().Logf("failed to dump response:\n%s", err)
 	}
-
 	return ctx, resp, nil
 }
 
 type serviceClient interface {
 	buildRequestMessage(*context.Context) (proto.Message, error)
 	invoke(gocontext.Context, proto.Message, ...grpc.CallOption) (proto.Message, *status.Status, error)
+}
+
+type streamingServiceClient interface {
+	serviceClient
+	isStreamingClient() bool
+	isStreamingServer() bool
+	buildRequestMessages(*context.Context) ([]proto.Message, error)
+	invokeServerStream(gocontext.Context, proto.Message, ...grpc.CallOption) ([]proto.Message, metadata.MD, metadata.MD, *status.Status, error)
+	invokeClientStream(gocontext.Context, []proto.Message, ...grpc.CallOption) (proto.Message, metadata.MD, metadata.MD, *status.Status, error)
+	invokeBidiStream(gocontext.Context, *context.Context, ...grpc.CallOption) ([]proto.Message, metadata.MD, metadata.MD, *status.Status, error)
 }
 
 func (r *Request) buildClient(ctx *context.Context, opts *RequestOptions) (serviceClient, error) {
@@ -414,11 +540,19 @@ func appendScenarigoMetadata(pairs []string, key string, value string) []string 
 	return append(pairs, key, value)
 }
 
-func (r *Request) dumpRequest(ctx *context.Context, reqMsg proto.Message) *context.Context {
+func (r *Request) dumpRequest(ctx *context.Context, reqMsg proto.Message, reqMsgs []proto.Message) *context.Context {
 	//nolint:exhaustruct
 	dumpReq := &request{
-		Method:  r.Method,
-		Message: &ProtoMessageYAMLMarshaler{reqMsg},
+		Method: r.Method,
+	}
+	if reqMsg != nil {
+		dumpReq.Message = &ProtoMessageYAMLMarshaler{reqMsg}
+	}
+	if len(reqMsgs) > 0 {
+		dumpReq.Messages = make([]*ProtoMessageYAMLMarshaler, len(reqMsgs))
+		for i, m := range reqMsgs {
+			dumpReq.Messages[i] = &ProtoMessageYAMLMarshaler{m}
+		}
 	}
 	reqMD, _ := metadata.FromOutgoingContext(ctx.RequestContext())
 	if len(reqMD) > 0 {

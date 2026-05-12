@@ -1,0 +1,130 @@
+---
+title: server streaming
+steps:
+- title: ServerStreamEcho
+  protocol: grpc
+  request:
+    target: '{{env.TEST_GRPC_SERVER_ADDR}}'
+    service: scenarigo.testdata.test.Test
+    method: ServerStreamEcho
+    message:
+      messageId: "1"
+      messageBody: hello
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: hello-0
+      - messageId: "1"
+        messageBody: hello-1
+      - messageId: "1"
+        messageBody: hello-2
+
+---
+title: client streaming
+steps:
+- title: ClientStreamEcho
+  protocol: grpc
+  request:
+    target: '{{env.TEST_GRPC_SERVER_ADDR}}'
+    service: scenarigo.testdata.test.Test
+    method: ClientStreamEcho
+    messages:
+      - messageBody: hello
+      - messageBody: world
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    code: OK
+    message:
+      messageId: aggregated
+      messageBody: "hello,world"
+
+---
+title: bidi streaming
+steps:
+- title: BidiStreamEcho
+  protocol: grpc
+  request:
+    target: '{{env.TEST_GRPC_SERVER_ADDR}}'
+    service: scenarigo.testdata.test.Test
+    method: BidiStreamEcho
+    messages:
+      - messageId: "1"
+        messageBody: hello
+      - messageId: "2"
+        messageBody: world
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: "re: hello"
+      - messageId: "2"
+        messageBody: "re: world"
+
+---
+title: bidi streaming with response reference
+steps:
+- title: BidiStreamEcho
+  protocol: grpc
+  request:
+    target: '{{env.TEST_GRPC_SERVER_ADDR}}'
+    service: scenarigo.testdata.test.Test
+    method: BidiStreamEcho
+    messages:
+      - messageId: "1"
+        messageBody: hello
+      - messageId: "2"
+        messageBody: '{{response.messages[0].messageBody}} world'
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: "re: hello"
+      - messageId: "2"
+        messageBody: "re: re: hello world"
+
+---
+title: bidi streaming with request reference
+steps:
+- title: BidiStreamEcho
+  protocol: grpc
+  request:
+    target: '{{env.TEST_GRPC_SERVER_ADDR}}'
+    service: scenarigo.testdata.test.Test
+    method: BidiStreamEcho
+    messages:
+      - messageId: "1"
+        messageBody: hello
+      - messageId: "2"
+        messageBody: '{{request.messages[0].messageBody}} world'
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: "re: hello"
+      - messageId: "2"
+        messageBody: "re: hello world"

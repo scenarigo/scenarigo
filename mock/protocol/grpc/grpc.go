@@ -27,10 +27,12 @@ func Register() {
 }
 
 // GRPC is a protocol type for the mock.
+const protocolName = "grpc"
+
 type GRPC struct{}
 
 // Name implements protocol.Protocol interface.
-func (_ GRPC) Name() string { return "grpc" } //nolint:revive
+func (_ GRPC) Name() string { return protocolName } //nolint:revive
 
 // UnmarshalConfig implements protocol.Protocol interface.
 func (_ GRPC) UnmarshalConfig(b []byte) (any, error) { //nolint:revive

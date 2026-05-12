@@ -1,0 +1,110 @@
+---
+title: server streaming
+plugins:
+  grpc: "grpc.so"
+steps:
+- title: ServerStreamEcho
+  protocol: grpc
+  request:
+    client: '{{plugins.grpc.CreateClient(ctx, env.TEST_GRPC_SERVER_ADDR)}}'
+    method: ServerStreamEcho
+    message:
+      messageId: "1"
+      messageBody: hello
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: hello-0
+      - messageId: "1"
+        messageBody: hello-1
+      - messageId: "1"
+        messageBody: hello-2
+
+---
+title: client streaming
+plugins:
+  grpc: "grpc.so"
+steps:
+- title: ClientStreamEcho
+  protocol: grpc
+  request:
+    client: '{{plugins.grpc.CreateClient(ctx, env.TEST_GRPC_SERVER_ADDR)}}'
+    method: ClientStreamEcho
+    messages:
+      - messageBody: hello
+      - messageBody: world
+  expect:
+    code: OK
+    message:
+      messageId: aggregated
+      messageBody: "hello,world"
+
+---
+title: bidi streaming
+plugins:
+  grpc: "grpc.so"
+steps:
+- title: BidiStreamEcho
+  protocol: grpc
+  request:
+    client: '{{plugins.grpc.CreateClient(ctx, env.TEST_GRPC_SERVER_ADDR)}}'
+    method: BidiStreamEcho
+    messages:
+      - messageId: "1"
+        messageBody: hello
+      - messageId: "2"
+        messageBody: world
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: "re: hello"
+      - messageId: "2"
+        messageBody: "re: world"
+
+---
+title: bidi streaming with response reference
+plugins:
+  grpc: "grpc.so"
+steps:
+- title: BidiStreamEcho
+  protocol: grpc
+  request:
+    client: '{{plugins.grpc.CreateClient(ctx, env.TEST_GRPC_SERVER_ADDR)}}'
+    method: BidiStreamEcho
+    messages:
+      - messageId: "1"
+        messageBody: hello
+      - messageId: "2"
+        messageBody: '{{response.messages[0].messageBody}} world'
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: "re: hello"
+      - messageId: "2"
+        messageBody: "re: re: hello world"
+
+---
+title: bidi streaming with request reference
+plugins:
+  grpc: "grpc.so"
+steps:
+- title: BidiStreamEcho
+  protocol: grpc
+  request:
+    client: '{{plugins.grpc.CreateClient(ctx, env.TEST_GRPC_SERVER_ADDR)}}'
+    method: BidiStreamEcho
+    messages:
+      - messageId: "1"
+        messageBody: hello
+      - messageId: "2"
+        messageBody: '{{request.messages[0].messageBody}} world'
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: "re: hello"
+      - messageId: "2"
+        messageBody: "re: hello world"

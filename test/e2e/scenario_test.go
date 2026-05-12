@@ -63,7 +63,55 @@ func (f builder) Build(ctx *context.Context) (assert.Assertion, error) {
 }
 
 type testGRPCServer struct {
+	test.UnimplementedTestServer
 	users map[string]string
+}
+
+func (s *testGRPCServer) ServerStreamEcho(req *test.EchoRequest, stream test.Test_ServerStreamEchoServer) error {
+	for i := range 3 {
+		if err := stream.Send(&test.EchoResponse{
+			MessageId:   req.GetMessageId(),
+			MessageBody: fmt.Sprintf("%s-%d", req.GetMessageBody(), i),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *testGRPCServer) ClientStreamEcho(stream test.Test_ClientStreamEchoServer) error {
+	var bodies []string
+	for {
+		req, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return stream.SendAndClose(&test.EchoResponse{
+				MessageId:   "aggregated",
+				MessageBody: strings.Join(bodies, ","),
+			})
+		}
+		if err != nil {
+			return err
+		}
+		bodies = append(bodies, req.GetMessageBody())
+	}
+}
+
+func (s *testGRPCServer) BidiStreamEcho(stream test.Test_BidiStreamEchoServer) error {
+	for {
+		req, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := stream.Send(&test.EchoResponse{
+			MessageId:   req.GetMessageId(),
+			MessageBody: fmt.Sprintf("re: %s", req.GetMessageBody()),
+		}); err != nil {
+			return err
+		}
+	}
 }
 
 func (s *testGRPCServer) Echo(ctx gocontext.Context, req *test.EchoRequest) (*test.EchoResponse, error) {

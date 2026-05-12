@@ -2,6 +2,8 @@ package grpc
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -96,6 +98,27 @@ proto:
 			filename: "testdata/invalid-expect-metadata.yaml",
 			config:   cfg,
 			f:        sendEchoRequest(status.New(codes.InvalidArgument, ".expect.metadata.content-type: request assertion failed"), "", ""),
+		},
+		"server streaming": {
+			filename: "testdata/server-streaming.yaml",
+			config:   cfg,
+			f: sendServerStreamRequest(nil, []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "hello-0"},
+				{MessageId: "1", MessageBody: "hello-1"},
+			}),
+		},
+		"client streaming": {
+			filename: "testdata/client-streaming.yaml",
+			config:   cfg,
+			f:        sendClientStreamRequest(nil, &testpb.EchoResponse{MessageId: "aggregated", MessageBody: "hello,world"}),
+		},
+		"bidi streaming": {
+			filename: "testdata/bidi-streaming.yaml",
+			config:   cfg,
+			f: sendBidiStreamRequest(nil, []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "re: hello"},
+				{MessageId: "2", MessageBody: "re: world"},
+			}),
 		},
 	}
 	for name, test := range tests {
@@ -195,6 +218,163 @@ func sendEchoRequest(st *status.Status, id, msg string) func(t *testing.T, addr 
 		}
 		if got, expect := resp.GetMessageBody(), msg; got != expect {
 			t.Errorf("expect %s but got %s", expect, got)
+		}
+	}
+}
+
+func sendServerStreamRequest(st *status.Status, expectMsgs []*testpb.EchoResponse) func(t *testing.T, addr string) {
+	return func(t *testing.T, addr string) {
+		t.Helper()
+		c, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("failed to connect server: %s", err)
+		}
+		client := testpb.NewTestClient(c)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		stream, err := client.ServerStreamEcho(ctx, &testpb.EchoRequest{
+			MessageId:   "1",
+			MessageBody: "hello",
+		})
+		if err != nil {
+			serr := status.Convert(err)
+			if st == nil {
+				t.Fatalf("expect status code %s but got %s", codes.OK, serr.Code())
+			}
+			if got, expect := serr.Code(), st.Code(); got != expect {
+				t.Errorf("expect status code %s but got %s", expect, got)
+			}
+			return
+		}
+		var received []*testpb.EchoResponse
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				serr := status.Convert(err)
+				if st == nil {
+					t.Fatalf("expect status code %s but got %s", codes.OK, serr.Code())
+				}
+				if got, expect := serr.Code(), st.Code(); got != expect {
+					t.Errorf("expect status code %s but got %s", expect, got)
+				}
+				return
+			}
+			received = append(received, resp)
+		}
+		if got, expect := len(received), len(expectMsgs); got != expect {
+			t.Fatalf("expect %d messages but got %d", expect, got)
+		}
+		for i, msg := range received {
+			if got, expect := msg.GetMessageId(), expectMsgs[i].GetMessageId(); got != expect {
+				t.Errorf("messages[%d]: expect messageId %s but got %s", i, expect, got)
+			}
+			if got, expect := msg.GetMessageBody(), expectMsgs[i].GetMessageBody(); got != expect {
+				t.Errorf("messages[%d]: expect messageBody %s but got %s", i, expect, got)
+			}
+		}
+	}
+}
+
+func sendClientStreamRequest(st *status.Status, expectResp *testpb.EchoResponse) func(t *testing.T, addr string) {
+	return func(t *testing.T, addr string) {
+		t.Helper()
+		c, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("failed to connect server: %s", err)
+		}
+		client := testpb.NewTestClient(c)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		stream, err := client.ClientStreamEcho(ctx)
+		if err != nil {
+			t.Fatalf("failed to open stream: %s", err)
+		}
+		msgs := []*testpb.EchoRequest{
+			{MessageId: "1", MessageBody: "hello"},
+			{MessageId: "2", MessageBody: "world"},
+		}
+		for _, msg := range msgs {
+			if err := stream.Send(msg); err != nil {
+				t.Fatalf("failed to send message: %s", err)
+			}
+		}
+		resp, err := stream.CloseAndRecv()
+		if err != nil {
+			serr := status.Convert(err)
+			if st == nil {
+				t.Fatalf("expect status code %s but got %s", codes.OK, serr.Code())
+			}
+			if got, expect := serr.Code(), st.Code(); got != expect {
+				t.Errorf("expect status code %s but got %s", expect, got)
+			}
+			return
+		}
+		if got, expect := resp.GetMessageId(), expectResp.GetMessageId(); got != expect {
+			t.Errorf("expect messageId %s but got %s", expect, got)
+		}
+		if got, expect := resp.GetMessageBody(), expectResp.GetMessageBody(); got != expect {
+			t.Errorf("expect messageBody %s but got %s", expect, got)
+		}
+	}
+}
+
+func sendBidiStreamRequest(st *status.Status, expectMsgs []*testpb.EchoResponse) func(t *testing.T, addr string) {
+	return func(t *testing.T, addr string) {
+		t.Helper()
+		c, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			t.Fatalf("failed to connect server: %s", err)
+		}
+		client := testpb.NewTestClient(c)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		stream, err := client.BidiStreamEcho(ctx)
+		if err != nil {
+			t.Fatalf("failed to open stream: %s", err)
+		}
+		msgs := []*testpb.EchoRequest{
+			{MessageId: "1", MessageBody: "hello"},
+			{MessageId: "2", MessageBody: "world"},
+		}
+		for _, msg := range msgs {
+			if err := stream.Send(msg); err != nil {
+				t.Fatalf("failed to send message: %s", err)
+			}
+		}
+		if err := stream.CloseSend(); err != nil {
+			t.Fatalf("failed to close send: %s", err)
+		}
+		var received []*testpb.EchoResponse
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				serr := status.Convert(err)
+				if st == nil {
+					t.Fatalf("expect status code %s but got %s", codes.OK, serr.Code())
+				}
+				if got, expect := serr.Code(), st.Code(); got != expect {
+					t.Errorf("expect status code %s but got %s", expect, got)
+				}
+				return
+			}
+			received = append(received, resp)
+		}
+		if got, expect := len(received), len(expectMsgs); got != expect {
+			t.Fatalf("expect %d messages but got %d", expect, got)
+		}
+		for i, msg := range received {
+			if got, expect := msg.GetMessageId(), expectMsgs[i].GetMessageId(); got != expect {
+				t.Errorf("messages[%d]: expect messageId %s but got %s", i, expect, got)
+			}
+			if got, expect := msg.GetMessageBody(), expectMsgs[i].GetMessageBody(); got != expect {
+				t.Errorf("messages[%d]: expect messageBody %s but got %s", i, expect, got)
+			}
 		}
 	}
 }
