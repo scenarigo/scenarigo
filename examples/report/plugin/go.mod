@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/report/plugin
 
 go 1.25.0
 
-toolchain go1.26.1
+toolchain go1.26.3
 
 require github.com/scenarigo/scenarigo v0.23.0
 
@@ -25,16 +25,16 @@ require (
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
-	golang.org/x/mod v0.34.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
