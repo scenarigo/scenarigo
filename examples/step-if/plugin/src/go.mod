@@ -2,11 +2,11 @@ module github.com/scenarigo/scenarigo/examples/step-if/plugin
 
 go 1.25.0
 
-toolchain go1.26.1
+toolchain go1.26.3
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/scenarigo/scenarigo v0.26.0
+	github.com/scenarigo/scenarigo v0.26.1
 )
 
 require (
@@ -34,7 +34,7 @@ require (
 	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/zoncoen/query-go v1.3.2 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
-	golang.org/x/mod v0.34.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
