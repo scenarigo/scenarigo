@@ -23,7 +23,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+    - uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       id: go-cache
       with:
         path: |
@@ -61,7 +61,7 @@ jobs:
         go-version: ${{ matrix.go-version }}
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+    - uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       id: go-cache
       with:
         path: |
@@ -76,7 +76,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: GO_VERSION=${{ matrix.go-version }} make build/ci
     - name: Upload artifacts
-      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: artifact-${{ matrix.go-version }}
         path: ${{ github.workspace }}/dist/
@@ -97,7 +97,7 @@ jobs:
         go-version: stable
         check-latest: true
         cache: false
-    - uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+    - uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       id: go-cache
       with:
         path: |
@@ -118,7 +118,7 @@ jobs:
         mv ./dist/**/*.tar.gz ./assets/
         ls ./assets/
     - name: Run GoReleaser
-      uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+      uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
       with:
         version: latest
         args: release --clean -f ./scripts/cross-build/.goreleaser.yml
