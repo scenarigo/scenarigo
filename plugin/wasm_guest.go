@@ -163,6 +163,7 @@ type handler struct {
 	teardownMap        map[string]func(*Context)
 	funcNameToValueMap map[string]reflect.Value
 	nameToValueMap     map[string]reflect.Value
+	reflectionCache    map[string]*reflectionCacheEntry
 }
 
 func newHandler(initFn, syncFn DefinitionFunc) *handler {
@@ -172,6 +173,7 @@ func newHandler(initFn, syncFn DefinitionFunc) *handler {
 		teardownMap:        make(map[string]func(*Context)),
 		funcNameToValueMap: make(map[string]reflect.Value),
 		nameToValueMap:     make(map[string]reflect.Value),
+		reflectionCache:    make(map[string]*reflectionCacheEntry),
 	}
 }
 
@@ -649,10 +651,24 @@ func (h *handler) getClientConn(clientName string) (grpc.ClientConnInterface, er
 	return nil, fmt.Errorf("client %q does not implement ClientConnProvider", clientName)
 }
 
-// buildRequestWithReflection builds a request message using gRPC reflection.
-func (h *handler) buildRequestWithReflection(r *wasm.GRPCBuildRequestCommandRequest) (*wasm.GRPCBuildRequestCommandResponse, error) {
+// reflectionCacheEntry holds a service descriptor resolved via gRPC reflection
+// and its serialized FileDescriptorSet.
+type reflectionCacheEntry struct {
+	fd    *desc.ServiceDescriptor
+	fdSet []byte
+}
+
+// resolveServiceWithReflection resolves a service descriptor using gRPC reflection.
+// The result is cached per client and service to avoid resolving the same service
+// repeatedly (e.g. once for building the request and once for invoking it).
+func (h *handler) resolveServiceWithReflection(client, service string) (*reflectionCacheEntry, error) {
+	key := client + "/" + service
+	if entry, ok := h.reflectionCache[key]; ok {
+		return entry, nil
+	}
+
 	// Get connection from client
-	conn, err := h.getClientConn(r.Client)
+	conn, err := h.getClientConn(client)
 	if err != nil {
 		return nil, err
 	}
@@ -662,14 +678,9 @@ func (h *handler) buildRequestWithReflection(r *wasm.GRPCBuildRequestCommandRequ
 	defer refClient.Reset()
 
 	// Resolve service descriptor
-	fd, err := refClient.ResolveService(r.Service)
+	fd, err := refClient.ResolveService(service)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve service %q: %w", r.Service, err)
-	}
-	sd := fd.UnwrapService()
-	md := sd.Methods().ByName(protoreflect.Name(r.Method))
-	if md == nil {
-		return nil, fmt.Errorf("method %q not found in service %q", r.Method, r.Service)
+		return nil, fmt.Errorf("failed to resolve service %q: %w", service, err)
 	}
 
 	// Build FileDescriptorSet from service descriptor
@@ -678,9 +689,26 @@ func (h *handler) buildRequestWithReflection(r *wasm.GRPCBuildRequestCommandRequ
 		return nil, err
 	}
 
+	entry := &reflectionCacheEntry{fd: fd, fdSet: fdSet}
+	h.reflectionCache[key] = entry
+	return entry, nil
+}
+
+// buildRequestWithReflection builds a request message using gRPC reflection.
+func (h *handler) buildRequestWithReflection(r *wasm.GRPCBuildRequestCommandRequest) (*wasm.GRPCBuildRequestCommandResponse, error) {
+	entry, err := h.resolveServiceWithReflection(r.Client, r.Service)
+	if err != nil {
+		return nil, err
+	}
+	sd := entry.fd.UnwrapService()
+	md := sd.Methods().ByName(protoreflect.Name(r.Method))
+	if md == nil {
+		return nil, fmt.Errorf("method %q not found in service %q", r.Method, r.Service)
+	}
+
 	return &wasm.GRPCBuildRequestCommandResponse{
 		MessageFQDN: string(md.Input().FullName()),
-		FDSet:       fdSet,
+		FDSet:       entry.fdSet,
 	}, nil
 }
 
@@ -692,16 +720,12 @@ func (h *handler) invokeWithReflection(r *wasm.GRPCInvokeCommandRequest) (*wasm.
 		return nil, err
 	}
 
-	// Create reflection client
-	refClient := grpcreflect.NewClientAuto(gocontext.Background(), conn)
-	defer refClient.Reset()
-
 	// Resolve service descriptor
-	fd, err := refClient.ResolveService(r.Service)
+	entry, err := h.resolveServiceWithReflection(r.Client, r.Service)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve service %q: %w", r.Service, err)
+		return nil, err
 	}
-	sd := fd.UnwrapService()
+	sd := entry.fd.UnwrapService()
 	md := sd.Methods().ByName(protoreflect.Name(r.Method))
 	if md == nil {
 		return nil, fmt.Errorf("method %q not found in service %q", r.Method, r.Service)
@@ -730,17 +754,13 @@ func (h *handler) invokeWithReflection(r *wasm.GRPCInvokeCommandRequest) (*wasm.
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response: %w", err)
 	}
-	fdSet, err := h.buildFileDescriptorSetFromServiceDesc(fd)
-	if err != nil {
-		return nil, err
-	}
 	stBytes, err := proto.Marshal(st.Proto())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal status: %w", err)
 	}
 
 	return &wasm.GRPCInvokeCommandResponse{
-		FDSet:         fdSet,
+		FDSet:         entry.fdSet,
 		ResponseFQDN:  string(md.Output().FullName()),
 		ResponseBytes: respBytes,
 		StatusProto:   stBytes,
