@@ -19,13 +19,19 @@ import (
 	_ "github.com/goccy/wasi-go/ext/wasip1"
 
 	"github.com/goccy/go-yaml"
+	"github.com/jhump/protoreflect/desc"
+	"github.com/jhump/protoreflect/grpcreflect"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/plugin"
@@ -514,6 +520,9 @@ func (h *handler) GRPCExistsMethod(r *wasm.GRPCExistsMethodCommandRequest) (*was
 }
 
 func (h *handler) GRPCBuildRequest(r *wasm.GRPCBuildRequestCommandRequest) (*wasm.GRPCBuildRequestCommandResponse, error) {
+	if r.UseReflection {
+		return h.buildRequestWithReflection(r)
+	}
 	method, err := h.getMethod(r.Client, r.Method)
 	if err != nil {
 		return nil, err
@@ -533,6 +542,9 @@ func (h *handler) GRPCBuildRequest(r *wasm.GRPCBuildRequestCommandRequest) (*was
 }
 
 func (h *handler) GRPCInvoke(r *wasm.GRPCInvokeCommandRequest) (*wasm.GRPCInvokeCommandResponse, error) {
+	if r.UseReflection {
+		return h.invokeWithReflection(r)
+	}
 	method, err := h.getMethod(r.Client, r.Method)
 	if err != nil {
 		return nil, err
@@ -545,7 +557,8 @@ func (h *handler) GRPCInvoke(r *wasm.GRPCInvokeCommandRequest) (*wasm.GRPCInvoke
 		return nil, err
 	}
 	ctx := metadata.NewOutgoingContext(gocontext.Background(), r.Metadata)
-	resMsg, st, err := plugin.GRPCInvoke(ctx, method, reqProtoMsg)
+	var header, trailer metadata.MD
+	resMsg, st, err := plugin.GRPCInvoke(ctx, method, reqProtoMsg, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
 		return nil, err
 	}
@@ -566,6 +579,8 @@ func (h *handler) GRPCInvoke(r *wasm.GRPCInvokeCommandRequest) (*wasm.GRPCInvoke
 		ResponseFQDN:  string(resMsg.ProtoReflect().Descriptor().FullName()),
 		ResponseBytes: resMsgBytes,
 		StatusProto:   stBytes,
+		Header:        header,
+		Trailer:       trailer,
 	}, nil
 }
 
@@ -616,6 +631,152 @@ func (h *handler) getMethod(clientName, methodName string) (reflect.Value, error
 		}
 	}
 	return method, nil
+}
+
+// getClientConn gets grpc.ClientConnInterface from client.
+// The client must implement plugin.ClientConnProvider interface.
+func (h *handler) getClientConn(clientName string) (grpc.ClientConnInterface, error) {
+	client, exists := h.nameToValueMap[clientName]
+	if !exists {
+		return nil, fmt.Errorf("unknown client: %q", clientName)
+	}
+
+	// Check if the client implements ClientConnProvider interface
+	if provider, ok := client.Interface().(plugin.ClientConnProvider); ok {
+		return provider.ClientConn(), nil
+	}
+
+	return nil, fmt.Errorf("client %q does not implement ClientConnProvider", clientName)
+}
+
+// buildRequestWithReflection builds a request message using gRPC reflection.
+func (h *handler) buildRequestWithReflection(r *wasm.GRPCBuildRequestCommandRequest) (*wasm.GRPCBuildRequestCommandResponse, error) {
+	// Get connection from client
+	conn, err := h.getClientConn(r.Client)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create reflection client
+	refClient := grpcreflect.NewClientAuto(gocontext.Background(), conn)
+	defer refClient.Reset()
+
+	// Resolve service descriptor
+	fd, err := refClient.ResolveService(r.Service)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve service %q: %w", r.Service, err)
+	}
+	sd := fd.UnwrapService()
+	md := sd.Methods().ByName(protoreflect.Name(r.Method))
+	if md == nil {
+		return nil, fmt.Errorf("method %q not found in service %q", r.Method, r.Service)
+	}
+
+	// Build FileDescriptorSet from service descriptor
+	fdSet, err := h.buildFileDescriptorSetFromServiceDesc(fd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wasm.GRPCBuildRequestCommandResponse{
+		MessageFQDN: string(md.Input().FullName()),
+		FDSet:       fdSet,
+	}, nil
+}
+
+// invokeWithReflection invokes a gRPC method using reflection.
+func (h *handler) invokeWithReflection(r *wasm.GRPCInvokeCommandRequest) (*wasm.GRPCInvokeCommandResponse, error) {
+	// Get connection from client
+	conn, err := h.getClientConn(r.Client)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create reflection client
+	refClient := grpcreflect.NewClientAuto(gocontext.Background(), conn)
+	defer refClient.Reset()
+
+	// Resolve service descriptor
+	fd, err := refClient.ResolveService(r.Service)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve service %q: %w", r.Service, err)
+	}
+	sd := fd.UnwrapService()
+	md := sd.Methods().ByName(protoreflect.Name(r.Method))
+	if md == nil {
+		return nil, fmt.Errorf("method %q not found in service %q", r.Method, r.Service)
+	}
+
+	// Create dynamic messages
+	reqMsg := dynamicpb.NewMessage(md.Input())
+	if err := protojson.Unmarshal(r.Request, reqMsg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request: %w", err)
+	}
+	respMsg := dynamicpb.NewMessage(md.Output())
+
+	// Invoke the method with header/trailer capture
+	ctx := metadata.NewOutgoingContext(gocontext.Background(), r.Metadata)
+	fullMethod := fmt.Sprintf("/%s/%s", r.Service, r.Method)
+	var header, trailer metadata.MD
+	var st *status.Status
+	if err := conn.Invoke(ctx, fullMethod, reqMsg, respMsg, grpc.Header(&header), grpc.Trailer(&trailer)); err != nil {
+		st = status.Convert(err)
+	} else {
+		st = status.New(codes.OK, "")
+	}
+
+	// Serialize response
+	respBytes, err := protojson.Marshal(respMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+	fdSet, err := h.buildFileDescriptorSetFromServiceDesc(fd)
+	if err != nil {
+		return nil, err
+	}
+	stBytes, err := proto.Marshal(st.Proto())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal status: %w", err)
+	}
+
+	return &wasm.GRPCInvokeCommandResponse{
+		FDSet:         fdSet,
+		ResponseFQDN:  string(md.Output().FullName()),
+		ResponseBytes: respBytes,
+		StatusProto:   stBytes,
+		Header:        header,
+		Trailer:       trailer,
+	}, nil
+}
+
+// buildFileDescriptorSetFromServiceDesc builds FileDescriptorSet bytes from a service descriptor.
+func (h *handler) buildFileDescriptorSetFromServiceDesc(sd *desc.ServiceDescriptor) ([]byte, error) {
+	var fdSet descriptorpb.FileDescriptorSet
+
+	// Collect all file descriptors transitively
+	visited := make(map[string]bool)
+	var collectFiles func(*desc.FileDescriptor)
+	collectFiles = func(fd *desc.FileDescriptor) {
+		if fd == nil || visited[fd.GetName()] {
+			return
+		}
+		visited[fd.GetName()] = true
+		fdSet.File = append(fdSet.File, fd.AsFileDescriptorProto())
+		for _, dep := range fd.GetDependencies() {
+			collectFiles(dep)
+		}
+	}
+
+	fileDesc := sd.GetFile()
+	if fileDesc != nil {
+		collectFiles(fileDesc)
+	}
+
+	b, err := proto.Marshal(&fdSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal FileDescriptorSet: %w", err)
+	}
+	return b, nil
 }
 
 func (h *handler) HTTPCall(r *wasm.HTTPCallCommandRequest) (*wasm.HTTPCallCommandResponse, error) {

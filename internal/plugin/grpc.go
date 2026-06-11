@@ -12,10 +12,22 @@ import (
 	"github.com/scenarigo/scenarigo/internal/reflectutil"
 )
 
+// ClientConnProvider is implemented by clients that can provide their underlying connection.
+// Native Go plugins should implement this to enable reflection with custom client.
+// WASM guest plugins should also implement this for their internal clients.
+type ClientConnProvider interface {
+	ClientConn() grpc.ClientConnInterface
+}
+
+// CustomGRPCClient is an interface for custom gRPC clients.
+// This interface is implemented by WASM plugin's StructValue to handle gRPC calls.
 type CustomGRPCClient interface {
 	ExistsMethod(method string) bool
 	BuildRequestMessage(method string, params []byte) (proto.Message, error)
-	Invoke(ctx context.Context, method string, req proto.Message) (proto.Message, *status.Status, error)
+	Invoke(ctx context.Context, method string, req proto.Message, opts ...grpc.CallOption) (proto.Message, *status.Status, error)
+	// SetReflectionContext sets the reflection context for WASM plugins.
+	// This is called before BuildRequestMessage and Invoke when reflection is enabled.
+	SetReflectionContext(useReflection bool, service string)
 }
 
 var (
