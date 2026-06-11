@@ -13,10 +13,14 @@
                   metadata:
                     scenarigo-scenario-filepath-bin:
                     - testdata/testcases/scenarios/scenarigo-headers/grpc.yaml
+                    scenarigo-scenario-identifier-bin:
+                    - "testdata/testcases/scenarios/scenarigo-headers/grpc.yaml#scenario=0&title=scenarigo+headers+grpc"
                     scenarigo-scenario-title-bin:
                     - scenarigo headers grpc
                     scenarigo-step-full-name-bin:
                     - testdata/testcases/scenarios/scenarigo-headers/grpc.yaml/scenarigo_headers_grpc/Echo
+                    scenarigo-step-identifier-bin:
+                    - "testdata/testcases/scenarios/scenarigo-headers/grpc.yaml#scenario=0&step=0&title=scenarigo+headers+grpc"
                     token:
                     - XXXXX
                   message: {}

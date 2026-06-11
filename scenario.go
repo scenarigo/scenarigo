@@ -9,6 +9,7 @@ import (
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/protocolmeta"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/schema"
 )
@@ -21,6 +22,10 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	ctx = ctx.WithSteps(steps)
 	ctx = ctx.WithScenarioFilepath(s.Filepath())
 	ctx = ctx.WithScenarioTitle(s.Title)
+	normalizedPath := protocolmeta.NormalizeScenarioFilepath(s.Filepath())
+	ctx = ctx.WithScenarioIdentifier(
+		protocolmeta.BuildScenarioIdentifier(normalizedPath, s.ScenarioIndex(), s.Title),
+	)
 
 	var setups setupFuncList
 	if s.Plugins != nil {
@@ -117,6 +122,11 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 				defer cancel()
 				stepCtx = stepCtx.WithRequestContext(reqCtx)
 			}
+
+			stepNormalizedPath := protocolmeta.NormalizeScenarioFilepath(s.Filepath())
+			stepCtx = stepCtx.WithStepIdentifier(
+				protocolmeta.BuildStepIdentifier(stepNormalizedPath, s.ScenarioIndex(), idx, s.Title),
+			)
 
 			stepCtx = runStepWithTimeout(stepCtx, s, step, idx)
 

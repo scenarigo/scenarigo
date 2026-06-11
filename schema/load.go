@@ -186,12 +186,12 @@ func loadScenariosFromFileAST(f *ast.File, opt *loadOption) ([]*Scenario, error)
 	var buf bytes.Buffer
 	dec := yaml.NewDecoder(&buf, yaml.UseOrderedMap(), yaml.Strict())
 	var scenarios []*Scenario
-	for _, doc := range f.Docs {
+	for idx, doc := range f.Docs {
 		var s Scenario
 		if err := dec.DecodeFromNode(doc.Body, &s); err != nil {
 			return nil, fmt.Errorf("failed to decode YAML: %w", err)
 		}
-		s.setMetadata(f.Name, doc.Body, opt.colorConfig)
+		s.setMetadata(f.Name, idx, doc.Body, opt.colorConfig)
 		if err := s.Validate(); err != nil {
 			return nil, fmt.Errorf("validation error: %s: %w", s.filepath, err)
 		}

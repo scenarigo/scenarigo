@@ -14,10 +14,14 @@
                   header:
                     Scenarigo-Scenario-Filepath:
                     - testdata%2Ftestcases%2Fscenarios%2Fscenarigo-headers%2Fhttp.yaml
+                    Scenarigo-Scenario-Identifier:
+                    - testdata%2Ftestcases%2Fscenarios%2Fscenarigo-headers%2Fhttp.yaml%23scenario=0&title=scenarigo+headers
                     Scenarigo-Scenario-Title:
                     - scenarigo%20headers
                     Scenarigo-Step-Full-Name:
                     - testdata%2Ftestcases%2Fscenarios%2Fscenarigo-headers%2Fhttp.yaml%2Fscenarigo_headers%2FGET_%2Fecho
+                    Scenarigo-Step-Identifier:
+                    - testdata%2Ftestcases%2Fscenarios%2Fscenarigo-headers%2Fhttp.yaml%23scenario=0&step=0&title=scenarigo+headers
                     User-Agent:
                     - scenarigo/v1.0.0
                 response:
