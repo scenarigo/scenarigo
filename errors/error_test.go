@@ -83,6 +83,19 @@ func TestErrors(t *testing.T) {
 			t.Errorf("not nil: %v", err)
 		}
 	})
+
+	t.Run("should ignore nil errors", func(t *testing.T) {
+		if err := Errors(nil); err != nil {
+			t.Errorf("not nil: %v", err)
+		}
+		err := Errors(nil, errors.New("message"), nil)
+		if err == nil {
+			t.Fatal("no error")
+		}
+		if got, expect := err.Error(), "1 error occurred: message"; got != expect {
+			t.Fatalf("unexpected error message: %s", got)
+		}
+	})
 	t.Run("should be wrapped by MultiPathError", func(t *testing.T) {
 		err := Errors(errors.New("a"), errors.New("b"))
 		if err == nil {
@@ -366,6 +379,22 @@ unexpected error: invalid b
 			t.Errorf("stdout differs:\n%s", dmp.DiffPrettyText(diffs))
 		}
 	})
+}
+
+func TestMultiPathErrorWithNestedMultiPathError(t *testing.T) {
+	err := Wrap(
+		Errors(
+			ErrorPath("a", "message1"),
+			Errors(
+				ErrorPath("b", "message2"),
+				errors.New("message3"),
+			),
+		),
+		"wrapped",
+	)
+	if got, expect := err.Error(), "2 errors occurred: .a: wrapped: message1\n2 errors occurred: .b: wrapped: message2\nwrapped: message3"; got != expect {
+		t.Fatalf("unexpected error message: %s", got)
+	}
 }
 
 func TestReplacePath(t *testing.T) {

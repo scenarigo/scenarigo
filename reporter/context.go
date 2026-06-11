@@ -48,6 +48,14 @@ func WithTestSummary() Option {
 	}
 }
 
+// WithoutStdoutCapture disables stdout capture to allow concurrent Run calls.
+// Note: Direct writes to os.Stdout will not be detected when this option is used.
+func WithoutStdoutCapture() Option {
+	return func(ctx *testContext) {
+		ctx.skipStdoutCapture = true
+	}
+}
+
 // testContext holds all fields that are common to all tests.
 type testContext struct {
 	m sync.Mutex
@@ -74,6 +82,9 @@ type testContext struct {
 
 	enabledTestSummary bool
 	testSummary        *testSummary
+
+	// skipStdoutCapture disables stdout capture to allow concurrent Run calls.
+	skipStdoutCapture bool
 
 	// for FromT
 	matcher *matcher

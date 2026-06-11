@@ -1,5 +1,54 @@
 # CHANGELOG
 
+## [v0.26.2](https://github.com/scenarigo/scenarigo/compare/v0.26.1...v0.26.2) - 2026-06-11
+
+### Bug Fixes
+- fix(errors): fix MultiPathError.wrapf panic; ignore nil in Errors by @gasugesu in https://github.com/scenarigo/scenarigo/pull/779
+- fix(plugin): normalize path before using it as the cache key by @gasugesu in https://github.com/scenarigo/scenarigo/pull/780
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/mod from 0.34.0 to 0.36.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/762
+- chore(deps): bump golang.org/x/text from 0.35.0 to 0.37.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/763
+- chore(deps): bump google.golang.org/grpc from 1.80.0 to 1.81.1 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/767
+- chore(deps): bump the github-actions group across 1 directory with 6 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/771
+- chore(deps): bump google.golang.org/grpc from 1.79.3 to 1.81.1 in /plugin/testdata/wasm/src in the go-minor group across 1 directory by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/772
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/774
+- chore(deps): bump github.com/tetratelabs/wazero from 1.11.0 to 1.12.0 in the go-minor group across 1 directory by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/776
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/775
+- chore(deps): bump the github-actions group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/781
+- chore(deps): bump the go-minor group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/782
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/777
+
+## [v0.26.1](https://github.com/scenarigo/scenarigo/compare/v0.26.0...v0.26.1) - 2026-05-11
+### Bug Fixes
+- fix(assert): prevent panic when actual value is nil by @utahta in https://github.com/scenarigo/scenarigo/pull/768
+### Dependency Upgrades
+- chore(deps): bump google.golang.org/grpc from 1.79.3 to 1.80.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/758
+### Other Changes
+- Release for v0.26.1 by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/760
+
+## [v0.26.1](https://github.com/scenarigo/scenarigo/compare/v0.26.0...v0.26.1) - 2026-05-11
+### Bug Fixes
+- fix(assert): prevent panic when actual value is nil by @utahta in https://github.com/scenarigo/scenarigo/pull/768
+### Dependency Upgrades
+- chore(deps): bump google.golang.org/grpc from 1.79.3 to 1.80.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/758
+
+## [v0.26.0](https://github.com/scenarigo/scenarigo/compare/v0.25.3...v0.26.0) - 2026-04-02
+### New Features
+- Add WithoutStdoutCapture option to allow concurrent Run calls by @vvakame in https://github.com/scenarigo/scenarigo/pull/706
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/sync from 0.19.0 to 0.20.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/737
+- chore(deps): bump google.golang.org/grpc from 1.79.1 to 1.79.2 in /plugin/testdata/wasm/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/739
+- chore(deps): bump the github-actions group across 1 directory with 6 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/755
+- chore(deps): bump golang.org/x/mod from 0.33.0 to 0.34.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/740
+- chore(deps): bump golang.org/x/text from 0.34.0 to 0.35.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/741
+- chore(deps): bump google.golang.org/grpc from 1.79.1 to 1.79.3 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/746
+- chore(deps): bump github.com/fatih/color from 1.18.0 to 1.19.0 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/753
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/734
+
+## [v0.25.3](https://github.com/scenarigo/scenarigo/compare/v0.25.2...v0.25.3) - 2026-03-17
+### Bug Fixes
+- fix(plugin): skip overrides with empty module path in updateRequireDirectives by @utahta in https://github.com/scenarigo/scenarigo/pull/743
+
 ## [v0.25.2](https://github.com/scenarigo/scenarigo/compare/v0.25.1...v0.25.2) - 2026-03-01
 ### Bug Fixes
 - fix(plugin): fix FD leak, deadlock, and double-close in WasmPlugin by @zoncoen in https://github.com/scenarigo/scenarigo/pull/726

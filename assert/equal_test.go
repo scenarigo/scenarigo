@@ -3,6 +3,7 @@ package assert
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/scenarigo/scenarigo/errors"
@@ -93,6 +94,32 @@ func TestEqual(t *testing.T) {
 			}
 			if err := assertion.Assert(tc.ng); err == nil {
 				t.Errorf("expected error but no error")
+			}
+		})
+	}
+}
+
+func TestEqual_NilActual(t *testing.T) {
+	// Asserting a non-nil expected value against a nil actual value must
+	// return an error instead of panicking with
+	// "reflect: nil type passed to Type.ConvertibleTo".
+	tests := map[string]struct {
+		expected any
+	}{
+		"string":  {expected: "value"},
+		"int":     {expected: 1},
+		"struct":  {expected: struct{ A int }{A: 1}},
+		"pointer": {expected: func() *string { s := "v"; return &s }()},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("unexpected panic: %v", r)
+				}
+			}()
+			if err := Equal(tc.expected).Assert(nil); err == nil {
+				t.Fatal("expected error but no error")
 			}
 		})
 	}
@@ -204,6 +231,16 @@ func TestConvert(t *testing.T) {
 			}
 		})
 	}
+	t.Run("convertToType with nil target type", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("unexpected panic: %v", r)
+			}
+		}()
+		if _, err := convertToType("v", reflect.Type(nil)); err == nil {
+			t.Fatal("expected error but no error")
+		}
+	})
 	t.Run("convertToBigInt", func(t *testing.T) {
 		if _, err := convertToBigInt("bad value"); err == nil {
 			t.Fatal("expected error but not eror")
