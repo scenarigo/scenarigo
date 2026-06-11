@@ -28,7 +28,7 @@ func Open(path string) (Plugin, error) {
 		}
 		path = abs
 	}
-	filepath.Clean(path)
+	path = filepath.Clean(path)
 	m.Lock()
 	defer m.Unlock()
 	if p, ok := cache[path]; ok {
