@@ -63,10 +63,16 @@ func ErrorPath(path, message string) error {
 
 // Errors create MultiPathError by error instances.
 func Errors(errs ...error) error {
-	if len(errs) == 0 {
+	nonNilErrs := make([]error, 0, len(errs))
+	for _, err := range errs {
+		if err != nil {
+			nonNilErrs = append(nonNilErrs, err)
+		}
+	}
+	if len(nonNilErrs) == 0 {
 		return nil
 	}
-	return &MultiPathError{Errs: errs}
+	return &MultiPathError{Errs: nonNilErrs}
 }
 
 // Wrap wrap error while paying attention to PathError and MultiPathError.
@@ -316,7 +322,7 @@ func (e *MultiPathError) replacePath(old, newPath string) {
 func (e *MultiPathError) wrapf(message string, args ...any) {
 	for idx, err := range e.Errs {
 		var pathErr Error
-		if errors.As(err, &e) {
+		if errors.As(err, &pathErr) {
 			pathErr.wrapf(message, args...)
 		} else {
 			e.Errs[idx] = Wrapf(err, message, args...)
