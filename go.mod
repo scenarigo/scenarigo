@@ -21,7 +21,7 @@ require (
 	github.com/sosedoff/gitkit v0.4.0
 	github.com/spf13/cobra v1.10.2
 	github.com/tetratelabs/wazero v1.12.0
-	github.com/zoncoen/query-go v1.3.2
+	github.com/zoncoen/query-go v1.4.0
 	github.com/zoncoen/query-go/extractor/protobuf v0.1.4
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2
 	golang.org/x/mod v0.37.0
