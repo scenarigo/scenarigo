@@ -19,6 +19,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/grpcstream"
 	"github.com/scenarigo/scenarigo/internal/ptr"
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
@@ -450,6 +451,31 @@ func TestProtoClient(t *testing.T) {
 			},
 			expectError: `.method: method "Unknown" not found`,
 		},
+		"unary with messages is invalid": {
+			handler: defaultHandler,
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "Echo",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectError: ".messages: messages can only be used with streaming methods",
+		},
 		"invalid request message": {
 			handler: defaultHandler,
 			request: &Request{
@@ -520,6 +546,772 @@ func TestProtoClient(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProtoClientServerStreaming(t *testing.T) {
+	defaultHandler := func(ctx gocontext.Context, req *testpb.EchoRequest) (*testpb.EchoResponse, error) {
+		return &testpb.EchoResponse{
+			MessageId:   req.GetMessageId(),
+			MessageBody: req.GetMessageBody(),
+		}, nil
+	}
+	tests := map[string]struct {
+		server          testpb.TestServer
+		request         *Request
+		expectCode      codes.Code
+		expectResponses []*testpb.EchoResponse
+		expectError     string
+	}{
+		"server streaming returns partial messages on mid-stream error": {
+			server: &customTestServer{
+				serverStream: func(req *testpb.EchoRequest, stream testpb.Test_ServerStreamEchoServer) error {
+					for i := range 2 {
+						if err := stream.Send(&testpb.EchoResponse{
+							MessageId:   req.GetMessageId(),
+							MessageBody: fmt.Sprintf("%s-%d", req.GetMessageBody(), i),
+						}); err != nil {
+							return err
+						}
+					}
+					return status.Error(codes.Internal, "stream aborted")
+				},
+			},
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ServerStreamEcho",
+				Message: yaml.MapSlice{
+					yaml.MapItem{Key: "messageId", Value: "1"},
+					yaml.MapItem{Key: "messageBody", Value: "hello"},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.Internal,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "hello-0"},
+				{MessageId: "1", MessageBody: "hello-1"},
+			},
+		},
+		"server streaming with proto files": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ServerStreamEcho",
+				Message: yaml.MapSlice{
+					yaml.MapItem{Key: "messageId", Value: "1"},
+					yaml.MapItem{Key: "messageBody", Value: "hello"},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "hello-0"},
+				{MessageId: "1", MessageBody: "hello-1"},
+				{MessageId: "1", MessageBody: "hello-2"},
+			},
+		},
+		"server streaming with reflection": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ServerStreamEcho",
+				Message: yaml.MapSlice{
+					yaml.MapItem{Key: "messageId", Value: "1"},
+					yaml.MapItem{Key: "messageBody", Value: "hello"},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "hello-0"},
+				{MessageId: "1", MessageBody: "hello-1"},
+				{MessageId: "1", MessageBody: "hello-2"},
+			},
+		},
+		"server streaming with messages is invalid": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ServerStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "hello"}},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectError: ".messages: messages cannot be used for server streaming request",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			srv := test.server
+			if srv == nil {
+				srv = testutil.TestGRPCServerFunc(defaultHandler)
+			}
+			target := testutil.StartTestGRPCServer(t, srv, testutil.EnableReflection())
+			t.Cleanup(func() { _ = connPool.closeConnection(target) })
+			ctx := context.FromT(t).WithVars(map[string]any{
+				"target": target,
+			})
+
+			_, result, err := test.request.Invoke(ctx)
+			if test.expectError != "" {
+				if err == nil {
+					t.Fatal("expected error but got nil")
+				}
+				if got := err.Error(); !strings.Contains(got, test.expectError) {
+					t.Fatalf("expected error %q but got %q", test.expectError, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+
+			resp, ok := result.(*response)
+			if !ok {
+				t.Fatalf("failed to type conversion from %s to *response", reflect.TypeOf(result))
+			}
+			if resp.Status.Code() != test.expectCode {
+				t.Fatalf("expected code is %s but got %s", test.expectCode, resp.Status.Code())
+			}
+			if len(test.expectResponses) > 0 {
+				if len(resp.Messages) != len(test.expectResponses) {
+					t.Fatalf("expected %d messages but got %d", len(test.expectResponses), len(resp.Messages))
+				}
+				for i, expected := range test.expectResponses {
+					if diff := cmp.Diff(expected, resp.Messages[i], protocmp.Transform()); diff != "" {
+						t.Errorf("messages[%d] differs: (-want +got)\n%s", i, diff)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestProtoClientClientStreaming(t *testing.T) {
+	defaultHandler := func(ctx gocontext.Context, req *testpb.EchoRequest) (*testpb.EchoResponse, error) {
+		return &testpb.EchoResponse{
+			MessageId:   req.GetMessageId(),
+			MessageBody: req.GetMessageBody(),
+		}, nil
+	}
+	tests := map[string]struct {
+		server         testpb.TestServer
+		request        *Request
+		expectCode     codes.Code
+		expectResponse *testpb.EchoResponse
+		expectError    string
+	}{
+		"client streaming reports server status when the stream is terminated": {
+			server: &customTestServer{
+				clientStream: func(stream testpb.Test_ClientStreamEchoServer) error {
+					if _, err := stream.Recv(); err != nil {
+						return err
+					}
+					return status.Error(codes.InvalidArgument, "rejected")
+				},
+			},
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ClientStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "hello"}},
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "world"}},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.InvalidArgument,
+		},
+		"client streaming with request reference": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ClientStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "hello"}},
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "{{request.messages[0].messageBody}} world"}},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponse: &testpb.EchoResponse{
+				MessageId:   "aggregated",
+				MessageBody: "hello,hello world",
+			},
+		},
+		"client streaming with proto files": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ClientStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "hello"}},
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "world"}},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponse: &testpb.EchoResponse{
+				MessageId:   "aggregated",
+				MessageBody: "hello,world",
+			},
+		},
+		"client streaming with reflection": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ClientStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "hello"}},
+					yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "world"}},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponse: &testpb.EchoResponse{
+				MessageId:   "aggregated",
+				MessageBody: "hello,world",
+			},
+		},
+		"client streaming with message is invalid": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "ClientStreamEcho",
+				Message: yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "hello"}},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectError: ".message: message cannot be used for client streaming request",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			srv := test.server
+			if srv == nil {
+				srv = testutil.TestGRPCServerFunc(defaultHandler)
+			}
+			target := testutil.StartTestGRPCServer(t, srv, testutil.EnableReflection())
+			t.Cleanup(func() { _ = connPool.closeConnection(target) })
+			ctx := context.FromT(t).WithVars(map[string]any{
+				"target": target,
+			})
+
+			_, result, err := test.request.Invoke(ctx)
+			if test.expectError != "" {
+				if err == nil {
+					t.Fatal("expected error but got nil")
+				}
+				if got := err.Error(); !strings.Contains(got, test.expectError) {
+					t.Fatalf("expected error %q but got %q", test.expectError, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+
+			resp, ok := result.(*response)
+			if !ok {
+				t.Fatalf("failed to type conversion from %s to *response", reflect.TypeOf(result))
+			}
+			if resp.Status.Code() != test.expectCode {
+				t.Fatalf("expected code is %s but got %s", test.expectCode, resp.Status.Code())
+			}
+			if test.expectResponse != nil {
+				if diff := cmp.Diff(test.expectResponse, resp.Message, protocmp.Transform()); diff != "" {
+					t.Errorf("differs: (-want +got)\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestProtoClientBidiStreaming(t *testing.T) {
+	defaultHandler := func(ctx gocontext.Context, req *testpb.EchoRequest) (*testpb.EchoResponse, error) {
+		return &testpb.EchoResponse{
+			MessageId:   req.GetMessageId(),
+			MessageBody: req.GetMessageBody(),
+		}, nil
+	}
+	tests := map[string]struct {
+		server             testpb.TestServer
+		request            *Request
+		expectCode         codes.Code
+		expectResponses    []*testpb.EchoResponse
+		expectError        string
+		expectRequestDump  int
+		expectResponseDump int
+	}{
+		"bidi streaming returns partial messages on mid-stream error": {
+			server: &customTestServer{
+				bidiStream: func(stream testpb.Test_BidiStreamEchoServer) error {
+					req, err := stream.Recv()
+					if err != nil {
+						return err
+					}
+					if err := stream.Send(&testpb.EchoResponse{
+						MessageId:   req.GetMessageId(),
+						MessageBody: fmt.Sprintf("re: %s", req.GetMessageBody()),
+					}); err != nil {
+						return err
+					}
+					if _, err := stream.Recv(); err != nil {
+						return err
+					}
+					return status.Error(codes.Internal, "stream aborted")
+				},
+			},
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: "world"},
+					},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.Internal,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "re: hello"},
+			},
+			expectRequestDump:  2,
+			expectResponseDump: 1,
+		},
+		"bidi streaming dumps partial request and response on template error": {
+			server: &customTestServer{
+				bidiStream: func(stream testpb.Test_BidiStreamEchoServer) error {
+					req, err := stream.Recv()
+					if err != nil {
+						return err
+					}
+					// Send a single echo and close the stream so that
+					// the template referencing response.messages[1] fails.
+					return stream.Send(&testpb.EchoResponse{
+						MessageId:   req.GetMessageId(),
+						MessageBody: fmt.Sprintf("re: %s", req.GetMessageBody()),
+					})
+				},
+			},
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: "{{response.messages[1].messageBody}}"},
+					},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectError:        ".messages[1].'messageBody': failed to execute template",
+			expectRequestDump:  1,
+			expectResponseDump: 1,
+		},
+		"bidi streaming with proto files": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: "world"},
+					},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "re: hello"},
+				{MessageId: "2", MessageBody: "re: world"},
+			},
+			expectRequestDump:  2,
+			expectResponseDump: 2,
+		},
+		"bidi streaming with reflection": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: "world"},
+					},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "re: hello"},
+				{MessageId: "2", MessageBody: "re: world"},
+			},
+		},
+		"bidi streaming with response reference": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: "{{response.messages[0].messageBody}} world"},
+					},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "re: hello"},
+				{MessageId: "2", MessageBody: "re: re: hello world"},
+			},
+		},
+		"bidi streaming with message is invalid": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Message: yaml.MapSlice{yaml.MapItem{Key: "messageBody", Value: "hello"}},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectError: ".message: message cannot be used for bidirectional streaming request",
+		},
+		"bidi streaming with request reference": {
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: "{{request.messages[0].messageBody}} world"},
+					},
+				},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.OK,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "re: hello"},
+				{MessageId: "2", MessageBody: "re: hello world"},
+			},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			srv := test.server
+			if srv == nil {
+				srv = testutil.TestGRPCServerFunc(defaultHandler)
+			}
+			target := testutil.StartTestGRPCServer(t, srv, testutil.EnableReflection())
+			t.Cleanup(func() { _ = connPool.closeConnection(target) })
+			ctx := context.FromT(t).WithVars(map[string]any{
+				"target": target,
+			})
+
+			rctx, result, err := test.request.Invoke(ctx)
+			if test.expectRequestDump > 0 {
+				reqDump, ok := rctx.Request().(*RequestExtractor)
+				if !ok {
+					t.Fatalf("request dump not found: %T", rctx.Request())
+				}
+				if len(reqDump.Messages) != test.expectRequestDump {
+					t.Errorf("expected %d dumped request messages but got %d", test.expectRequestDump, len(reqDump.Messages))
+				}
+			}
+			if test.expectResponseDump > 0 {
+				respDump, ok := rctx.Response().(*ResponseExtractor)
+				if !ok {
+					t.Fatalf("response dump not found: %T", rctx.Response())
+				}
+				if len(respDump.Messages) != test.expectResponseDump {
+					t.Errorf("expected %d dumped response messages but got %d", test.expectResponseDump, len(respDump.Messages))
+				}
+			}
+			if test.expectError != "" {
+				if err == nil {
+					t.Fatal("expected error but got nil")
+				}
+				if got := err.Error(); !strings.Contains(got, test.expectError) {
+					t.Fatalf("expected error %q but got %q", test.expectError, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+
+			resp, ok := result.(*response)
+			if !ok {
+				t.Fatalf("failed to type conversion from %s to *response", reflect.TypeOf(result))
+			}
+			if resp.Status.Code() != test.expectCode {
+				t.Fatalf("expected code is %s but got %s", test.expectCode, resp.Status.Code())
+			}
+			if len(test.expectResponses) > 0 {
+				if len(resp.Messages) != len(test.expectResponses) {
+					t.Fatalf("expected %d messages but got %d", len(test.expectResponses), len(resp.Messages))
+				}
+				for i, expected := range test.expectResponses {
+					if diff := cmp.Diff(expected, resp.Messages[i], protocmp.Transform()); diff != "" {
+						t.Errorf("messages[%d] differs: (-want +got)\n%s", i, diff)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestProtoClientBidiStreaming_DeadlockGuard(t *testing.T) {
+	tests := map[string]struct {
+		// prepare returns the context to invoke with and an optional trigger,
+		// run concurrently, that interrupts the wait once the server has received
+		// the first request (recved is closed). Driving the interruption off that
+		// signal makes it happen during the blocking wait rather than racing with
+		// stream setup, which would otherwise make the test flaky.
+		prepare func(t *testing.T, base *context.Context, recved <-chan struct{}) (*context.Context, func())
+	}{
+		"default guard (no deadline)": {
+			prepare: func(t *testing.T, base *context.Context, _ <-chan struct{}) (*context.Context, func()) {
+				t.Helper()
+				// No deadline on the context, so newWaitContext applies the guard
+				// timeout. It is measured from the At call (after setup), so it does
+				// not race with stream setup.
+				old := grpcstream.DefaultMessageWaitTimeout
+				grpcstream.DefaultMessageWaitTimeout = 300 * time.Millisecond
+				t.Cleanup(func() { grpcstream.DefaultMessageWaitTimeout = old })
+				return base, nil
+			},
+		},
+		"request context deadline": {
+			prepare: func(t *testing.T, base *context.Context, recved <-chan struct{}) (*context.Context, func()) {
+				t.Helper()
+				// A generous deadline routes newWaitContext through its
+				// existing-deadline branch without firing during setup; the context
+				// is canceled once the wait has started.
+				reqCtx, cancel := gocontext.WithTimeout(base.RequestContext(), 10*time.Second)
+				t.Cleanup(cancel)
+				trigger := func() {
+					<-recved
+					cancel()
+				}
+				return base.WithRequestContext(reqCtx), trigger
+			},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			// The server receives the first request and then withholds any
+			// response, so the scenario's second request blocks forever on
+			// response.messages[0] unless the guard or a cancellation fires.
+			recved := make(chan struct{})
+			srv := &customTestServer{
+				bidiStream: func(stream testpb.Test_BidiStreamEchoServer) error {
+					if _, err := stream.Recv(); err != nil {
+						return err
+					}
+					close(recved)
+					<-stream.Context().Done()
+					return stream.Context().Err()
+				},
+			}
+			target := testutil.StartTestGRPCServer(t, srv, testutil.EnableReflection())
+			t.Cleanup(func() { _ = connPool.closeConnection(target) })
+
+			ctx, trigger := test.prepare(t, context.FromT(t).WithVars(map[string]any{"target": target}), recved)
+			if trigger != nil {
+				go trigger()
+			}
+
+			r := &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: "{{response.messages[0].messageBody}}"},
+					},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{Insecure: ptr.To(true)},
+				},
+			}
+
+			done := make(chan error, 1)
+			go func() {
+				_, _, err := r.Invoke(ctx)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("expected deadlock guard error but got nil")
+				}
+				if got, want := err.Error(), "interrupted while waiting for a streaming response message"; !strings.Contains(got, want) {
+					t.Fatalf("expected error to contain %q but got %q", want, got)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("Invoke did not return; the deadlock guard did not fire")
+			}
+		})
+	}
+}
+
+// customTestServer is a test server whose streaming handlers can be overridden per test case.
+type customTestServer struct {
+	testpb.UnimplementedTestServer
+	serverStream func(*testpb.EchoRequest, testpb.Test_ServerStreamEchoServer) error
+	clientStream func(testpb.Test_ClientStreamEchoServer) error
+	bidiStream   func(testpb.Test_BidiStreamEchoServer) error
+}
+
+func (s *customTestServer) ServerStreamEcho(req *testpb.EchoRequest, stream testpb.Test_ServerStreamEchoServer) error {
+	return s.serverStream(req, stream)
+}
+
+func (s *customTestServer) ClientStreamEcho(stream testpb.Test_ClientStreamEchoServer) error {
+	return s.clientStream(stream)
+}
+
+func (s *customTestServer) BidiStreamEcho(stream testpb.Test_BidiStreamEchoServer) error {
+	return s.bidiStream(stream)
 }
 
 func generateCert(t *testing.T) (string, string, string) {
