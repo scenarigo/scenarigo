@@ -103,8 +103,8 @@ github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8
 github.com/tetratelabs/wazero v1.12.0 h1:DuWcpNu/FzgEXgGBDp8J1Spc+CWOvvtvVyjKlaZopYU=
 github.com/tetratelabs/wazero v1.12.0/go.mod h1:LvKtzl2RqO4gyF27BiXU+nKAjcV8f38U+kP/q2vgxh0=
 github.com/yuin/goldmark v1.4.1/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
-github.com/zoncoen/query-go v1.3.2 h1:7gE0EYEmbHPlZC4becyLQZSE6iIQuUyfomvCEvtGB+I=
-github.com/zoncoen/query-go v1.3.2/go.mod h1:Al1T6+Jinwu1bzZ7puVTlCr+r6qVAZ7YLer3cIqG7+I=
+github.com/zoncoen/query-go v1.4.0 h1:jTrFGZ7OAmrHYkEMezOqIqAwl6c5ukP9iRqR0QCZxb8=
+github.com/zoncoen/query-go v1.4.0/go.mod h1:xJ6xvqbOJ8QFwc9u6QcHyiO+qLENez4JjtwXp1WQOKs=
 github.com/zoncoen/query-go/extractor/protobuf v0.1.4 h1:sVDfMrP1keeNTEpGjEPUhGtHx2UxGQZ0s/Uj1MQrHi8=
 github.com/zoncoen/query-go/extractor/protobuf v0.1.4/go.mod h1:p7mQxZKWR3X2oabRhyx3iv8AJVIkQsjfffgPKWDjanE=
 github.com/zoncoen/query-go/extractor/yaml v0.2.2 h1:+A85j5FtJh7I22yGx9GbHGN+S3z6b9T2leS7cPAROAM=
