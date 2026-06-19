@@ -16,7 +16,7 @@ jobs:
     - uses: suzuki-shunsuke/get-pr-action@b002e41164d7a39586b41f17f9caca4e98a1efe4 # v0.1.0
       id: pr
     - name: Checkout code
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         ref: ${{steps.pr.outputs.merge_commit_sha}}
     - name: Install Go
@@ -61,7 +61,7 @@ jobs:
         app_id: ${{ secrets.WRITE_APP_ID }}
         private_key: ${{ secrets.WRITE_PRIVATE_KEY }}
     - name: Checkout code
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       with:
         ref: ${{ github.event.pull_request.head.ref }}
         token: ${{ steps.generate_token.outputs.token }}
