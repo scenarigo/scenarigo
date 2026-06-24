@@ -4,7 +4,7 @@ go 1.25.0
 
 toolchain go1.26.4
 
-require github.com/scenarigo/scenarigo v0.26.1
+require github.com/scenarigo/scenarigo v0.26.2
 
 require (
 	github.com/kr/pretty v0.3.0 // indirect

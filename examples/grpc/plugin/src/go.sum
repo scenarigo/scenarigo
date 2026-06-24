@@ -72,8 +72,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/rogpeppe/go-internal v1.6.1/go.mod h1:xXDCJY+GAPziupqXw64V24skbSoqbTEfhy4qGm1nDQc=
 github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
-github.com/scenarigo/scenarigo v0.26.1 h1:H9lbjqU/dz648ue+0W+4ziTYTkKhTGTgZFBA4XWje4o=
-github.com/scenarigo/scenarigo v0.26.1/go.mod h1:FgNHOd4ioMrXaUaenWAIQthkFExmFgqDJAfF8fuwXzk=
+github.com/scenarigo/scenarigo v0.26.2 h1:GNeIPszOJVHa+PqRcKKhkqbkzwsLpuE5Xnlb2YHLaqI=
+github.com/scenarigo/scenarigo v0.26.2/go.mod h1:zXrAjBL9ArsIv4crfkoQCVCiz2b03f1bEIFkoGXxD28=
 github.com/sergi/go-diff v1.4.0 h1:n/SP9D5ad1fORl+llWyN+D6qoUETXNZARKjyY2/KVCw=
 github.com/sergi/go-diff v1.4.0/go.mod h1:A0bzQcvG0E7Rwjx0REVgAGH58e96+X0MeOfepqsbeW4=
 github.com/stealthrocket/wazergo v0.19.1 h1:BPrITETPgSFwiytwmToO0MbUC/+RGC39JScz1JmmG6c=
