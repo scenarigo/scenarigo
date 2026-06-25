@@ -11,7 +11,7 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
-require github.com/scenarigo/scenarigo v0.26.1
+require github.com/scenarigo/scenarigo v0.26.2
 
 require (
 	carvel.dev/ytt v0.50.0 // indirect
@@ -29,7 +29,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
-	github.com/zoncoen/query-go v1.3.2 // indirect
+	github.com/zoncoen/query-go v1.4.0 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect

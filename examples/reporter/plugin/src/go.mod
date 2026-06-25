@@ -4,7 +4,7 @@ go 1.25.0
 
 toolchain go1.26.4
 
-require github.com/scenarigo/scenarigo v0.26.1
+require github.com/scenarigo/scenarigo v0.26.2
 
 require (
 	github.com/kr/pretty v0.3.0 // indirect
@@ -29,7 +29,7 @@ require (
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
-	github.com/zoncoen/query-go v1.3.2 // indirect
+	github.com/zoncoen/query-go v1.4.0 // indirect
 	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
