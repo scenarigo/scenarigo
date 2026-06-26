@@ -34,7 +34,7 @@ func TestRun_NilPanic(t *testing.T) {
 					{},
 					{
 						Failed: true,
-						Logs:   []string{"panic called with nil argument"},
+						Logs:   []string{(&runtime.PanicNilError{}).Error()},
 					},
 				},
 			},
