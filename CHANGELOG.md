@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [v0.26.3](https://github.com/scenarigo/scenarigo/compare/v0.26.2...v0.26.3) - 2026-07-02
+
+### New Features
+- feat(grpc): support custom client with reflection API by @goccy in https://github.com/scenarigo/scenarigo/pull/703
+### Code Refactoring
+- perf(plugin): cache service descriptors resolved via gRPC reflection in WASM guest by @zoncoen in https://github.com/scenarigo/scenarigo/pull/784
+### Dependency Upgrades
+- chore(deps): bump github.com/zoncoen/query-go from 1.3.2 to 1.4.0 in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/787
+- chore(deps): bump the github-actions group across 1 directory with 4 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/790
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/785
+- chore(deps): bump the github-actions group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/793
+- chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.0 in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/794
+- chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.0 in /plugin/testdata/wasm/src in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/795
+### Testing
+- test(reporter): make TestRun_NilPanic Go-version independent by @zoncoen in https://github.com/scenarigo/scenarigo/pull/791
+
 ## [v0.26.2](https://github.com/scenarigo/scenarigo/compare/v0.26.1...v0.26.2) - 2026-06-11
 
 ### Bug Fixes
