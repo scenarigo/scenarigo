@@ -27,8 +27,9 @@ func (f AssertionFunc) Assert(v any) error {
 }
 
 type buildOpt struct {
-	tmplData any
-	eqs      []Equaler
+	tmplData  any
+	eqs       []Equaler
+	exactList bool
 }
 
 // BuildOpt represents an option for Build().
@@ -45,6 +46,17 @@ func FromTemplate(data any) BuildOpt {
 func WithEqualers(eqs ...Equaler) BuildOpt {
 	return func(opt *buildOpt) {
 		opt.eqs = append(opt.eqs, eqs...)
+	}
+}
+
+// ExactList is a build option that makes list assertions also assert the
+// element count, so a list with more elements than expected fails instead of
+// matching only the listed prefix. The count assertion is aggregated with the
+// per-element assertions, so a count mismatch and element mismatches are
+// reported together.
+func ExactList() BuildOpt {
+	return func(opt *buildOpt) {
+		opt.exactList = true
 	}
 }
 
@@ -133,6 +145,14 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 			}
 		}
 	case []any:
+		if opt.exactList {
+			// Assert the element count, aggregated with the per-element assertions.
+			as, err := build(ctx, q, Length(len(v)), opt)
+			if err != nil {
+				return nil, err
+			}
+			assertions = append(assertions, as...)
+		}
 		for i, elm := range v {
 			as, err := build(ctx, q.Index(i), elm, opt)
 			if err != nil {

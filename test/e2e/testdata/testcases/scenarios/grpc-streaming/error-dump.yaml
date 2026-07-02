@@ -1,0 +1,26 @@
+---
+title: bidi streaming error dump
+steps:
+- title: BidiStreamEcho
+  protocol: grpc
+  request:
+    target: '{{env.TEST_GRPC_SERVER_ADDR}}'
+    service: scenarigo.testdata.test.Test
+    method: BidiStreamEcho
+    messages:
+      - messageId: "1"
+        messageBody: hello
+      - messageId: "2"
+        messageBody: abort
+    options:
+      reflection:
+        enabled: true
+      auth:
+        insecure: true
+  expect:
+    code: OK
+    messages:
+      - messageId: "1"
+        messageBody: "re: hello"
+      - messageId: "2"
+        messageBody: "re: abort"

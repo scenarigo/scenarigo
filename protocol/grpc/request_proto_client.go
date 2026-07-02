@@ -3,7 +3,9 @@ package grpc
 import (
 	gocontext "context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -15,6 +17,7 @@ import (
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/grpcstream"
 	grpcproto "github.com/scenarigo/scenarigo/protocol/grpc/proto"
 	"github.com/scenarigo/scenarigo/version"
 )
@@ -193,4 +196,232 @@ func (client *protoClient) invoke(ctx gocontext.Context, in proto.Message, opts 
 		sts = status.Convert(err)
 	}
 	return out, sts, nil
+}
+
+func (client *protoClient) isStreamingClient() bool {
+	return client.md.IsStreamingClient()
+}
+
+func (client *protoClient) isStreamingServer() bool {
+	return client.md.IsStreamingServer()
+}
+
+func (client *protoClient) buildRequestMessages(ctx *context.Context) ([]proto.Message, error) {
+	// Allow each message template to reference the already-built messages via request.messages[N].
+	reqAccessor := &requestMessagesAccessor{}
+	ctx = ctx.WithRequest(reqAccessor)
+	msgs := make([]proto.Message, len(client.r.Messages))
+	for i, m := range client.r.Messages {
+		in := dynamicpb.NewMessage(client.md.Input())
+		if err := buildRequestMsg(ctx, in, m); err != nil {
+			return nil, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "failed to build request message")
+		}
+		msgs[i] = in
+		reqAccessor.sent = append(reqAccessor.sent, in)
+	}
+	return msgs, nil
+}
+
+func (client *protoClient) invokeServerStream(ctx gocontext.Context, in proto.Message, opts ...grpc.CallOption) (*streamResult, error) {
+	streamDesc := &grpc.StreamDesc{
+		ServerStreams: true,
+	}
+	stream, err := client.conn.NewStream(ctx, streamDesc, client.fullMethodName, opts...)
+	if err != nil {
+		return &streamResult{sts: status.Convert(err)}, nil
+	}
+	// SendMsg returns io.EOF when the server terminates the stream;
+	// the actual status is retrieved by RecvMsg below.
+	if err := stream.SendMsg(in); err != nil && !stderrors.Is(err, io.EOF) {
+		return &streamResult{sts: status.Convert(err)}, nil
+	}
+	if err := stream.CloseSend(); err != nil {
+		return &streamResult{sts: status.Convert(err)}, nil
+	}
+
+	var msgs []proto.Message
+	for {
+		out := dynamicpb.NewMessage(client.md.Output())
+		if err := stream.RecvMsg(out); err != nil {
+			if stderrors.Is(err, io.EOF) {
+				break
+			}
+			// Keep the messages received so far to dump them for debugging.
+			header, _ := stream.Header()
+			return &streamResult{messages: msgs, header: header, trailer: stream.Trailer(), sts: status.Convert(err)}, nil
+		}
+		msgs = append(msgs, out)
+	}
+
+	header, _ := stream.Header()
+	return &streamResult{messages: msgs, header: header, trailer: stream.Trailer()}, nil
+}
+
+func (client *protoClient) invokeClientStream(ctx gocontext.Context, msgs []proto.Message, opts ...grpc.CallOption) (*streamResult, error) {
+	streamDesc := &grpc.StreamDesc{
+		ClientStreams: true,
+	}
+	stream, err := client.conn.NewStream(ctx, streamDesc, client.fullMethodName, opts...)
+	if err != nil {
+		return &streamResult{sts: status.Convert(err)}, nil
+	}
+	for _, msg := range msgs {
+		if err := stream.SendMsg(msg); err != nil {
+			// SendMsg returns io.EOF when the server terminates the stream;
+			// the actual status is retrieved by RecvMsg below.
+			if stderrors.Is(err, io.EOF) {
+				break
+			}
+			return &streamResult{sts: status.Convert(err)}, nil
+		}
+	}
+	if err := stream.CloseSend(); err != nil {
+		return &streamResult{sts: status.Convert(err)}, nil
+	}
+
+	out := dynamicpb.NewMessage(client.md.Output())
+	if err := stream.RecvMsg(out); err != nil {
+		header, _ := stream.Header()
+		return &streamResult{header: header, trailer: stream.Trailer(), sts: status.Convert(err)}, nil
+	}
+
+	header, _ := stream.Header()
+	return &streamResult{message: out, header: header, trailer: stream.Trailer()}, nil
+}
+
+func (client *protoClient) invokeBidiStream(ctx gocontext.Context, sCtx *context.Context, opts ...grpc.CallOption) (*streamResult, error) {
+	streamDesc := &grpc.StreamDesc{
+		ServerStreams: true,
+		ClientStreams: true,
+	}
+	result := &streamResult{}
+	// Cancel the stream when we return so the background receiver goroutine and
+	// the server RPC are released even if we bail out mid-stream (e.g. when the
+	// deadlock guard fires while evaluating a response reference).
+	streamCtx, cancelStream := gocontext.WithCancel(ctx)
+	defer cancelStream()
+	stream, err := client.conn.NewStream(streamCtx, streamDesc, client.fullMethodName, opts...)
+	if err != nil {
+		result.sts = status.Convert(err)
+		return result, nil
+	}
+
+	// Accumulate responses in the background. Blocking response references
+	// (response.messages[N]) wait on the buffer, bounded by the template
+	// evaluation context, so a deadlocked scenario fails instead of hanging.
+	buf := grpcstream.NewBuffer[proto.Message]()
+	recvCh := make(chan error, 1)
+	go func() {
+		for {
+			out := dynamicpb.NewMessage(client.md.Output())
+			if err := stream.RecvMsg(out); err != nil {
+				buf.Close()
+				if stderrors.Is(err, io.EOF) {
+					err = nil
+				}
+				recvCh <- err
+				return
+			}
+			buf.Append(out)
+		}
+	}()
+
+	// Set up a response accessor that blocks until the Nth response is available
+	bidiResp := &bidiResponseAccessor{buf: buf}
+	sCtx = sCtx.WithResponse(bidiResp)
+
+	// Set up a request accessor for referencing already-sent messages
+	bidiReq := &requestMessagesAccessor{}
+	sCtx = sCtx.WithRequest(bidiReq)
+
+	// Send messages sequentially, evaluating templates as we go
+	for i, m := range client.r.Messages {
+		x, err := sCtx.ExecuteTemplate(m)
+		if err != nil {
+			result.messages = buf.Snapshot()
+			if buf.WaitErr() != nil {
+				return result, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "interrupted while waiting for a streaming response message (possible deadlock or timeout)")
+			}
+			return result, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "failed to execute template")
+		}
+		in := dynamicpb.NewMessage(client.md.Input())
+		if x != nil {
+			if err := ConvertToProto(x, in); err != nil {
+				result.messages = buf.Snapshot()
+				return result, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "failed to build request message")
+			}
+		}
+		// Record the message before sending so that failed attempts also appear in the dump.
+		bidiReq.sent = append(bidiReq.sent, in)
+		result.sent = bidiReq.sent
+		if err := stream.SendMsg(in); err != nil {
+			// SendMsg returns io.EOF when the server terminates the stream;
+			// the actual status is reported by the receiver goroutine.
+			if stderrors.Is(err, io.EOF) {
+				break
+			}
+			result.messages = buf.Snapshot()
+			result.sts = status.Convert(err)
+			return result, nil
+		}
+	}
+
+	if err := stream.CloseSend(); err != nil {
+		result.messages = buf.Snapshot()
+		result.sts = status.Convert(err)
+		return result, nil
+	}
+
+	// Wait for all responses
+	recvErr := <-recvCh
+	result.messages = buf.Snapshot()
+	header, _ := stream.Header()
+	result.header = header
+	result.trailer = stream.Trailer()
+	if recvErr != nil {
+		result.sts = status.Convert(recvErr)
+	}
+	return result, nil
+}
+
+// requestMessagesAccessor provides access to already-built request messages.
+type requestMessagesAccessor struct {
+	sent []proto.Message
+}
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (a *requestMessagesAccessor) ExtractByKey(key string) (any, bool) {
+	if key == "messages" {
+		msgs := make([]*ProtoMessageYAMLMarshaler, len(a.sent))
+		for i, m := range a.sent {
+			msgs[i] = &ProtoMessageYAMLMarshaler{m}
+		}
+		return msgs, true
+	}
+	return nil, false
+}
+
+// bidiResponseAccessor provides access to streaming responses with blocking semantics.
+// When accessing messages[N], it blocks until the Nth response has been received,
+// the stream is closed, or the wait is canceled (deadlock/timeout guard).
+type bidiResponseAccessor struct {
+	buf *grpcstream.Buffer[proto.Message]
+}
+
+// ExtractByKey implements query.KeyExtractorContext interface.
+func (a *bidiResponseAccessor) ExtractByKey(_ gocontext.Context, key string) (any, bool) {
+	if key == "messages" {
+		return a, true
+	}
+	return nil, false
+}
+
+// ExtractByIndex implements query.IndexExtractorContext interface. It blocks
+// until the Nth response has been received, bounded by ctx.
+func (a *bidiResponseAccessor) ExtractByIndex(ctx gocontext.Context, i int) (any, bool) {
+	msg, ok := a.buf.At(ctx, i)
+	if !ok {
+		return nil, false
+	}
+	return &ProtoMessageYAMLMarshaler{msg}, true
 }
