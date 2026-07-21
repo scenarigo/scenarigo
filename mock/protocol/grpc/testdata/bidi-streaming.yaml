@@ -1,0 +1,17 @@
+- protocol: grpc
+  expect:
+    service: scenarigo.testdata.test.Test
+    method: BidiStreamEcho
+    messages:
+      - messageId: '1'
+        messageBody: hello
+      - messageId: '2'
+        messageBody: world
+  response:
+    status:
+      code: OK
+    messages:
+      - messageId: '1'
+        messageBody: 're: {{request.messages[0].messageBody}}'
+      - messageId: '2'
+        messageBody: 're: {{request.messages[1].messageBody}}'
