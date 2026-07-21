@@ -17,14 +17,14 @@ type notDefinedError struct {
 }
 
 func lookup(ctx context.Context, node ast.Node, data any) (any, error) {
-	v, err := extract(node, data)
+	v, err := extract(ctx, node, data)
 	if err != nil {
 		return nil, err
 	}
 	return Execute(ctx, v, data)
 }
 
-func extract(node ast.Node, data any) (any, error) {
+func extract(ctx context.Context, node ast.Node, data any) (any, error) {
 	q, err := buildQuery(queryutil.New(), node)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create query from AST")
@@ -38,8 +38,18 @@ func extract(node ast.Node, data any) (any, error) {
 	if err == nil {
 		return v, nil
 	}
-	v, err = q.Extract(data)
+	// Pass ctx so that context-aware extractors (e.g. a blocking streaming
+	// response accessor) can observe the caller's deadline and cancellation.
+	v, err = q.ExtractContext(ctx, data)
 	if err != nil {
+		// If the context has ended, the failure is (or may be) caused by the
+		// cancellation or deadline rather than the value being genuinely absent.
+		// Report a hard error so that ?? and defined() do not silently treat an
+		// interrupted wait (e.g. a streaming deadlock guard firing) as "not
+		// defined"; only a definitive absence is undefined.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, errors.Wrap(err, ctxErr.Error())
+		}
 		return nil, notDefinedError{err}
 	}
 	return v, nil
