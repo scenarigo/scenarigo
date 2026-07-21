@@ -18,6 +18,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/context"
@@ -311,6 +312,7 @@ func startGRPCServer(t *testing.T) func() {
 	}
 	s := grpc.NewServer()
 	test.RegisterTestServer(s, testServer)
+	reflection.Register(s)
 
 	ln, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

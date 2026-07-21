@@ -2,7 +2,11 @@ package testutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -84,6 +88,60 @@ type testServer func(context.Context, *testpb.EchoRequest) (*testpb.EchoResponse
 
 func (f testServer) Echo(ctx context.Context, req *testpb.EchoRequest) (*testpb.EchoResponse, error) {
 	return f(ctx, req)
+}
+
+func (f testServer) ServerStreamEcho(req *testpb.EchoRequest, stream testpb.Test_ServerStreamEchoServer) error {
+	resp, err := f(stream.Context(), req)
+	if err != nil {
+		return err
+	}
+	// Send the response multiple times (echo with index suffix)
+	for i := range 3 {
+		r := &testpb.EchoResponse{
+			MessageId:   resp.GetMessageId(),
+			MessageBody: fmt.Sprintf("%s-%d", resp.GetMessageBody(), i),
+		}
+		if err := stream.Send(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f testServer) ClientStreamEcho(stream testpb.Test_ClientStreamEchoServer) error {
+	var bodies []string
+	for {
+		req, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return stream.SendAndClose(&testpb.EchoResponse{
+				MessageId:   "aggregated",
+				MessageBody: strings.Join(bodies, ","),
+			})
+		}
+		if err != nil {
+			return err
+		}
+		bodies = append(bodies, req.GetMessageBody())
+	}
+}
+
+func (f testServer) BidiStreamEcho(stream testpb.Test_BidiStreamEchoServer) error {
+	for {
+		req, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		resp := &testpb.EchoResponse{
+			MessageId:   req.GetMessageId(),
+			MessageBody: fmt.Sprintf("re: %s", req.GetMessageBody()),
+		}
+		if err := stream.Send(resp); err != nil {
+			return err
+		}
+	}
 }
 
 func TestGRPCServerFunc(f func(context.Context, *testpb.EchoRequest) (*testpb.EchoResponse, error)) testpb.TestServer {
