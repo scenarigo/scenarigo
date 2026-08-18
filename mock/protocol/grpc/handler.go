@@ -94,7 +94,9 @@ func (s *server) unaryHandler(svcName protoreflect.FullName, method protoreflect
 		if err := mock.Response.Unmarshal(&resp); err != nil {
 			return nil, status.Error(codes.Internal, errors.WrapPath(err, "response", "failed to unmarshal response").Error())
 		}
-		sctx := context.New(nil)
+		// Expose the received request to response templates as request.message,
+		// mirroring the scenario-side dump shape and the streaming handlers.
+		sctx := context.New(nil).WithRequest(&mockRequestAccessor{message: req})
 		v, err := sctx.ExecuteTemplate(resp)
 		if err != nil {
 			return nil, status.Error(codes.Internal, errors.WrapPath(err, "response", "failed to execute template of response").Error())
@@ -178,9 +180,10 @@ func (s *server) handleServerStream(stream grpc.ServerStream, method protoreflec
 		return err
 	}
 
-	// Set up template context with request.message
+	// Expose the received request to response templates as request.message,
+	// mirroring the scenario-side dump shape.
 	sctx := context.New(nil)
-	sctx = sctx.WithRequest(req)
+	sctx = sctx.WithRequest(&mockRequestAccessor{message: req})
 
 	// Send multiple response messages
 	msgs, err := resp.extractMessages(sctx, method)
@@ -393,6 +396,22 @@ func (s *server) handleBidiStream(stream grpc.ServerStream, method protoreflect.
 }
 
 // clientStreamRequestAccessor provides access to received client-stream request messages.
+// mockRequestAccessor exposes the received request to response templates as
+// request.message, mirroring the scenario-side dump shape for unary and
+// server-streaming methods (client/bidi streaming expose request.messages via
+// their own accessors).
+type mockRequestAccessor struct {
+	message proto.Message
+}
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (a *mockRequestAccessor) ExtractByKey(key string) (any, bool) {
+	if key == "message" {
+		return a.message, true
+	}
+	return nil, false
+}
+
 type clientStreamRequestAccessor struct {
 	received []*grpcprotocol.ProtoMessageYAMLMarshaler
 }

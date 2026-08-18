@@ -99,6 +99,11 @@ proto:
 			config:   cfg,
 			f:        sendEchoRequest(status.New(codes.InvalidArgument, ".expect.metadata.content-type: request assertion failed"), "", ""),
 		},
+		"unary with request.message template": {
+			filename: "testdata/unary-request-template.yaml",
+			config:   cfg,
+			f:        sendEchoRequest(nil, "1", "hello"),
+		},
 		"server streaming": {
 			filename: "testdata/server-streaming.yaml",
 			config:   cfg,

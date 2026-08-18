@@ -9,7 +9,7 @@
     status:
       code: OK
     messages:
-      - messageId: '1'
-        messageBody: hello-0
+      - messageId: '{{request.message.messageId}}'
+        messageBody: '{{request.message.messageBody}}-0'
       - messageId: '1'
         messageBody: hello-1
