@@ -203,6 +203,26 @@ func TestProtoClient(t *testing.T) {
 			},
 		},
 
+		"unary with explicitly empty messages is invalid": {
+			handler: defaultHandler,
+			request: &Request{
+				Target:   "{{vars.target}}",
+				Service:  testpb.Test_ServiceDesc.ServiceName,
+				Method:   "Echo",
+				Messages: []any{},
+				Options: &RequestOptions{
+					Proto: &ProtoOption{
+						Files: []string{
+							"../../testdata/proto/test/test.proto",
+						},
+					},
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectError: ".messages: messages can only be used with streaming methods",
+		},
 		"server returns error": {
 			handler: func(ctx gocontext.Context, req *testpb.EchoRequest) (*testpb.EchoResponse, error) {
 				return nil, status.New(codes.Unauthenticated, "unauthenticated").Err()

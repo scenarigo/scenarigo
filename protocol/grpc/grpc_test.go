@@ -92,6 +92,11 @@ message: test
 messages:
   - test`),
 			},
+			"use message and empty messages": {
+				bytes: []byte(`
+message: test
+messages: []`),
+			},
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {

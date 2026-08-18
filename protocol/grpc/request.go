@@ -365,13 +365,16 @@ func (r *Request) invokeUnary(ctx *context.Context, client serviceClient) (*cont
 }
 
 func (r *Request) validateMessageFields(isStreamClient, isStreamServer bool) error {
+	// Check for explicit presence (non-nil) rather than non-emptiness so that
+	// an explicitly written "messages: []" is rejected on non-client-streaming
+	// methods too, consistently with the message/messages exclusivity check.
 	if !isStreamClient && !isStreamServer {
-		if len(r.Messages) > 0 {
+		if r.Messages != nil {
 			return errors.ErrorPath("messages", "messages can only be used with streaming methods")
 		}
 	}
 	if isStreamServer && !isStreamClient {
-		if len(r.Messages) > 0 {
+		if r.Messages != nil {
 			return errors.ErrorPath("messages", "messages cannot be used for server streaming request (use message instead)")
 		}
 	}
