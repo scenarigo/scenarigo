@@ -3,11 +3,14 @@ package grpc
 import (
 	gocontext "context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -193,4 +196,107 @@ func (client *protoClient) invoke(ctx gocontext.Context, in proto.Message, opts 
 		sts = status.Convert(err)
 	}
 	return out, sts, nil
+}
+
+func (client *protoClient) isStreamingClient() bool {
+	return client.md.IsStreamingClient()
+}
+
+func (client *protoClient) isStreamingServer() bool {
+	return client.md.IsStreamingServer()
+}
+
+func (client *protoClient) buildRequestMessages(ctx *context.Context) ([]proto.Message, error) {
+	// Allow each message template to reference the already-built messages via request.messages[N].
+	reqAccessor := &requestMessagesAccessor{}
+	ctx = ctx.WithRequest(reqAccessor)
+	msgs := make([]proto.Message, len(client.r.Messages))
+	for i, m := range client.r.Messages {
+		in := dynamicpb.NewMessage(client.md.Input())
+		if err := buildRequestMsg(ctx, in, m); err != nil {
+			return nil, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "failed to build request message")
+		}
+		msgs[i] = in
+		reqAccessor.sent = append(reqAccessor.sent, in)
+	}
+	return msgs, nil
+}
+
+// protoStreamConn adapts a generic grpc.ClientStream to the per-kind stream
+// connection interfaces using dynamic messages.
+type protoStreamConn struct {
+	stream grpc.ClientStream
+	md     protoreflect.MethodDescriptor
+}
+
+func (c *protoStreamConn) NewInput() (proto.Message, error) {
+	return dynamicpb.NewMessage(c.md.Input()), nil
+}
+
+func (c *protoStreamConn) Send(msg proto.Message) error {
+	return c.stream.SendMsg(msg)
+}
+
+func (c *protoStreamConn) Recv() (proto.Message, error) {
+	out := dynamicpb.NewMessage(c.md.Output())
+	if err := c.stream.RecvMsg(out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *protoStreamConn) CloseSend() error {
+	return c.stream.CloseSend()
+}
+
+// CloseAndRecv finishes a client-streaming call the same way grpc-go's
+// generated code does: CloseSend followed by a single receive.
+func (c *protoStreamConn) CloseAndRecv() (proto.Message, error) {
+	if err := c.stream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return c.Recv()
+}
+
+func (c *protoStreamConn) HeaderTrailer() (metadata.MD, metadata.MD) {
+	header, _ := c.stream.Header()
+	return header, c.stream.Trailer()
+}
+
+func (client *protoClient) newStreamConn(ctx gocontext.Context, desc *grpc.StreamDesc, opts ...grpc.CallOption) (*protoStreamConn, error) {
+	stream, err := client.conn.NewStream(ctx, desc, client.fullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &protoStreamConn{stream: stream, md: client.md}, nil
+}
+
+func (client *protoClient) invokeServerStream(ctx gocontext.Context, in proto.Message, opts ...grpc.CallOption) (*streamResult, error) {
+	return runServerStream(func() (serverStreamConn, error) {
+		conn, err := client.newStreamConn(ctx, &grpc.StreamDesc{ServerStreams: true}, opts...)
+		if err != nil {
+			return nil, err
+		}
+		// SendMsg returns io.EOF when the server terminates the stream;
+		// the actual status is retrieved by Recv.
+		if err := conn.stream.SendMsg(in); err != nil && !stderrors.Is(err, io.EOF) {
+			return nil, err
+		}
+		if err := conn.stream.CloseSend(); err != nil {
+			return nil, err
+		}
+		return conn, nil
+	})
+}
+
+func (client *protoClient) invokeClientStream(ctx gocontext.Context, msgs []proto.Message, opts ...grpc.CallOption) (*streamResult, error) {
+	return runClientStream(func() (clientStreamConn, error) {
+		return client.newStreamConn(ctx, &grpc.StreamDesc{ClientStreams: true}, opts...)
+	}, msgs)
+}
+
+func (client *protoClient) invokeBidiStream(ctx gocontext.Context, sCtx *context.Context, opts ...grpc.CallOption) (*streamResult, error) {
+	return runBidiStream(ctx, sCtx, client.r.Messages, func(streamCtx gocontext.Context) (bidiStreamConn, error) {
+		return client.newStreamConn(streamCtx, &grpc.StreamDesc{ServerStreams: true, ClientStreams: true}, opts...)
+	})
 }

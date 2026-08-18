@@ -1,0 +1,8 @@
+- protocol: grpc
+  expect:
+    service: scenarigo.testdata.test.Test
+    method: ClientStreamEcho
+  response:
+    status:
+      code: '{{"NotFound"}}'
+      message: 'received {{request.messages[0].messageBody}}'

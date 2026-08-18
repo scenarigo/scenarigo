@@ -99,7 +99,7 @@ func (t *Template) executeExpr(ctx context.Context, expr ast.Expr, data any) (an
 	case *ast.LeftArrowExpr:
 		return t.executeLeftArrowExpr(ctx, e, data)
 	case *ast.DefinedExpr:
-		return t.executeDefinedExpr(e, data)
+		return t.executeDefinedExpr(ctx, e, data)
 	default:
 		return nil, errors.Errorf(`unknown expression "%T"`, e)
 	}
@@ -345,7 +345,7 @@ func (t *Template) executeBinaryOperation(op token.Token, x, y val.Value, yExpr 
 func (t *Template) executeCoalescingExpr(ctx context.Context, e *ast.BinaryExpr, data any) (any, error) {
 	switch e.X.(type) {
 	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
-		extracted, err := extract(e.X, data)
+		extracted, err := extract(ctx, e.X, data)
 		if err != nil {
 			var notDefined notDefinedError
 			if errors.As(err, &notDefined) {
@@ -777,10 +777,10 @@ func (t *Template) executeLeftArrowExpr(ctx context.Context, e *ast.LeftArrowExp
 	return f.Exec(arg)
 }
 
-func (t *Template) executeDefinedExpr(e *ast.DefinedExpr, data any) (any, error) {
+func (t *Template) executeDefinedExpr(ctx context.Context, e *ast.DefinedExpr, data any) (any, error) {
 	switch e.Arg.(type) {
 	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr:
-		if _, err := extract(e.Arg, data); err != nil {
+		if _, err := extract(ctx, e.Arg, data); err != nil {
 			var notDefined notDefinedError
 			if errors.As(err, &notDefined) {
 				return false, nil

@@ -1,0 +1,148 @@
+package grpcstream
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+// waitUntilBlocked blocks until at least one consumer is parked in cond.Wait,
+// so a test can signal the waiter deterministically instead of racing it.
+func waitUntilBlocked[T any](t *testing.T, b *Buffer[T]) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for b.numWaiters() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("consumer never blocked in At")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestBuffer_AtUnblocksOnAppend(t *testing.T) {
+	b := NewBuffer[int]()
+
+	got := make(chan int, 1)
+	go func() {
+		v, ok := b.At(context.Background(), 1)
+		if ok {
+			got <- v
+		} else {
+			got <- -1
+		}
+	}()
+
+	// Ensure the consumer is parked waiting for index 1 before appending, so the
+	// Append→Broadcast wakeup path is exercised rather than the fast path.
+	b.Append(10)
+	waitUntilBlocked(t, b)
+	b.Append(20)
+
+	select {
+	case v := <-got:
+		if v != 20 {
+			t.Fatalf("expected 20 but got %d", v)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("At did not unblock after Append")
+	}
+}
+
+func TestBuffer_AtReturnsFalseOnClose(t *testing.T) {
+	b := NewBuffer[int]()
+
+	got := make(chan bool, 1)
+	go func() {
+		_, ok := b.At(context.Background(), 5)
+		got <- ok
+	}()
+
+	b.Append(1)
+	b.Close()
+
+	select {
+	case ok := <-got:
+		if ok {
+			t.Fatal("expected At to return false after Close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("At did not unblock after Close")
+	}
+}
+
+func TestBuffer_AtReturnsFalseOnContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	b := NewBuffer[int]()
+
+	got := make(chan bool, 1)
+	go func() {
+		_, ok := b.At(ctx, 0)
+		got <- ok
+	}()
+
+	// Park the consumer in cond.Wait before canceling, so the cancel-driven
+	// broadcast wakeup path is exercised rather than an early ctx.Err() check.
+	waitUntilBlocked(t, b)
+	cancel()
+
+	select {
+	case ok := <-got:
+		if ok {
+			t.Fatal("expected At to return false after context cancel")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("At did not unblock after context cancel")
+	}
+}
+
+func TestBuffer_AtReturnsFalseOnContextDeadline(t *testing.T) {
+	// Callers bound blocking waits by putting a deadline (the deadlock guard)
+	// on the context; At must unblock when it expires.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	b := NewBuffer[int]()
+
+	got := make(chan bool, 1)
+	go func() {
+		_, ok := b.At(ctx, 0)
+		got <- ok
+	}()
+
+	select {
+	case ok := <-got:
+		if ok {
+			t.Fatal("expected At to return false after the deadline")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("At did not unblock; the context deadline did not fire")
+	}
+}
+
+func TestBuffer_Done(t *testing.T) {
+	b := NewBuffer[int]()
+	if b.Done() {
+		t.Fatal("expected Done to be false before Close")
+	}
+	b.Append(1)
+	if b.Done() {
+		t.Fatal("expected Done to be false after Append")
+	}
+	b.Close()
+	if !b.Done() {
+		t.Fatal("expected Done to be true after Close")
+	}
+}
+
+func TestBuffer_Snapshot(t *testing.T) {
+	b := NewBuffer[string]()
+
+	if got := b.Snapshot(); len(got) != 0 {
+		t.Fatalf("expected empty snapshot but got %v", got)
+	}
+	b.Append("a")
+	b.Append("b")
+	got := b.Snapshot()
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("unexpected snapshot: %v", got)
+	}
+}

@@ -64,6 +64,13 @@ func (p *GRPC) UnmarshalRequest(b []byte) (protocol.Invoker, error) {
 		r.Body = nil
 	}
 
+	// Check for explicit presence (non-nil) rather than non-emptiness so that
+	// an explicitly written "messages: []" conflicts with "message" too, the
+	// same way the expect side is validated.
+	if r.Message != nil && r.Messages != nil {
+		return nil, errors.New("message and messages are exclusive")
+	}
+
 	return &r, nil
 }
 
@@ -85,6 +92,10 @@ func (p *GRPC) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, error) {
 		}
 		e.Message = e.Body
 		e.Body = nil
+	}
+
+	if e.Message != nil && e.Messages != nil {
+		return nil, errors.New("message and messages are exclusive")
 	}
 
 	return &e, nil

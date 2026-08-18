@@ -185,6 +185,102 @@ func TestExpect_Build(t *testing.T) {
 					}},
 				},
 			},
+			"assert messages": {
+				expect: &Expect{
+					Code: "OK",
+					Messages: []any{
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageId", Value: "1"},
+							yaml.MapItem{Key: "messageBody", Value: "hello-0"},
+						},
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageId", Value: "1"},
+							yaml.MapItem{Key: "messageBody", Value: "hello-1"},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageId: "1", MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageId: "1", MessageBody: "hello-1"}},
+					},
+				},
+			},
+			"assert messages count with and+length": {
+				// The README documents this pattern to also pin the number of
+				// received messages on top of the prefix match.
+				expect: &Expect{
+					Code: "OK",
+					Messages: yaml.MapSlice{
+						yaml.MapItem{
+							Key: "{{assert.and <-}}",
+							Value: []any{
+								"{{assert.length(3)}}",
+								[]any{
+									yaml.MapSlice{
+										yaml.MapItem{Key: "messageBody", Value: "hello-0"},
+									},
+								},
+							},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageBody: "hello-1"}},
+						{&test.EchoResponse{MessageBody: "hello-2"}},
+					},
+				},
+			},
+			"assert messages count with and+size template": {
+				// The count can also be pinned with a plain template predicate
+				// on the actual list ($) instead of assert.length.
+				expect: &Expect{
+					Code: "OK",
+					Messages: yaml.MapSlice{
+						yaml.MapItem{
+							Key: "{{assert.and <-}}",
+							Value: []any{
+								"{{size($) == 3}}",
+								[]any{
+									yaml.MapSlice{
+										yaml.MapItem{Key: "messageBody", Value: "hello-0"},
+									},
+								},
+							},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageBody: "hello-1"}},
+						{&test.EchoResponse{MessageBody: "hello-2"}},
+					},
+				},
+			},
+			"assert messages with contains": {
+				// messages written as a contains assertion only checks containment.
+				expect: &Expect{
+					Code: "OK",
+					Messages: yaml.MapSlice{
+						yaml.MapItem{
+							Key: "{{assert.contains <-}}",
+							Value: yaml.MapSlice{
+								yaml.MapItem{Key: "messageBody", Value: "hello-1"},
+							},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageBody: "hello-1"}},
+						{&test.EchoResponse{MessageBody: "hello-2"}},
+					},
+				},
+			},
 			"with $": {
 				vars: map[string]string{"body": "hello"},
 				expect: &Expect{
@@ -311,6 +407,31 @@ func TestExpect_Build(t *testing.T) {
 				},
 				expectBuildError: true,
 			},
+			"messages count mismatch": {
+				expect: &Expect{
+					Code: "OK",
+					Messages: yaml.MapSlice{
+						yaml.MapItem{
+							Key: "{{assert.and <-}}",
+							Value: []any{
+								"{{size($) == 3}}",
+								[]any{
+									yaml.MapSlice{
+										yaml.MapItem{Key: "messageBody", Value: "hello-0"},
+									},
+								},
+							},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageBody: "hello-1"}},
+					},
+				},
+				expectAssertError: true,
+			},
 			"wrong code in case of default": {
 				expect: &Expect{},
 				v: &response{
@@ -428,6 +549,115 @@ func TestExpect_Build(t *testing.T) {
 						},
 					}),
 					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{}},
+				},
+				expectAssertError: true,
+			},
+			"missing response message": {
+				expect: &Expect{
+					Code: "OK",
+					Messages: []any{
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageBody", Value: "hello-0"},
+						},
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageBody", Value: "hello-1"},
+						},
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageBody", Value: "hello-2"},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageBody: "hello-1"}},
+					},
+				},
+				expectAssertError: true,
+			},
+			"messages with contains but absent": {
+				expect: &Expect{
+					Code: "OK",
+					Messages: yaml.MapSlice{
+						yaml.MapItem{
+							Key: "{{assert.contains <-}}",
+							Value: yaml.MapSlice{
+								yaml.MapItem{Key: "messageBody", Value: "absent"},
+							},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageBody: "hello-1"}},
+					},
+				},
+				expectAssertError: true,
+			},
+			"extra response messages are allowed (prefix match)": {
+				// Like other list assertions, messages matches the listed
+				// elements as a prefix; extra streamed messages are allowed.
+				expect: &Expect{
+					Code: "OK",
+					Messages: []any{
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageBody", Value: "hello-0"},
+						},
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageBody", Value: "hello-1"},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello-0"}},
+						{&test.EchoResponse{MessageBody: "hello-1"}},
+						{&test.EchoResponse{MessageBody: "hello-2"}},
+					},
+				},
+			},
+			"wrong messages (value mismatch)": {
+				expect: &Expect{
+					Code: "OK",
+					Messages: []any{
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageBody", Value: "hello"},
+						},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "world"}},
+					},
+				},
+				expectAssertError: true,
+			},
+			"expect messages but response has no messages (unary)": {
+				expect: &Expect{
+					Code: "OK",
+					Messages: []any{
+						yaml.MapSlice{
+							yaml.MapItem{Key: "messageBody", Value: "hello"},
+						},
+					},
+				},
+				v: &response{
+					Message: &ProtoMessageYAMLMarshaler{&test.EchoResponse{MessageBody: "hello"}},
+				},
+				expectAssertError: true,
+			},
+			"expect message but response has no message (streaming)": {
+				expect: &Expect{
+					Code: "OK",
+					Message: yaml.MapSlice{
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+				},
+				v: &response{
+					Messages: []*ProtoMessageYAMLMarshaler{
+						{&test.EchoResponse{MessageBody: "hello"}},
+					},
 				},
 				expectAssertError: true,
 			},

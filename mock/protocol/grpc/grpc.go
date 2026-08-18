@@ -27,10 +27,12 @@ func Register() {
 }
 
 // GRPC is a protocol type for the mock.
+const protocolName = "grpc"
+
 type GRPC struct{}
 
 // Name implements protocol.Protocol interface.
-func (_ GRPC) Name() string { return "grpc" } //nolint:revive
+func (_ GRPC) Name() string { return protocolName } //nolint:revive
 
 // UnmarshalConfig implements protocol.Protocol interface.
 func (_ GRPC) UnmarshalConfig(b []byte) (any, error) { //nolint:revive
@@ -164,7 +166,7 @@ func (s *server) wait(ctx context.Context) error {
 			once.Do(func() {
 				c, cErr := grpc.NewClient(s.addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 				if cErr != nil {
-					err = fmt.Errorf("failed to connect server: %w", err)
+					err = fmt.Errorf("failed to connect server: %w", cErr)
 					return
 				}
 				client = healthpb.NewHealthClient(c)

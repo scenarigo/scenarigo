@@ -86,6 +86,17 @@ method: Ping`),
 body: test
 message: test`),
 			},
+			"use message and messages": {
+				bytes: []byte(`
+message: test
+messages:
+  - test`),
+			},
+			"use message and empty messages": {
+				bytes: []byte(`
+message: test
+messages: []`),
+			},
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {
@@ -156,6 +167,12 @@ func TestGRPC_UnmarshalExpect(t *testing.T) {
 				bytes: []byte(`
 body: test
 message: test`),
+			},
+			"use message and messages": {
+				bytes: []byte(`
+message: test
+messages:
+  - test`),
 			},
 		}
 		for name, test := range tests {

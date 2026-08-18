@@ -1,0 +1,40 @@
+--- FAIL: testdata/testcases/scenarios/grpc-streaming/error-dump.yaml (0.00s)
+    --- FAIL: testdata/testcases/scenarios/grpc-streaming/error-dump.yaml/bidi_streaming_error_dump (0.00s)
+        --- FAIL: testdata/testcases/scenarios/grpc-streaming/error-dump.yaml/bidi_streaming_error_dump/BidiStreamEcho (0.00s)
+                request:
+                  method: BidiStreamEcho
+                  metadata:
+                    scenarigo-scenario-filepath-bin:
+                    - testdata/testcases/scenarios/grpc-streaming/error-dump.yaml
+                    scenarigo-scenario-title-bin:
+                    - bidi streaming error dump
+                    scenarigo-step-full-name-bin:
+                    - testdata/testcases/scenarios/grpc-streaming/error-dump.yaml/bidi_streaming_error_dump/BidiStreamEcho
+                  messages:
+                  - messageId: "1"
+                    messageBody: hello
+                  - messageId: "2"
+                    messageBody: abort
+                response:
+                  status:
+                    code: Aborted
+                    message: aborted by request
+                  header:
+                    content-type:
+                    - application/grpc
+                  messages:
+                  - messageId: "1"
+                    messageBody: "re: hello"
+                elapsed time: 0.000000 sec
+                expected "OK" but got "10"
+                      18 |       auth:
+                      19 |         insecure: true
+                      20 |   expect:
+                    > 21 |     code: OK
+                                     ^
+                      22 |     messages:
+                      23 |       - messageId: "1"
+                      24 |         messageBody: "re: hello"
+FAIL
+FAIL	testdata/testcases/scenarios/grpc-streaming/error-dump.yaml	0.000s
+FAIL
