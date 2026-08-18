@@ -1307,6 +1307,53 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 	})
 }
 
+func TestTemplate_Execute_EndedContext(t *testing.T) {
+	// A context that had already ended before the evaluation started cannot
+	// have interrupted a blocking wait, so ordinary undefined values must keep
+	// their fallback semantics: e.g. bind evaluation after a step timeout runs
+	// with the expired request context and relies on ?? / defined() working.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	t.Run("?? falls back", func(t *testing.T) {
+		tmpl, err := New(`{{a.b ?? "default"}}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		i, err := tmpl.Execute(ctx, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if diff := cmp.Diff("default", i); diff != "" {
+			t.Errorf("diff: (-want +got)\n%s", diff)
+		}
+	})
+	t.Run("defined returns false", func(t *testing.T) {
+		tmpl, err := New(`{{defined(a.b)}}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		i, err := tmpl.Execute(ctx, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if diff := cmp.Diff(true, i == false); diff != "" {
+			t.Errorf("expected false but got %v", i)
+		}
+	})
+	t.Run("bare undefined value still reports not found", func(t *testing.T) {
+		tmpl, err := New(`{{a.b}}`)
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if _, err := tmpl.Execute(ctx, nil); err == nil {
+			t.Fatal("expected error but got no error")
+		} else if strings.Contains(err.Error(), "context canceled") {
+			t.Errorf("the failure must be reported as not found, not as a context error: %s", err)
+		}
+	})
+}
+
 type executeTestCase struct {
 	str         string
 	data        any
