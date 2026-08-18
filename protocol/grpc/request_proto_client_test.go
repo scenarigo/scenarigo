@@ -1567,3 +1567,39 @@ func generateCert(t *testing.T) (string, string, string) {
 
 	return caPEM.Name(), certPEM.Name(), certKeyPEM.Name()
 }
+
+func TestProtoClientStreaming_TransportErrorStaysStatus(t *testing.T) {
+	// A transport-level open failure is observable scenario state and must be
+	// recorded as the result status (matching unary), unlike client-side bugs
+	// such as a nil stream, which are hard errors.
+	r := &Request{
+		Target:  "localhost:1", // nothing listens here
+		Service: testpb.Test_ServiceDesc.ServiceName,
+		Method:  "ServerStreamEcho",
+		Message: yaml.MapSlice{
+			yaml.MapItem{Key: "messageId", Value: "1"},
+		},
+		Options: &RequestOptions{
+			Proto: &ProtoOption{
+				Files: []string{
+					"../../testdata/proto/test/test.proto",
+				},
+			},
+			Auth: &AuthOption{
+				Insecure: ptr.To(true),
+			},
+		},
+	}
+	t.Cleanup(func() { _ = connPool.closeConnection("localhost:1") })
+	_, result, err := r.Invoke(context.FromT(t))
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	resp, ok := result.(*response)
+	if !ok {
+		t.Fatalf("failed to type conversion from %T to *response", result)
+	}
+	if resp.Status.Code() != codes.Unavailable {
+		t.Fatalf("expected status Unavailable but got %s", resp.Status.Code())
+	}
+}

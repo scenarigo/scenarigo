@@ -50,7 +50,7 @@ type bidiStreamConn interface {
 func runServerStream(open func() (serverStreamConn, error)) (*streamResult, error) {
 	stream, err := open()
 	if err != nil {
-		return &streamResult{sts: status.Convert(err)}, nil
+		return openFailure(&streamResult{}, err)
 	}
 
 	var msgs []proto.Message
@@ -75,7 +75,7 @@ func runServerStream(open func() (serverStreamConn, error)) (*streamResult, erro
 func runClientStream(open func() (clientStreamConn, error), msgs []proto.Message) (*streamResult, error) {
 	stream, err := open()
 	if err != nil {
-		return &streamResult{sts: status.Convert(err)}, nil
+		return openFailure(&streamResult{}, err)
 	}
 
 	for _, msg := range msgs {
@@ -112,8 +112,7 @@ func runBidiStream(ctx gocontext.Context, sCtx *context.Context, msgs []any, ope
 	defer cancelStream()
 	stream, err := open(streamCtx)
 	if err != nil {
-		result.sts = status.Convert(err)
-		return result, nil
+		return openFailure(result, err)
 	}
 
 	// Accumulate responses in the background. Blocking response references
@@ -212,6 +211,20 @@ func runBidiStream(ctx gocontext.Context, sCtx *context.Context, msgs []any, ope
 		result.sts = status.Convert(recvErr)
 	}
 	return result, nil
+}
+
+// openFailure records an open() failure. A gRPC status error — including
+// transport failures such as Unavailable — is observable scenario state and is
+// recorded as the result status, matching the unary behavior; any other error
+// is a client-side bug (e.g. a plugin returning a nil stream) and is escalated
+// as a hard error so that a scenario cannot accidentally assert it away with
+// an expect.status.code.
+func openFailure(result *streamResult, err error) (*streamResult, error) {
+	if s, ok := status.FromError(err); ok {
+		result.sts = s
+		return result, nil
+	}
+	return result, err
 }
 
 // abortBidi records the partial results for the dump when runBidiStream bails

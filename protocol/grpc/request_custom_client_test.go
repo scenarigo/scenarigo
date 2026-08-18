@@ -677,19 +677,15 @@ func TestCustomServiceClient_BidiStream_NilStream(t *testing.T) {
 			ctx := context.FromT(t).WithVars(map[string]any{
 				"client": client,
 			})
-			_, result, err := r.Invoke(ctx)
-			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+			// A nil stream is a client-side bug, not observable scenario state:
+			// it must surface as a hard error rather than a status a scenario
+			// could assert away.
+			_, _, err := r.Invoke(ctx)
+			if err == nil {
+				t.Fatal("expected error but got nil")
 			}
-			typedResult, ok := result.(*response)
-			if !ok {
-				t.Fatalf("failed to type conversion from %T to *response", result)
-			}
-			if typedResult.Status.Code() == codes.OK {
-				t.Fatal("expected non-OK status for a nil stream")
-			}
-			if !strings.Contains(typedResult.Status.Message(), "nil stream") {
-				t.Fatalf("expected nil stream error but got %q", typedResult.Status.Message())
+			if !strings.Contains(err.Error(), "nil stream") {
+				t.Fatalf("expected nil stream error but got %q", err.Error())
 			}
 		})
 	}
