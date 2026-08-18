@@ -283,3 +283,16 @@ func (a *bidiResponseAccessor) ExtractByIndex(ctx gocontext.Context, i int) (any
 	}
 	return &ProtoMessageYAMLMarshaler{msg}, true
 }
+
+// MarshalYAML implements the yaml.InterfaceMarshaler interface. An unindexed
+// {{response.messages}} reference materializes as the messages received so far
+// — mirroring {{request.messages}}, which lists the messages sent so far —
+// instead of rendering the accessor struct itself.
+func (a *bidiResponseAccessor) MarshalYAML() (any, error) {
+	msgs := a.buf.Snapshot()
+	out := make([]*ProtoMessageYAMLMarshaler, len(msgs))
+	for i, m := range msgs {
+		out[i] = &ProtoMessageYAMLMarshaler{m}
+	}
+	return out, nil
+}

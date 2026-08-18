@@ -1,12 +1,14 @@
 package grpc
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"strings"
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
@@ -616,6 +618,37 @@ func TestAccessors(t *testing.T) {
 		buf.Close()
 		if _, ok := a.ExtractByIndex(context.Background(), 0); ok {
 			t.Error("expected index 0 to not be found when done with no messages")
+		}
+	})
+	t.Run("mockBidiRequestAccessor materializes received messages", func(t *testing.T) {
+		comp := proto.NewCompiler(nil)
+		fds, err := comp.Compile(context.Background(), []string{"./testdata/test.proto"})
+		if err != nil {
+			t.Fatalf("failed to compile proto: %s", err)
+		}
+		sd, err := fds.ResolveService(protoreflect.FullName("scenarigo.testdata.test.Test"))
+		if err != nil {
+			t.Fatalf("failed to resolve service: %s", err)
+		}
+		msg := dynamicpb.NewMessage(sd.Methods().ByName("BidiStreamEcho").Input())
+		msg.Set(msg.Descriptor().Fields().ByName("message_id"), protoreflect.ValueOfString("1"))
+
+		buf := grpcstream.NewBuffer[*grpcprotocol.ProtoMessageYAMLMarshaler]()
+		buf.Append(&grpcprotocol.ProtoMessageYAMLMarshaler{Message: msg})
+		a := &mockBidiRequestAccessor{buf: buf}
+
+		var b bytes.Buffer
+		if err := yaml.NewEncoder(&b, yaml.JSON()).Encode(a); err != nil {
+			t.Fatalf("failed to encode: %s", err)
+		}
+		var got []struct {
+			MessageID string `yaml:"messageId"`
+		}
+		if err := yaml.Unmarshal(b.Bytes(), &got); err != nil {
+			t.Fatalf("failed to decode: %s", err)
+		}
+		if len(got) != 1 || got[0].MessageID != "1" {
+			t.Fatalf("expected message 1 but got %v", got)
 		}
 	})
 }

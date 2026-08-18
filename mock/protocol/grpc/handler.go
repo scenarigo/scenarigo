@@ -469,6 +469,13 @@ func (a *mockBidiRequestAccessor) ExtractByIndex(ctx gocontext.Context, i int) (
 	return msg, true
 }
 
+// MarshalYAML implements the yaml.InterfaceMarshaler interface. An unindexed
+// {{request.messages}} reference materializes as the messages received so far
+// instead of rendering the accessor struct itself.
+func (a *mockBidiRequestAccessor) MarshalYAML() (any, error) {
+	return a.buf.Snapshot(), nil
+}
+
 // mockBidiResponseAccessor provides access to already-sent response messages.
 type mockBidiResponseAccessor struct {
 	sent []*grpcprotocol.ProtoMessageYAMLMarshaler

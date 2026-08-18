@@ -1,8 +1,10 @@
 package grpc
 
 import (
+	"bytes"
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -67,6 +69,40 @@ func TestAbortBidi(t *testing.T) {
 
 		if result.sts != nil {
 			t.Fatalf("expected nil status but got %v", result.sts)
+		}
+	})
+}
+
+func TestBidiResponseAccessor_MarshalYAML(t *testing.T) {
+	t.Run("materializes the messages received so far", func(t *testing.T) {
+		buf := grpcstream.NewBuffer[proto.Message]()
+		buf.Append(&testpb.EchoResponse{MessageId: "1"})
+		buf.Append(&testpb.EchoResponse{MessageId: "2"})
+		a := &bidiResponseAccessor{buf: buf}
+
+		var b bytes.Buffer
+		if err := yaml.NewEncoder(&b, yaml.JSON()).Encode(a); err != nil {
+			t.Fatalf("failed to encode: %s", err)
+		}
+		var got []struct {
+			MessageID string `yaml:"messageId"`
+		}
+		if err := yaml.Unmarshal(b.Bytes(), &got); err != nil {
+			t.Fatalf("failed to decode: %s", err)
+		}
+		if len(got) != 2 || got[0].MessageID != "1" || got[1].MessageID != "2" {
+			t.Fatalf("expected messages 1, 2 but got %v", got)
+		}
+	})
+	t.Run("empty buffer materializes as an empty list", func(t *testing.T) {
+		a := &bidiResponseAccessor{buf: grpcstream.NewBuffer[proto.Message]()}
+
+		var b bytes.Buffer
+		if err := yaml.NewEncoder(&b, yaml.JSON()).Encode(a); err != nil {
+			t.Fatalf("failed to encode: %s", err)
+		}
+		if s := string(bytes.TrimSpace(b.Bytes())); s != "[]" {
+			t.Fatalf("expected [] but got %q", s)
 		}
 	})
 }
