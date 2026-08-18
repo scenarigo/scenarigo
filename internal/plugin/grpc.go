@@ -241,10 +241,8 @@ func GRPCInvokeServerStream(ctx context.Context, method reflect.Value, reqMsg pr
 	if len(rvalues) != 2 {
 		return reflect.Value{}, errors.Errorf("expected return value length of method call is 2 but %d", len(rvalues))
 	}
-	if !rvalues[1].IsNil() {
-		if callErr, ok := rvalues[1].Interface().(error); ok {
-			return reflect.Value{}, callErr
-		}
+	if callErr := reflectedError(rvalues[1]); callErr != nil {
+		return reflect.Value{}, callErr
 	}
 	if err := validateStreamValue(rvalues[0]); err != nil {
 		return reflect.Value{}, err
@@ -266,10 +264,8 @@ func GRPCInvokeStream(ctx context.Context, method reflect.Value, opts ...grpc.Ca
 	if len(rvalues) != 2 {
 		return reflect.Value{}, errors.Errorf("expected return value length of method call is 2 but %d", len(rvalues))
 	}
-	if !rvalues[1].IsNil() {
-		if callErr, ok := rvalues[1].Interface().(error); ok {
-			return reflect.Value{}, callErr
-		}
+	if callErr := reflectedError(rvalues[1]); callErr != nil {
+		return reflect.Value{}, callErr
 	}
 	if err := validateStreamValue(rvalues[0]); err != nil {
 		return reflect.Value{}, err
@@ -287,6 +283,20 @@ func validateStreamValue(stream reflect.Value) error {
 	}
 	if !v.IsValid() || (isNilable(v.Kind()) && v.IsNil()) {
 		return errors.New("streaming method returned a nil stream")
+	}
+	return nil
+}
+
+// reflectedError interprets a reflected return value as an error result.
+// The type assertion runs first so that a concrete error type with value
+// receivers never reaches IsNil, which panics on non-nilable kinds; a nil
+// error interface fails the assertion and reports no error.
+func reflectedError(v reflect.Value) error {
+	if !v.IsValid() {
+		return nil
+	}
+	if err, ok := v.Interface().(error); ok {
+		return err
 	}
 	return nil
 }
@@ -311,12 +321,7 @@ func GRPCStreamSend(stream reflect.Value, msg proto.Message) error {
 	if len(rvalues) != 1 {
 		return errors.Errorf("expected 1 return value from Send but got %d", len(rvalues))
 	}
-	if !rvalues[0].IsNil() {
-		if err, ok := rvalues[0].Interface().(error); ok {
-			return err
-		}
-	}
-	return nil
+	return reflectedError(rvalues[0])
 }
 
 // GRPCStreamRecv calls the Recv method on a stream via reflection.
@@ -329,12 +334,12 @@ func GRPCStreamRecv(stream reflect.Value) (proto.Message, error) {
 	if len(rvalues) != 2 {
 		return nil, errors.Errorf("expected 2 return values from Recv but got %d", len(rvalues))
 	}
-	if !rvalues[1].IsNil() {
-		if err, ok := rvalues[1].Interface().(error); ok {
-			return nil, err
-		}
+	if err := reflectedError(rvalues[1]); err != nil {
+		return nil, err
 	}
-	if rvalues[0].IsNil() {
+	// Guard IsNil with a kind check: a custom stream may return a non-pointer
+	// message value, and IsNil panics on non-nilable kinds.
+	if !rvalues[0].IsValid() || (isNilable(rvalues[0].Kind()) && rvalues[0].IsNil()) {
 		return nil, io.EOF
 	}
 	msg, ok := rvalues[0].Interface().(proto.Message)
@@ -354,12 +359,12 @@ func GRPCStreamCloseAndRecv(stream reflect.Value) (proto.Message, error) {
 	if len(rvalues) != 2 {
 		return nil, errors.Errorf("expected 2 return values from CloseAndRecv but got %d", len(rvalues))
 	}
-	if !rvalues[1].IsNil() {
-		if err, ok := rvalues[1].Interface().(error); ok {
-			return nil, err
-		}
+	if err := reflectedError(rvalues[1]); err != nil {
+		return nil, err
 	}
-	if rvalues[0].IsNil() {
+	// Guard IsNil with a kind check: a custom stream may return a non-pointer
+	// message value, and IsNil panics on non-nilable kinds.
+	if !rvalues[0].IsValid() || (isNilable(rvalues[0].Kind()) && rvalues[0].IsNil()) {
 		return nil, errors.New("CloseAndRecv returned nil response")
 	}
 	msg, ok := rvalues[0].Interface().(proto.Message)
@@ -379,12 +384,7 @@ func GRPCStreamCloseSend(stream reflect.Value) error {
 	if len(rvalues) != 1 {
 		return errors.Errorf("expected 1 return value from CloseSend but got %d", len(rvalues))
 	}
-	if !rvalues[0].IsNil() {
-		if err, ok := rvalues[0].Interface().(error); ok {
-			return err
-		}
-	}
-	return nil
+	return reflectedError(rvalues[0])
 }
 
 // GRPCStreamRequestType returns the request message type for a streaming method.

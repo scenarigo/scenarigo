@@ -1010,3 +1010,36 @@ func TestGRPCStreamAsClientStream_NonNilableKind(t *testing.T) {
 		t.Fatal("expected no client stream for a non-nilable concrete value")
 	}
 }
+
+type valueError struct{}
+
+func (valueError) Error() string { return "value error" }
+
+type structErrClient struct{}
+
+// The error return is a concrete type with value receivers: calling IsNil on
+// the reflected return value would panic, and the streaming method validation
+// accepts this signature (Out(1) implements error).
+func (structErrClient) Bidi(_ gocontext.Context, _ ...grpc.CallOption) (testpb.Test_BidiStreamEchoClient, valueError) {
+	return nil, valueError{}
+}
+
+func TestGRPCInvokeStream_StructError(t *testing.T) {
+	method := reflect.ValueOf(structErrClient{}).MethodByName("Bidi")
+	_, err := GRPCInvokeStream(gocontext.Background(), method)
+	if err == nil || !strings.Contains(err.Error(), "value error") {
+		t.Fatalf("expected the concrete error value to be returned but got %v", err)
+	}
+}
+
+type valueRecvStream struct{}
+
+// Recv returns a non-pointer message value: calling IsNil on it would panic.
+func (valueRecvStream) Recv() (struct{ X int }, error) { return struct{ X int }{}, nil }
+
+func TestGRPCStreamRecv_NonPointerMessage(t *testing.T) {
+	_, err := GRPCStreamRecv(reflect.ValueOf(valueRecvStream{}))
+	if err == nil || !strings.Contains(err.Error(), "expected proto.Message from Recv") {
+		t.Fatalf("expected a clean type error but got %v", err)
+	}
+}
