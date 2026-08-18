@@ -291,6 +291,26 @@ func TestStreamHandler_failure(t *testing.T) {
 			stream: &mockStream{ctx: context.Background(), recvMsgs: []any{newMsg(serverStreamMD)}},
 			expect: "request assertion failed",
 		},
+		"server stream: messages must be a list": {
+			mocks: []protocol.Mock{{
+				Protocol: "grpc",
+				Expect:   yamlutil.RawMessage(""),
+				Response: yamlutil.RawMessage(`messages: '{{request.message}}'`),
+			}},
+			method: serverStreamMD,
+			stream: &mockStream{ctx: context.Background(), recvMsgs: []any{newMsg(serverStreamMD)}},
+			expect: ".response.messages: must be a list of messages",
+		},
+		"bidi stream: messages must be a list": {
+			mocks: []protocol.Mock{{
+				Protocol: "grpc",
+				Expect:   yamlutil.RawMessage(""),
+				Response: yamlutil.RawMessage(`messages: foo`),
+			}},
+			method: bidiStreamMD,
+			stream: &mockStream{ctx: context.Background(), recvMsgs: []any{newMsg(bidiStreamMD)}},
+			expect: ".response.messages: must be a list of messages",
+		},
 		"server stream: invalid status code": {
 			mocks: []protocol.Mock{{
 				Protocol: "grpc",

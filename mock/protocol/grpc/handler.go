@@ -335,13 +335,17 @@ func (s *server) handleBidiStream(stream grpc.ServerStream, method protoreflect.
 		return err
 	}
 
+	list, err := resp.messageList()
+	if err != nil {
+		return status.Error(codes.Internal, errors.WithPath(err, "response").Error())
+	}
 	// Send response messages sequentially, evaluating templates as we go. Each
 	// evaluation is bounded by the client-propagated deadline, or by the
 	// deadlock guard when none is set, so a blocking request reference that can
 	// never be satisfied fails instead of hanging. Putting the guard on the
 	// context lets the template engine report an interrupted wait as an error
 	// instead of treating it as an undefined value.
-	for i, m := range resp.messageList() {
+	for i, m := range list {
 		evalCtx := sctx
 		cancelEval := gocontext.CancelFunc(func() {})
 		if _, ok := sctx.RequestContext().Deadline(); !ok {
@@ -566,18 +570,28 @@ func (resp *Response) extract(msg proto.Message) (proto.Message, *status.Status,
 }
 
 // messageList returns the configured response messages as a list. The mock
-// sends these, so they are always authored as a literal list (unlike the
-// client-side expect, whose messages may be an assertion such as contains).
-func (resp *Response) messageList() []any {
-	if l, ok := resp.Messages.([]any); ok {
-		return l
+// sends these, so they must be authored as a literal list (unlike the
+// client-side expect, whose messages may be an assertion such as contains);
+// any other non-nil value is a configuration error rather than an empty
+// stream, so it is reported instead of being silently ignored.
+func (resp *Response) messageList() ([]any, error) {
+	if resp.Messages == nil {
+		return nil, nil
 	}
-	return nil
+	l, ok := resp.Messages.([]any)
+	if !ok {
+		return nil, errors.ErrorPathf("messages", "must be a list of messages but got %T", resp.Messages)
+	}
+	return l, nil
 }
 
 func (resp *Response) extractMessages(sctx *context.Context, method protoreflect.MethodDescriptor) ([]proto.Message, error) {
+	list, err := resp.messageList()
+	if err != nil {
+		return nil, err
+	}
 	var msgs []proto.Message
-	for i, m := range resp.messageList() {
+	for i, m := range list {
 		x, err := sctx.ExecuteTemplate(m)
 		if err != nil {
 			return nil, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "failed to execute template")
