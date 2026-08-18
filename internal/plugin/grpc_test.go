@@ -370,6 +370,19 @@ func TestDetectGRPCMethodType(t *testing.T) {
 			t.Errorf("DetectGRPCMethodType() = %d, want %d", got, GRPCMethodUnary)
 		}
 	})
+
+	t.Run("2-arg method without a stream client result is unary", func(t *testing.T) {
+		// A unary method mistakenly written without its variadic CallOption
+		// parameter must be classified as unary so that validation reports the
+		// unary-signature error rather than a misleading streaming one.
+		method := reflect.ValueOf(func(ctx gocontext.Context, req *testpb.EchoRequest) (*testpb.EchoResponse, error) {
+			return nil, nil //nolint:nilnil // signature-only stub for classification
+		})
+		got := DetectGRPCMethodType(method)
+		if got != GRPCMethodUnary {
+			t.Errorf("DetectGRPCMethodType() = %d, want %d", got, GRPCMethodUnary)
+		}
+	})
 }
 
 func TestValidateGRPCStreamingMethod(t *testing.T) {

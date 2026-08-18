@@ -147,25 +147,27 @@ func DetectGRPCMethodType(method reflect.Value) GRPCMethodType {
 	}
 
 	if numIn == 2 {
-		// Client Stream or Bidi Stream. Both return a stream client, so
-		// distinguish by the stream's methods: a bidi stream client exposes
-		// Recv (streaming responses), while a client stream client exposes
-		// CloseAndRecv (a single response) and has no Recv. This holds for both
-		// the classic and the generic protoc-gen-go-grpc stream clients.
-		if mt.NumOut() >= 1 {
+		// Client Stream or Bidi Stream — but only when the method actually
+		// returns a stream client. A 2-argument method that does not (e.g. a
+		// unary method mistakenly written without its variadic CallOption
+		// parameter) is classified as unary so that validation reports the
+		// actionable unary-signature error instead of steering the user toward
+		// streaming signatures.
+		if mt.NumOut() >= 1 && mt.Out(0).Implements(typeClientStream) {
+			// Both kinds return a stream client, so distinguish by the stream's
+			// methods: a bidi stream client exposes Recv (streaming responses),
+			// while a client stream client exposes CloseAndRecv (a single
+			// response) and has no Recv. This holds for both the classic and
+			// the generic protoc-gen-go-grpc stream clients.
 			streamType := mt.Out(0)
-			hasRecv := false
 			for i := range streamType.NumMethod() {
 				if streamType.Method(i).Name == "Recv" {
-					hasRecv = true
-					break
+					return GRPCMethodBidiStream
 				}
 			}
-			if hasRecv {
-				return GRPCMethodBidiStream
-			}
+			return GRPCMethodClientStream
 		}
-		return GRPCMethodClientStream
+		return GRPCMethodUnary
 	}
 
 	return GRPCMethodUnary
