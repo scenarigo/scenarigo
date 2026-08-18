@@ -1,0 +1,8 @@
+- protocol: grpc
+  expect:
+    service: scenarigo.testdata.test.Test
+    method: BidiStreamEcho
+  response:
+    status:
+      code: Aborted
+      message: 'closed after {{request.messages[1].messageBody}}'

@@ -120,6 +120,23 @@ proto:
 				{MessageId: "1", MessageBody: "hello-1"},
 			}),
 		},
+		"server streaming with templated status": {
+			filename: "testdata/server-streaming-templated-status.yaml",
+			config:   cfg,
+			f: sendServerStreamRequest(status.New(codes.Internal, "hello boom"), []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "hello-0"},
+			}),
+		},
+		"client streaming with templated status": {
+			filename: "testdata/client-streaming-templated-status.yaml",
+			config:   cfg,
+			f:        sendClientStreamRequest(status.New(codes.NotFound, "received hello"), nil),
+		},
+		"bidi streaming with templated status": {
+			filename: "testdata/bidi-streaming-templated-status.yaml",
+			config:   cfg,
+			f:        sendBidiStreamRequest(status.New(codes.Aborted, "closed after world"), nil),
+		},
 		"client streaming": {
 			filename: "testdata/client-streaming.yaml",
 			config:   cfg,

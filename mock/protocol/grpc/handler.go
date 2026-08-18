@@ -172,18 +172,18 @@ func (s *server) handleServerStream(stream grpc.ServerStream, method protoreflec
 		return status.Error(codes.InvalidArgument, errors.WrapPath(err, "expect", "request assertion failed").Error())
 	}
 
-	// Validate the configured status code up front (a malformed code is a config
-	// error), but apply a non-OK status only after the configured messages have
-	// been sent: a gRPC stream may emit messages and then end with an error.
-	statusErr, err := configuredStatusError(resp)
-	if err != nil {
-		return err
-	}
-
 	// Expose the received request to response templates as request.message,
 	// mirroring the scenario-side dump shape.
 	sctx := context.New(nil)
 	sctx = sctx.WithRequest(&mockRequestAccessor{message: req})
+
+	// Resolve the configured status up front (a malformed code or template is a
+	// config error), but apply a non-OK status only after the configured messages
+	// have been sent: a gRPC stream may emit messages and then end with an error.
+	statusErr, err := configuredStatusError(sctx, resp)
+	if err != nil {
+		return err
+	}
 
 	// Send multiple response messages
 	msgs, err := resp.extractMessages(sctx, method)
@@ -198,14 +198,26 @@ func (s *server) handleServerStream(stream grpc.ServerStream, method protoreflec
 	return statusErr
 }
 
-// configuredStatusError parses resp.Status and returns the non-OK status error
-// to end the stream with, or nil when no status (or codes.OK) is configured. The
-// second return value is a config error (Internal) for a malformed status code.
-func configuredStatusError(resp *Response) (error, error) {
-	if resp.Status.Code == "" {
+// configuredStatusError evaluates the templates in resp.Status and returns the
+// non-OK status error to end the stream with, or nil when no status (or
+// codes.OK) is configured. The second return value is a config error
+// (Internal) for a template failure or a malformed status code. It takes the
+// same template context as the response messages so that a templated status
+// resolves consistently with the unary handler, which template-executes the
+// whole response.
+func configuredStatusError(sctx *context.Context, resp *Response) (error, error) {
+	v, err := sctx.ExecuteTemplate(resp.Status)
+	if err != nil {
+		return nil, status.Error(codes.Internal, errors.WrapPath(err, "response.status", "failed to execute template").Error())
+	}
+	st, ok := v.(grpcprotocol.ExpectStatus)
+	if !ok {
+		return nil, status.Error(codes.Internal, errors.WithPath(fmt.Errorf("failed to execute template of status: unexpected type %T", v), "response.status").Error())
+	}
+	if st.Code == "" {
 		return nil, nil //nolint:nilnil // no status configured and no error
 	}
-	code, err := strToCode(resp.Status.Code)
+	code, err := strToCode(st.Code)
 	if err != nil {
 		return nil, status.Error(codes.Internal, errors.WithPath(err, "response.status.code").Error())
 	}
@@ -213,8 +225,8 @@ func configuredStatusError(resp *Response) (error, error) {
 		return nil, nil //nolint:nilnil // OK status is the same as no status
 	}
 	smsg := code.String()
-	if resp.Status.Message != "" {
-		smsg = resp.Status.Message
+	if st.Message != "" {
+		smsg = st.Message
 	}
 	return status.Error(code, smsg), nil
 }
@@ -258,17 +270,17 @@ func (s *server) handleClientStream(stream grpc.ServerStream, method protoreflec
 		return status.Error(codes.InvalidArgument, errors.WrapPath(err, "expect", "request assertion failed").Error())
 	}
 
+	// Set up template context with request.messages
+	sctx := context.New(nil)
+	sctx = sctx.WithRequest(&clientStreamRequestAccessor{received: msgs})
+
 	// A client-streaming RPC ends with a single response or an error status, so a
 	// non-OK status replaces the response: return it before sending.
-	if statusErr, err := configuredStatusError(resp); err != nil {
+	if statusErr, err := configuredStatusError(sctx, resp); err != nil {
 		return err
 	} else if statusErr != nil {
 		return statusErr
 	}
-
-	// Set up template context with request.messages
-	sctx := context.New(nil)
-	sctx = sctx.WithRequest(&clientStreamRequestAccessor{received: msgs})
 
 	// Execute template and extract single response message
 	v, err := sctx.ExecuteTemplate(*resp)
@@ -325,15 +337,6 @@ func (s *server) handleBidiStream(stream grpc.ServerStream, method protoreflect.
 	sctx := context.New(nil).WithRequestContext(stream.Context())
 	sctx = sctx.WithRequest(bidiReq)
 	sctx = sctx.WithResponse(bidiResp)
-
-	// Validate the configured status up front, but apply a non-OK status only
-	// after the response messages have been sent and the request stream has been
-	// received and asserted: a gRPC stream may emit messages and then end with an
-	// error, and the request assertion must run regardless of the final status.
-	statusErr, err := configuredStatusError(resp)
-	if err != nil {
-		return err
-	}
 
 	list, err := resp.messageList()
 	if err != nil {
@@ -396,6 +399,15 @@ func (s *server) handleBidiStream(stream grpc.ServerStream, method protoreflect.
 		return status.Error(codes.InvalidArgument, errors.WrapPath(err, "expect", "request assertion failed").Error())
 	}
 
+	// Resolve the configured status only now: a bidi status template may
+	// reference request.messages[N], which is guaranteed to be non-blocking once
+	// the whole request stream has been received. The non-OK status is applied
+	// after the response messages and the request assertion, since a gRPC stream
+	// may emit messages and then end with an error.
+	statusErr, err := configuredStatusError(sctx, resp)
+	if err != nil {
+		return err
+	}
 	return statusErr
 }
 

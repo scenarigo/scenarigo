@@ -1,0 +1,11 @@
+- protocol: grpc
+  expect:
+    service: scenarigo.testdata.test.Test
+    method: ServerStreamEcho
+  response:
+    status:
+      code: '{{"Internal"}}'
+      message: '{{request.message.messageBody}} boom'
+    messages:
+      - messageId: '1'
+        messageBody: hello-0
