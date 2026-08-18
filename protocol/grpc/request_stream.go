@@ -158,12 +158,17 @@ func runBidiStream(ctx gocontext.Context, sCtx *context.Context, msgs []any, ope
 			evalCtx, cancelEval = sCtx.WithRequestContext(c), cancel
 		}
 		x, err := evalCtx.ExecuteTemplate(m)
-		interrupted := evalCtx.RequestContext().Err() != nil
+		evalErr := evalCtx.RequestContext().Err()
 		cancelEval()
 		if err != nil {
 			abortBidi(result, buf, recvCh, stream)
-			if interrupted {
+			// Distinguish the interruption causes: only an expired deadline
+			// suggests a deadlock, while a cancellation is an external abort.
+			switch {
+			case stderrors.Is(evalErr, gocontext.DeadlineExceeded):
 				return result, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "interrupted while waiting for a streaming response message (possible deadlock or timeout)")
+			case evalErr != nil:
+				return result, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "canceled while waiting for a streaming response message")
 			}
 			return result, errors.WrapPathf(err, fmt.Sprintf("messages[%d]", i), "failed to execute template")
 		}

@@ -1318,26 +1318,29 @@ func TestProtoClientBidiStreaming_DeadlockGuard(t *testing.T) {
 		// the first request (recved is closed). Driving the interruption off that
 		// signal makes it happen during the blocking wait rather than racing with
 		// stream setup, which would otherwise make the test flaky.
-		prepare func(t *testing.T, base *context.Context, recved <-chan struct{}) (*context.Context, func())
+		prepare     func(t *testing.T, base *context.Context, recved <-chan struct{}) (*context.Context, func())
+		expectError string
 	}{
 		"default guard (no deadline)": {
 			prepare: func(t *testing.T, base *context.Context, _ <-chan struct{}) (*context.Context, func()) {
 				t.Helper()
-				// No deadline on the context, so newWaitContext applies the guard
-				// timeout. It is measured from the At call (after setup), so it does
-				// not race with stream setup.
+				// No deadline on the context, so runBidiStream applies the guard
+				// timeout to the evaluation context. It is measured per message
+				// evaluation, so it does not race with stream setup.
 				old := grpcstream.DefaultMessageWaitTimeout
 				grpcstream.DefaultMessageWaitTimeout = 300 * time.Millisecond
 				t.Cleanup(func() { grpcstream.DefaultMessageWaitTimeout = old })
 				return base, nil
 			},
+			expectError: "interrupted while waiting for a streaming response message",
 		},
-		"request context deadline": {
+		"request context canceled": {
 			prepare: func(t *testing.T, base *context.Context, recved <-chan struct{}) (*context.Context, func()) {
 				t.Helper()
-				// A generous deadline routes newWaitContext through its
+				// A generous deadline routes runBidiStream through its
 				// existing-deadline branch without firing during setup; the context
-				// is canceled once the wait has started.
+				// is canceled once the wait has started, which must be diagnosed as
+				// a cancellation rather than a deadlock.
 				reqCtx, cancel := gocontext.WithTimeout(base.RequestContext(), 10*time.Second)
 				t.Cleanup(cancel)
 				trigger := func() {
@@ -1346,6 +1349,7 @@ func TestProtoClientBidiStreaming_DeadlockGuard(t *testing.T) {
 				}
 				return base.WithRequestContext(reqCtx), trigger
 			},
+			expectError: "canceled while waiting for a streaming response message",
 		},
 	}
 	for name, test := range tests {
@@ -1401,7 +1405,7 @@ func TestProtoClientBidiStreaming_DeadlockGuard(t *testing.T) {
 				if err == nil {
 					t.Fatal("expected deadlock guard error but got nil")
 				}
-				if got, want := err.Error(), "interrupted while waiting for a streaming response message"; !strings.Contains(got, want) {
+				if got, want := err.Error(), test.expectError; !strings.Contains(got, want) {
 					t.Fatalf("expected error to contain %q but got %q", want, got)
 				}
 			case <-time.After(10 * time.Second):

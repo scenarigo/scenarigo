@@ -356,11 +356,17 @@ func (s *server) handleBidiStream(stream grpc.ServerStream, method protoreflect.
 			evalCtx, cancelEval = sctx.WithRequestContext(c), cancel
 		}
 		x, err := evalCtx.ExecuteTemplate(m)
-		interrupted := evalCtx.RequestContext().Err() != nil
+		evalErr := evalCtx.RequestContext().Err()
 		cancelEval()
 		if err != nil {
-			if interrupted {
+			// Distinguish the interruption causes: only an expired deadline
+			// suggests a deadlock, while a cancellation (e.g. the client
+			// disconnecting) is an external abort.
+			switch {
+			case stderrors.Is(evalErr, gocontext.DeadlineExceeded):
 				return status.Error(codes.DeadlineExceeded, errors.WrapPathf(err, fmt.Sprintf("response.messages[%d]", i), "interrupted while waiting for a streaming request message (possible deadlock or timeout)").Error())
+			case evalErr != nil:
+				return status.Error(codes.Canceled, errors.WrapPathf(err, fmt.Sprintf("response.messages[%d]", i), "canceled while waiting for a streaming request message").Error())
 			}
 			return status.Error(codes.Internal, errors.WrapPathf(err, fmt.Sprintf("response.messages[%d]", i), "failed to execute template").Error())
 		}
