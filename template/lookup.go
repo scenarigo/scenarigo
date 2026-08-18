@@ -42,6 +42,10 @@ func extract(ctx context.Context, node ast.Node, data any) (any, error) {
 	// response accessor) can observe the caller's deadline and cancellation.
 	// Snapshot the context state first: only a context that ends DURING the
 	// extraction can have interrupted a blocking wait.
+	//
+	// TODO(#811): this is inference, not causation — remove the snapshot and
+	// classify via errors.Is on the extraction error once query-go extractors
+	// can propagate typed errors (ErrNotFound vs a wrapped ctx error).
 	preErr := ctx.Err()
 	v, err = q.ExtractContext(ctx, data)
 	if err != nil {
