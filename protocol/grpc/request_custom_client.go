@@ -161,6 +161,9 @@ type customStreamConn struct {
 }
 
 func (c *customStreamConn) NewInput() (proto.Message, error) {
+	if c.reqType == nil {
+		return nil, fmt.Errorf("request message type is not resolved")
+	}
 	in, ok := reflect.New(c.reqType).Interface().(proto.Message)
 	if !ok {
 		return nil, fmt.Errorf("expected proto.Message but got %T", reflect.New(c.reqType).Interface())
@@ -188,13 +191,24 @@ func (c *customStreamConn) HeaderTrailer() (metadata.MD, metadata.MD) {
 	return streamHeaderTrailer(c.stream)
 }
 
+// newStreamConn builds a customStreamConn with the request message type
+// resolved, keeping the invariant that reqType is always set so NewInput can
+// never dereference a nil type regardless of which runner calls it.
+func (client *customServiceClient) newStreamConn(stream reflect.Value) (*customStreamConn, error) {
+	reqType, err := plugin.GRPCStreamRequestType(client.method, client.methodType)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to determine request type")
+	}
+	return &customStreamConn{stream: stream, reqType: reqType}, nil
+}
+
 func (client *customServiceClient) invokeServerStream(ctx gocontext.Context, reqMsg proto.Message, opts ...grpc.CallOption) (*streamResult, error) {
 	return runServerStream(func() (serverStreamConn, error) {
 		stream, err := plugin.GRPCInvokeServerStream(ctx, client.method, reqMsg, opts...)
 		if err != nil {
 			return nil, err
 		}
-		return &customStreamConn{stream: stream}, nil
+		return client.newStreamConn(stream)
 	})
 }
 
@@ -204,21 +218,17 @@ func (client *customServiceClient) invokeClientStream(ctx gocontext.Context, msg
 		if err != nil {
 			return nil, err
 		}
-		return &customStreamConn{stream: stream}, nil
+		return client.newStreamConn(stream)
 	}, msgs)
 }
 
 func (client *customServiceClient) invokeBidiStream(ctx gocontext.Context, sCtx *context.Context, opts ...grpc.CallOption) (*streamResult, error) {
-	reqType, err := plugin.GRPCStreamRequestType(client.method, client.methodType)
-	if err != nil {
-		return &streamResult{}, errors.Wrap(err, "failed to determine request type")
-	}
 	return runBidiStream(ctx, sCtx, client.r.Messages, func(streamCtx gocontext.Context) (bidiStreamConn, error) {
 		stream, err := plugin.GRPCInvokeStream(streamCtx, client.method, opts...)
 		if err != nil {
 			return nil, err
 		}
-		return &customStreamConn{stream: stream, reqType: reqType}, nil
+		return client.newStreamConn(stream)
 	})
 }
 

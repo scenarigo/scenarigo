@@ -694,3 +694,11 @@ func TestCustomServiceClient_BidiStream_NilStream(t *testing.T) {
 		})
 	}
 }
+
+func TestCustomStreamConn_NewInputWithoutType(t *testing.T) {
+	// The zero value must fail cleanly instead of panicking in reflect.New(nil).
+	c := &customStreamConn{}
+	if _, err := c.NewInput(); err == nil {
+		t.Fatal("expected error but got nil")
+	}
+}
