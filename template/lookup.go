@@ -2,30 +2,30 @@ package template
 
 import (
 	"context"
-	"strconv"
+	"math"
+	"reflect"
 
 	"github.com/pkg/errors"
 	"github.com/zoncoen/query-go"
 
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/template/ast"
-	"github.com/scenarigo/scenarigo/template/token"
 )
 
 type notDefinedError struct {
 	error
 }
 
-func lookup(ctx context.Context, node ast.Node, data any) (any, error) {
-	v, err := extract(ctx, node, data)
+func (t *Template) lookup(ctx context.Context, node ast.Node, data any) (any, error) {
+	v, err := t.extract(ctx, node, data)
 	if err != nil {
 		return nil, err
 	}
 	return Execute(ctx, v, data)
 }
 
-func extract(ctx context.Context, node ast.Node, data any) (any, error) {
-	q, err := buildQuery(queryutil.New(), node)
+func (t *Template) extract(ctx context.Context, node ast.Node, data any) (any, error) {
+	q, err := t.buildQuery(ctx, queryutil.New(), node, data)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create query from AST")
 	}
@@ -65,31 +65,58 @@ func extract(ctx context.Context, node ast.Node, data any) (any, error) {
 	return v, nil
 }
 
-func buildQuery(q *query.Query, node ast.Node) (*query.Query, error) {
+func (t *Template) buildQuery(ctx context.Context, q *query.Query, node ast.Node, data any) (*query.Query, error) {
 	var err error
 	switch n := node.(type) {
 	case *ast.Ident:
 		return q.Key(n.Name), nil
 	case *ast.SelectorExpr:
-		q, err = buildQuery(q, n.X)
+		q, err = t.buildQuery(ctx, q, n.X, data)
 		if err != nil {
 			return nil, err
 		}
 		return q.Key(n.Sel.Name), nil
 	case *ast.IndexExpr:
-		i, ok := n.Index.(*ast.BasicLit)
-		if !ok || i.Kind != token.INT {
-			return nil, errors.Errorf(`expected int but "%s"`, i.Kind.String())
-		}
-		idx, err := strconv.Atoi(i.Value)
-		if err != nil {
-			return nil, errors.Errorf(`expected int but "%s"`, i.Value)
-		}
-		q, err = buildQuery(q, n.X)
+		q, err = t.buildQuery(ctx, q, n.X, data)
 		if err != nil {
 			return nil, err
 		}
-		return q.Index(idx), nil
+		return t.appendIndexQuery(ctx, q, n.Index, data)
 	}
 	return nil, errors.Errorf(`unknown node "%T"`, node)
+}
+
+// appendIndexQuery evaluates the index expression and appends the
+// corresponding extractor to q: an integer extracts by index, a string
+// extracts by key.
+func (t *Template) appendIndexQuery(ctx context.Context, q *query.Query, expr ast.Expr, data any) (*query.Query, error) {
+	v, err := t.executeExpr(ctx, expr, data)
+	if err != nil {
+		return nil, err
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		i := rv.Int()
+		if i < 0 {
+			return nil, errors.Errorf("index must not be negative but got %d", i)
+		}
+		if i > math.MaxInt {
+			return nil, errors.Errorf("index %d overflows int", i)
+		}
+		return q.Index(int(i)), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		u := rv.Uint()
+		if u > math.MaxInt {
+			return nil, errors.Errorf("index %d overflows int", u)
+		}
+		return q.Index(int(u)), nil
+	case reflect.String:
+		return q.Key(rv.String()), nil
+	default:
+		if v == nil {
+			return nil, errors.New("expected an integer or string index but got nil")
+		}
+		return nil, errors.Errorf("expected an integer or string index but got %T", v)
+	}
 }

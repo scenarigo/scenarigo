@@ -339,6 +339,115 @@ func TestTemplate_Execute(t *testing.T) {
 	runExecute(t, tests)
 }
 
+func TestTemplate_Execute_IndexExpr(t *testing.T) {
+	data := map[string]any{
+		"vars": map[string]any{
+			"array":  []string{"a", "b", "c"},
+			"index":  1,
+			"uindex": uint(2),
+			"map": map[string]string{
+				"foo":         "FOO",
+				"foo.bar-baz": "QUX",
+			},
+			"key":  "foo",
+			"keys": map[string]string{"ref": "foo"},
+		},
+	}
+	tests := map[string]executeTestCase{
+		"integer literal index": {
+			str:    "{{vars.array[1]}}",
+			data:   data,
+			expect: "b",
+		},
+		"index by variable": {
+			str:    "{{vars.array[vars.index]}}",
+			data:   data,
+			expect: "b",
+		},
+		"index by unsigned integer variable": {
+			str:    "{{vars.array[vars.uindex]}}",
+			data:   data,
+			expect: "c",
+		},
+		"index by expression": {
+			str:    "{{vars.array[1+1]}}",
+			data:   data,
+			expect: "c",
+		},
+		"key by string literal": {
+			str:    `{{vars.map["foo"]}}`,
+			data:   data,
+			expect: "FOO",
+		},
+		"key by string literal containing special characters": {
+			str:    `{{vars.map["foo.bar-baz"]}}`,
+			data:   data,
+			expect: "QUX",
+		},
+		"key by variable": {
+			str:    "{{vars.map[vars.key]}}",
+			data:   data,
+			expect: "FOO",
+		},
+		"key by nested index expression": {
+			str:    `{{vars.map[vars.keys["ref"]]}}`,
+			data:   data,
+			expect: "FOO",
+		},
+		"key not found": {
+			str:         `{{vars.map["missing"]}}`,
+			data:        data,
+			expectError: `".vars.map.missing" not found`,
+		},
+		"index out of range": {
+			str:         "{{vars.array[3]}}",
+			data:        data,
+			expectError: `".vars.array[3]" not found`,
+		},
+		"negative index": {
+			str:         "{{vars.array[-1]}}",
+			data:        data,
+			expectError: "index must not be negative but got -1",
+		},
+		"float index": {
+			str:         "{{vars.array[1.5]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got float64",
+		},
+		"bool index": {
+			str:         "{{vars.array[true]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got bool",
+		},
+		"nil index": {
+			str:         "{{vars.array[nil]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got nil",
+		},
+		"undefined variable index": {
+			str:         "{{vars.map[vars.missing]}}",
+			data:        data,
+			expectError: `".vars.missing" not found`,
+		},
+		"undefined variable index with coalescing operator": {
+			str:    `{{vars.map[vars.missing] ?? "default"}}`,
+			data:   data,
+			expect: "default",
+		},
+		"defined() with index by variable": {
+			str:    "{{defined(vars.map[vars.key])}}",
+			data:   data,
+			expect: true,
+		},
+		"defined() with undefined variable index": {
+			str:    "{{defined(vars.map[vars.missing])}}",
+			data:   data,
+			expect: false,
+		},
+	}
+	runExecute(t, tests)
+}
+
 func TestTemplate_Execute_UnaryExpr(t *testing.T) {
 	tests := map[string]executeTestCase{
 		"!true": {
