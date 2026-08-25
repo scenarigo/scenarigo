@@ -29,7 +29,7 @@ func (t *Template) lookup(ctx context.Context, node ast.Node, data any) (any, er
 func (t *Template) extract(ctx context.Context, node ast.Node, data any) (any, error) {
 	q, err := t.buildQuery(ctx, queryutil.New(), node, data)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create query from AST")
+		return nil, err
 	}
 
 	f, err := q.Extract(functions)
@@ -85,7 +85,7 @@ func (t *Template) buildQuery(ctx context.Context, q *query.Query, node ast.Node
 		}
 		return t.appendIndexQuery(ctx, q, n.Index, data)
 	}
-	return nil, errors.Errorf(`unknown node "%T"`, node)
+	return nil, errors.Errorf(`failed to create query from AST: unknown node "%T"`, node)
 }
 
 // appendIndexQuery evaluates the index expression and appends the

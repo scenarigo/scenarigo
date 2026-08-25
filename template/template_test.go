@@ -444,9 +444,11 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 			expectError: "expected an integer or string index but got nil",
 		},
 		"undefined variable index": {
-			str:         "{{vars.map[vars.missing]}}",
-			data:        data,
-			expectError: `".vars.missing" not found`,
+			str:  "{{vars.map[vars.missing]}}",
+			data: data,
+			// the failure of the index expression is reported as-is, not as a
+			// failure to build the query
+			expectError: `failed to execute: {{vars.map[vars.missing]}}: ".vars.missing" not found`,
 		},
 		"undefined variable index with coalescing operator": {
 			str:    `{{vars.map[vars.missing] ?? "default"}}`,
