@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	query "github.com/zoncoen/query-go"
-	yamlextractor "github.com/zoncoen/query-go/extractor/yaml"
+	yamlextractor "github.com/zoncoen/query-go/extractor/yaml/v2"
+	query "github.com/zoncoen/query-go/v2"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
@@ -36,16 +36,16 @@ func Options() []query.Option {
 
 func dynamicpbExtractFunc() func(query.ExtractFunc) query.ExtractFunc {
 	return func(f query.ExtractFunc) query.ExtractFunc {
-		return func(in reflect.Value) (reflect.Value, bool) {
+		return func(ctx context.Context, in reflect.Value) (reflect.Value, error) {
 			v := in
 			if v.IsValid() && v.CanInterface() {
 				if msg, ok := v.Interface().(*dynamicpb.Message); ok {
-					return f(reflect.ValueOf(&keyExtractor{
+					return f(ctx, reflect.ValueOf(&keyExtractor{
 						v: msg,
 					}))
 				}
 			}
-			return f(in)
+			return f(ctx, in)
 		}
 	}
 }
@@ -87,8 +87,10 @@ func (e *ProtoEnum) Descriptor() protoreflect.EnumDescriptor {
 	return e.desc
 }
 
-// ExtractByKey implements the query.KeyExtractorContext interface.
-func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, bool) {
+var _ query.KeyExtractor = (*keyExtractor)(nil)
+
+// ExtractByKey implements the query.KeyExtractor interface.
+func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, error) {
 	ci := query.IsCaseInsensitive(ctx)
 	if ci {
 		key = strings.ToLower(key)
@@ -124,15 +126,15 @@ func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, bool)
 			}
 		}
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
-func (e *keyExtractor) getField(f protoreflect.FieldDescriptor) (any, bool) {
+func (e *keyExtractor) getField(f protoreflect.FieldDescriptor) (any, error) {
 	field := e.v.Get(f).Interface()
 	if number, ok := field.(protoreflect.EnumNumber); ok {
-		return &ProtoEnum{desc: f.Enum(), number: number}, true
+		return &ProtoEnum{desc: f.Enum(), number: number}, nil
 	}
-	return field, true
+	return field, nil
 }
 
 func AppendOptions(customOpts ...query.Option) {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
@@ -146,7 +146,7 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 			return buildAssertion(ctx, q, v, opt)
 		case Assertion:
 			assertions = append(assertions, AssertionFunc(func(val any) error {
-				got, err := q.Extract(val)
+				got, err := q.Extract(context.Background(), val)
 				if err != nil {
 					return err
 				}
@@ -183,7 +183,7 @@ func buildAssertion(ctx context.Context, q *query.Query, expect any, opt *buildO
 
 func lazyAssertion(q *query.Query, f template.Lazy) Assertion {
 	return AssertionFunc(func(val any) error {
-		v, err := q.Extract(val)
+		v, err := q.Extract(context.Background(), val)
 		if err != nil {
 			return err
 		}

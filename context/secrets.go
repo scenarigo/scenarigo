@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/internal/reflectutil"
@@ -43,19 +43,21 @@ func (s *Secrets) Append(v any) *Secrets {
 	}
 }
 
-// ExtractByKey implements query.KeyExtractorContext interface.
-func (s *Secrets) ExtractByKey(ctx context.Context, key string) (any, bool) {
+var _ query.KeyExtractor = (*Secrets)(nil)
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (s *Secrets) ExtractByKey(ctx context.Context, key string) (any, error) {
 	var opts []query.Option
 	if query.IsCaseInsensitive(ctx) {
 		opts = append(opts, query.CaseInsensitive())
 	}
 	k := queryutil.New(opts...).Key(key)
 	for i := len(s.secrets) - 1; i >= 0; i-- {
-		if v, err := k.Extract(s.secrets[i]); err == nil {
-			return v, true
+		if v, err := k.Extract(ctx, s.secrets[i]); err == nil {
+			return v, nil
 		}
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 func (s *Secrets) ReplaceAll(str string) string {

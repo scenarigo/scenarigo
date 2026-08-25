@@ -3,12 +3,15 @@
 package plugin
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"plugin"
 	"reflect"
 	"strconv"
 	"sync"
+
+	query "github.com/zoncoen/query-go/v2"
 )
 
 var (
@@ -143,17 +146,19 @@ func (p *openedPlugin) getSetup(setups []SetupFunc) SetupFunc {
 // Native Go plugins cannot be closed once opened, so this is a no-op.
 func (p *openedPlugin) Close() {}
 
+var _ query.KeyExtractor = (*openedPlugin)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (p *openedPlugin) ExtractByKey(key string) (any, bool) {
+func (p *openedPlugin) ExtractByKey(_ context.Context, key string) (any, error) {
 	sym, err := p.Lookup(key)
 	if err != nil {
-		return nil, false
+		return nil, query.ErrNotFound
 	}
 	// If sym is a pointer to a variable, return the actual variable for convenience.
 	if v := reflect.ValueOf(sym); v.Kind() == reflect.Ptr {
-		return v.Elem().Interface(), true
+		return v.Elem().Interface(), nil
 	}
-	return sym, true
+	return sym, nil
 }
 
 // CloseAll closes all cached plugins and clears the cache.

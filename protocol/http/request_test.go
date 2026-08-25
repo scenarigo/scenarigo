@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"compress/gzip"
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,7 +23,7 @@ import (
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/version"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestRequestExtractor(t *testing.T) {
@@ -73,7 +74,7 @@ func TestRequestExtractor(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			v, err := q.Extract(req)
+			v, err := q.Extract(gocontext.Background(), req)
 			if test.expectError == "" && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -139,7 +140,7 @@ func TestResponseExtractor(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			v, err := q.Extract(resp)
+			v, err := q.Extract(gocontext.Background(), resp)
 			if test.expectError == "" && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

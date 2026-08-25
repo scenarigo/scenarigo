@@ -1,9 +1,10 @@
 package context
 
 import (
+	"context"
 	"testing"
 
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestSecrets(t *testing.T) {
@@ -31,7 +32,7 @@ func checkSecrets(t *testing.T, secrets *Secrets, s string, expect any, expectEr
 	if err != nil {
 		t.Fatalf("failed to parse: %s", err)
 	}
-	got, err := q.Extract(secrets)
+	got, err := q.Extract(context.Background(), secrets)
 	if expect != got {
 		t.Errorf("expected %v, got %v", expect, got)
 	}

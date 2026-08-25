@@ -1,6 +1,7 @@
 package context
 
 import (
+	"context"
 	"testing"
 
 	"github.com/scenarigo/scenarigo/reporter"
@@ -41,7 +42,7 @@ func TestSteps(t *testing.T) {
 		}
 	})
 	t.Run("ExtractByKey", func(t *testing.T) {
-		if v, ok := steps.ExtractByKey("foo"); !ok {
+		if v, err := steps.ExtractByKey(context.Background(), "foo"); err != nil {
 			t.Fatal("not found")
 		} else {
 			step, ok := v.(*Step)
@@ -52,7 +53,7 @@ func TestSteps(t *testing.T) {
 				t.Errorf("expect %q but got %q", expect, got)
 			}
 		}
-		if _, ok := steps.ExtractByKey("baz"); ok {
+		if _, err := steps.ExtractByKey(context.Background(), "baz"); err == nil {
 			t.Fatal("found")
 		}
 	})

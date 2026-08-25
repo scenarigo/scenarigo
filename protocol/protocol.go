@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/assert"
 	"github.com/scenarigo/scenarigo/context"

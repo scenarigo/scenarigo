@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/template/ast"
@@ -30,11 +30,11 @@ func extract(ctx context.Context, node ast.Node, data any) (any, error) {
 		return nil, errors.Wrap(err, "failed to create query from AST")
 	}
 
-	f, err := q.Extract(functions)
+	f, err := q.Extract(ctx, functions)
 	if err == nil {
 		return f, nil
 	}
-	v, err := q.Extract(typeFunctions)
+	v, err := q.Extract(ctx, typeFunctions)
 	if err == nil {
 		return v, nil
 	}
@@ -47,7 +47,7 @@ func extract(ctx context.Context, node ast.Node, data any) (any, error) {
 	// classify via errors.Is on the extraction error once query-go extractors
 	// can propagate typed errors (ErrNotFound vs a wrapped ctx error).
 	preErr := ctx.Err()
-	v, err = q.ExtractContext(ctx, data)
+	v, err = q.Extract(ctx, data)
 	if err != nil {
 		// If the context ended while extracting, the failure is (or may be)
 		// caused by the cancellation or deadline rather than the value being

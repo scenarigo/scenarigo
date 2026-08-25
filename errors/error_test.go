@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func validatePath(t *testing.T, e *PathError, path string) {

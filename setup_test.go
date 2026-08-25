@@ -2,6 +2,7 @@ package scenarigo
 
 import (
 	"bytes"
+	gocontext "context"
 	"strings"
 	"testing"
 
@@ -75,8 +76,8 @@ ok  	setup	0.000s
 						ctx.Reporter().Log("setup a")
 						ctx = ctx.WithVars(map[string]int{"a": 1})
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("a")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "a")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown a %v", v)
@@ -89,8 +90,8 @@ ok  	setup	0.000s
 						ctx.Reporter().Log("setup b")
 						ctx = ctx.WithVars(map[string]int{"b": 2})
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("b")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "b")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown b %v", v)
@@ -103,8 +104,8 @@ ok  	setup	0.000s
 						ctx.Reporter().Log("setup c")
 						ctx = ctx.WithVars(map[string]int{"c": 3})
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("c")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "c")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown c %v", v)
@@ -150,8 +151,8 @@ ok  	teardown	0.000s
 						ctx.Reporter().Log("setup a")
 						ctx = ctx.WithVars(map[string]int{"a": 1})
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("a")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "a")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown a %v", v)
@@ -171,8 +172,8 @@ ok  	teardown	0.000s
 						ctx.Reporter().Log("setup c")
 						ctx = ctx.WithVars(map[string]int{"c": 3})
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("c")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "c")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown c %v", v)
@@ -210,8 +211,8 @@ ok  	teardown	0.000s
 						ctx.Reporter().Log("setup a")
 						ctx = ctx.WithVars(map[string]int{"a": 1})
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("a")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "a")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown a %v", v)
@@ -223,8 +224,8 @@ ok  	teardown	0.000s
 					f: func(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
 						ctx.Reporter().Log("setup b")
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("b")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "b")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown b %v", v)
@@ -237,8 +238,8 @@ ok  	teardown	0.000s
 						ctx.Reporter().Log("setup c")
 						ctx = ctx.WithVars(map[string]int{"c": 3})
 						return ctx, func(ctx *plugin.Context) {
-							v, ok := ctx.Vars().ExtractByKey("c")
-							if !ok {
+							v, err := ctx.Vars().ExtractByKey(gocontext.Background(), "c")
+							if err != nil {
 								ctx.Reporter().Fatal("var not found")
 							}
 							ctx.Reporter().Logf("teardown c %v", v)

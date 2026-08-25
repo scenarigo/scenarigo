@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"compress/gzip"
+	gocontext "context"
 	"fmt"
 	"io"
 	"mime"
@@ -12,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/mattn/go-encoding"
+	query "github.com/zoncoen/query-go/v2"
+
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/protocolmeta"
@@ -37,17 +40,19 @@ type Request struct {
 // RequestExtractor represents a request dump.
 type RequestExtractor Request
 
+var _ query.KeyExtractor = (*RequestExtractor)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (r RequestExtractor) ExtractByKey(key string) (any, bool) {
+func (r RequestExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
 	q := queryutil.New().Key(key)
-	if v, err := q.Extract(Request(r)); err == nil {
-		return v, true
+	if v, err := q.Extract(ctx, Request(r)); err == nil {
+		return v, nil
 	}
 	// for backward compatibility
-	if v, err := q.Extract(r.Body); err == nil {
-		return v, true
+	if v, err := q.Extract(ctx, r.Body); err == nil {
+		return v, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 type response struct {
@@ -60,17 +65,19 @@ type response struct {
 // ResponseExtractor represents a response dump.
 type ResponseExtractor response
 
+var _ query.KeyExtractor = (*ResponseExtractor)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (r ResponseExtractor) ExtractByKey(key string) (any, bool) {
+func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
 	q := queryutil.New().Key(key)
-	if v, err := q.Extract(response(r)); err == nil {
-		return v, true
+	if v, err := q.Extract(ctx, response(r)); err == nil {
+		return v, nil
 	}
 	// for backward compatibility
-	if v, err := q.Extract(r.Body); err == nil {
-		return v, true
+	if v, err := q.Extract(ctx, r.Body); err == nil {
+		return v, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 type httpClient interface {

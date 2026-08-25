@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/scenarigo/scenarigo/color"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 // Errorf call fmt.Errorf.

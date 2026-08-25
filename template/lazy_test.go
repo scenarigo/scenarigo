@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestLazy(t *testing.T) {
@@ -131,7 +131,7 @@ func TestWaitContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse query string: %s", err)
 	}
-	if _, err := q.Extract(wc); err == nil {
+	if _, err := q.Extract(context.Background(), wc); err == nil {
 		t.Fatal("no error")
 	}
 }
@@ -142,7 +142,7 @@ func extractVal(t *testing.T, s string, target any) any {
 	if err != nil {
 		t.Fatalf("failed to parse query string: %s", err)
 	}
-	v, err := q.Extract(target)
+	v, err := q.Extract(context.Background(), target)
 	if err != nil {
 		t.Fatalf("failed to extract: %s", err)
 	}

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 
 	"github.com/goccy/go-yaml"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/assert"
 	"github.com/scenarigo/scenarigo/context"
@@ -426,24 +427,28 @@ type mockRequestAccessor struct {
 	message proto.Message
 }
 
+var _ query.KeyExtractor = (*mockRequestAccessor)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (a *mockRequestAccessor) ExtractByKey(key string) (any, bool) {
+func (a *mockRequestAccessor) ExtractByKey(_ gocontext.Context, key string) (any, error) {
 	if key == "message" {
-		return a.message, true
+		return a.message, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 type clientStreamRequestAccessor struct {
 	received []*grpcprotocol.ProtoMessageYAMLMarshaler
 }
 
+var _ query.KeyExtractor = (*clientStreamRequestAccessor)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (a *clientStreamRequestAccessor) ExtractByKey(key string) (any, bool) {
+func (a *clientStreamRequestAccessor) ExtractByKey(_ gocontext.Context, key string) (any, error) {
 	if key == messagesKey {
-		return a.received, true
+		return a.received, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 // mockBidiRequestAccessor provides blocking access to request messages received by a background goroutine.
@@ -451,22 +456,27 @@ type mockBidiRequestAccessor struct {
 	buf *grpcstream.Buffer[*grpcprotocol.ProtoMessageYAMLMarshaler]
 }
 
-// ExtractByKey implements query.KeyExtractorContext interface.
-func (a *mockBidiRequestAccessor) ExtractByKey(_ gocontext.Context, key string) (any, bool) {
+var (
+	_ query.KeyExtractor   = (*mockBidiRequestAccessor)(nil)
+	_ query.IndexExtractor = (*mockBidiRequestAccessor)(nil)
+)
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (a *mockBidiRequestAccessor) ExtractByKey(_ gocontext.Context, key string) (any, error) {
 	if key == messagesKey {
-		return a, true
+		return a, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
-// ExtractByIndex implements query.IndexExtractorContext interface. It blocks
+// ExtractByIndex implements query.IndexExtractor interface. It blocks
 // until the Nth request message has been received, bounded by ctx.
-func (a *mockBidiRequestAccessor) ExtractByIndex(ctx gocontext.Context, i int) (any, bool) {
+func (a *mockBidiRequestAccessor) ExtractByIndex(ctx gocontext.Context, i int) (any, error) {
 	msg, ok := a.buf.At(ctx, i)
 	if !ok {
-		return nil, false
+		return nil, query.ErrNotFound
 	}
-	return msg, true
+	return msg, nil
 }
 
 // MarshalYAML implements the yaml.InterfaceMarshaler interface. An unindexed
@@ -481,12 +491,14 @@ type mockBidiResponseAccessor struct {
 	sent []*grpcprotocol.ProtoMessageYAMLMarshaler
 }
 
+var _ query.KeyExtractor = (*mockBidiResponseAccessor)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (a *mockBidiResponseAccessor) ExtractByKey(key string) (any, bool) {
+func (a *mockBidiResponseAccessor) ExtractByKey(_ gocontext.Context, key string) (any, error) {
 	if key == messagesKey {
-		return a.sent, true
+		return a.sent, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 type request struct {

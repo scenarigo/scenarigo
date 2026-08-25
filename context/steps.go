@@ -1,6 +1,11 @@
 package context
 
-import "sync"
+import (
+	"context"
+	"sync"
+
+	query "github.com/zoncoen/query-go/v2"
+)
 
 // Steps represents results of steps.
 type Steps struct {
@@ -42,11 +47,13 @@ func (s *Steps) Get(id string) *Step {
 	return s.results[id]
 }
 
+var _ query.KeyExtractor = (*Steps)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (s *Steps) ExtractByKey(key string) (any, bool) {
+func (s *Steps) ExtractByKey(_ context.Context, key string) (any, error) {
 	step := s.Get(key)
 	if step != nil {
-		return step, true
+		return step, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }

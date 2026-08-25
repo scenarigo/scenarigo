@@ -589,34 +589,34 @@ func TestStreamHandler_failure(t *testing.T) {
 func TestAccessors(t *testing.T) {
 	t.Run("clientStreamRequestAccessor", func(t *testing.T) {
 		a := &clientStreamRequestAccessor{}
-		if _, ok := a.ExtractByKey(messagesKey); !ok {
+		if _, err := a.ExtractByKey(context.Background(), messagesKey); err != nil {
 			t.Error("expected messages key to be found")
 		}
-		if _, ok := a.ExtractByKey("other"); ok {
+		if _, err := a.ExtractByKey(context.Background(), "other"); err == nil {
 			t.Error("expected other key to not be found")
 		}
 	})
 	t.Run("mockBidiResponseAccessor", func(t *testing.T) {
 		a := &mockBidiResponseAccessor{}
-		if _, ok := a.ExtractByKey(messagesKey); !ok {
+		if _, err := a.ExtractByKey(context.Background(), messagesKey); err != nil {
 			t.Error("expected messages key to be found")
 		}
-		if _, ok := a.ExtractByKey("other"); ok {
+		if _, err := a.ExtractByKey(context.Background(), "other"); err == nil {
 			t.Error("expected other key to not be found")
 		}
 	})
 	t.Run("mockBidiRequestAccessor", func(t *testing.T) {
 		buf := grpcstream.NewBuffer[*grpcprotocol.ProtoMessageYAMLMarshaler]()
 		a := &mockBidiRequestAccessor{buf: buf}
-		if _, ok := a.ExtractByKey(context.Background(), messagesKey); !ok {
+		if _, err := a.ExtractByKey(context.Background(), messagesKey); err != nil {
 			t.Error("expected messages key to be found")
 		}
-		if _, ok := a.ExtractByKey(context.Background(), "other"); ok {
+		if _, err := a.ExtractByKey(context.Background(), "other"); err == nil {
 			t.Error("expected other key to not be found")
 		}
 		// Test ExtractByIndex when done and no messages
 		buf.Close()
-		if _, ok := a.ExtractByIndex(context.Background(), 0); ok {
+		if _, err := a.ExtractByIndex(context.Background(), 0); err == nil {
 			t.Error("expected index 0 to not be found when done with no messages")
 		}
 	})

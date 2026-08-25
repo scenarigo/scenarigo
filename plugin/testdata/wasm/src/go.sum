@@ -76,10 +76,10 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/tetratelabs/wazero v1.12.0 h1:DuWcpNu/FzgEXgGBDp8J1Spc+CWOvvtvVyjKlaZopYU=
 github.com/tetratelabs/wazero v1.12.0/go.mod h1:LvKtzl2RqO4gyF27BiXU+nKAjcV8f38U+kP/q2vgxh0=
-github.com/zoncoen/query-go v1.4.0 h1:jTrFGZ7OAmrHYkEMezOqIqAwl6c5ukP9iRqR0QCZxb8=
-github.com/zoncoen/query-go v1.4.0/go.mod h1:xJ6xvqbOJ8QFwc9u6QcHyiO+qLENez4JjtwXp1WQOKs=
-github.com/zoncoen/query-go/extractor/yaml v0.2.2 h1:+A85j5FtJh7I22yGx9GbHGN+S3z6b9T2leS7cPAROAM=
-github.com/zoncoen/query-go/extractor/yaml v0.2.2/go.mod h1:UwIFSsTCSpoVMzAR2Egif/7u0tUimmhBpnC2WGDRn44=
+github.com/zoncoen/query-go/extractor/yaml/v2 v2.0.0 h1:1507d/cKquN+O9rmfZY97UjfkChnIDoleATeKC1M7cw=
+github.com/zoncoen/query-go/extractor/yaml/v2 v2.0.0/go.mod h1:w4m8NwgFVZPapjgn0QRQCPKgaxv+geviCZJvWRjZtBM=
+github.com/zoncoen/query-go/v2 v2.0.0 h1:9zghJZ9RZJDQJ4EG8FJDkbTSulm3mV9LqiGen4CWGCY=
+github.com/zoncoen/query-go/v2 v2.0.0/go.mod h1:rdCaQ0pWnfVd1hoGGpkVjGk/NaxtRGFEsk0RrZ+65vs=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/otel v1.44.0 h1:JjwHmHpA4iZ3wBxluu2fbbE7j4kqlE8jXyAyPXH7HqU=

@@ -1,9 +1,10 @@
 package context
 
 import (
+	"context"
 	"testing"
 
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestVars(t *testing.T) {
@@ -31,7 +32,7 @@ func checkVars(t *testing.T, vars Vars, s string, expect any, expectErr bool) {
 	if err != nil {
 		t.Fatalf("failed to parse: %s", err)
 	}
-	got, err := q.Extract(vars)
+	got, err := q.Extract(context.Background(), vars)
 	if expect != got {
 		t.Errorf("expected %v, got %v", expect, got)
 	}

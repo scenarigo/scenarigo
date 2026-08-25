@@ -4734,8 +4734,8 @@ https://github.com/tetratelabs/wazero
 
 ================================================================
 
-github.com/zoncoen/query-go
-https://github.com/zoncoen/query-go
+github.com/zoncoen/query-go/extractor/protobuf/v2
+https://github.com/zoncoen/query-go/extractor/protobuf/v2
 ----------------------------------------------------------------
 The MIT License (MIT)
 
@@ -4761,8 +4761,8 @@ THE SOFTWARE.
 
 ================================================================
 
-github.com/zoncoen/query-go/extractor/protobuf
-https://github.com/zoncoen/query-go/extractor/protobuf
+github.com/zoncoen/query-go/extractor/yaml/v2
+https://github.com/zoncoen/query-go/extractor/yaml/v2
 ----------------------------------------------------------------
 The MIT License (MIT)
 
@@ -4788,8 +4788,8 @@ THE SOFTWARE.
 
 ================================================================
 
-github.com/zoncoen/query-go/extractor/yaml
-https://github.com/zoncoen/query-go/extractor/yaml
+github.com/zoncoen/query-go/v2
+https://github.com/zoncoen/query-go/v2
 ----------------------------------------------------------------
 The MIT License (MIT)
 

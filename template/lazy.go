@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 
+	query "github.com/zoncoen/query-go/v2"
+
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 )
@@ -103,15 +105,21 @@ func (c *waitContext) set(v any) error {
 	return errors.New("set an actual value twice")
 }
 
+var _ query.KeyExtractor = (*waitContext)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (c *waitContext) ExtractByKey(key string) (any, bool) {
+func (c *waitContext) ExtractByKey(ctx context.Context, key string) (any, error) {
 	if key == "$" {
-		return c.extractActualValue()
+		v, ok := c.extractActualValue()
+		if !ok {
+			return nil, query.ErrNotFound
+		}
+		return v, nil
 	}
 	k := queryutil.New().Key(key)
-	res, err := k.Extract(c.any)
+	res, err := k.Extract(ctx, c.any)
 	if err != nil {
-		return nil, false
+		return nil, query.ErrNotFound
 	}
-	return res, true
+	return res, nil
 }

@@ -76,8 +76,8 @@ func TestWasmHost(t *testing.T) {
 
 	t.Run("value", func(t *testing.T) {
 		t.Run("int", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Int")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Int")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != int(1) {
@@ -85,8 +85,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("int8", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Int8")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Int8")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != int8(2) {
@@ -94,8 +94,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("int16", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Int16")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Int16")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != int16(3) {
@@ -103,8 +103,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("int32", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Int32")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Int32")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != int32(4) {
@@ -112,8 +112,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("int64", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Int64")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Int64")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != int64(5) {
@@ -121,8 +121,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("uint", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Uint")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Uint")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != uint(6) {
@@ -130,8 +130,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("uint8", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Uint8")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Uint8")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != uint8(7) {
@@ -139,8 +139,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("uint16", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Uint16")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Uint16")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != uint16(8) {
@@ -148,8 +148,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("uint32", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Uint32")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Uint32")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != uint32(9) {
@@ -157,8 +157,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("uint64", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Uint64")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Uint64")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != uint64(10) {
@@ -166,8 +166,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("float32", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Float32")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Float32")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != float32(11) {
@@ -175,8 +175,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("float64", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Float64")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Float64")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != float64(12) {
@@ -184,8 +184,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("uintptr", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Uintptr")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Uintptr")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != uintptr(13) {
@@ -193,8 +193,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("bool", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Bool")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Bool")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != true {
@@ -202,8 +202,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("string", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("String")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "String")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != "hello" {
@@ -211,8 +211,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("[]byte", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Bytes")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Bytes")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			b, ok := v.([]byte)
@@ -224,8 +224,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("map", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Map")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Map")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			m, ok := v.(map[string]any)
@@ -240,8 +240,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("slice", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Slice")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Slice")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			slice, ok := v.([]any)
@@ -260,8 +260,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("array", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Array")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Array")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			arr, ok := v.([2]int64)
@@ -273,23 +273,23 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("struct", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Struct")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Struct")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			st, ok := v.(*StructValue)
 			if !ok {
 				t.Fatalf("failed to get bytes value: %T", v)
 			}
-			x, ok := st.ExtractByKey("X")
-			if !ok {
+			x, err := st.ExtractByKey(gocontext.Background(), "X")
+			if err != nil {
 				t.Fatalf("failed to get x field value")
 			}
 			if x != 1 {
 				t.Fatalf("failed to get x: %+v", x)
 			}
-			y, ok := st.ExtractByKey("Y")
-			if !ok {
+			y, err := st.ExtractByKey(gocontext.Background(), "Y")
+			if err != nil {
 				t.Fatalf("failed to get y field value")
 			}
 			if y != "hello" {
@@ -297,23 +297,23 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("structptr", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("StructPtr")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "StructPtr")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			st, ok := v.(*StructValue)
 			if !ok {
 				t.Fatalf("failed to get bytes value: %T", v)
 			}
-			x, ok := st.ExtractByKey("X")
-			if !ok {
+			x, err := st.ExtractByKey(gocontext.Background(), "X")
+			if err != nil {
 				t.Fatalf("failed to get x field value")
 			}
 			if x != 1 {
 				t.Fatalf("failed to get x: %+v", x)
 			}
-			y, ok := st.ExtractByKey("Y")
-			if !ok {
+			y, err := st.ExtractByKey(gocontext.Background(), "Y")
+			if err != nil {
 				t.Fatalf("failed to get y field value")
 			}
 			if y != "hello" {
@@ -321,32 +321,32 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("structchain", func(t *testing.T) {
-			chain, ok := wasmPlugin.ExtractByKey("StructChain")
-			if !ok {
+			chain, err := wasmPlugin.ExtractByKey(gocontext.Background(), "StructChain")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			stchain, ok := chain.(*StructValue)
 			if !ok {
 				t.Fatalf("failed to get bytes value: %T", chain)
 			}
-			x, ok := stchain.ExtractByKey("X")
-			if !ok {
+			x, err := stchain.ExtractByKey(gocontext.Background(), "X")
+			if err != nil {
 				t.Fatalf("failed to get x field value")
 			}
 			xst, ok := x.(*StructValue)
 			if !ok {
 				t.Fatalf("failed to get bytes value: %T", x)
 			}
-			y, ok := xst.ExtractByKey("Y")
-			if !ok {
+			y, err := xst.ExtractByKey(gocontext.Background(), "Y")
+			if err != nil {
 				t.Fatalf("failed to get x field value")
 			}
 			yst, ok := y.(*StructValue)
 			if !ok {
 				t.Fatalf("failed to get bytes value: %T", y)
 			}
-			z, ok := yst.ExtractByKey("Z")
-			if !ok {
+			z, err := yst.ExtractByKey(gocontext.Background(), "Z")
+			if err != nil {
 				t.Fatalf("failed to get x field value")
 			}
 			if z != 10 {
@@ -354,8 +354,8 @@ func TestWasmHost(t *testing.T) {
 			}
 		})
 		t.Run("any", func(t *testing.T) {
-			v, ok := wasmPlugin.ExtractByKey("Any")
-			if !ok {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Any")
+			if err != nil {
 				t.Fatalf("failed to get value")
 			}
 			if v != int(1) {
@@ -364,8 +364,8 @@ func TestWasmHost(t *testing.T) {
 		})
 	})
 	t.Run("func", func(t *testing.T) {
-		bar, ok := wasmPlugin.ExtractByKey("Bar")
-		if !ok {
+		bar, err := wasmPlugin.ExtractByKey(gocontext.Background(), "Bar")
+		if err != nil {
 			t.Fatalf("failed to get Bar value")
 		}
 		ret := reflect.ValueOf(bar).Call([]reflect.Value{})
@@ -378,8 +378,8 @@ func TestWasmHost(t *testing.T) {
 		}
 	})
 	t.Run("grpc", func(t *testing.T) {
-		client, ok := wasmPlugin.ExtractByKey("EchoClient")
-		if !ok {
+		client, err := wasmPlugin.ExtractByKey(gocontext.Background(), "EchoClient")
+		if err != nil {
 			t.Fatalf("failed to get EchoClient")
 		}
 		wasmValue, ok := client.(*StructValue)
