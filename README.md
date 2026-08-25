@@ -1365,6 +1365,8 @@ vars:
 {{vars.map[vars.key]}}       # FOO
 ```
 
+The base of an index expression must be a variable reference; the result of a function call can not be indexed. A number decoded from a JSON response body is always an index, so a map whose keys are numeric strings must be accessed by a string (e.g. `{{vars.map[string(response.body.id)]}}`).
+
 ### Syntax
 
 The grammar of the template is defined below, using `|` for alternatives, `[]` for optional, `{}` for repeated, `()` for grouping, and `...` for character range.
