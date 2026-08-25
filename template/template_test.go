@@ -2,6 +2,7 @@ package template
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -349,8 +350,11 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 				"foo":         "FOO",
 				"foo.bar-baz": "QUX",
 			},
-			"key":  "foo",
-			"keys": map[string]string{"ref": "foo"},
+			"key":     "foo",
+			"keys":    map[string]string{"ref": "foo"},
+			"jsonNum": json.Number("2"),
+			"jsonFlt": json.Number("1.5"),
+			"jsonBig": json.Number("9223372036854775808"),
 		},
 	}
 	tests := map[string]executeTestCase{
@@ -366,6 +370,11 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 		},
 		"index by unsigned integer variable": {
 			str:    "{{vars.array[vars.uindex]}}",
+			data:   data,
+			expect: "c",
+		},
+		"index by JSON number variable": {
+			str:    "{{vars.array[vars.jsonNum]}}",
 			data:   data,
 			expect: "c",
 		},
@@ -413,6 +422,16 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 			str:         "{{vars.array[1.5]}}",
 			data:        data,
 			expectError: "expected an integer or string index but got float64",
+		},
+		"non-integer JSON number index": {
+			str:         "{{vars.array[vars.jsonFlt]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got 1.5",
+		},
+		"out of range JSON number index": {
+			str:         "{{vars.array[vars.jsonBig]}}",
+			data:        data,
+			expectError: "index 9223372036854775808 overflows int",
 		},
 		"bool index": {
 			str:         "{{vars.array[true]}}",

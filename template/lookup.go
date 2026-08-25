@@ -2,8 +2,10 @@ package template
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"reflect"
+	"strconv"
 
 	"github.com/pkg/errors"
 	"github.com/zoncoen/query-go"
@@ -93,6 +95,18 @@ func (t *Template) appendIndexQuery(ctx context.Context, q *query.Query, expr as
 	v, err := t.executeExpr(ctx, expr, data)
 	if err != nil {
 		return nil, err
+	}
+	// JSON numbers are decoded as json.Number, whose kind is string. Interpret
+	// them as integers so that an index taken from a response body works.
+	if n, ok := v.(json.Number); ok {
+		i, err := n.Int64()
+		if err != nil {
+			if errors.Is(err, strconv.ErrRange) {
+				return nil, errors.Errorf("index %s overflows int", n.String())
+			}
+			return nil, errors.Errorf("expected an integer or string index but got %s", n.String())
+		}
+		v = i
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
