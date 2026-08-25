@@ -2,11 +2,11 @@ module github.com/scenarigo/scenarigo/examples/grpc/plugin/src
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.27.0
 
 require (
 	github.com/scenarigo/scenarigo v0.26.2
-	google.golang.org/grpc v1.83.0
+	google.golang.org/grpc v1.83.1
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -33,8 +33,8 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
-	github.com/zoncoen/query-go v1.4.0 // indirect
-	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
+	github.com/zoncoen/query-go v1.5.0 // indirect
+	github.com/zoncoen/query-go/extractor/yaml v0.2.3 // indirect
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
