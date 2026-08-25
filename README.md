@@ -1356,12 +1356,13 @@ vars:
   map:
     foo.bar: FOO
   key: foo.bar
-steps:
-- vars:
-    first: '{{vars.array[0]}}'            # first: a
-    second: '{{vars.array[vars.index]}}'  # second: b
-    literal: '{{vars.map["foo.bar"]}}'    # literal: FOO
-    byKey: '{{vars.map[vars.key]}}'       # byKey: FOO
+```
+
+```
+{{vars.array[0]}}            # a
+{{vars.array[vars.index]}}   # b
+{{vars.map["foo.bar"]}}      # FOO
+{{vars.map[vars.key]}}       # FOO
 ```
 
 ### Syntax
