@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/assert/plugin
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.27.0
 
 require (
 	github.com/kr/pretty v0.3.0 // indirect
