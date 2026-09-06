@@ -2,6 +2,7 @@ package template
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -147,4 +148,12 @@ func extractVal(t *testing.T, s string, target any) any {
 		t.Fatalf("failed to extract: %s", err)
 	}
 	return v
+}
+
+func TestWaitContext_ExtractByKey_Failure(t *testing.T) {
+	c := newWaitContext(context.Background(), failingExtractor{})
+	_, err := c.ExtractByKey(context.Background(), "k")
+	if err == nil || errors.Is(err, query.ErrNotFound) {
+		t.Fatalf("expected the failure to be reported but got %v", err)
+	}
 }

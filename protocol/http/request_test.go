@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	gocontext "context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -712,4 +713,25 @@ func TestRequest_buildRequest_ScenarigoHeaderEncoding(t *testing.T) {
 			t.Fatalf("step full name differs: want %q got %q", expect, got)
 		}
 	})
+}
+
+type failingKey struct{}
+
+func (failingKey) ExtractByKey(gocontext.Context, string) (any, error) {
+	return nil, stderrors.New("lookup failed")
+}
+
+func TestExtractors_Failure(t *testing.T) {
+	extractors := map[string]query.KeyExtractor{
+		"request":  RequestExtractor{Body: failingKey{}},
+		"response": ResponseExtractor{Body: failingKey{}},
+	}
+	for name, e := range extractors {
+		t.Run(name, func(t *testing.T) {
+			_, err := e.ExtractByKey(gocontext.Background(), "k")
+			if err == nil || stderrors.Is(err, query.ErrNotFound) {
+				t.Fatalf("expected the failure to be reported but got %v", err)
+			}
+		})
+	}
 }

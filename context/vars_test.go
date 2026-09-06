@@ -2,6 +2,7 @@ package context
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	query "github.com/zoncoen/query-go/v2"
@@ -41,5 +42,20 @@ func checkVars(t *testing.T, vars Vars, s string, expect any, expectErr bool) {
 	}
 	if expectErr && err == nil {
 		t.Error("no error")
+	}
+}
+
+type failingKey struct{}
+
+func (failingKey) ExtractByKey(context.Context, string) (any, error) {
+	return nil, errors.New("lookup failed")
+}
+
+func TestVars_ExtractByKey_Failure(t *testing.T) {
+	var v Vars
+	v = v.Append(map[string]int{"k": 1}).Append(failingKey{})
+	_, err := v.ExtractByKey(context.Background(), "k")
+	if err == nil || errors.Is(err, query.ErrNotFound) {
+		t.Fatalf("expected the failure to be reported but got %v", err)
 	}
 }

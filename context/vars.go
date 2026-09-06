@@ -2,6 +2,7 @@ package context
 
 import (
 	"context"
+	"errors"
 
 	query "github.com/zoncoen/query-go/v2"
 
@@ -28,8 +29,12 @@ func (vars Vars) Append(v any) Vars {
 func (vars Vars) ExtractByKey(ctx context.Context, key string) (any, error) {
 	k := queryutil.New().Key(key)
 	for i := len(vars) - 1; i >= 0; i-- {
-		if v, err := k.Extract(ctx, vars[i]); err == nil {
+		v, err := k.Extract(ctx, vars[i])
+		if err == nil {
 			return v, nil
+		}
+		if !errors.Is(err, query.ErrNotFound) {
+			return nil, err
 		}
 	}
 	return nil, query.ErrNotFound

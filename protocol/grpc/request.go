@@ -153,17 +153,8 @@ var _ query.KeyExtractor = (*RequestExtractor)(nil)
 // ExtractByKey implements query.KeyExtractor interface.
 func (r RequestExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
 	q := queryutil.New().Key(key)
-	if v, err := q.Extract(ctx, request(r)); err == nil {
-		return v, nil
-	}
-	// for backward compatibility
-	if v, err := q.Extract(ctx, r.Message); err == nil {
-		return v, nil
-	}
-	if v, err := q.Extract(ctx, r.Messages); err == nil {
-		return v, nil
-	}
-	return nil, query.ErrNotFound
+	// r.Message and r.Messages are looked up for backward compatibility.
+	return queryutil.ExtractFirst(ctx, q, request(r), r.Message, r.Messages)
 }
 
 type request struct {
@@ -264,11 +255,7 @@ func (s *responseStatus) ExtractByKey(ctx gocontext.Context, key string) (any, e
 	if query.IsCaseInsensitive(ctx) {
 		opts = append(opts, query.CaseInsensitive())
 	}
-	q := queryutil.New(opts...).Key(key)
-	if got, err := q.Extract(ctx, s.Marshaler()); err == nil {
-		return got, nil
-	}
-	return nil, query.ErrNotFound
+	return queryutil.New(opts...).Key(key).Extract(ctx, s.Marshaler())
 }
 
 // ResponseExtractor represents a response dump.
@@ -283,17 +270,8 @@ func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any,
 		opts = append(opts, query.CaseInsensitive())
 	}
 	q := queryutil.New(opts...).Key(key)
-	if v, err := q.Extract(ctx, response(r)); err == nil {
-		return v, nil
-	}
-	// for backward compatibility
-	if v, err := q.Extract(ctx, r.Message); err == nil {
-		return v, nil
-	}
-	if v, err := q.Extract(ctx, r.Messages); err == nil {
-		return v, nil
-	}
-	return nil, query.ErrNotFound
+	// r.Message and r.Messages are looked up for backward compatibility.
+	return queryutil.ExtractFirst(ctx, q, response(r), r.Message, r.Messages)
 }
 
 // Invoke implements protocol.Invoker interface.

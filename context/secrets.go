@@ -2,6 +2,7 @@ package context
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go/token"
 	"reflect"
@@ -53,8 +54,12 @@ func (s *Secrets) ExtractByKey(ctx context.Context, key string) (any, error) {
 	}
 	k := queryutil.New(opts...).Key(key)
 	for i := len(s.secrets) - 1; i >= 0; i-- {
-		if v, err := k.Extract(ctx, s.secrets[i]); err == nil {
+		v, err := k.Extract(ctx, s.secrets[i])
+		if err == nil {
 			return v, nil
+		}
+		if !errors.Is(err, query.ErrNotFound) {
+			return nil, err
 		}
 	}
 	return nil, query.ErrNotFound

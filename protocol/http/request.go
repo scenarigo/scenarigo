@@ -45,14 +45,8 @@ var _ query.KeyExtractor = (*RequestExtractor)(nil)
 // ExtractByKey implements query.KeyExtractor interface.
 func (r RequestExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
 	q := queryutil.New().Key(key)
-	if v, err := q.Extract(ctx, Request(r)); err == nil {
-		return v, nil
-	}
-	// for backward compatibility
-	if v, err := q.Extract(ctx, r.Body); err == nil {
-		return v, nil
-	}
-	return nil, query.ErrNotFound
+	// r.Body is looked up for backward compatibility.
+	return queryutil.ExtractFirst(ctx, q, Request(r), r.Body)
 }
 
 type response struct {
@@ -70,14 +64,8 @@ var _ query.KeyExtractor = (*ResponseExtractor)(nil)
 // ExtractByKey implements query.KeyExtractor interface.
 func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
 	q := queryutil.New().Key(key)
-	if v, err := q.Extract(ctx, response(r)); err == nil {
-		return v, nil
-	}
-	// for backward compatibility
-	if v, err := q.Extract(ctx, r.Body); err == nil {
-		return v, nil
-	}
-	return nil, query.ErrNotFound
+	// r.Body is looked up for backward compatibility.
+	return queryutil.ExtractFirst(ctx, q, response(r), r.Body)
 }
 
 type httpClient interface {
