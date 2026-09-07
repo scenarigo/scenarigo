@@ -421,6 +421,10 @@ func (r *GetCommandRequest) isCommandRequest() bool { return true }
 
 type GetCommandResponse struct {
 	Value *Value `json:"value"`
+	// NotFound reports that the selected field or key does not exist. It
+	// distinguishes absence from a failure to read the value, which is
+	// reported through Response.Error.
+	NotFound bool `json:"notFound,omitempty"`
 }
 
 func (r *GetCommandResponse) isCommandResponse() bool { return true }

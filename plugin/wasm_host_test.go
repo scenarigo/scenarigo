@@ -4,6 +4,7 @@ import (
 	"bytes"
 	gocontext "context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	query "github.com/zoncoen/query-go/v2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -295,6 +297,34 @@ func TestWasmHost(t *testing.T) {
 			if y != "hello" {
 				t.Fatalf("failed to get x: %+v", y)
 			}
+			if _, err := st.ExtractByKey(gocontext.Background(), "NoSuchField"); !errors.Is(err, query.ErrNotFound) {
+				t.Fatalf("expected query.ErrNotFound for a missing field, got %v", err)
+			}
+		})
+		t.Run("structnilptr", func(t *testing.T) {
+			// A selector applied to a nil pointer is an absence for the
+			// reflection-based extractor, so the WASM one must agree: otherwise
+			// the same template fails hard on a WASM plugin and falls back on a
+			// native one.
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "StructNilPtr")
+			if err != nil {
+				t.Fatalf("failed to get StructNilPtr value: %s", err)
+			}
+			st, ok := v.(*StructValue)
+			if !ok {
+				t.Fatalf("expected *StructValue but got %T", v)
+			}
+			ptr, err := st.ExtractByKey(gocontext.Background(), "Ptr")
+			if err != nil {
+				t.Fatalf("failed to get the Ptr field: %s", err)
+			}
+			nilPtr, ok := ptr.(*StructValue)
+			if !ok {
+				t.Skipf("the nil pointer field did not stay on the guest side (%T)", ptr)
+			}
+			if _, err := nilPtr.ExtractByKey(gocontext.Background(), "X"); !errors.Is(err, query.ErrNotFound) {
+				t.Fatalf("expected query.ErrNotFound for a field of a nil pointer, got %v", err)
+			}
 		})
 		t.Run("structptr", func(t *testing.T) {
 			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "StructPtr")
@@ -360,6 +390,34 @@ func TestWasmHost(t *testing.T) {
 			}
 			if v != int(1) {
 				t.Fatalf("failed to get value: %v(%T)", v, v)
+			}
+		})
+		t.Run("map behind an interface field", func(t *testing.T) {
+			v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "StructAny")
+			if err != nil {
+				t.Fatalf("failed to get value: %s", err)
+			}
+			st, ok := v.(*StructValue)
+			if !ok {
+				t.Fatalf("expected *StructValue but got %T", v)
+			}
+			a, err := st.ExtractByKey(gocontext.Background(), "A")
+			if err != nil {
+				t.Fatalf("failed to get A: %s", err)
+			}
+			m, ok := a.(*StructValue)
+			if !ok {
+				t.Fatalf("expected *StructValue for A but got %T", a)
+			}
+			k, err := m.ExtractByKey(gocontext.Background(), "k")
+			if err != nil {
+				t.Fatalf("failed to get k: %s", err)
+			}
+			if k != "v" {
+				t.Fatalf("unexpected k: %v(%T)", k, k)
+			}
+			if _, err := m.ExtractByKey(gocontext.Background(), "NoSuchKey"); !errors.Is(err, query.ErrNotFound) {
+				t.Fatalf("expected query.ErrNotFound for a missing key, got %v", err)
 			}
 		})
 	})

@@ -108,6 +108,11 @@ var (
 		X: 1,
 		Y: "hello",
 	}
+	// StructNilPtr carries a nil pointer field so that a selector applied to it
+	// can be checked to report an absence rather than a read failure.
+	StructNilPtr = struct {
+		Ptr *struct{ X int }
+	}{}
 	StructChain = struct {
 		X struct {
 			Y struct {
@@ -128,6 +133,8 @@ var (
 		},
 	}
 	Any any = 1
+	// StructAny holds a map behind an interface-typed field.
+	StructAny = struct{ A any }{A: map[string]any{"k": "v"}}
 )
 
 func Bar() int {
@@ -161,8 +168,10 @@ func main() {
 				plugin.ToDefinition("Array", Array),
 				plugin.ToDefinition("Struct", Struct),
 				plugin.ToDefinition("StructPtr", StructPtr),
+				plugin.ToDefinition("StructNilPtr", StructNilPtr),
 				plugin.ToDefinition("StructChain", StructChain),
 				plugin.ToDefinition("Any", Any),
+				plugin.ToDefinition("StructAny", StructAny),
 				plugin.ToDefinition("ServerAddr", ServerAddr),
 			}
 		},
@@ -191,8 +200,10 @@ func main() {
 				plugin.ToDefinition("Array", Array),
 				plugin.ToDefinition("Struct", Struct),
 				plugin.ToDefinition("StructPtr", StructPtr),
+				plugin.ToDefinition("StructNilPtr", StructNilPtr),
 				plugin.ToDefinition("StructChain", StructChain),
 				plugin.ToDefinition("Any", Any),
+				plugin.ToDefinition("StructAny", StructAny),
 				plugin.ToDefinition("ServerAddr", ServerAddr),
 			}
 		},
