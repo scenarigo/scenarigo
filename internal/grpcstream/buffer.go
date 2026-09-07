@@ -69,10 +69,11 @@ func (b *Buffer[T]) Close() {
 	b.mu.Unlock()
 }
 
-// At returns the i-th message, blocking until it arrives. It returns
-// ErrClosed when the stream ends before the message arrives, and the context
-// error when ctx ends first, so callers can tell a definitive absence from an
-// interrupted wait.
+// At returns the i-th message, blocking until it arrives. A negative index
+// counts from the end, which the stream only has once it has ended, so it
+// blocks until then. It returns ErrClosed when the stream ends before the
+// message arrives, and the context error when ctx ends first, so callers can
+// tell a definitive absence from an interrupted wait.
 func (b *Buffer[T]) At(ctx context.Context, i int) (T, error) {
 	// Wake this waiter when its context is done so it re-checks and stops waiting.
 	stop := make(chan struct{})
@@ -90,8 +91,16 @@ func (b *Buffer[T]) At(ctx context.Context, i int) (T, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for {
-		if i < len(b.items) {
-			return b.items[i], nil
+		if i >= 0 {
+			if i < len(b.items) {
+				return b.items[i], nil
+			}
+		} else if b.done {
+			// Which message an index counted from the end names is settled
+			// only once no more can arrive.
+			if n := len(b.items) + i; n >= 0 {
+				return b.items[n], nil
+			}
 		}
 		if b.done {
 			var zero T
