@@ -1307,6 +1307,38 @@ func TestTemplate_Execute_BinaryExpr(t *testing.T) {
 	})
 }
 
+type failingExtractor struct{}
+
+func (failingExtractor) ExtractByKey(_ context.Context, _ string) (any, error) {
+	return nil, errors.New("host call failed")
+}
+
+func TestTemplate_Execute_ExtractionFailure(t *testing.T) {
+	// A failure to extract is not an absence: ?? and defined() absorb only
+	// query.ErrNotFound and report anything else, so a broken plugin value does
+	// not silently degrade into its fallback.
+	data := map[string]any{"x": failingExtractor{}}
+	for name, str := range map[string]string{
+		"??":      `{{x.a ?? "default"}}`,
+		"defined": `{{defined(x.a)}}`,
+		"plain":   `{{x.a}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpl, err := New(str)
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			_, err = tmpl.Execute(context.Background(), data)
+			if err == nil {
+				t.Fatal("expected error but got no error")
+			}
+			if !strings.Contains(err.Error(), "host call failed") {
+				t.Errorf("expected the extraction failure but got %q", err)
+			}
+		})
+	}
+}
+
 func TestTemplate_Execute_EndedContext(t *testing.T) {
 	// A context that had already ended before the evaluation started cannot
 	// have interrupted a blocking wait, so ordinary undefined values must keep
@@ -1718,4 +1750,61 @@ func (*dumpFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
 		return nil, err
 	}
 	return arg, nil
+}
+
+func TestTemplate_Execute_UnexportedFieldIsAFailure(t *testing.T) {
+	// A field that exists but cannot be read is not an absence. Under query-go
+	// v1 this reached ?? and defined() as "not defined", so a reference to an
+	// unexported field silently took the fallback; v2 reports it, and the
+	// classification in extract keeps it a failure. This is a user-visible
+	// change of behaviour, so pin it.
+	// token is read through the template, not from Go.
+	type hasUnexported struct{ token string }
+	data := map[string]any{"x": hasUnexported{token: "secret"}}
+	for name, str := range map[string]string{
+		"??":      `{{x.token ?? "fallback"}}`,
+		"defined": `{{defined(x.token)}}`,
+		"plain":   `{{x.token}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpl, err := New(str)
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			v, err := tmpl.Execute(context.Background(), data)
+			if err == nil {
+				t.Fatalf("expected an error but got %#v", v)
+			}
+			if !strings.Contains(err.Error(), "can not access unexported field") {
+				t.Errorf("expected the access failure to be reported but got: %s", err)
+			}
+		})
+	}
+}
+
+// failingExtractorWithMethod fails every lookup and also has a method whose
+// name a template can select, the way a plugin value with both would.
+type failingExtractorWithMethod struct{}
+
+func (failingExtractorWithMethod) ExtractByKey(_ context.Context, _ string) (any, error) {
+	return nil, errors.New("host call failed")
+}
+
+func (failingExtractorWithMethod) Greet() string { return "called the method" }
+
+func TestTemplate_Execute_AFailedLookupIsNotAMethodCall(t *testing.T) {
+	// A name the value does not have may still be a method of it, but a lookup
+	// that failed is something else. Calling a method that happens to share
+	// the name would swallow the failure.
+	tmpl, err := New(`{{v.Greet()}}`)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	got, err := tmpl.Execute(context.Background(), map[string]any{"v": failingExtractorWithMethod{}})
+	if err == nil {
+		t.Fatalf("the failure was swallowed by the method: got %v", got)
+	}
+	if !strings.Contains(err.Error(), "host call failed") {
+		t.Errorf("expected the extraction failure but got %q", err)
+	}
 }

@@ -2,6 +2,7 @@ package grpcstream
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -24,8 +25,8 @@ func TestBuffer_AtUnblocksOnAppend(t *testing.T) {
 
 	got := make(chan int, 1)
 	go func() {
-		v, ok := b.At(context.Background(), 1)
-		if ok {
+		v, err := b.At(context.Background(), 1)
+		if err == nil {
 			got <- v
 		} else {
 			got <- -1
@@ -48,36 +49,36 @@ func TestBuffer_AtUnblocksOnAppend(t *testing.T) {
 	}
 }
 
-func TestBuffer_AtReturnsFalseOnClose(t *testing.T) {
+func TestBuffer_AtReturnsErrClosedOnClose(t *testing.T) {
 	b := NewBuffer[int]()
 
-	got := make(chan bool, 1)
+	got := make(chan error, 1)
 	go func() {
-		_, ok := b.At(context.Background(), 5)
-		got <- ok
+		_, err := b.At(context.Background(), 5)
+		got <- err
 	}()
 
 	b.Append(1)
 	b.Close()
 
 	select {
-	case ok := <-got:
-		if ok {
-			t.Fatal("expected At to return false after Close")
+	case err := <-got:
+		if !errors.Is(err, ErrClosed) {
+			t.Fatalf("expected ErrClosed after Close but got %v", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("At did not unblock after Close")
 	}
 }
 
-func TestBuffer_AtReturnsFalseOnContextCancel(t *testing.T) {
+func TestBuffer_AtReturnsContextErrorOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	b := NewBuffer[int]()
 
-	got := make(chan bool, 1)
+	got := make(chan error, 1)
 	go func() {
-		_, ok := b.At(ctx, 0)
-		got <- ok
+		_, err := b.At(ctx, 0)
+		got <- err
 	}()
 
 	// Park the consumer in cond.Wait before canceling, so the cancel-driven
@@ -86,32 +87,32 @@ func TestBuffer_AtReturnsFalseOnContextCancel(t *testing.T) {
 	cancel()
 
 	select {
-	case ok := <-got:
-		if ok {
-			t.Fatal("expected At to return false after context cancel")
+	case err := <-got:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled after cancel but got %v", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("At did not unblock after context cancel")
 	}
 }
 
-func TestBuffer_AtReturnsFalseOnContextDeadline(t *testing.T) {
+func TestBuffer_AtReturnsContextErrorOnDeadline(t *testing.T) {
 	// Callers bound blocking waits by putting a deadline (the deadlock guard)
 	// on the context; At must unblock when it expires.
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	b := NewBuffer[int]()
 
-	got := make(chan bool, 1)
+	got := make(chan error, 1)
 	go func() {
-		_, ok := b.At(ctx, 0)
-		got <- ok
+		_, err := b.At(ctx, 0)
+		got <- err
 	}()
 
 	select {
-	case ok := <-got:
-		if ok {
-			t.Fatal("expected At to return false after the deadline")
+	case err := <-got:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expected context.DeadlineExceeded after the deadline but got %v", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("At did not unblock; the context deadline did not fire")

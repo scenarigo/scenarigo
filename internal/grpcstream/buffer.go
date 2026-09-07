@@ -11,9 +11,14 @@ package grpcstream
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
+
+// ErrClosed reports that the stream ended before the requested message
+// arrived, so the message is definitively absent.
+var ErrClosed = errors.New("stream closed")
 
 // DefaultMessageWaitTimeout bounds how long a blocking message reference may
 // wait. Callers that evaluate message templates apply it as a deadline on the
@@ -64,10 +69,11 @@ func (b *Buffer[T]) Close() {
 	b.mu.Unlock()
 }
 
-// At blocks until the i-th message is available and returns it. It returns
-// false if the buffer is closed or ctx ends before the message arrives; the
-// caller can tell the two apart by checking ctx.Err.
-func (b *Buffer[T]) At(ctx context.Context, i int) (T, bool) {
+// At returns the i-th message, blocking until it arrives. It returns
+// ErrClosed when the stream ends before the message arrives, and the context
+// error when ctx ends first, so callers can tell a definitive absence from an
+// interrupted wait.
+func (b *Buffer[T]) At(ctx context.Context, i int) (T, error) {
 	// Wake this waiter when its context is done so it re-checks and stops waiting.
 	stop := make(chan struct{})
 	defer close(stop)
@@ -85,15 +91,15 @@ func (b *Buffer[T]) At(ctx context.Context, i int) (T, bool) {
 	defer b.mu.Unlock()
 	for {
 		if i < len(b.items) {
-			return b.items[i], true
+			return b.items[i], nil
 		}
 		if b.done {
 			var zero T
-			return zero, false
+			return zero, ErrClosed
 		}
-		if ctx.Err() != nil {
+		if err := ctx.Err(); err != nil {
 			var zero T
-			return zero, false
+			return zero, err
 		}
 		b.waiters++
 		b.cond.Wait()

@@ -286,9 +286,12 @@ func (a *bidiResponseAccessor) ExtractByKey(_ gocontext.Context, key string) (an
 // ExtractByIndex implements query.IndexExtractor interface. It blocks
 // until the Nth response has been received, bounded by ctx.
 func (a *bidiResponseAccessor) ExtractByIndex(ctx gocontext.Context, i int) (any, error) {
-	msg, ok := a.buf.At(ctx, i)
-	if !ok {
-		return nil, query.ErrNotFound
+	msg, err := a.buf.At(ctx, i)
+	if err != nil {
+		if stderrors.Is(err, grpcstream.ErrClosed) {
+			return nil, query.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to wait for the response message: %w", err)
 	}
 	return &ProtoMessageYAMLMarshaler{msg}, nil
 }
