@@ -116,5 +116,5 @@ func (c *waitContext) ExtractByKey(ctx context.Context, key string) (any, error)
 		}
 		return v, nil
 	}
-	return queryutil.New().Key(key).Extract(ctx, c.any)
+	return queryutil.NewFromContext(ctx).Key(key).Extract(ctx, c.any)
 }

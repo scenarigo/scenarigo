@@ -48,11 +48,9 @@ var _ query.KeyExtractor = (*Secrets)(nil)
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (s *Secrets) ExtractByKey(ctx context.Context, key string) (any, error) {
-	var opts []query.Option
-	if query.IsCaseInsensitive(ctx) {
-		opts = append(opts, query.CaseInsensitive())
-	}
-	k := queryutil.New(opts...).Key(key)
+	// The context carries the options of the lookup this extractor is part of,
+	// case-insensitivity included, so the sub-query behaves the same way.
+	k := queryutil.NewFromContext(ctx).Key(key)
 	for i := len(s.secrets) - 1; i >= 0; i-- {
 		v, err := k.Extract(ctx, s.secrets[i])
 		if err == nil {

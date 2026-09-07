@@ -44,7 +44,7 @@ var _ query.KeyExtractor = (*RequestExtractor)(nil)
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (r RequestExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
-	q := queryutil.New().Key(key)
+	q := queryutil.NewFromContext(ctx).Key(key)
 	// r.Body is looked up for backward compatibility.
 	return queryutil.ExtractFirst(ctx, q, Request(r), r.Body)
 }
@@ -63,7 +63,7 @@ var _ query.KeyExtractor = (*ResponseExtractor)(nil)
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
-	q := queryutil.New().Key(key)
+	q := queryutil.NewFromContext(ctx).Key(key)
 	// r.Body is looked up for backward compatibility.
 	return queryutil.ExtractFirst(ctx, q, response(r), r.Body)
 }

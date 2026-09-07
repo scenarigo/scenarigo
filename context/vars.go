@@ -27,7 +27,7 @@ func (vars Vars) Append(v any) Vars {
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (vars Vars) ExtractByKey(ctx context.Context, key string) (any, error) {
-	k := queryutil.New().Key(key)
+	k := queryutil.NewFromContext(ctx).Key(key)
 	for i := len(vars) - 1; i >= 0; i-- {
 		v, err := k.Extract(ctx, vars[i])
 		if err == nil {

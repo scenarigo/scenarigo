@@ -152,7 +152,7 @@ var _ query.KeyExtractor = (*RequestExtractor)(nil)
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (r RequestExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
-	q := queryutil.New().Key(key)
+	q := queryutil.NewFromContext(ctx).Key(key)
 	// r.Message and r.Messages are looked up for backward compatibility.
 	return queryutil.ExtractFirst(ctx, q, request(r), r.Message, r.Messages)
 }
@@ -251,11 +251,7 @@ var _ query.KeyExtractor = (*responseStatus)(nil)
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (s *responseStatus) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
-	var opts []query.Option
-	if query.IsCaseInsensitive(ctx) {
-		opts = append(opts, query.CaseInsensitive())
-	}
-	return queryutil.New(opts...).Key(key).Extract(ctx, s.Marshaler())
+	return queryutil.NewFromContext(ctx).Key(key).Extract(ctx, s.Marshaler())
 }
 
 // ResponseExtractor represents a response dump.
@@ -265,11 +261,7 @@ var _ query.KeyExtractor = (*ResponseExtractor)(nil)
 
 // ExtractByKey implements query.KeyExtractor interface.
 func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
-	var opts []query.Option
-	if query.IsCaseInsensitive(ctx) {
-		opts = append(opts, query.CaseInsensitive())
-	}
-	q := queryutil.New(opts...).Key(key)
+	q := queryutil.NewFromContext(ctx).Key(key)
 	// r.Message and r.Messages are looked up for backward compatibility.
 	return queryutil.ExtractFirst(ctx, q, response(r), r.Message, r.Messages)
 }

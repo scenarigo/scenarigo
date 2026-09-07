@@ -21,6 +21,22 @@ func New(opts ...query.Option) *query.Query {
 	return query.New(optionsWith(opts)...)
 }
 
+// NewFromContext returns a query that carries the options of the extraction ctx
+// belongs to, so a sub-query an extractor runs behaves like the lookup it is
+// part of - case-insensitivity and any custom extract func included. Outside an
+// extraction, where the context carries no options, it falls back to the
+// process-wide options like New.
+//
+// It takes no options of its own. In a query this package built, the adapter
+// for v1-shaped extractors is the last custom extract func, and one appended
+// after it would compose inside it - see optionsWith.
+func NewFromContext(ctx context.Context) *query.Query {
+	if inherited := query.OptionsFromContext(ctx); len(inherited) > 0 {
+		return query.New(inherited...)
+	}
+	return New()
+}
+
 // Options returns the process-wide query options: the base set, what the
 // registered protocols added, and the adapter for v1-shaped extractors last.
 func Options() []query.Option {

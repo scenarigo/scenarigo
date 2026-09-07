@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	query "github.com/zoncoen/query-go/v2"
+
+	"github.com/scenarigo/scenarigo/internal/queryutil"
 )
 
 func TestVars(t *testing.T) {
@@ -57,5 +59,21 @@ func TestVars_ExtractByKey_Failure(t *testing.T) {
 	_, err := v.ExtractByKey(context.Background(), "k")
 	if err == nil || errors.Is(err, query.ErrNotFound) {
 		t.Fatalf("expected the failure to be reported but got %v", err)
+	}
+}
+
+func TestVars_CaseInsensitiveReachesTheSubQuery(t *testing.T) {
+	// Vars looks the key up in each appended value with a sub-query. That
+	// sub-query has to carry the options of the lookup it is part of, or a
+	// case-insensitive reference stops being case-insensitive the moment it
+	// reaches the variables.
+	vars := Vars{}.Append(map[string]any{"Foo": "FOO"})
+	q := query.New(append(queryutil.Options(), query.CaseInsensitive())...).Key("vars").Key("foo")
+	got, err := q.Extract(context.Background(), map[string]any{"vars": vars})
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if expect := "FOO"; got != expect {
+		t.Errorf("expected %q but got %v", expect, got)
 	}
 }
