@@ -101,6 +101,8 @@ func (p *GRPC) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, error) {
 	return &e, nil
 }
 
+var _ protocol.QueryOptionsProvider = (*GRPC)(nil)
+
 // QueryOptions implements the QueryOptionsProvider interface.
 func (p *GRPC) QueryOptions() []query.Option {
 	return []query.Option{
