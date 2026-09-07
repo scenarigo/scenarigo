@@ -316,7 +316,7 @@ func (s *server) handleBidiStream(stream grpc.ServerStream, method protoreflect.
 		for {
 			req := dynamicpb.NewMessage(method.Input())
 			if err := stream.RecvMsg(req); err != nil {
-				buf.Close()
+				buf.Close(grpcstream.End(stream.Context(), err))
 				if stderrors.Is(err, io.EOF) {
 					err = nil
 				}

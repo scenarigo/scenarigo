@@ -9,7 +9,10 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
+	query "github.com/zoncoen/query-go/v2"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 
@@ -560,6 +563,25 @@ func TestStreamHandler_failure(t *testing.T) {
 			stream: &mockStream{ctx: context.Background(), recvErr: errors.New("recv failed")},
 			expect: "failed to receive messages",
 		},
+		"bidi stream: a wait our own context cut short is not an absence": {
+			// The mock closes the buffer with grpcstream.End, which asks the
+			// stream's own context before calling a receive error an ending.
+			// A client that goes away ends the stream and the evaluation at
+			// once; reading the status gRPC synthesises for that as an ending
+			// would make the message the template waits for absent, and ??
+			// would fall back instead of reporting the interruption.
+			mocks: []protocol.Mock{{
+				Protocol: "grpc",
+				Expect:   yamlutil.RawMessage(""),
+				Response: yamlutil.RawMessage("messages:\n  - messageId: '{{request.messages[5].messageId ?? \"FALLBACK\"}}'"),
+			}},
+			method: bidiStreamMD,
+			stream: &mockStream{
+				ctx:     canceledContext(),
+				recvErr: status.Error(codes.Canceled, "context canceled"),
+			},
+			expect: "canceled while waiting for a streaming request message",
+		},
 		"bidi stream: send error": {
 			mocks: []protocol.Mock{{
 				Protocol: "grpc",
@@ -615,9 +637,30 @@ func TestAccessors(t *testing.T) {
 			t.Error("expected other key to not be found")
 		}
 		// Test ExtractByIndex when done and no messages
-		buf.Close()
+		buf.Close(nil)
 		if _, err := a.ExtractByIndex(context.Background(), 0); err == nil {
 			t.Error("expected index 0 to not be found when done with no messages")
+		}
+	})
+	t.Run("mockBidiRequestAccessor reports a stream that stopped", func(t *testing.T) {
+		// The mock server closes the buffer with grpcstream.End the same way
+		// the client does, so a stream its own context cut short reaches the
+		// accessor as the reason rather than as an ending. Reporting it as an
+		// absence would let {{request.messages[N] ?? ...}} absorb it.
+		ended, cancel := context.WithCancel(context.Background())
+		cancel()
+		stopped := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
+
+		buf := grpcstream.NewBuffer[*grpcprotocol.ProtoMessageYAMLMarshaler]()
+		buf.Close(grpcstream.End(ended, stopped))
+		a := &mockBidiRequestAccessor{buf: buf}
+
+		_, err := a.ExtractByIndex(context.Background(), 0)
+		if err == nil {
+			t.Fatal("no error")
+		}
+		if errors.Is(err, query.ErrNotFound) {
+			t.Fatalf("the reason the stream stopped was reported as an absence: %s", err)
 		}
 	})
 	t.Run("mockBidiRequestAccessor materializes received messages", func(t *testing.T) {
@@ -651,4 +694,12 @@ func TestAccessors(t *testing.T) {
 			t.Fatalf("expected message 1 but got %v", got)
 		}
 	})
+}
+
+// canceledContext returns a context that has already ended, the way a stream's
+// context has once the client goes away.
+func canceledContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
 }

@@ -3,8 +3,13 @@ package grpcstream
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // waitUntilBlocked blocks until at least one consumer is parked in cond.Wait,
@@ -59,7 +64,7 @@ func TestBuffer_AtReturnsErrClosedOnClose(t *testing.T) {
 	}()
 
 	b.Append(1)
-	b.Close()
+	b.Close(nil)
 
 	select {
 	case err := <-got:
@@ -128,7 +133,7 @@ func TestBuffer_AtResolvesNegativeIndexWhenClosed(t *testing.T) {
 		b.Append(1)
 		b.Append(2)
 		b.Append(3)
-		b.Close()
+		b.Close(nil)
 		for i, expect := range map[int]int{-1: 3, -2: 2, -3: 1} {
 			got, err := b.At(context.Background(), i)
 			if err != nil {
@@ -145,7 +150,7 @@ func TestBuffer_AtResolvesNegativeIndexWhenClosed(t *testing.T) {
 		b.Append(1)
 		b.Append(2)
 		b.Append(3)
-		b.Close()
+		b.Close(nil)
 		if _, err := b.At(context.Background(), -5); !errors.Is(err, ErrClosed) {
 			t.Fatalf("expected ErrClosed but got %v", err)
 		}
@@ -170,7 +175,7 @@ func TestBuffer_AtResolvesNegativeIndexWhenClosed(t *testing.T) {
 		}
 		// The last message is not the one that was there when At was called.
 		b.Append(2)
-		b.Close()
+		b.Close(nil)
 		select {
 		case r := <-ch:
 			if r.err != nil {
@@ -204,7 +209,7 @@ func TestBuffer_Done(t *testing.T) {
 	if b.Done() {
 		t.Fatal("expected Done to be false after Append")
 	}
-	b.Close()
+	b.Close(nil)
 	if !b.Done() {
 		t.Fatal("expected Done to be true after Close")
 	}
@@ -221,5 +226,147 @@ func TestBuffer_Snapshot(t *testing.T) {
 	got := b.Snapshot()
 	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("unexpected snapshot: %v", got)
+	}
+}
+
+func TestBuffer_AtReportsWhyTheStreamStopped(t *testing.T) {
+	// A stream that stopped is not a stream that finished: the message is not
+	// absent, it is unobtainable. Reporting it as an absence would let ?? and
+	// defined() hide the reason, which is what the typed error exists to stop.
+	t.Run("an index counted from the end reports the reason too", func(t *testing.T) {
+		// A stream that stopped has no last message, only the last one that
+		// happened to arrive before it did. Counting from an end it never
+		// reached would report that one as if the stream had finished on it.
+		b := NewBuffer[int]()
+		b.Append(1)
+		b.Append(2)
+		stopped := errors.New("rpc error: code = Unavailable")
+		b.Close(stopped)
+		if _, err := b.At(context.Background(), -1); !errors.Is(err, stopped) {
+			t.Fatalf("expected the reason the stream stopped but got %v", err)
+		}
+	})
+
+	t.Run("a stream that stopped reports the reason", func(t *testing.T) {
+		b := NewBuffer[int]()
+		stopped := errors.New("rpc error: code = Canceled")
+		b.Close(stopped)
+		if _, err := b.At(context.Background(), 0); !errors.Is(err, stopped) {
+			t.Fatalf("expected the reason the stream stopped but got %v", err)
+		}
+		if _, err := b.At(context.Background(), 0); errors.Is(err, ErrClosed) {
+			t.Fatal("the reason was reported as a plain absence")
+		}
+	})
+
+	t.Run("a stream that finished is an absence", func(t *testing.T) {
+		// End is what turns an ending into the nil Close takes.
+		for _, err := range []error{nil, io.EOF, status.Error(codes.Aborted, "aborted")} {
+			b := NewBuffer[int]()
+			b.Close(End(context.Background(), err))
+			if _, got := b.At(context.Background(), 0); !errors.Is(got, ErrClosed) {
+				t.Fatalf("Close(End(%v)): expected ErrClosed but got %v", err, got)
+			}
+		}
+	})
+
+	t.Run("a waiter interrupted by the close learns the reason", func(t *testing.T) {
+		b := NewBuffer[int]()
+		stopped := errors.New("rpc error: code = Unavailable")
+		ch := make(chan error, 1)
+		go func() {
+			_, err := b.At(context.Background(), 0)
+			ch <- err
+		}()
+		time.Sleep(20 * time.Millisecond)
+		b.Close(stopped)
+		select {
+		case err := <-ch:
+			if !errors.Is(err, stopped) {
+				t.Fatalf("expected the reason the stream stopped but got %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("At did not return after the stream stopped")
+		}
+	})
+}
+
+func TestBuffer_AtPrefersWhatTheStreamDid(t *testing.T) {
+	// A context that has ended says only that this caller stopped waiting; what
+	// the stream did says whether the message can ever arrive. The latter is
+	// the more useful answer and does not depend on how the two raced, so a
+	// stream that has ended outranks a context that has.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	t.Run("a finished stream is an absence", func(t *testing.T) {
+		b := NewBuffer[int]()
+		b.Append(1)
+		b.Close(nil)
+		if _, err := b.At(ctx, 5); !errors.Is(err, ErrClosed) {
+			t.Fatalf("expected ErrClosed but got %v", err)
+		}
+	})
+
+	t.Run("a stopped stream reports the reason", func(t *testing.T) {
+		b := NewBuffer[int]()
+		stopped := errors.New("rpc error: code = Canceled")
+		b.Close(stopped)
+		if _, err := b.At(ctx, 0); !errors.Is(err, stopped) {
+			t.Fatalf("expected the reason the stream stopped but got %v", err)
+		}
+	})
+
+	t.Run("an open stream reports the interrupted wait", func(t *testing.T) {
+		b := NewBuffer[int]()
+		if _, err := b.At(ctx, 0); !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected the context error but got %v", err)
+		}
+	})
+}
+
+func TestEnd(t *testing.T) {
+	// What counts as an ending is the protocol's business. A gRPC stream that
+	// ends with a non-OK status the peer sent has ended, and the status is
+	// something the scenario asserts on with expect.status.code, so a message
+	// the stream ended before producing is absent - not unobtainable, which
+	// would make ?? and defined() fail instead of falling back.
+	//
+	// A status gRPC synthesised for a context that ended on this side is a
+	// different thing. Our own deadline is what bounds a blocking message
+	// reference, so reading it as an ending would turn the message that
+	// reference was waiting for into an absence, and ?? would hide the timeout.
+	clientBug := errors.New("nil stream returned by the plugin")
+	ours, cancel := context.WithCancel(context.Background())
+	cancel()
+	timedOut := status.Error(codes.DeadlineExceeded, "context deadline exceeded")
+	aborted := status.Error(codes.Aborted, "stream aborted")
+	for name, test := range map[string]struct {
+		ctx    context.Context
+		err    error
+		expect error
+	}{
+		"no error":                       {context.Background(), nil, nil},
+		"the OK ending":                  {context.Background(), io.EOF, nil},
+		"a wrapped OK ending":            {context.Background(), fmt.Errorf("recv: %w", io.EOF), nil},
+		"a non-OK status":                {context.Background(), status.Error(codes.Aborted, "stream aborted"), nil},
+		"a cancelled call":               {context.Background(), status.Error(codes.Canceled, "context canceled"), nil},
+		"an unavailable peer":            {context.Background(), status.Error(codes.Unavailable, "connection refused"), nil},
+		"anything else":                  {context.Background(), clientBug, clientBug},
+		"our own context ended":          {ours, timedOut, timedOut},
+		"our own context, anything else": {ours, clientBug, clientBug},
+		"our own context, but the stream finished first": {ours, io.EOF, nil},
+		// Kept deliberately, although the peer really did send this one: it
+		// cannot be told apart from the status gRPC synthesises for our own
+		// context, and the waiter racing that context reports an interrupted
+		// wait on the other branch. Ending the stream here would decide
+		// absence-or-failure by who won the race.
+		"our own context ended as the peer ended it": {ours, aborted, aborted},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := End(test.ctx, test.err); !errors.Is(got, test.expect) {
+				t.Errorf("End(%v) = %v, want %v", test.err, got, test.expect)
+			}
+		})
 	}
 }

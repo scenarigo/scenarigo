@@ -126,7 +126,7 @@ func runBidiStream(ctx gocontext.Context, sCtx *context.Context, msgs []any, ope
 		for {
 			out, err := stream.Recv()
 			if err != nil {
-				buf.Close()
+				buf.Close(grpcstream.End(streamCtx, err))
 				if stderrors.Is(err, io.EOF) {
 					err = nil
 				}
