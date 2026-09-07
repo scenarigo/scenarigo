@@ -49,6 +49,7 @@ func WithEqualers(eqs ...Equaler) BuildOpt {
 }
 
 // Build builds an assertion from Go value.
+// The built assertion extracts the actual value with ctx, so ctx should stay alive until its Assert method is called.
 // If the Assert method of built assertion isn't called, the context value should be canceled to avoid a goroutine leak.
 func Build(ctx context.Context, expect any, fs ...BuildOpt) (Assertion, error) {
 	var opt buildOpt
@@ -146,7 +147,7 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 			return buildAssertion(ctx, q, v, opt)
 		case Assertion:
 			assertions = append(assertions, AssertionFunc(func(val any) error {
-				got, err := q.Extract(context.Background(), val)
+				got, err := q.Extract(ctx, val)
 				if err != nil {
 					return err
 				}
@@ -158,7 +159,7 @@ func build(ctx context.Context, q *query.Query, expect any, opt *buildOpt) ([]As
 		case func(*query.Query) Assertion:
 			assertions = append(assertions, v(q))
 		case template.Lazy:
-			assertions = append(assertions, lazyAssertion(q, v))
+			assertions = append(assertions, lazyAssertion(ctx, q, v))
 		default:
 			as, err := build(ctx, q, Equal(v, opt.eqs...), opt)
 			if err != nil {
@@ -181,9 +182,9 @@ func buildAssertion(ctx context.Context, q *query.Query, expect any, opt *buildO
 	return build(ctx, q, v, opt)
 }
 
-func lazyAssertion(q *query.Query, f template.Lazy) Assertion {
+func lazyAssertion(ctx context.Context, q *query.Query, f template.Lazy) Assertion {
 	return AssertionFunc(func(val any) error {
-		v, err := q.Extract(context.Background(), val)
+		v, err := q.Extract(ctx, val)
 		if err != nil {
 			return err
 		}

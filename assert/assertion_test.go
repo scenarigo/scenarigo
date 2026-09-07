@@ -6,7 +6,10 @@ import (
 	"testing"
 
 	"github.com/goccy/go-yaml"
+
 	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+	"github.com/scenarigo/scenarigo/template"
 )
 
 func TestBuild(t *testing.T) {
@@ -351,4 +354,53 @@ func (*callFunc) UnmarshalArg(unmarshal func(any) error) (any, error) {
 		return nil, err
 	}
 	return &arg, nil
+}
+
+// ctxWatchingTarget is an extractor that reports why the extraction stopped
+// instead of a value, the way a plugin extractor that waits for something can.
+type ctxWatchingTarget struct{}
+
+func (ctxWatchingTarget) ExtractByKey(ctx context.Context, key string) (any, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func TestBuild_AssertionExtractsWithTheBuildContext(t *testing.T) {
+	t.Run("assertion", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		assertion, err := Build(ctx, yaml.MapSlice{{Key: "k", Value: Equal("k")}})
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if err := assertion.Assert(ctxWatchingTarget{}); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		cancel()
+		err = assertion.Assert(ctxWatchingTarget{})
+		if err == nil {
+			t.Fatal("no error")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled but got %s", err)
+		}
+	})
+	t.Run("lazy assertion", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		lazy := template.Lazy(func(v any) (any, error) { return v == "k", nil })
+		assertion := lazyAssertion(ctx, queryutil.New().Key("k"), lazy)
+		if err := assertion.Assert(ctxWatchingTarget{}); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		cancel()
+		err := assertion.Assert(ctxWatchingTarget{})
+		if err == nil {
+			t.Fatal("no error")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled but got %s", err)
+		}
+	})
 }
