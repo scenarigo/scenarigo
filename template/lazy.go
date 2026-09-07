@@ -61,7 +61,7 @@ type templateResult struct {
 
 type waitContext struct {
 	any                // base data
-	extractActualValue func() (any, bool)
+	extractActualValue func() (any, error)
 	ready              chan any
 	blocked            func() <-chan struct{}
 	setOnce            sync.Once
@@ -73,19 +73,22 @@ func newWaitContext(ctx context.Context, base any) *waitContext {
 	//nolint:exhaustruct
 	return &waitContext{
 		any: base,
-		extractActualValue: sync.OnceValues(func() (any, bool) {
+		extractActualValue: sync.OnceValues(func() (any, error) {
 			cancel()
 			select {
 			case v := <-ready:
-				return v, true
+				return v, nil
 			case <-ctx.Done():
 				// ignore canceled if the value is already set
 				select {
 				case v := <-ready:
-					return v, true
+					return v, nil
 				default:
 				}
-				return nil, false
+				// The wait was cut short; the value is not absent, it never
+				// arrived. Reporting an absence would let ?? and defined()
+				// hide the interruption.
+				return nil, ctx.Err()
 			}
 		}),
 		ready:   ready,
@@ -110,9 +113,9 @@ var _ query.KeyExtractor = (*waitContext)(nil)
 // ExtractByKey implements query.KeyExtractor interface.
 func (c *waitContext) ExtractByKey(ctx context.Context, key string) (any, error) {
 	if key == "$" {
-		v, ok := c.extractActualValue()
-		if !ok {
-			return nil, query.ErrNotFound
+		v, err := c.extractActualValue()
+		if err != nil {
+			return nil, err
 		}
 		return v, nil
 	}

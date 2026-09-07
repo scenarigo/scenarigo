@@ -157,3 +157,22 @@ func TestWaitContext_ExtractByKey_Failure(t *testing.T) {
 		t.Fatalf("expected the failure to be reported but got %v", err)
 	}
 }
+
+func TestWaitContext_InterruptedWaitIsNotAnAbsence(t *testing.T) {
+	// The wait for the actual value can be cut short. The value is then not
+	// absent, it never arrived, so ?? and defined() must not absorb it - the
+	// same rule the streaming accessors and the fallback chains follow.
+	ctx, cancel := context.WithCancel(context.Background())
+	c := newWaitContext(ctx, nil)
+	cancel()
+	v, err := c.ExtractByKey(ctx, "$")
+	if err == nil {
+		t.Fatalf("expected an error but got %#v", v)
+	}
+	if errors.Is(err, query.ErrNotFound) {
+		t.Errorf("the interrupted wait was reported as an absence: %s", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected the context error but got: %s", err)
+	}
+}
