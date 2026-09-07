@@ -30,17 +30,13 @@ func extract(ctx context.Context, node ast.Node, data any) (any, error) {
 		return nil, errors.Wrap(err, "failed to create query from AST")
 	}
 
-	f, err := q.Extract(ctx, functions)
-	if err == nil {
-		return f, nil
-	}
-	v, err := q.Extract(ctx, typeFunctions)
-	if err == nil {
-		return v, nil
-	}
+	// The builtins are tried before the data, and only an absence moves the
+	// lookup on to the next one: a failure in one of them is a failure of the
+	// lookup, not a reason to look somewhere else.
+	//
 	// Pass ctx so that context-aware extractors (e.g. a blocking streaming
 	// response accessor) can observe the caller's deadline and cancellation.
-	v, err = q.Extract(ctx, data)
+	v, err := queryutil.ExtractFirst(ctx, q, functions, typeFunctions, data)
 	if err != nil {
 		// Only a definitive absence is "not defined". Any other error — an
 		// interrupted wait for a streaming message, a failed plugin call, an
