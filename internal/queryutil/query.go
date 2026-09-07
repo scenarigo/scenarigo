@@ -18,20 +18,38 @@ var (
 )
 
 func New(opts ...query.Option) *query.Query {
-	return query.New(append(Options(), opts...)...)
+	return query.New(optionsWith(opts)...)
 }
 
+// Options returns the process-wide query options: the base set, what the
+// registered protocols added, and the adapter for v1-shaped extractors last.
 func Options() []query.Option {
+	return optionsWith(nil)
+}
+
+// optionsWith returns the process-wide options with extra inserted just before
+// the adapter for v1-shaped extractors, which has to stay last.
+//
+// query-go composes custom extract funcs so that the first is the outermost,
+// so last means innermost: the adapter hands its stand-in to the extraction
+// itself and to nothing else. Anywhere earlier, the funcs a protocol or a
+// caller registers would be handed the stand-in instead of the value it
+// adapts - they could not recognise a concrete type that also has a v1
+// extractor shape, and what they did with it would decide whether the lookup
+// falls back to reflecting over the original value. Innermost also matches
+// what those funcs saw before there was an adapter at all.
+func optionsWith(extra []query.Option) []query.Option {
 	m.RLock()
 	defer m.RUnlock()
-	return append(
-		[]query.Option{
-			query.ExtractByStructTag("yaml", "json"),
-			query.CustomExtractFunc(yamlextractor.MapSliceExtractFunc()),
-			query.CustomExtractFunc(dynamicpbExtractFunc()),
-		},
-		opts...,
+	all := make([]query.Option, 0, len(opts)+len(extra)+4)
+	all = append(all,
+		query.ExtractByStructTag("yaml", "json"),
+		query.CustomExtractFunc(yamlextractor.MapSliceExtractFunc()),
+		query.CustomExtractFunc(dynamicpbExtractFunc()),
 	)
+	all = append(all, opts...)
+	all = append(all, extra...)
+	return append(all, query.CustomExtractFunc(legacyExtractFunc()))
 }
 
 func dynamicpbExtractFunc() func(query.ExtractFunc) query.ExtractFunc {
