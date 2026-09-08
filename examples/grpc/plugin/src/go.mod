@@ -2,11 +2,11 @@ module github.com/scenarigo/scenarigo/examples/grpc/plugin/src
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.27.1
 
 require (
 	github.com/scenarigo/scenarigo v0.26.2
-	google.golang.org/grpc v1.83.0
+	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -27,6 +27,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
+	github.com/jhump/protoreflect v1.18.1 // indirect
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
