@@ -13,6 +13,7 @@ import (
 	"go/token"
 	goversion "go/version"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -109,7 +110,7 @@ This command requires go command in $PATH.
 		SilenceUsage:  true,
 	}
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
-	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "skip migration")
+	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "leave plugin sources untouched: skip rewriting the github.com/zoncoen/scenarigo import path and skip migrating extractor calls to the query-go v2 signatures")
 	cmd.Flags().BoolVarP(&wasm, "wasm", "", false, "build as WebAssembly")
 	return cmd
 }
@@ -195,6 +196,19 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 		pbs = append(pbs, pb)
 	}
 
+	// From here on the migration may rewrite the plugin's own sources, so
+	// whatever ends this function has to put them back unless the build that
+	// followed them succeeded: an error return or a panic. An interrupt runs
+	// through here too - main installs signal.NotifyContext and every go
+	// command runs under that context, so a signal cancels the build and
+	// returns an error rather than killing the process.
+	built := false
+	defer func() {
+		if !built {
+			restoreMigratedSources(cmd, pbs)
+		}
+	}()
+
 	goworkPath, err := checkGowork(ctx(cmd), goCmd, pbs)
 	if err != nil {
 		return fmt.Errorf("failed to build plugin: %w", err)
@@ -264,6 +278,10 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 		}
 	}
 
+	testHookAfterBuildLoop()
+
+	built = true
+
 	for _, pb := range pbs {
 		if err := pb.printUpdatedResult(cmd, goCmd, pb.name, pb.gomodPath, overrides); err != nil {
 			return err
@@ -272,6 +290,11 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 
 	return nil
 }
+
+// testHookAfterBuildLoop runs after the build loop, before the build counts as
+// done. Tests replace it to end the command in a way the loop's own error
+// returns cannot - the deferred restore has to cover those endings too.
+var testHookAfterBuildLoop = func() {}
 
 func findGoCmd(ctx context.Context) (string, error) {
 	if goCmd := os.Getenv("SCENARIGO_GO"); goCmd != "" {
@@ -289,7 +312,66 @@ func findGoCmd(ctx context.Context) (string, error) {
 
 // 2nd return value should always be called.
 //
+// rewriteImports rewrites the import paths of every Go source under dir. rewrite
+// returns the new path for an import it applies to, and the empty string for one
+// it leaves alone.
+//
 //nolint:cyclop
+func rewriteImports(dir string, rewrite func(string) string) error {
+	fset := token.NewFileSet()
+	return filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || filepath.Ext(info.Name()) != ".go" {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %w", err)
+		}
+		f, err := parser.ParseFile(fset, info.Name(), b, parser.ParseComments)
+		if err != nil {
+			return fmt.Errorf("failed to parse file: %w", err)
+		}
+		var (
+			inspErr error
+			found   bool
+		)
+		ast.Inspect(f, func(n ast.Node) bool {
+			x, ok := n.(*ast.ImportSpec)
+			if !ok {
+				return true
+			}
+			p, err := strconv.Unquote(x.Path.Value)
+			if err != nil {
+				inspErr = err
+				return false
+			}
+			if to := rewrite(p); to != "" {
+				found = true
+				x.Path.Value = strconv.Quote(to)
+			}
+			return true
+		})
+		if inspErr != nil {
+			return fmt.Errorf("failed to modify import path: %w", inspErr)
+		}
+		if !found {
+			return nil
+		}
+		fd, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return fmt.Errorf("failed to open file: %w", err)
+		}
+		defer fd.Close()
+		if err := format.Node(fd, fset, f); err != nil {
+			return fmt.Errorf("failed to modify import path: %w", err)
+		}
+		return nil
+	})
+}
+
 func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig], opts *buildOpts) (*pluginBuilder, func(), error) {
 	out := item.Key
 
@@ -335,54 +417,11 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 		if _, ok := pb.initialRequires[oldScenarigoModPath]; ok {
 			debugLogf(cmd, "replace %s => %s in %s", oldScenarigoModPath, newScenarigoModPath, item.Value.Src)
 
-			fset := token.NewFileSet()
-			if err := filepath.Walk(pb.dir, func(path string, info fs.FileInfo, err error) error {
-				if err != nil {
-					return err
+			if err := rewriteImports(pb.dir, func(path string) string {
+				if !strings.HasPrefix(path, oldScenarigoModPath) {
+					return ""
 				}
-				if info.IsDir() || filepath.Ext(info.Name()) != ".go" {
-					return nil
-				}
-				b, err := os.ReadFile(path)
-				if err != nil {
-					return fmt.Errorf("failed to read file: %w", err)
-				}
-				f, err := parser.ParseFile(fset, info.Name(), b, parser.ParseComments)
-				if err != nil {
-					return fmt.Errorf("failed to parse file: %w", err)
-				}
-				var (
-					inspErr error
-					found   bool
-				)
-				ast.Inspect(f, func(n ast.Node) bool {
-					if x, ok := n.(*ast.ImportSpec); ok {
-						p, err := strconv.Unquote(x.Path.Value)
-						if err != nil {
-							inspErr = err
-							return false
-						}
-						if strings.HasPrefix(p, oldScenarigoModPath) {
-							found = true
-							x.Path.Value = strconv.Quote(strings.Replace(p, oldScenarigoModPath, newScenarigoModPath, 1))
-						}
-					}
-					return true
-				})
-				if inspErr != nil {
-					return fmt.Errorf("failed to modify import path: %w", inspErr)
-				}
-				if !found {
-					return nil
-				}
-				fd, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, info.Mode())
-				if err != nil {
-					return fmt.Errorf("failed to open file: %w", err)
-				}
-				if err := format.Node(fd, fset, f); err != nil {
-					return fmt.Errorf("failed to modify import path: %w", err)
-				}
-				return nil
+				return strings.Replace(path, oldScenarigoModPath, newScenarigoModPath, 1)
 			}); err != nil {
 				return nil, clean, err
 			}
@@ -628,6 +667,13 @@ type pluginBuilder struct {
 	initialRequires map[string]modfile.Require
 	initialReplaces map[string]modfile.Replace
 	out             string
+
+	// migratedSources holds the original content of every source file the
+	// extractor migration rewrote, so that a failed build can restore them.
+	migratedSources map[string]migratedSource
+	// migrated is set once the extractor migration ran, so that a plugin is
+	// migrated at most once per build.
+	migrated bool
 }
 
 func newPluginBuilder(cmd *cobra.Command, goCmd, name, mod, src, out, defaultModName string) (*pluginBuilder, error) {
@@ -798,27 +844,158 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 
 		envs = append(envs, "GOOS=wasip1", "GOARCH=wasm")
 		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-overlay", overlayFile.Path(), "-o", pb.out); err != nil {
-			return fmt.Errorf(`"go build -overlay %s -o %s" failed: %w`, overlayFile.Path(), pb.out, err)
+			// The generated main file is part of the package being
+			// analyzed, so this runs before the deferred removal.
+			if retry := pb.migrateExtractorCalls(cmd, goCmd, envs, []string{"-overlay", overlayFile.Path()}, []string{mainPath}, pb.dir, "", opts); retry != nil {
+				return retry
+			}
+			return pb.buildError(fmt.Errorf(`"go build -overlay %s -o %s" failed: %w`, overlayFile.Path(), pb.out, err))
 		}
 		return nil
 	}
 
 	if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
-		return fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err)
+		if retry := pb.migrateExtractorCalls(cmd, goCmd, envs, nil, nil, pb.buildPkgDir(), pb.buildTarget(), opts); retry != nil {
+			return retry
+		}
+		return pb.buildError(fmt.Errorf(`"go build -buildmode=plugin -o %s %s" failed: %w`, pb.out, pb.src, err))
 	}
 	return nil
+}
+
+// buildPkgDir returns the directory of the package the build compiles, which
+// is not pb.dir when the plugin lives in a subdirectory of its module.
+func (pb *pluginBuilder) buildPkgDir() string {
+	path := filepath.Join(pb.dir, pb.src)
+	info, err := os.Stat(path)
+	if err != nil {
+		return pb.dir
+	}
+	if info.IsDir() {
+		return path
+	}
+	return filepath.Dir(path)
+}
+
+// buildTarget returns the source file the native build compiles when the
+// plugin src is a file, or an empty string when it compiles the package in
+// pb.dir.
+func (pb *pluginBuilder) buildTarget() string {
+	path := filepath.Join(pb.dir, pb.src)
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		return path
+	}
+	return ""
+}
+
+// migrateExtractorCalls rewrites the plugin sources that still call
+// scenarigo's extractors with the query-go v1 signatures and asks for one
+// rebuild. It returns nil when there is nothing to rewrite, leaving the build
+// error to be reported as it is.
+func (pb *pluginBuilder) migrateExtractorCalls(cmd *cobra.Command, goCmd string, envs, buildFlags, skipFiles []string, pkgDir, target string, opts *buildOpts) error {
+	if (opts != nil && opts.skipMigration) || pb.migrated {
+		return nil
+	}
+	pb.migrated = true
+	res, err := migrateExtractorCalls(ctx(cmd), &migration{
+		dir:        pb.dir,
+		goCmd:      goCmd,
+		pkgDir:     pkgDir,
+		env:        commandEnv(envs),
+		buildFlags: buildFlags,
+		skipFiles:  skipFiles,
+		target:     target,
+	})
+	pb.rememberMigratedSources(res.originals)
+	if err != nil {
+		warnLogf(cmd, "%s: failed to migrate the extractor calls: %s", pb.name, err)
+		return nil
+	}
+	for _, m := range res.manual {
+		warnLogf(cmd, "%s: %s", pb.name, m)
+	}
+	if len(res.changes) == 0 {
+		return nil
+	}
+	for _, c := range res.changes {
+		warnLogf(cmd, "%s: %s", pb.name, c)
+	}
+	warnLogf(cmd, "%s: rewrote %d call(s) in place because query-go v2 changed the extractor methods to ExtractByKey(ctx context.Context, key string) (any, error); pass --skip-migration to leave the sources untouched", pb.name, len(res.changes))
+	return &retriableError{
+		reason: fmt.Sprintf("migrated %d extractor call(s)", len(res.changes)),
+	}
+}
+
+// buildError reports a build failure, naming the automatic migration when the
+// sources were rewritten before this attempt: the compiler errors the user is
+// about to read then come from code they did not write.
+func (pb *pluginBuilder) buildError(err error) error {
+	if pb.migrated && len(pb.migratedSources) > 0 {
+		return fmt.Errorf("the build failed again after migrating the sources: %w", err)
+	}
+	return err
+}
+
+func (pb *pluginBuilder) rememberMigratedSources(originals map[string]migratedSource) {
+	if len(originals) == 0 {
+		return
+	}
+	if pb.migratedSources == nil {
+		pb.migratedSources = map[string]migratedSource{}
+	}
+	for path, s := range originals {
+		if _, ok := pb.migratedSources[path]; !ok {
+			pb.migratedSources[path] = s
+		}
+	}
+}
+
+// restoreMigratedSources puts back every source file the migration rewrote.
+// A build that failed anyway must leave the plugin as it found it.
+func restoreMigratedSources(cmd *cobra.Command, pbs []*pluginBuilder) {
+	for _, pb := range pbs {
+		pb.restoreMigratedSources(cmd)
+	}
+}
+
+func (pb *pluginBuilder) restoreMigratedSources(cmd *cobra.Command) {
+	dir, err := filepath.Abs(pb.dir)
+	if err != nil {
+		dir = pb.dir
+	}
+	realDir := realPath(dir)
+	for _, path := range slices.Sorted(maps.Keys(pb.migratedSources)) {
+		s := pb.migratedSources[path]
+		// The file was inside the plugin directory when it was rewritten;
+		// make sure it still is before writing through it.
+		if resolved, err := filepath.EvalSymlinks(path); err != nil || !within(resolved, realDir) {
+			warnLogf(cmd, "%s: not restoring %s because it no longer resolves inside the plugin directory", pb.name, path)
+			continue
+		}
+		if err := os.WriteFile(path, s.content, s.mode); err != nil {
+			warnLogf(cmd, "%s: failed to restore %s: %s", pb.name, path, err)
+			continue
+		}
+		warnLogf(cmd, "%s: restored %s because the build failed after the migration", pb.name, path)
+	}
+	pb.migratedSources = nil
 }
 
 func execute(ctx context.Context, wd, name string, args ...string) (string, error) {
 	return executeWithEnvs(ctx, nil, wd, name, args...)
 }
 
+// commandEnv returns the environment every go command runs with: the process
+// environment, envs, and the toolchain selection.
+func commandEnv(envs []string) []string {
+	return append(os.Environ(), append(slices.Clone(envs), fmt.Sprintf("GOTOOLCHAIN=%s", toolchain))...)
+}
+
 func executeWithEnvs(ctx context.Context, envs []string, wd, name string, args ...string) (string, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, name, args...)
-	envs = append(envs, fmt.Sprintf("GOTOOLCHAIN=%s", toolchain))
-	cmd.Env = append(os.Environ(), envs...)
+	cmd.Env = commandEnv(envs)
 	if wd != "" {
 		cmd.Dir = wd
 	}
