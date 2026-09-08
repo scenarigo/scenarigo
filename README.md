@@ -2023,6 +2023,36 @@ plugins:
     src: github.com/zoncoen-sample/scenarigo-plugins/uuid@latest
 ```
 
+#### Automatic source migration
+
+query-go v2 changed the signature of the extractor methods (`ExtractByKey` and `ExtractByIndex`) that plugins call on the scenarigo types (`Vars`, `Secrets`, `Plugins`, `Steps`, `Context`, ...) from `ExtractByKey(key string) (any, bool)` to `ExtractByKey(ctx context.Context, key string) (any, error)`, so plugins written against the old signature no longer compile. When a build fails, `scenarigo plugin build` type-checks the plugin sources, rewrites the calls whose receiver is a scenarigo type in place, and retries the build once. Every rewritten call site is reported as a warning, and the original sources are put back unless the build succeeds, whether the second build fails, the command fails earlier, or it is interrupted. Once the plugin is built the rewritten sources are what it was built from, so they stay. Only the sources the failed build compiles are rewritten: the plugin package and the packages inside the plugin directory that it imports, following the imports of the single file when the build compiles one file rather than a package. Test files, vendored packages, the file generated for a WASM build, and files that resolve outside the plugin directory through a symbolic link are left alone.
+
+```shell
+$ scenarigo plugin build
+WARN: date.so: main.go:16:23: ExtractByKey("k") => ExtractByKey(ctx.RequestContext(), "k"), ok => err
+WARN: date.so: rewrote 1 call(s) in place because query-go v2 changed the extractor methods to ExtractByKey(ctx context.Context, key string) (any, error); pass --skip-migration to leave the sources untouched
+```
+
+The rewrite inserts the context argument and turns the `bool` result into an `error`. The variable is renamed to `err` when that name is free, and its uses become `err == nil` or `err != nil`.
+
+```go
+// before
+v, ok := ctx.Vars().ExtractByKey("k")
+if !ok {
+    return nil, errors.New("k is not defined")
+}
+
+// after
+v, err := ctx.Vars().ExtractByKey(ctx.RequestContext(), "k")
+if err != nil {
+    return nil, errors.New("k is not defined")
+}
+```
+
+The context argument is `RequestContext()` of the scenarigo context the receiver was obtained from, or `context.Background()` (importing `context` if needed) when the receiver is a plain variable. Calls whose results cannot be converted mechanically, such as a result assigned to an existing variable, a call returned as is, or a `bool` variable that is assigned again later, are left untouched and reported with instructions to rewrite them by hand. Note that `err != nil` is also true when the extraction fails for a reason other than absence; use `errors.Is(err, query.ErrNotFound)` to test absence only.
+
+If the build still fails after the migration, scenarigo restores the original sources and reports the compile error. Pass `--skip-migration` to leave the sources untouched; the flag also disables the rewrite of the `github.com/zoncoen/scenarigo` import path. Plugins fetched from a remote module are built from a downloaded copy, so the rewrite never touches the module cache.
+
 ### Advanced features
 
 #### Setup Funciton
