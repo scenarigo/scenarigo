@@ -1,9 +1,18 @@
 package context
 
-import "github.com/scenarigo/scenarigo/internal/queryutil"
+import (
+	"context"
+	"errors"
+
+	query "github.com/zoncoen/query-go/v2"
+
+	"github.com/scenarigo/scenarigo/internal/queryutil"
+)
 
 // Vars represents context variables.
 type Vars []any
+
+var _ query.KeyExtractor = (Vars)(nil)
 
 // Append appends v to context variables.
 func (vars Vars) Append(v any) Vars {
@@ -17,12 +26,16 @@ func (vars Vars) Append(v any) Vars {
 }
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (vars Vars) ExtractByKey(key string) (any, bool) {
-	k := queryutil.New().Key(key)
+func (vars Vars) ExtractByKey(ctx context.Context, key string) (any, error) {
+	k := queryutil.NewFromContext(ctx).Key(key)
 	for i := len(vars) - 1; i >= 0; i-- {
-		if v, err := k.Extract(vars[i]); err == nil {
-			return v, true
+		v, err := k.Extract(ctx, vars[i])
+		if err == nil {
+			return v, nil
+		}
+		if !errors.Is(err, query.ErrNotFound) {
+			return nil, err
 		}
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }

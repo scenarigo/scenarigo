@@ -1,9 +1,11 @@
 package context
 
 import (
+	"context"
+	"errors"
 	"testing"
 
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestSecrets(t *testing.T) {
@@ -31,7 +33,7 @@ func checkSecrets(t *testing.T, secrets *Secrets, s string, expect any, expectEr
 	if err != nil {
 		t.Fatalf("failed to parse: %s", err)
 	}
-	got, err := q.Extract(secrets)
+	got, err := q.Extract(context.Background(), secrets)
 	if expect != got {
 		t.Errorf("expected %v, got %v", expect, got)
 	}
@@ -40,5 +42,14 @@ func checkSecrets(t *testing.T, secrets *Secrets, s string, expect any, expectEr
 	}
 	if expectErr && err == nil {
 		t.Error("no error")
+	}
+}
+
+func TestSecrets_ExtractByKey_Failure(t *testing.T) {
+	var s *Secrets
+	s = s.Append(map[string]int{"k": 1}).Append(failingKey{})
+	_, err := s.ExtractByKey(context.Background(), "k")
+	if err == nil || errors.Is(err, query.ErrNotFound) {
+		t.Fatalf("expected the failure to be reported but got %v", err)
 	}
 }

@@ -2,7 +2,10 @@ package grpc
 
 import (
 	"bytes"
+	gocontext "context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"google.golang.org/grpc/codes"
@@ -10,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/grpcstream"
 	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 )
@@ -30,7 +34,7 @@ func TestAbortBidi(t *testing.T) {
 	t.Run("recovers the final status after the stream ended", func(t *testing.T) {
 		buf := grpcstream.NewBuffer[proto.Message]()
 		buf.Append(&testpb.EchoResponse{MessageId: "1"})
-		buf.Close()
+		buf.Close(nil)
 		recvCh := make(chan error, 1)
 		recvCh <- status.Error(codes.Aborted, "stream aborted")
 
@@ -49,7 +53,7 @@ func TestAbortBidi(t *testing.T) {
 	})
 	t.Run("normal close keeps the status nil", func(t *testing.T) {
 		buf := grpcstream.NewBuffer[proto.Message]()
-		buf.Close()
+		buf.Close(nil)
 		recvCh := make(chan error, 1)
 		recvCh <- nil
 
@@ -105,4 +109,49 @@ func TestBidiResponseAccessor_MarshalYAML(t *testing.T) {
 			t.Fatalf("expected [] but got %q", s)
 		}
 	})
+}
+
+// blockingBidiStreamConn is a peer that never answers: Recv returns only once
+// the stream's own context ends, the way a real one does, with the status gRPC
+// synthesises for it. That status does not wrap the context error.
+type blockingBidiStreamConn struct {
+	ctx gocontext.Context
+}
+
+func (c *blockingBidiStreamConn) NewInput() (proto.Message, error) {
+	return &testpb.EchoRequest{}, nil
+}
+func (c *blockingBidiStreamConn) Send(proto.Message) error { return nil }
+func (c *blockingBidiStreamConn) Recv() (proto.Message, error) {
+	<-c.ctx.Done()
+	return nil, status.Error(codes.DeadlineExceeded, "context deadline exceeded")
+}
+func (c *blockingBidiStreamConn) CloseSend() error { return nil }
+func (c *blockingBidiStreamConn) HeaderTrailer() (metadata.MD, metadata.MD) {
+	return nil, nil
+}
+
+func TestRunBidiStream_AWaitOurOwnDeadlineCutShortIsNotAnAbsence(t *testing.T) {
+	// The stream and the template evaluation share the request context, so the
+	// deadline that bounds a blocking response reference ends the stream too.
+	// Reading the status gRPC synthesises for it as the stream having ended
+	// would make the message the reference waited for absent, and ?? would fall
+	// back instead of reporting the timeout the guard exists to report.
+	reqCtx, cancel := gocontext.WithTimeout(gocontext.Background(), 100*time.Millisecond)
+	defer cancel()
+	sCtx := context.New(nil).WithRequestContext(reqCtx)
+	msgs := []any{
+		map[string]any{"messageId": "1"},
+		map[string]any{"messageId": `{{response.messages[5].messageId ?? "FALLBACK"}}`},
+	}
+
+	_, err := runBidiStream(reqCtx, sCtx, msgs, func(ctx gocontext.Context) (bidiStreamConn, error) {
+		return &blockingBidiStreamConn{ctx: ctx}, nil
+	})
+	if err == nil {
+		t.Fatal("the interrupted wait was reported as an absence and absorbed by ??")
+	}
+	if got, expect := err.Error(), "interrupted while waiting for a streaming response message"; !strings.Contains(got, expect) {
+		t.Fatalf("expected an error containing %q but got %q", expect, got)
+	}
 }

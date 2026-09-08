@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	gocontext "context"
 	"os"
 	"testing"
 
@@ -190,7 +191,7 @@ messages:
 func TestGRPC_QueryOptions(t *testing.T) {
 	p := &GRPC{}
 	queryutil.AppendOptions(p.QueryOptions()...)
-	got, err := queryutil.New().Key("b").Key("bar_value").Extract(&OneofMessage{
+	got, err := queryutil.New().Key("b").Key("bar_value").Extract(gocontext.Background(), &OneofMessage{
 		Value: &OneofMessage_B_{
 			B: &OneofMessage_B{
 				BarValue: "yyy",

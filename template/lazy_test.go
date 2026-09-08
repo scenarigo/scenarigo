@@ -2,6 +2,7 @@ package template
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -9,7 +10,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestLazy(t *testing.T) {
@@ -131,7 +132,7 @@ func TestWaitContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse query string: %s", err)
 	}
-	if _, err := q.Extract(wc); err == nil {
+	if _, err := q.Extract(context.Background(), wc); err == nil {
 		t.Fatal("no error")
 	}
 }
@@ -142,9 +143,36 @@ func extractVal(t *testing.T, s string, target any) any {
 	if err != nil {
 		t.Fatalf("failed to parse query string: %s", err)
 	}
-	v, err := q.Extract(target)
+	v, err := q.Extract(context.Background(), target)
 	if err != nil {
 		t.Fatalf("failed to extract: %s", err)
 	}
 	return v
+}
+
+func TestWaitContext_ExtractByKey_Failure(t *testing.T) {
+	c := newWaitContext(context.Background(), failingExtractor{})
+	_, err := c.ExtractByKey(context.Background(), "k")
+	if err == nil || errors.Is(err, query.ErrNotFound) {
+		t.Fatalf("expected the failure to be reported but got %v", err)
+	}
+}
+
+func TestWaitContext_InterruptedWaitIsNotAnAbsence(t *testing.T) {
+	// The wait for the actual value can be cut short. The value is then not
+	// absent, it never arrived, so ?? and defined() must not absorb it - the
+	// same rule the streaming accessors and the fallback chains follow.
+	ctx, cancel := context.WithCancel(context.Background())
+	c := newWaitContext(ctx, nil)
+	cancel()
+	v, err := c.ExtractByKey(ctx, "$")
+	if err == nil {
+		t.Fatalf("expected an error but got %#v", v)
+	}
+	if errors.Is(err, query.ErrNotFound) {
+		t.Errorf("the interrupted wait was reported as an absence: %s", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected the context error but got: %s", err)
+	}
 }

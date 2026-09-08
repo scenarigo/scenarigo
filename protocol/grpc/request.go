@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
@@ -148,20 +148,13 @@ type TLSOption struct {
 // RequestExtractor represents a request dump.
 type RequestExtractor request
 
+var _ query.KeyExtractor = (*RequestExtractor)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (r RequestExtractor) ExtractByKey(key string) (any, bool) {
-	q := queryutil.New().Key(key)
-	if v, err := q.Extract(request(r)); err == nil {
-		return v, true
-	}
-	// for backward compatibility
-	if v, err := q.Extract(r.Message); err == nil {
-		return v, true
-	}
-	if v, err := q.Extract(r.Messages); err == nil {
-		return v, true
-	}
-	return nil, false
+func (r RequestExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
+	q := queryutil.NewFromContext(ctx).Key(key)
+	// r.Message and r.Messages are looked up for backward compatibility.
+	return queryutil.ExtractFirst(ctx, q, request(r), r.Message, r.Messages)
 }
 
 type request struct {
@@ -254,40 +247,23 @@ func (s *responseStatus) MarshalYAML(ctx gocontext.Context) ([]byte, error) {
 	return yaml.MarshalContext(ctx, s.Marshaler())
 }
 
-// ExtractByKey implements query.KeyExtractorContext interface.
-func (s *responseStatus) ExtractByKey(ctx gocontext.Context, key string) (any, bool) {
-	var opts []query.Option
-	if query.IsCaseInsensitive(ctx) {
-		opts = append(opts, query.CaseInsensitive())
-	}
-	q := queryutil.New(opts...).Key(key)
-	if got, err := q.Extract(s.Marshaler()); err == nil {
-		return got, true
-	}
-	return nil, false
+var _ query.KeyExtractor = (*responseStatus)(nil)
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (s *responseStatus) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
+	return queryutil.NewFromContext(ctx).Key(key).Extract(ctx, s.Marshaler())
 }
 
 // ResponseExtractor represents a response dump.
 type ResponseExtractor response
 
-// ExtractByKey implements query.KeyExtractorContext interface.
-func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, bool) {
-	var opts []query.Option
-	if query.IsCaseInsensitive(ctx) {
-		opts = append(opts, query.CaseInsensitive())
-	}
-	q := queryutil.New(opts...).Key(key)
-	if v, err := q.Extract(response(r)); err == nil {
-		return v, true
-	}
-	// for backward compatibility
-	if v, err := q.Extract(r.Message); err == nil {
-		return v, true
-	}
-	if v, err := q.Extract(r.Messages); err == nil {
-		return v, true
-	}
-	return nil, false
+var _ query.KeyExtractor = (*ResponseExtractor)(nil)
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (r ResponseExtractor) ExtractByKey(ctx gocontext.Context, key string) (any, error) {
+	q := queryutil.NewFromContext(ctx).Key(key)
+	// r.Message and r.Messages are looked up for backward compatibility.
+	return queryutil.ExtractFirst(ctx, q, response(r), r.Message, r.Messages)
 }
 
 // Invoke implements protocol.Invoker interface.

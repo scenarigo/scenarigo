@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	query "github.com/zoncoen/query-go"
-	yamlextractor "github.com/zoncoen/query-go/extractor/yaml"
+	yamlextractor "github.com/zoncoen/query-go/extractor/yaml/v2"
+	query "github.com/zoncoen/query-go/v2"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
@@ -18,34 +18,68 @@ var (
 )
 
 func New(opts ...query.Option) *query.Query {
-	return query.New(append(Options(), opts...)...)
+	return query.New(optionsWith(opts)...)
 }
 
+// NewFromContext returns a query that carries the options of the extraction ctx
+// belongs to, so a sub-query an extractor runs behaves like the lookup it is
+// part of - case-insensitivity and any custom extract func included. Outside an
+// extraction, where the context carries no options, it falls back to the
+// process-wide options like New.
+//
+// It takes no options of its own. In a query this package built, the adapter
+// for v1-shaped extractors is the last custom extract func, and one appended
+// after it would compose inside it - see optionsWith.
+func NewFromContext(ctx context.Context) *query.Query {
+	if inherited := query.OptionsFromContext(ctx); len(inherited) > 0 {
+		return query.New(inherited...)
+	}
+	return New()
+}
+
+// Options returns the process-wide query options: the base set, what the
+// registered protocols added, and the adapter for v1-shaped extractors last.
 func Options() []query.Option {
+	return optionsWith(nil)
+}
+
+// optionsWith returns the process-wide options with extra inserted just before
+// the adapter for v1-shaped extractors, which has to stay last.
+//
+// query-go composes custom extract funcs so that the first is the outermost,
+// so last means innermost: the adapter hands its stand-in to the extraction
+// itself and to nothing else. Anywhere earlier, the funcs a protocol or a
+// caller registers would be handed the stand-in instead of the value it
+// adapts - they could not recognise a concrete type that also has a v1
+// extractor shape, and what they did with it would decide whether the lookup
+// falls back to reflecting over the original value. Innermost also matches
+// what those funcs saw before there was an adapter at all.
+func optionsWith(extra []query.Option) []query.Option {
 	m.RLock()
 	defer m.RUnlock()
-	return append(
-		[]query.Option{
-			query.ExtractByStructTag("yaml", "json"),
-			query.CustomExtractFunc(yamlextractor.MapSliceExtractFunc()),
-			query.CustomExtractFunc(dynamicpbExtractFunc()),
-		},
-		opts...,
+	all := make([]query.Option, 0, len(opts)+len(extra)+4)
+	all = append(all,
+		query.ExtractByStructTag("yaml", "json"),
+		query.CustomExtractFunc(yamlextractor.MapSliceExtractFunc()),
+		query.CustomExtractFunc(dynamicpbExtractFunc()),
 	)
+	all = append(all, opts...)
+	all = append(all, extra...)
+	return append(all, query.CustomExtractFunc(legacyExtractFunc()))
 }
 
 func dynamicpbExtractFunc() func(query.ExtractFunc) query.ExtractFunc {
 	return func(f query.ExtractFunc) query.ExtractFunc {
-		return func(in reflect.Value) (reflect.Value, bool) {
+		return func(ctx context.Context, in reflect.Value) (reflect.Value, error) {
 			v := in
 			if v.IsValid() && v.CanInterface() {
 				if msg, ok := v.Interface().(*dynamicpb.Message); ok {
-					return f(reflect.ValueOf(&keyExtractor{
+					return f(ctx, reflect.ValueOf(&keyExtractor{
 						v: msg,
 					}))
 				}
 			}
-			return f(in)
+			return f(ctx, in)
 		}
 	}
 }
@@ -87,8 +121,10 @@ func (e *ProtoEnum) Descriptor() protoreflect.EnumDescriptor {
 	return e.desc
 }
 
-// ExtractByKey implements the query.KeyExtractorContext interface.
-func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, bool) {
+var _ query.KeyExtractor = (*keyExtractor)(nil)
+
+// ExtractByKey implements the query.KeyExtractor interface.
+func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, error) {
 	ci := query.IsCaseInsensitive(ctx)
 	if ci {
 		key = strings.ToLower(key)
@@ -124,15 +160,15 @@ func (e *keyExtractor) ExtractByKey(ctx context.Context, key string) (any, bool)
 			}
 		}
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
-func (e *keyExtractor) getField(f protoreflect.FieldDescriptor) (any, bool) {
+func (e *keyExtractor) getField(f protoreflect.FieldDescriptor) (any, error) {
 	field := e.v.Get(f).Interface()
 	if number, ok := field.(protoreflect.EnumNumber); ok {
-		return &ProtoEnum{desc: f.Enum(), number: number}, true
+		return &ProtoEnum{desc: f.Enum(), number: number}, nil
 	}
-	return field, true
+	return field, nil
 }
 
 func AppendOptions(customOpts ...query.Option) {

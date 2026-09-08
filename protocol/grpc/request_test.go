@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"bytes"
+	gocontext "context"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/mockutil"
@@ -90,7 +91,7 @@ func TestRequestExtractor(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			v, err := q.Extract(req)
+			v, err := q.Extract(gocontext.Background(), req)
 			if test.expectError == "" && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -159,7 +160,7 @@ func TestResponseExtractor(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			v, err := q.Extract(resp)
+			v, err := q.Extract(gocontext.Background(), resp)
 			if test.expectError == "" && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

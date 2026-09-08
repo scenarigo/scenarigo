@@ -2,12 +2,13 @@ package context
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go/token"
 	"reflect"
 	"strings"
 
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/internal/reflectutil"
@@ -43,19 +44,23 @@ func (s *Secrets) Append(v any) *Secrets {
 	}
 }
 
-// ExtractByKey implements query.KeyExtractorContext interface.
-func (s *Secrets) ExtractByKey(ctx context.Context, key string) (any, bool) {
-	var opts []query.Option
-	if query.IsCaseInsensitive(ctx) {
-		opts = append(opts, query.CaseInsensitive())
-	}
-	k := queryutil.New(opts...).Key(key)
+var _ query.KeyExtractor = (*Secrets)(nil)
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (s *Secrets) ExtractByKey(ctx context.Context, key string) (any, error) {
+	// The context carries the options of the lookup this extractor is part of,
+	// case-insensitivity included, so the sub-query behaves the same way.
+	k := queryutil.NewFromContext(ctx).Key(key)
 	for i := len(s.secrets) - 1; i >= 0; i-- {
-		if v, err := k.Extract(s.secrets[i]); err == nil {
-			return v, true
+		v, err := k.Extract(ctx, s.secrets[i])
+		if err == nil {
+			return v, nil
+		}
+		if !errors.Is(err, query.ErrNotFound) {
+			return nil, err
 		}
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 func (s *Secrets) ReplaceAll(str string) string {

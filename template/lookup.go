@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/template/ast"
@@ -30,37 +30,22 @@ func extract(ctx context.Context, node ast.Node, data any) (any, error) {
 		return nil, errors.Wrap(err, "failed to create query from AST")
 	}
 
-	f, err := q.Extract(functions)
-	if err == nil {
-		return f, nil
-	}
-	v, err := q.Extract(typeFunctions)
-	if err == nil {
-		return v, nil
-	}
+	// The builtins are tried before the data, and only an absence moves the
+	// lookup on to the next one: a failure in one of them is a failure of the
+	// lookup, not a reason to look somewhere else.
+	//
 	// Pass ctx so that context-aware extractors (e.g. a blocking streaming
 	// response accessor) can observe the caller's deadline and cancellation.
-	// Snapshot the context state first: only a context that ends DURING the
-	// extraction can have interrupted a blocking wait.
-	//
-	// TODO(#811): this is inference, not causation — remove the snapshot and
-	// classify via errors.Is on the extraction error once query-go extractors
-	// can propagate typed errors (ErrNotFound vs a wrapped ctx error).
-	preErr := ctx.Err()
-	v, err = q.ExtractContext(ctx, data)
+	v, err := queryutil.ExtractFirst(ctx, q, functions, typeFunctions, data)
 	if err != nil {
-		// If the context ended while extracting, the failure is (or may be)
-		// caused by the cancellation or deadline rather than the value being
-		// genuinely absent. Report a hard error so that ?? and defined() do not
-		// silently treat an interrupted wait (e.g. a streaming deadlock guard
-		// firing) as "not defined". A context that had already ended before the
-		// extraction started cannot have cut a wait short — e.g. bind evaluation
-		// after a step timeout — so ordinary absence keeps its undefined
-		// semantics there.
-		if ctxErr := ctx.Err(); ctxErr != nil && preErr == nil {
-			return nil, errors.Wrap(err, ctxErr.Error())
+		// Only a definitive absence is "not defined". Any other error — an
+		// interrupted wait for a streaming message, a failed plugin call, an
+		// inaccessible field — is a failure that ?? and defined() must not
+		// silently absorb.
+		if errors.Is(err, query.ErrNotFound) {
+			return nil, notDefinedError{err}
 		}
-		return nil, notDefinedError{err}
+		return nil, err
 	}
 	return v, nil
 }

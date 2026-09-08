@@ -1,7 +1,15 @@
 package context
 
+import (
+	"context"
+
+	query "github.com/zoncoen/query-go/v2"
+)
+
 // Plugins represents plugins.
 type Plugins []map[string]any
+
+var _ query.KeyExtractor = (Plugins)(nil)
 
 // Append appends p to plugins.
 func (plugins Plugins) Append(ps map[string]any) Plugins {
@@ -13,11 +21,11 @@ func (plugins Plugins) Append(ps map[string]any) Plugins {
 }
 
 // ExtractByKey implements query.KeyExtractor interface.
-func (plugins Plugins) ExtractByKey(key string) (any, bool) {
+func (plugins Plugins) ExtractByKey(_ context.Context, key string) (any, error) {
 	for _, ps := range plugins {
 		if p, ok := ps[key]; ok {
-			return p, true
+			return p, nil
 		}
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }

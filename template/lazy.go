@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 
+	query "github.com/zoncoen/query-go/v2"
+
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 )
@@ -59,7 +61,7 @@ type templateResult struct {
 
 type waitContext struct {
 	any                // base data
-	extractActualValue func() (any, bool)
+	extractActualValue func() (any, error)
 	ready              chan any
 	blocked            func() <-chan struct{}
 	setOnce            sync.Once
@@ -71,19 +73,22 @@ func newWaitContext(ctx context.Context, base any) *waitContext {
 	//nolint:exhaustruct
 	return &waitContext{
 		any: base,
-		extractActualValue: sync.OnceValues(func() (any, bool) {
+		extractActualValue: sync.OnceValues(func() (any, error) {
 			cancel()
 			select {
 			case v := <-ready:
-				return v, true
+				return v, nil
 			case <-ctx.Done():
 				// ignore canceled if the value is already set
 				select {
 				case v := <-ready:
-					return v, true
+					return v, nil
 				default:
 				}
-				return nil, false
+				// The wait was cut short; the value is not absent, it never
+				// arrived. Reporting an absence would let ?? and defined()
+				// hide the interruption.
+				return nil, ctx.Err()
 			}
 		}),
 		ready:   ready,
@@ -103,15 +108,16 @@ func (c *waitContext) set(v any) error {
 	return errors.New("set an actual value twice")
 }
 
+var _ query.KeyExtractor = (*waitContext)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (c *waitContext) ExtractByKey(key string) (any, bool) {
+func (c *waitContext) ExtractByKey(ctx context.Context, key string) (any, error) {
 	if key == "$" {
-		return c.extractActualValue()
+		v, err := c.extractActualValue()
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
 	}
-	k := queryutil.New().Key(key)
-	res, err := k.Extract(c.any)
-	if err != nil {
-		return nil, false
-	}
-	return res, true
+	return queryutil.NewFromContext(ctx).Key(key).Extract(ctx, c.any)
 }

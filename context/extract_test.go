@@ -1,12 +1,13 @@
 package context
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/scenarigo/scenarigo/internal/queryutil"
 	"github.com/scenarigo/scenarigo/reporter"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestContext_ExtractKey(t *testing.T) {
@@ -83,7 +84,7 @@ func TestContext_ExtractKey(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
-			got, err := q.Extract(ctx)
+			got, err := q.Extract(context.Background(), ctx)
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}

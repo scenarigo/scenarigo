@@ -29,8 +29,8 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
-	github.com/zoncoen/query-go v1.4.0 // indirect
-	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
+	github.com/zoncoen/query-go/extractor/yaml/v2 v2.0.0 // indirect
+	github.com/zoncoen/query-go/v2 v2.0.0 // indirect
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect

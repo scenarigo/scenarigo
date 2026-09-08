@@ -3,7 +3,9 @@ package http
 import (
 	"bytes"
 	"compress/gzip"
+	gocontext "context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +24,7 @@ import (
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/version"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 )
 
 func TestRequestExtractor(t *testing.T) {
@@ -73,7 +75,7 @@ func TestRequestExtractor(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			v, err := q.Extract(req)
+			v, err := q.Extract(gocontext.Background(), req)
 			if test.expectError == "" && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -139,7 +141,7 @@ func TestResponseExtractor(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			v, err := q.Extract(resp)
+			v, err := q.Extract(gocontext.Background(), resp)
 			if test.expectError == "" && err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
@@ -711,4 +713,25 @@ func TestRequest_buildRequest_ScenarigoHeaderEncoding(t *testing.T) {
 			t.Fatalf("step full name differs: want %q got %q", expect, got)
 		}
 	})
+}
+
+type failingKey struct{}
+
+func (failingKey) ExtractByKey(gocontext.Context, string) (any, error) {
+	return nil, stderrors.New("lookup failed")
+}
+
+func TestExtractors_Failure(t *testing.T) {
+	extractors := map[string]query.KeyExtractor{
+		"request":  RequestExtractor{Body: failingKey{}},
+		"response": ResponseExtractor{Body: failingKey{}},
+	}
+	for name, e := range extractors {
+		t.Run(name, func(t *testing.T) {
+			_, err := e.ExtractByKey(gocontext.Background(), "k")
+			if err == nil || stderrors.Is(err, query.ErrNotFound) {
+				t.Fatalf("expected the failure to be reported but got %v", err)
+			}
+		})
+	}
 }

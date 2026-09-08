@@ -447,6 +447,9 @@ func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, erro
 		var err error
 		v, err = getFieldValue(v, sel)
 		if err != nil {
+			if errors.Is(err, errFieldNotFound) {
+				return &wasm.GetCommandResponse{NotFound: true}, nil
+			}
 			return nil, err
 		}
 	}
@@ -461,6 +464,15 @@ func (h *handler) Get(r *wasm.GetCommandRequest) (*wasm.GetCommandResponse, erro
 	}, nil
 }
 
+// errFieldNotFound marks a selector the value does not have, as opposed to a
+// value that could not be read. It covers every case the reflection-based
+// extractor treats as an absence - a field or key that is not there, but also a
+// selector applied to a nil pointer, a nil interface or a value of a kind that
+// has no fields - so that a template behaves the same whether the value came
+// from a WASM plugin or from a native one. Reading a value that is there and
+// failing, such as an unexported field, stays a failure.
+var errFieldNotFound = errors.New("not found")
+
 func getFieldValue(v reflect.Value, sel string) (ret reflect.Value, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -470,24 +482,24 @@ func getFieldValue(v reflect.Value, sel string) (ret reflect.Value, err error) {
 
 	// Handle nil or invalid values
 	if !v.IsValid() {
-		return reflect.Value{}, fmt.Errorf("invalid value when accessing field %s", sel)
+		return reflect.Value{}, fmt.Errorf("invalid value %w when accessing field %s", errFieldNotFound, sel)
 	}
 
 	switch v.Type().Kind() {
 	case reflect.Pointer:
 		if v.IsNil() {
-			return reflect.Value{}, fmt.Errorf("nil pointer when accessing field %s", sel)
+			return reflect.Value{}, fmt.Errorf("nil pointer %w when accessing field %s", errFieldNotFound, sel)
 		}
 		return getFieldValue(v.Elem(), sel)
 	case reflect.Interface:
 		if v.IsNil() {
-			return reflect.Value{}, fmt.Errorf("nil interface when accessing field %s", sel)
+			return reflect.Value{}, fmt.Errorf("nil interface %w when accessing field %s", errFieldNotFound, sel)
 		}
 		return getFieldValue(v.Elem(), sel)
 	case reflect.Struct:
 		field := v.FieldByName(sel)
 		if !field.IsValid() {
-			return reflect.Value{}, fmt.Errorf("field %s not found in struct type %s", sel, v.Type())
+			return reflect.Value{}, fmt.Errorf("field %s %w in struct type %s", sel, errFieldNotFound, v.Type())
 		}
 		if !field.CanInterface() {
 			return reflect.Value{}, fmt.Errorf("field %s is not accessible (unexported)", sel)
@@ -496,15 +508,15 @@ func getFieldValue(v reflect.Value, sel string) (ret reflect.Value, err error) {
 	case reflect.Map:
 		key := reflect.ValueOf(sel)
 		if !key.Type().AssignableTo(v.Type().Key()) {
-			return reflect.Value{}, fmt.Errorf("key %s is not assignable to map key type %s", sel, v.Type().Key())
+			return reflect.Value{}, fmt.Errorf("key %s %w: not assignable to map key type %s", sel, errFieldNotFound, v.Type().Key())
 		}
 		mapValue := v.MapIndex(key)
 		if !mapValue.IsValid() {
-			return reflect.Value{}, fmt.Errorf("key %s not found in map", sel)
+			return reflect.Value{}, fmt.Errorf("key %s %w in map", sel, errFieldNotFound)
 		}
 		return mapValue, nil
 	default:
-		return reflect.Value{}, fmt.Errorf("cannot access field %s on type %s (kind: %s)", sel, v.Type(), v.Type().Kind())
+		return reflect.Value{}, fmt.Errorf("field %s %w on type %s (kind: %s)", sel, errFieldNotFound, v.Type(), v.Type().Kind())
 	}
 }
 

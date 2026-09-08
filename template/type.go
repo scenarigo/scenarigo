@@ -1,16 +1,25 @@
 package template
 
-import "github.com/scenarigo/scenarigo/template/val"
+import (
+	"context"
+
+	query "github.com/zoncoen/query-go/v2"
+
+	"github.com/scenarigo/scenarigo/template/val"
+)
 
 var typeFunctions typeFunctionExtractor
 
 type typeFunctionExtractor struct{}
 
-func (m typeFunctionExtractor) ExtractByKey(key string) (any, bool) {
+var _ query.KeyExtractor = typeFunctionExtractor{}
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (m typeFunctionExtractor) ExtractByKey(_ context.Context, key string) (any, error) {
 	if key == "type" {
 		return func(in any) any {
 			return val.NewValue(in).Type().Name()
-		}, true
+		}, nil
 	}
 	if t := val.GetType(key); t != nil {
 		return func(in any) (any, error) {
@@ -19,7 +28,7 @@ func (m typeFunctionExtractor) ExtractByKey(key string) (any, bool) {
 				return nil, err
 			}
 			return v.GoValue(), nil
-		}, true
+		}, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }

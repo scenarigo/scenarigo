@@ -451,6 +451,14 @@ func (t *Template) executeFuncCall(ctx context.Context, call *ast.CallExpr, data
 		if err == nil {
 			fn = reflect.ValueOf(v)
 		} else {
+			// A name the value simply does not have may still be a method of
+			// it. A lookup that failed is something else: calling a method
+			// that happens to share the name would swallow the failure, the
+			// way ?? would if this did not tell the two apart either.
+			var notDefined notDefinedError
+			if !errors.As(err, &notDefined) {
+				return nil, err
+			}
 			r, m, ok := getMethod(reflect.ValueOf(x), selector.Sel.Name)
 			if !ok {
 				return nil, err

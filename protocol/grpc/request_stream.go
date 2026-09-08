@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	query "github.com/zoncoen/query-go/v2"
+
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
 	"github.com/scenarigo/scenarigo/internal/grpcstream"
@@ -124,7 +126,7 @@ func runBidiStream(ctx gocontext.Context, sCtx *context.Context, msgs []any, ope
 		for {
 			out, err := stream.Recv()
 			if err != nil {
-				buf.Close()
+				buf.Close(grpcstream.End(streamCtx, err))
 				if stderrors.Is(err, io.EOF) {
 					err = nil
 				}
@@ -247,16 +249,18 @@ type requestMessagesAccessor struct {
 	sent []proto.Message
 }
 
+var _ query.KeyExtractor = (*requestMessagesAccessor)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (a *requestMessagesAccessor) ExtractByKey(key string) (any, bool) {
+func (a *requestMessagesAccessor) ExtractByKey(_ gocontext.Context, key string) (any, error) {
 	if key == "messages" {
 		msgs := make([]*ProtoMessageYAMLMarshaler, len(a.sent))
 		for i, m := range a.sent {
 			msgs[i] = &ProtoMessageYAMLMarshaler{m}
 		}
-		return msgs, true
+		return msgs, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 // bidiResponseAccessor provides access to streaming responses with blocking semantics.
@@ -266,22 +270,30 @@ type bidiResponseAccessor struct {
 	buf *grpcstream.Buffer[proto.Message]
 }
 
-// ExtractByKey implements query.KeyExtractorContext interface.
-func (a *bidiResponseAccessor) ExtractByKey(_ gocontext.Context, key string) (any, bool) {
+var (
+	_ query.KeyExtractor   = (*bidiResponseAccessor)(nil)
+	_ query.IndexExtractor = (*bidiResponseAccessor)(nil)
+)
+
+// ExtractByKey implements query.KeyExtractor interface.
+func (a *bidiResponseAccessor) ExtractByKey(_ gocontext.Context, key string) (any, error) {
 	if key == "messages" {
-		return a, true
+		return a, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
-// ExtractByIndex implements query.IndexExtractorContext interface. It blocks
+// ExtractByIndex implements query.IndexExtractor interface. It blocks
 // until the Nth response has been received, bounded by ctx.
-func (a *bidiResponseAccessor) ExtractByIndex(ctx gocontext.Context, i int) (any, bool) {
-	msg, ok := a.buf.At(ctx, i)
-	if !ok {
-		return nil, false
+func (a *bidiResponseAccessor) ExtractByIndex(ctx gocontext.Context, i int) (any, error) {
+	msg, err := a.buf.At(ctx, i)
+	if err != nil {
+		if stderrors.Is(err, grpcstream.ErrClosed) {
+			return nil, query.ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to wait for the response message: %w", err)
 	}
-	return &ProtoMessageYAMLMarshaler{msg}, true
+	return &ProtoMessageYAMLMarshaler{msg}, nil
 }
 
 // MarshalYAML implements the yaml.InterfaceMarshaler interface. An unindexed

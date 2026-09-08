@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/goccy/go-yaml"
-	"github.com/zoncoen/query-go"
-	protobufextractor "github.com/zoncoen/query-go/extractor/protobuf"
+	protobufextractor "github.com/zoncoen/query-go/extractor/protobuf/v2"
+	query "github.com/zoncoen/query-go/v2"
 
 	"github.com/scenarigo/scenarigo/protocol"
 )
@@ -100,6 +100,8 @@ func (p *GRPC) UnmarshalExpect(b []byte) (protocol.AssertionBuilder, error) {
 
 	return &e, nil
 }
+
+var _ protocol.QueryOptionsProvider = (*GRPC)(nil)
 
 // QueryOptions implements the QueryOptionsProvider interface.
 func (p *GRPC) QueryOptions() []query.Option {

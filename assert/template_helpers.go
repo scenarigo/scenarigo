@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	query "github.com/zoncoen/query-go/v2"
 
 	sccontext "github.com/scenarigo/scenarigo/context"
 )
@@ -20,41 +21,43 @@ type assertions struct {
 	ctx context.Context
 }
 
+var _ query.KeyExtractor = (*assertions)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (a *assertions) ExtractByKey(key string) (any, bool) {
+func (a *assertions) ExtractByKey(_ context.Context, key string) (any, error) {
 	switch key {
 	case "and":
-		return listArgsLeftArrowFunc(buildAssertionArgs(a.ctx, And)), true
+		return listArgsLeftArrowFunc(buildAssertionArgs(a.ctx, And)), nil
 	case "or":
-		return listArgsLeftArrowFunc(buildAssertionArgs(a.ctx, Or)), true
+		return listArgsLeftArrowFunc(buildAssertionArgs(a.ctx, Or)), nil
 	case "contains":
 		return &leftArrowFunc{
 			ctx: a.ctx,
 			f:   buildAssertionArg(a.ctx, Contains),
-		}, true
+		}, nil
 	case "notContains":
 		return &leftArrowFunc{
 			ctx: a.ctx,
 			f:   buildAssertionArg(a.ctx, NotContains),
-		}, true
+		}, nil
 	case "any":
-		return Nop(), true
+		return Nop(), nil
 	case "notZero":
-		return NotZero(), true
+		return NotZero(), nil
 	case "regexp":
-		return Regexp, true
+		return Regexp, nil
 	case "greaterThan":
-		return Greater, true
+		return Greater, nil
 	case "greaterThanOrEqual":
-		return GreaterOrEqual, true
+		return GreaterOrEqual, nil
 	case "lessThan":
-		return Less, true
+		return Less, nil
 	case "lessThanOrEqual":
-		return LessOrEqual, true
+		return LessOrEqual, nil
 	case "length":
-		return Length, true
+		return Length, nil
 	}
-	return nil, false
+	return nil, query.ErrNotFound
 }
 
 func buildAssertionArg(ctx context.Context, base func(Assertion) Assertion) func(any) Assertion {

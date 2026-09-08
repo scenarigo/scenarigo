@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/scenarigo/scenarigo/protocol/grpc/proto"
-	"github.com/zoncoen/query-go"
+	query "github.com/zoncoen/query-go/v2"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
@@ -55,7 +55,7 @@ func TestKeyExtractor_ExtractByKey(t *testing.T) {
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {
-				v, err := New(test.opts...).Key(test.key).Extract(msg)
+				v, err := New(test.opts...).Key(test.key).Extract(context.Background(), msg)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -79,7 +79,7 @@ func TestKeyExtractor_ExtractByKey(t *testing.T) {
 		}
 		for name, test := range tests {
 			t.Run(name, func(t *testing.T) {
-				_, err := New(test.opts...).Key(test.key).Extract(msg)
+				_, err := New(test.opts...).Key(test.key).Extract(context.Background(), msg)
 				if err == nil {
 					t.Fatal("no error")
 				}

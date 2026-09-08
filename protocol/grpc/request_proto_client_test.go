@@ -1092,6 +1092,53 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 			expectRequestDump:  2,
 			expectResponseDump: 1,
 		},
+		"bidi streaming nullish coalescing falls back when the stream ends with a status": {
+			server: &customTestServer{
+				bidiStream: func(stream testpb.Test_BidiStreamEchoServer) error {
+					req, err := stream.Recv()
+					if err != nil {
+						return err
+					}
+					if err := stream.Send(&testpb.EchoResponse{
+						MessageId:   req.GetMessageId(),
+						MessageBody: fmt.Sprintf("re: %s", req.GetMessageBody()),
+					}); err != nil {
+						return err
+					}
+					// A non-OK status ends the stream as much as OK does, and
+					// the scenario asserts on it. A message the stream ended
+					// before producing is absent, so ?? must fall back rather
+					// than fail with the status.
+					return status.Error(codes.Aborted, "stream aborted")
+				},
+			},
+			request: &Request{
+				Target:  "{{vars.target}}",
+				Service: testpb.Test_ServiceDesc.ServiceName,
+				Method:  "BidiStreamEcho",
+				Messages: []any{
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "1"},
+						yaml.MapItem{Key: "messageBody", Value: "hello"},
+					},
+					yaml.MapSlice{
+						yaml.MapItem{Key: "messageId", Value: "2"},
+						yaml.MapItem{Key: "messageBody", Value: `{{response.messages[5].messageBody ?? "fallback"}}`},
+					},
+				},
+				Options: &RequestOptions{
+					Auth: &AuthOption{
+						Insecure: ptr.To(true),
+					},
+				},
+			},
+			expectCode: codes.Aborted,
+			expectResponses: []*testpb.EchoResponse{
+				{MessageId: "1", MessageBody: "re: hello"},
+			},
+			expectRequestDump:  2,
+			expectResponseDump: 1,
+		},
 		"bidi streaming with proto files": {
 			request: &Request{
 				Target:  "{{vars.target}}",

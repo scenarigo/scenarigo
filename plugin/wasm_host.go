@@ -88,6 +88,7 @@ import (
 	"github.com/goccy/wasi-go/imports"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
+	query "github.com/zoncoen/query-go/v2"
 	stpb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -572,17 +573,25 @@ func (p *WasmPlugin) setupEachScenario(sctx *Context, idx int) (*Context, func(*
 	}, nil
 }
 
+var _ query.KeyExtractor = (*WasmPlugin)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface.
-func (p *WasmPlugin) ExtractByKey(name string) (any, bool) {
+//
+// The context is not observed. Reaching a value in the guest is a request and
+// a response over one instance, so abandoning a call would leave the next one
+// reading the wrong reply; honouring a cancellation needs the instance either
+// drained or closed, which is a change to the host/guest protocol rather than
+// to this method.
+func (p *WasmPlugin) ExtractByKey(_ gocontext.Context, name string) (any, error) {
 	typ, exists := p.nameToTypeMap[name]
 	if !exists {
-		return nil, false
+		return nil, query.ErrNotFound
 	}
 	ret, err := p.getValue(typ, name, nil)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return ret, true
+	return ret, nil
 }
 
 func (p *WasmPlugin) callFunc(typ *wasm.FuncType, name string, selectors []string, args []reflect.Value) ([]reflect.Value, error) {
@@ -631,6 +640,9 @@ func (p *WasmPlugin) getValue(typ *wasm.Type, name string, selectors []string) (
 	valRes, err := convertCommandResponse[*wasm.GetCommandResponse](res)
 	if err != nil {
 		return nil, err
+	}
+	if valRes.NotFound {
+		return nil, query.ErrNotFound
 	}
 	v, err := p.decodeValue(valRes.Value.Type, valRes.Value)
 	if err != nil {
@@ -733,18 +745,21 @@ func (v *StructValue) Run(ctx *Context, step *schema.Step) *Context {
 	return newCtx
 }
 
+var _ query.KeyExtractor = (*StructValue)(nil)
+
 // ExtractByKey implements query.KeyExtractor interface for StructValue.
-// It always returns false as WASM values don't support key extraction.
-func (v *StructValue) ExtractByKey(key string) (any, bool) {
+//
+// The context is not observed, for the reason WasmPlugin.ExtractByKey gives.
+func (v *StructValue) ExtractByKey(_ gocontext.Context, key string) (any, error) {
 	value, err := v.plugin.getValue(
 		v.typ,
 		v.name,
 		append(append([]string{}, v.selectors...), key),
 	)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return value, true
+	return value, nil
 }
 
 // ExistsMethod checks if a gRPC method exists on the WASM value.
