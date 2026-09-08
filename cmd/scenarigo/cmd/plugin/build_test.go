@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -2666,6 +2667,71 @@ replace github.com/scenarigo/scenarigo => ../../../../../../..
 	}
 }
 
+func TestRewriteImports(t *testing.T) {
+	v1 := "package lib\n\nimport _ \"github.com/zoncoen/query-go\"\n"
+	t.Run("a parse failure leaves every file untouched", func(t *testing.T) {
+		// Files are written only after every file parsed and formatted, so
+		// one broken source does not leave the module half-rewritten. The
+		// good file sorts first: a write-as-you-walk implementation would
+		// have rewritten it before reaching the broken one.
+		dir := t.TempDir()
+		create(t, filepath.Join(dir, "a_good.go"), v1)
+		create(t, filepath.Join(dir, "z_broken.go"), "package lib\nfunc {\n")
+		if err := rewriteImports(dir, false, rewriteQueryGoV1); err == nil {
+			t.Fatal("no error")
+		}
+		b, err := os.ReadFile(filepath.Join(dir, "a_good.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(b) != v1 {
+			t.Errorf("a file was rewritten although the rewrite failed:\n%s", b)
+		}
+	})
+	t.Run("a symlinked source outside the directory is left alone", func(t *testing.T) {
+		// The call migration already refuses files that resolve outside the
+		// plugin directory through a symbolic link; the import rewrite draws
+		// the same line, or it would edit sources the plugin does not own.
+		if runtime.GOOS == "windows" {
+			t.Skip("symlinks")
+		}
+		outside := filepath.Join(t.TempDir(), "out.go")
+		create(t, outside, v1)
+		dir := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(dir, "linked.go")); err != nil {
+			t.Fatal(err)
+		}
+		if err := rewriteImports(dir, false, rewriteQueryGoV1); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		b, err := os.ReadFile(outside)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(b) != v1 {
+			t.Errorf("the file outside the plugin directory was rewritten:\n%s", b)
+		}
+	})
+}
+
+func TestRewriteQueryGoV1(t *testing.T) {
+	tests := map[string]string{ // import path -> rewritten (empty = untouched)
+		"github.com/zoncoen/query-go":                    "github.com/zoncoen/query-go/v2",
+		"github.com/zoncoen/query-go/extractor/yaml":     "github.com/zoncoen/query-go/extractor/yaml/v2",
+		"github.com/zoncoen/query-go/extractor/protobuf": "github.com/zoncoen/query-go/extractor/protobuf/v2",
+		"github.com/zoncoen/query-go/v2":                 "",
+		"github.com/zoncoen/query-go/v2/sub":             "",
+		"github.com/zoncoen/query-go/extractor/yaml/v2":  "",
+		"github.com/zoncoen/query-gopher":                "",
+		"github.com/scenarigo/scenarigo/plugin":          "",
+	}
+	for path, expect := range tests {
+		if got := rewriteQueryGoV1(path); got != expect {
+			t.Errorf("rewriteQueryGoV1(%q) = %q, want %q", path, got, expect)
+		}
+	}
+}
+
 func TestBuildMigration(t *testing.T) {
 	// from testdata/migrate/<case>/src to the repository root
 	const relRoot = "../../../../../../../.."
@@ -2803,6 +2869,216 @@ func Lookup(ctx *plugin.Context) any {
 			}
 		}()
 		_ = buildRunWithOpts(cmd, []string{}, &buildOpts{})
+	})
+
+	t.Run("query-go v1 imports move to v2", func(t *testing.T) {
+		// A plugin that still imports query-go v1 builds without an error -
+		// the v1 and v2 module paths coexist - so the on-failure migration
+		// never fires for it. The import rewrite has to run up front.
+		v1src := `package main
+
+import (
+	query "github.com/zoncoen/query-go"
+
+	"github.com/scenarigo/scenarigo/plugin"
+)
+
+func Q(_ *plugin.Context) *query.Query { return query.New() }
+`
+		dir, cmd, _ := setup(t, "querygo", "plugin.so", v1src)
+		create(t, filepath.Join(dir, "src", "go.mod"), gomod+"\nrequire github.com/zoncoen/query-go v1.5.0\n")
+		// The build does not compile the vendor tree, and it holds another
+		// module's sources: the rewrite must leave it alone. It sits below a
+		// subdirectory so the go command does not switch the whole build to
+		// vendoring mode; the walk skips a vendor directory at any depth.
+		vendored := "package lib\n\nimport _ \"github.com/zoncoen/query-go\"\n"
+		create(t, filepath.Join(dir, "src", "sub", "vendor", "example.com", "lib", "lib.go"), vendored)
+		if err := buildRunWithOpts(cmd, []string{}, &buildOpts{}); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		main := readMain(t, dir)
+		if !strings.Contains(main, "\"github.com/zoncoen/query-go/v2\"") {
+			t.Errorf("the import was not rewritten to /v2:\n%s", main)
+		}
+		gomodBytes, err := os.ReadFile(filepath.Join(dir, "src", "go.mod"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b, err := os.ReadFile(filepath.Join(dir, "src", "sub", "vendor", "example.com", "lib", "lib.go")); err != nil {
+			t.Fatal(err)
+		} else if string(b) != vendored {
+			t.Errorf("the vendored source was rewritten:\n%s", b)
+		}
+		if strings.Contains(string(gomodBytes), "github.com/zoncoen/query-go v1") {
+			t.Errorf("the v1 require was not dropped:\n%s", gomodBytes)
+		}
+	})
+
+	t.Run("a test file keeps its query-go v1 import", func(t *testing.T) {
+		// The build does not compile test files, so the on-failure migration
+		// can never fix their extractor calls - a /v2 import there would
+		// leave them uncompilable. They keep v1, and the tidy that follows
+		// keeps the v1 require around for them as a test-only dependency.
+		v1src := "package main\n\nimport (\n\tquery \"github.com/zoncoen/query-go\"\n\n\t\"github.com/scenarigo/scenarigo/plugin\"\n)\n\nfunc Q(_ *plugin.Context) *query.Query { return query.New() }\n"
+		testSrc := "package main\n\nimport _ \"github.com/zoncoen/query-go\"\n"
+		dir, cmd, _ := setup(t, "querygotest", "plugin.so", v1src)
+		create(t, filepath.Join(dir, "src", "go.mod"), gomod+"\nrequire github.com/zoncoen/query-go v1.5.0\n")
+		create(t, filepath.Join(dir, "src", "main_test.go"), testSrc)
+		if err := buildRunWithOpts(cmd, []string{}, &buildOpts{}); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if !strings.Contains(readMain(t, dir), "\"github.com/zoncoen/query-go/v2\"") {
+			t.Error("the import was not rewritten to /v2")
+		}
+		if b, err := os.ReadFile(filepath.Join(dir, "src", "main_test.go")); err != nil {
+			t.Fatal(err)
+		} else if string(b) != testSrc {
+			t.Errorf("the test file was rewritten:\n%s", b)
+		}
+		gomodBytes, err := os.ReadFile(filepath.Join(dir, "src", "go.mod"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(gomodBytes), "github.com/zoncoen/query-go v1") {
+			t.Errorf("the v1 require the test file needs was dropped:\n%s", gomodBytes)
+		}
+	})
+
+	t.Run("extractor module imports move to v2 as well", func(t *testing.T) {
+		// The mapping is longest-first over three modules; the two extractor
+		// modules must be matched as their own modules, not as subpackages of
+		// the root one, all the way through a real build.
+		v1src := "package main\n\nimport (\n\tquery \"github.com/zoncoen/query-go\"\n\t_ \"github.com/zoncoen/query-go/extractor/protobuf\"\n\t_ \"github.com/zoncoen/query-go/extractor/yaml\"\n\n\t\"github.com/scenarigo/scenarigo/plugin\"\n)\n\nfunc Q(_ *plugin.Context) *query.Query { return query.New() }\n"
+		dir, cmd, _ := setup(t, "querygoext", "plugin.so", v1src)
+		create(t, filepath.Join(dir, "src", "go.mod"), gomod+"\nrequire (\n\tgithub.com/zoncoen/query-go v1.4.0\n\tgithub.com/zoncoen/query-go/extractor/protobuf v0.1.4\n\tgithub.com/zoncoen/query-go/extractor/yaml v0.2.2\n)\n")
+		if err := buildRunWithOpts(cmd, []string{}, &buildOpts{}); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		main := readMain(t, dir)
+		for _, want := range []string{
+			"\"github.com/zoncoen/query-go/v2\"",
+			"\"github.com/zoncoen/query-go/extractor/protobuf/v2\"",
+			"\"github.com/zoncoen/query-go/extractor/yaml/v2\"",
+		} {
+			if !strings.Contains(main, want) {
+				t.Errorf("expected the import %s:\n%s", want, main)
+			}
+		}
+		gomodBytes, err := os.ReadFile(filepath.Join(dir, "src", "go.mod"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, stale := range []string{"query-go v1.", "extractor/protobuf v0.", "extractor/yaml v0."} {
+			if strings.Contains(string(gomodBytes), stale) {
+				t.Errorf("a v1 require was not dropped (%s):\n%s", stale, gomodBytes)
+			}
+		}
+	})
+
+	t.Run("skip migration leaves query-go v1 imports alone", func(t *testing.T) {
+		v1src := "package main\n\nimport (\n\tquery \"github.com/zoncoen/query-go\"\n\n\t\"github.com/scenarigo/scenarigo/plugin\"\n)\n\nfunc Q(_ *plugin.Context) *query.Query { return query.New() }\n"
+		dir, cmd, _ := setup(t, "skipquerygo", "plugin.so", v1src)
+		create(t, filepath.Join(dir, "src", "go.mod"), gomod+"\nrequire github.com/zoncoen/query-go v1.5.0\n")
+		if err := buildRunWithOpts(cmd, []string{}, &buildOpts{skipMigration: true}); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if got := readMain(t, dir); got != v1src {
+			t.Errorf("the source was modified:\n%s", got)
+		}
+		gomodBytes, err := os.ReadFile(filepath.Join(dir, "src", "go.mod"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(gomodBytes), "github.com/zoncoen/query-go v1") {
+			t.Errorf("the v1 require was dropped:\n%s", gomodBytes)
+		}
+	})
+
+	t.Run("a remote module keeps v1 only in the module cache", func(t *testing.T) {
+		// A plugin fetched from a remote module is built from a downloaded
+		// copy. The v1 import rewrite runs on that copy and never on the
+		// module cache, whose sources stay exactly as published. The fixture
+		// uses query.ErrNotFound, which only exists in v2, so the build
+		// succeeds only when the copy's import really was rewritten.
+		goCmd, err := findGoCmd(context.Background())
+		if err != nil {
+			t.Fatalf("failed to find go command: %s", err)
+		}
+		fixture := filepath.Join("testdata", "git", "querygo")
+		if err := os.RemoveAll(fixture); err != nil {
+			t.Fatal(err)
+		}
+		create(t, filepath.Join(fixture, "go.mod"), "module 127.0.0.1/querygo.git\n\ngo 1.25.0\n\nrequire github.com/zoncoen/query-go v1.4.0\n")
+		create(t, filepath.Join(fixture, "main.go"), "package main\n\nimport query \"github.com/zoncoen/query-go\"\n\nvar NotFound = query.ErrNotFound\n")
+		t.Cleanup(func() { os.RemoveAll(fixture) })
+		setupGitServer(t, goCmd)
+		dropModCache := func() {
+			for _, cache := range []string{
+				filepath.Join(build.Default.GOPATH, "pkg", "mod", "127.0.0.1"),
+				filepath.Join(build.Default.GOPATH, "pkg", "mod", "cache", "download", "127.0.0.1"),
+			} {
+				_ = filepath.Walk(cache, func(path string, info fs.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					return os.Chmod(path, 0o777)
+				})
+				_ = os.RemoveAll(cache)
+			}
+			// The cached VCS clone is keyed by the port-less remote URL, so
+			// every run hits the same clone, and git fetch never moves the
+			// v1.0.0 tag it already has: without this, every run would keep
+			// building the first run's fixture.
+			infos, _ := filepath.Glob(filepath.Join(build.Default.GOPATH, "pkg", "mod", "cache", "vcs", "*.info"))
+			for _, info := range infos {
+				b, err := os.ReadFile(info)
+				if err != nil || !strings.Contains(string(b), "127.0.0.1") {
+					continue
+				}
+				_ = os.RemoveAll(strings.TrimSuffix(info, ".info"))
+				_ = os.Remove(info)
+			}
+		}
+		// A cache left over from an earlier run would satisfy the assertions
+		// below without a fresh download.
+		dropModCache()
+		t.Cleanup(dropModCache)
+
+		dir := filepath.Join("testdata", "migrate", "remote")
+		if err := os.RemoveAll(dir); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(dir) })
+		create(t, filepath.Join(dir, "scenarigo.yaml"), "schemaVersion: config/v1\nplugins:\n  gen/plugin.so:\n    src: 127.0.0.1/querygo.git@v1.0.0\n")
+		config.ConfigPath = filepath.Join(dir, "scenarigo.yaml")
+		cmd := &cobra.Command{}
+		var stderr bytes.Buffer
+		cmd.SetErr(&stderr)
+		verbose = true
+		t.Cleanup(func() { verbose = false })
+		if err := buildRunWithOpts(cmd, []string{}, &buildOpts{}); err != nil {
+			t.Fatalf("unexpected error: %s\n%s", err, stderr.String())
+		}
+		if _, err := os.Stat(filepath.Join(dir, "gen", "plugin.so")); err != nil {
+			t.Fatalf("plugin not found: %s", err)
+		}
+		if !strings.Contains(stderr.String(), "replace query-go v1 imports with /v2") {
+			t.Errorf("the v1 import rewrite did not run on the downloaded copy:\n%s", stderr.String())
+		}
+		cached, err := filepath.Glob(filepath.Join(build.Default.GOPATH, "pkg", "mod", "127.0.0.1", "querygo.git@*", "main.go"))
+		if err != nil || len(cached) == 0 {
+			t.Fatalf("the cached module was not found: %v %q", err, cached)
+		}
+		b, err := os.ReadFile(cached[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), "query-go/v2") {
+			t.Errorf("the module cache was rewritten:\n%s", b)
+		}
+		if !strings.Contains(string(b), "\"github.com/zoncoen/query-go\"") {
+			t.Errorf("the cached source lost its v1 import:\n%s", b)
+		}
 	})
 
 	t.Run("build fails after the migration", func(t *testing.T) {
