@@ -110,7 +110,7 @@ This command requires go command in $PATH.
 		SilenceUsage:  true,
 	}
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print verbose log")
-	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "leave plugin sources untouched: skip rewriting the github.com/zoncoen/scenarigo import path and skip migrating extractor calls to the query-go v2 signatures")
+	cmd.Flags().BoolVarP(&skipMigration, "skip-migration", "", false, "leave plugin sources untouched: skip rewriting the github.com/zoncoen/scenarigo and query-go v1 import paths and skip migrating extractor calls to the query-go v2 signatures")
 	cmd.Flags().BoolVarP(&wasm, "wasm", "", false, "build as WebAssembly")
 	return cmd
 }
@@ -310,20 +310,31 @@ func findGoCmd(ctx context.Context) (string, error) {
 	return goCmd, nil
 }
 
-// 2nd return value should always be called.
+// rewriteImports rewrites the import paths of the Go sources under dir.
+// rewrite returns the new path for an import it applies to, and the empty
+// string for one it leaves alone.
 //
-// rewriteImports rewrites the import paths of every Go source under dir. rewrite
-// returns the new path for an import it applies to, and the empty string for one
-// it leaves alone.
-//
-//nolint:cyclop
-func rewriteImports(dir string, rewrite func(string) string) error {
+// A vendor tree is never entered: it holds other modules' sources, which no
+// rewrite may touch. Test files are skipped when skipTestFiles says so - the
+// build does not compile them, so a rewrite there is not needed to build and
+// cannot be followed up by the call migration, which only sees what a failed
+// build compiles.
+func rewriteImports(dir string, skipTestFiles bool, rewrite func(string) string) error {
 	fset := token.NewFileSet()
 	return filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || filepath.Ext(info.Name()) != ".go" {
+		if info.IsDir() {
+			if info.Name() == "vendor" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(info.Name()) != ".go" {
+			return nil
+		}
+		if skipTestFiles && strings.HasSuffix(info.Name(), "_test.go") {
 			return nil
 		}
 		b, err := os.ReadFile(path)
@@ -372,6 +383,34 @@ func rewriteImports(dir string, rewrite func(string) string) error {
 	})
 }
 
+// queryGoV1Modules are the module paths of query-go v1 and its extractor
+// modules, longest first so that an extractor import is matched as its own
+// module rather than as a subpackage of the root one.
+var queryGoV1Modules = []string{
+	"github.com/zoncoen/query-go/extractor/protobuf",
+	"github.com/zoncoen/query-go/extractor/yaml",
+	"github.com/zoncoen/query-go",
+}
+
+// rewriteQueryGoV1 returns the v2 import path for an import of query-go v1 or
+// of one of its extractor modules, and the empty string for any other import.
+// The /v2 goes right after the module path, wherever the import points inside
+// the module; an import that already carries it is left alone.
+func rewriteQueryGoV1(path string) string {
+	for _, m := range queryGoV1Modules {
+		if path != m && !strings.HasPrefix(path, m+"/") {
+			continue
+		}
+		rest := strings.TrimPrefix(path, m)
+		if rest == "/v2" || strings.HasPrefix(rest, "/v2/") {
+			return ""
+		}
+		return m + "/v2" + rest
+	}
+	return ""
+}
+
+// The 2nd return value should always be called.
 func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[string]*overrideModule, root, pluginDir string, item schema.OrderedMapItem[string, schema.PluginConfig], opts *buildOpts) (*pluginBuilder, func(), error) {
 	out := item.Key
 
@@ -417,7 +456,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 		if _, ok := pb.initialRequires[oldScenarigoModPath]; ok {
 			debugLogf(cmd, "replace %s => %s in %s", oldScenarigoModPath, newScenarigoModPath, item.Value.Src)
 
-			if err := rewriteImports(pb.dir, func(path string) string {
+			if err := rewriteImports(pb.dir, false, func(path string) string {
 				if !strings.HasPrefix(path, oldScenarigoModPath) {
 					return ""
 				}
@@ -436,6 +475,48 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 				}
 				if err := gomod.AddRequire(newScenarigoModPath, v); err != nil {
 					return fmt.Errorf("%s: %w", pb.gomodPath, err)
+				}
+				return nil
+			}); err != nil {
+				return nil, clean, fmt.Errorf("failed to edit require directive: %w", err)
+			}
+		}
+
+		// Move query-go itself to v2. A plugin that still imports v1 builds
+		// fine - the v1 and v2 module paths coexist - so the migration that
+		// runs on a build failure never sees it; it would just keep handing
+		// scenarigo v1 option types that v2 silently drops. Rewrite the
+		// imports up front instead. A compile error that follows, such as an
+		// extractor call with the v1 signature, is exactly what the
+		// on-failure migration exists to fix.
+		var hasQueryGoV1 bool
+		for _, m := range queryGoV1Modules {
+			if _, ok := pb.initialRequires[m]; ok {
+				hasQueryGoV1 = true
+				break
+			}
+		}
+		if hasQueryGoV1 {
+			debugLogf(cmd, "replace query-go v1 imports with /v2 in %s", item.Value.Src)
+			// Test files keep their v1 imports: the build does not compile
+			// them, so the on-failure migration can never fix their extractor
+			// calls, and a /v2 import over v1-shaped calls would not compile
+			// at all. The tidy that follows keeps the v1 require around for
+			// them, as a test-only dependency, so the plugin's own tests
+			// still compile.
+			if err := rewriteImports(pb.dir, true, rewriteQueryGoV1); err != nil {
+				return nil, clean, err
+			}
+			// Dropping the v1 requires is enough: the build forces the /v2
+			// modules in, since scenarigo itself requires them.
+			if err := pb.editGoMod(cmd, goCmd, func(gomod *modfile.File) error {
+				for _, m := range queryGoV1Modules {
+					if _, ok := pb.initialRequires[m]; !ok {
+						continue
+					}
+					if err := gomod.DropRequire(m); err != nil {
+						return fmt.Errorf("%s: %w", pb.gomodPath, err)
+					}
 				}
 				return nil
 			}); err != nil {
