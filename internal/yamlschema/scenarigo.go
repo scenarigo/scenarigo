@@ -1,5 +1,7 @@
 package yamlschema
 
+import "strings"
+
 // Scenarigo schema definitions for config and scenario YAML files.
 
 // ConfigSchema returns the schema for scenarigo.yaml configuration files.
@@ -207,10 +209,10 @@ func grpcRequestOptionFields() []*FieldInfo {
 // to ScenarioSchema (the most common type) so that completion and other
 // features remain available while the user is still typing.
 func DetectSchemaType(text string) *Schema {
-	for _, line := range splitLines(text) {
-		trimmed := trimSpace(line)
-		if hasPrefix(trimmed, "schemaVersion:") {
-			value := trimSpace(trimmed[len("schemaVersion:"):])
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "schemaVersion:") {
+			value := strings.TrimSpace(trimmed[len("schemaVersion:"):])
 			value = trimQuotes(value)
 			switch value {
 			case "config/v1":
@@ -227,33 +229,6 @@ func DetectSchemaType(text string) *Schema {
 	return nil
 }
 
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
-}
-
-func trimSpace(s string) string {
-	i := 0
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-		i++
-	}
-	j := len(s)
-	for j > i && (s[j-1] == ' ' || s[j-1] == '\t' || s[j-1] == '\r') {
-		j--
-	}
-	return s[i:j]
-}
-
 // mergeFields combines two field slices, deduplicating by name.
 func mergeFields(a, b []*FieldInfo) []*FieldInfo {
 	seen := make(map[string]bool, len(a))
@@ -268,10 +243,6 @@ func mergeFields(a, b []*FieldInfo) []*FieldInfo {
 		}
 	}
 	return result
-}
-
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
 
 func trimQuotes(s string) string {
