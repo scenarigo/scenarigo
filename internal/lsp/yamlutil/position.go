@@ -3,9 +3,11 @@ package yamlutil
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/goccy/go-yaml/token"
 )
 
 // Document holds a parsed YAML document and provides position-based lookups.
@@ -41,19 +43,34 @@ func (d *Document) FindNodeAtPosition(line, col int) *NodePath {
 	if d == nil || d.File == nil {
 		return nil
 	}
-	for _, doc := range d.File.Docs {
-		if doc.Body == nil {
-			continue
-		}
-		path := &NodePath{}
-		if findNode(doc.Body, line, col, path) {
-			return path
+	// Prefer the node whose token spans the column, so that several keys on
+	// one line (flow mappings) resolve individually; fall back to the first
+	// node on the line so that a cursor in trailing space still hits the key.
+	for _, lenient := range []bool{false, true} {
+		for _, doc := range d.File.Docs {
+			if doc.Body == nil {
+				continue
+			}
+			path := &NodePath{}
+			if findNode(doc.Body, line, col, path, lenient) {
+				return path
+			}
 		}
 	}
 	return nil
 }
 
-func findNode(node ast.Node, line, col int, path *NodePath) bool {
+// tokenSpans reports whether the token covers the column on the line.
+// Columns are 1-based rune indexes, as reported by goccy/go-yaml.
+func tokenSpans(tok *token.Token, line, col int) bool {
+	if tok == nil || tok.Position.Line != line {
+		return false
+	}
+	start := tok.Position.Column
+	return col >= start && col < start+utf8.RuneCountInString(tok.Value)
+}
+
+func findNode(node ast.Node, line, col int, path *NodePath, lenient bool) bool {
 	if node == nil {
 		return false
 	}
@@ -61,36 +78,31 @@ func findNode(node ast.Node, line, col int, path *NodePath) bool {
 	switch n := node.(type) {
 	case *ast.MappingNode:
 		for _, v := range n.Values {
-			if findNode(v, line, col, path) {
+			if findNode(v, line, col, path, lenient) {
 				return true
 			}
 		}
 	case *ast.MappingValueNode:
 		keyTok := n.Key.GetToken()
-		if keyTok != nil && keyTok.Position.Line == line {
+		onLine := keyTok != nil && keyTok.Position.Line == line
+		if tokenSpans(keyTok, line, col) || (lenient && onLine) {
 			path.Keys = append(path.Keys, n.Key.String())
 			path.Node = n
 			return true
 		}
 		if n.Value != nil {
 			valPath := &NodePath{}
-			if findNode(n.Value, line, col, valPath) {
+			if findNode(n.Value, line, col, valPath, lenient) {
 				path.Keys = append(path.Keys, n.Key.String())
 				path.Keys = append(path.Keys, valPath.Keys...)
 				path.Node = valPath.Node
 				return true
 			}
 		}
-		// Check if cursor is on value position (same line as key, after colon)
-		if keyTok != nil && keyTok.Position.Line == line {
-			path.Keys = append(path.Keys, n.Key.String())
-			path.Node = n
-			return true
-		}
 	case *ast.SequenceNode:
 		for i, v := range n.Values {
 			valPath := &NodePath{}
-			if findNode(v, line, col, valPath) {
+			if findNode(v, line, col, valPath, lenient) {
 				path.Keys = append(path.Keys, fmt.Sprintf("%d", i))
 				path.Keys = append(path.Keys, valPath.Keys...)
 				path.Node = valPath.Node
@@ -99,7 +111,7 @@ func findNode(node ast.Node, line, col int, path *NodePath) bool {
 		}
 	default:
 		tok := node.GetToken()
-		if tok != nil && tok.Position.Line == line {
+		if tokenSpans(tok, line, col) || (lenient && tok != nil && tok.Position.Line == line) {
 			path.Node = node
 			return true
 		}
