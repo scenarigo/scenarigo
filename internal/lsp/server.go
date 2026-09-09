@@ -1250,21 +1250,6 @@ func (s *Server) resolveFileLocation(docURI, filePath string) *Location {
 	}
 }
 
-func uriToPath(uri string) string {
-	if after, ok := strings.CutPrefix(uri, "file://"); ok {
-		return after
-	}
-	return ""
-}
-
-func pathToURI(path string) string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "file://" + path
-	}
-	return "file://" + abs
-}
-
 func (s *Server) complete(doc *document, pos Position) []CompletionItem {
 	sch := yamlschema.DetectSchemaType(doc.Text)
 	if sch == nil {

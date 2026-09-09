@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -402,5 +403,44 @@ func TestEditorSession_PositionEncoding(t *testing.T) {
 				t.Errorf("hover at the protocol key = %s", hoverResp)
 			}
 		})
+	}
+}
+
+// TestEditorSession_EncodedWorkspaceURI checks that features reading files from
+// disk work when the workspace path needs percent-encoding in URIs.
+func TestEditorSession_EncodedWorkspaceURI(t *testing.T) {
+	client := newRunningTestClient(t)
+	dir := filepath.Join(t.TempDir(), "my project 日本")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := "schemaVersion: config/v1\nvars:\n  configVar: from-config\n"
+	if err := os.WriteFile(filepath.Join(dir, "scenarigo.yaml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "included.yaml"), []byte("title: included\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := pathToURI(dir)
+	if !strings.Contains(root, "%20") {
+		t.Fatalf("root URI is not percent-encoded: %s", root)
+	}
+	client.initialize(1, root)
+
+	uri := root + "/test.yaml"
+	docText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - include: included.yaml\n    vars:\n      x: '{{vars.'\n"
+	client.openDocument(uri, docText)
+
+	list := client.complete(2, uri, 5, 17)
+	if labels := labelList(list.Items); !slices.Contains(labels, "configVar") {
+		t.Errorf("expected configVar from scenarigo.yaml in completions, got %v", labels)
+	}
+
+	var loc Location
+	if err := json.Unmarshal(client.definition(3, uri, 3, 15), &loc); err != nil {
+		t.Fatalf("decode definition: %v", err)
+	}
+	if want := root + "/included.yaml"; loc.URI != want {
+		t.Errorf("definition URI = %q, want %q", loc.URI, want)
 	}
 }

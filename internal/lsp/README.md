@@ -158,6 +158,7 @@ internal/lsp/
   document.go           # Document management (open/change/close + AST cache)
   transport.go          # JSON-RPC framing over stdio
   position.go           # Column unit conversions (bytes, runes, UTF-16)
+  uri.go                # file URI <-> path conversions
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
 
@@ -174,7 +175,7 @@ The LSP server has three tiers of tests, each with a different purpose and cost.
 
 | Tier | Files | Run with | Purpose |
 |---|---|---|---|
-| **Unit / Fuzz** | `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
+| **Unit / Fuzz** | `position_test.go`, `transport_test.go`, `uri_test.go`, `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
 | **Fixture + Session** | `fixture_test.go` + `testdata/`, `integration_test.go` | `go test ./internal/lsp/...` | Protocol-level behavior via in-process `io.Pipe` |
 | **E2E (binary + Neovim)** | `e2e_test.go` + `testdata/e2e_nvim/` | `make test/lsp-e2e` | Real binary over OS pipes; real editor integration |
 
@@ -207,6 +208,9 @@ internal/lsp/
   fixture_test.go         # YAML fixture loader, parseCursorMarker, per-operation runners
   integration_test.go     # Multi-step session tests (TestEditorSession_*)
   server_fuzz_test.go     # FuzzGetTemplateContext, FuzzCompleteTemplate
+  position_test.go        # Column conversions between bytes, runes and UTF-16
+  transport_test.go       # Message framing and protocol error responses
+  uri_test.go             # file URI <-> path conversions
   e2e_test.go             # [e2e_lsp] Binary subprocess + Neovim headless tests
   testdata/
     completion/           # Completion fixtures
