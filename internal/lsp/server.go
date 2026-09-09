@@ -1946,7 +1946,16 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlsc
 
 		switch v := mv.Value.(type) {
 		case *ast.MappingNode:
-			s.validateNode(v, childFields, nil, diags)
+			if field.Type == yamlschema.FieldTypeMap {
+				// Map keys are user-defined; validate each value against the children.
+				for _, entry := range v.Values {
+					if m, ok := entry.Value.(*ast.MappingNode); ok {
+						s.validateNode(m, childFields, nil, diags)
+					}
+				}
+			} else {
+				s.validateNode(v, childFields, nil, diags)
+			}
 		case *ast.SequenceNode:
 			// For sequences with object items (e.g., steps), validate each item.
 			if field.Children != nil {

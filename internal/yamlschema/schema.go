@@ -82,7 +82,14 @@ func (s *Schema) FindField(path []string) *FieldInfo {
 	}
 	fields := s.Fields
 	var found *FieldInfo
+	mapKey := false
 	for _, key := range path {
+		if mapKey {
+			// The key of a map field is user-defined and has no schema entry.
+			mapKey = false
+			found = nil
+			continue
+		}
 		if isNumeric(key) {
 			continue
 		}
@@ -90,11 +97,8 @@ func (s *Schema) FindField(path []string) *FieldInfo {
 		for _, f := range fields {
 			if f.Name == key {
 				found = f
-				if f.DynamicChildren != nil {
-					fields = f.DynamicChildren("")
-				} else {
-					fields = f.Children
-				}
+				fields = f.children("")
+				mapKey = f.hasMapChildren()
 				break
 			}
 		}
@@ -119,18 +123,19 @@ func isNumeric(s string) bool {
 
 // ChildFields returns the child fields at the given path.
 // If context (sibling field values) is provided, it may resolve dynamic children.
+// The key of a map field with children is user-defined and is skipped.
 func (s *Schema) ChildFields(path []string, context map[string]string) []*FieldInfo {
 	if s == nil {
 		return nil
 	}
-	if len(path) == 0 {
-		return s.Fields
-	}
-
 	fields := s.Fields
-	var current *FieldInfo
+	mapKey := false
 	for _, key := range path {
-		current = nil
+		if mapKey {
+			mapKey = false
+			continue
+		}
+		var current *FieldInfo
 		for _, f := range fields {
 			if f.Name == key {
 				current = f
@@ -140,15 +145,25 @@ func (s *Schema) ChildFields(path []string, context map[string]string) []*FieldI
 		if current == nil {
 			return nil
 		}
-		if current.DynamicChildren != nil {
-			discriminator := ""
-			if context != nil && current.DynamicKey != "" {
-				discriminator = context[current.DynamicKey]
-			}
-			fields = current.DynamicChildren(discriminator)
-		} else {
-			fields = current.Children
+		discriminator := ""
+		if context != nil && current.DynamicKey != "" {
+			discriminator = context[current.DynamicKey]
 		}
+		fields = current.children(discriminator)
+		mapKey = current.hasMapChildren()
 	}
 	return fields
+}
+
+// children resolves the child fields, using the discriminator for dynamic children.
+func (f *FieldInfo) children(discriminator string) []*FieldInfo {
+	if f.DynamicChildren != nil {
+		return f.DynamicChildren(discriminator)
+	}
+	return f.Children
+}
+
+// hasMapChildren reports whether f is a map whose values have a schema of their own.
+func (f *FieldInfo) hasMapChildren() bool {
+	return f.Type == FieldTypeMap && len(f.Children) > 0
 }
