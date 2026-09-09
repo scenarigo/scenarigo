@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -17,6 +18,14 @@ import (
 
 	"github.com/scenarigo/scenarigo/internal/lsp/yamlutil"
 	"github.com/scenarigo/scenarigo/internal/yamlschema"
+)
+
+// Template namespaces, which are also the YAML blocks that declare them.
+const (
+	nsVars    = "vars"
+	nsSecrets = "secrets"
+	nsSteps   = "steps"
+	nsPlugins = "plugins"
 )
 
 // Server is the LSP server.
@@ -551,8 +560,7 @@ func (s *Server) mappingValueToSymbol(text string, mv *ast.MappingValueNode) Doc
 			}
 		case *ast.SequenceNode:
 			for i, item := range v.Values {
-				switch m := item.(type) {
-				case *ast.MappingNode:
+				if m, ok := item.(*ast.MappingNode); ok {
 					// Sequence item with mapping: create a symbol for the item.
 					itemSym := DocumentSymbol{
 						Name:           fmt.Sprintf("[%d]", i),
@@ -638,7 +646,7 @@ func (s *Server) definition(doc *document, params DefinitionParams) *Location {
 	case ctx.Type == yamlutil.CursorContextValue:
 		// Check if we're in a plugins mapping or scenarios array.
 		for _, key := range ctx.Path {
-			if key == "plugins" || key == "scenarios" {
+			if key == nsPlugins || key == "scenarios" {
 				return s.resolveFileLocation(params.TextDocument.URI, ctx.PartialValue)
 			}
 		}
@@ -699,22 +707,22 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 		return nil
 	}
 	root := parts[0]
-	if root != "vars" && root != "secrets" && root != "plugins" {
+	if root != nsVars && root != nsSecrets && root != nsPlugins {
 		return nil
 	}
 	name := parts[1]
 
 	// Try to find the definition in the current document.
-	if root == "plugins" {
+	if root == nsPlugins {
 		if len(parts) >= 3 {
 			// plugins.<name>.<symbol> — jump to Go source definition.
 			return s.findPluginSymbolDefinition(doc, name, parts[2])
 		}
 		// plugins.<name> — jump to plugin declaration.
-		if r := findBlockKeyRange(doc.Text, "plugins", name); r != nil {
+		if r := findBlockKeyRange(doc.Text, nsPlugins, name); r != nil {
 			return &Location{URI: params.TextDocument.URI, Range: *r}
 		}
-		return s.findConfigDefinition("plugins", name)
+		return s.findConfigDefinition(nsPlugins, name)
 	}
 
 	symbolPath := []string{root, name}
@@ -731,7 +739,7 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 
 // readConfigText returns the text of scenarigo.yaml and its URI.
 // It checks the document store first, then falls back to reading from disk.
-func (s *Server) readConfigText() (text, uri string, ok bool) {
+func (s *Server) readConfigText() (string, string, bool) {
 	rootPath := uriToPath(s.rootURI)
 	if rootPath == "" {
 		return "", "", false
@@ -1065,7 +1073,7 @@ func (s *Server) getPluginSymbols(sourceDir string) *pluginSymbols {
 // resolvePluginSourceDir resolves the Go source directory for a plugin.
 // It maps a scenario plugin alias to a binary name, then looks up the source path in scenarigo.yaml.
 //
-// Flow: scenario "plugins: { grpc: grpc.so }" → config "plugins: { grpc.so: { src: ./plugin/src } }"
+// Flow: scenario "plugins: { grpc: grpc.so }" → config "plugins: { grpc.so: { src: ./plugin/src } }".
 func (s *Server) resolvePluginSourceDir(doc *document, pluginAlias string) string {
 	rootPath := uriToPath(s.rootURI)
 	if rootPath == "" {
@@ -1075,9 +1083,9 @@ func (s *Server) resolvePluginSourceDir(doc *document, pluginAlias string) strin
 	// Get the binary name from the scenario's plugins block.
 	binaryName := ""
 	if doc != nil {
-		for _, key := range extractBlockKeys(doc.Text, "plugins") {
+		for _, key := range extractBlockKeys(doc.Text, nsPlugins) {
 			if key == pluginAlias {
-				binaryName = extractBlockValue(doc.Text, "plugins", key)
+				binaryName = extractBlockValue(doc.Text, nsPlugins, key)
 				break
 			}
 		}
@@ -1134,9 +1142,9 @@ func extractBlockValue(text, blockName, keyName string) string {
 			}
 			key := extractKeyFromLine(line)
 			if key == keyName {
-				colonIdx := strings.Index(trimmed, ":")
-				if colonIdx >= 0 {
-					val := strings.TrimSpace(trimmed[colonIdx+1:])
+				_, after, ok := strings.Cut(trimmed, ":")
+				if ok {
+					val := strings.TrimSpace(after)
 					val = strings.Trim(val, `"'`)
 					return val
 				}
@@ -1149,7 +1157,7 @@ func extractBlockValue(text, blockName, keyName string) string {
 // extractTopLevelValue extracts the value of a top-level key from YAML text.
 // e.g., extractTopLevelValue(text, "pluginDirectory") returns "./gen" from "pluginDirectory: ./gen".
 func extractTopLevelValue(text, key string) string {
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, key+":") {
 			val := strings.TrimSpace(trimmed[len(key)+1:])
@@ -1160,7 +1168,7 @@ func extractTopLevelValue(text, key string) string {
 }
 
 // extractPluginSrc extracts the src value for a plugin binary from config text.
-// Config format: "plugins:\n  binary.so:\n    src: ./path"
+// Config format: "plugins:\n  binary.so:\n    src: ./path".
 func extractPluginSrc(configText, binaryName string) string {
 	lines := strings.Split(configText, "\n")
 	inPlugins := false
@@ -1202,9 +1210,9 @@ func extractPluginSrc(configText, binaryName string) string {
 			}
 			key := extractKeyFromLine(line)
 			if key == "src" {
-				colonIdx := strings.Index(trimmed, ":")
-				if colonIdx >= 0 {
-					val := strings.TrimSpace(trimmed[colonIdx+1:])
+				_, after, ok := strings.Cut(trimmed, ":")
+				if ok {
+					val := strings.TrimSpace(after)
 					val = strings.Trim(val, `"'`)
 					return val
 				}
@@ -1243,8 +1251,8 @@ func (s *Server) resolveFileLocation(docURI, filePath string) *Location {
 }
 
 func uriToPath(uri string) string {
-	if strings.HasPrefix(uri, "file://") {
-		return strings.TrimPrefix(uri, "file://")
+	if after, ok := strings.CutPrefix(uri, "file://"); ok {
+		return after
 	}
 	return ""
 }
@@ -1333,12 +1341,12 @@ func (s *Server) completeTemplate(doc *document, expr string) []CompletionItem {
 	// Top-level template names available in scenarigo.
 	topLevel := []templateCandidate{
 		{name: "ctx", detail: "Execution context (for plugin functions)", kind: CompletionItemKindVariable},
-		{name: "vars", detail: "Scenario/step variables", kind: CompletionItemKindVariable},
-		{name: "secrets", detail: "Secret variables", kind: CompletionItemKindVariable},
-		{name: "plugins", detail: "Plugin exports", kind: CompletionItemKindVariable},
+		{name: nsVars, detail: "Scenario/step variables", kind: CompletionItemKindVariable},
+		{name: nsSecrets, detail: "Secret variables", kind: CompletionItemKindVariable},
+		{name: nsPlugins, detail: "Plugin exports", kind: CompletionItemKindVariable},
 		{name: "request", detail: "Request data (protocol-specific)", kind: CompletionItemKindVariable},
 		{name: "response", detail: "Response data (protocol-specific)", kind: CompletionItemKindVariable},
-		{name: "steps", detail: "Results from previous steps", kind: CompletionItemKindVariable},
+		{name: nsSteps, detail: "Results from previous steps", kind: CompletionItemKindVariable},
 		{name: "env", detail: "Environment variable", kind: CompletionItemKindVariable},
 		{name: "assert", detail: "Assertion functions", kind: CompletionItemKindModule},
 		{name: "size", detail: "func(v any) int", doc: "Get size of collection", kind: CompletionItemKindFunction},
@@ -1388,27 +1396,58 @@ type templateCandidate struct {
 	kind   int
 }
 
+// assertCandidates lists the assertion helpers exposed under {{assert.}}.
+func assertCandidates() []templateCandidate {
+	return []templateCandidate{
+		{name: "and", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with AND — all must pass", kind: CompletionItemKindFunction},
+		{name: "or", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with OR — at least one must pass", kind: CompletionItemKindFunction},
+		{name: "any", detail: "any", doc: "Accept any value (always passes)", kind: CompletionItemKindFunction},
+		{name: "contains", detail: "func(expected any) any", doc: "Assert value contains the expected substring or element", kind: CompletionItemKindFunction},
+		{name: "notContains", detail: "func(value any) any", doc: "Assert value does not contain the given substring or element", kind: CompletionItemKindFunction},
+		{name: "regexp", detail: "func(pattern string) any", doc: "Assert value matches the regular expression pattern", kind: CompletionItemKindFunction},
+		{name: "notZero", detail: "any", doc: "Assert value is not the zero value of its type", kind: CompletionItemKindFunction},
+		{name: "greaterThan", detail: "func(n any) any", doc: "Assert value is greater than the threshold", kind: CompletionItemKindFunction},
+		{name: "greaterThanOrEqual", detail: "func(n any) any", doc: "Assert value is greater than or equal to the threshold", kind: CompletionItemKindFunction},
+		{name: "lessThan", detail: "func(n any) any", doc: "Assert value is less than the threshold", kind: CompletionItemKindFunction},
+		{name: "lessThanOrEqual", detail: "func(n any) any", doc: "Assert value is less than or equal to the threshold", kind: CompletionItemKindFunction},
+		{name: "length", detail: "func(n int) any", doc: "Assert collection has the specified length", kind: CompletionItemKindFunction},
+	}
+}
+
+// pluginSymbolCandidates lists the exported symbols of a plugin for {{plugins.<alias>.}}.
+func (s *Server) pluginSymbolCandidates(doc *document, alias string) []templateCandidate {
+	sourceDir := s.resolvePluginSourceDir(doc, alias)
+	if sourceDir == "" {
+		return nil
+	}
+	syms := s.getPluginSymbols(sourceDir)
+	if syms == nil {
+		return nil
+	}
+	var candidates []templateCandidate
+	for _, sym := range syms.Symbols {
+		kind := CompletionItemKindVariable
+		if sym.IsFunc {
+			kind = CompletionItemKindFunction
+		}
+		candidates = append(candidates, templateCandidate{
+			name:   sym.Name,
+			detail: sym.Signature,
+			doc:    sym.Doc,
+			kind:   kind,
+		})
+	}
+	return candidates
+}
+
 func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []CompletionItem {
 	// Known sub-completions.
 	var candidates []templateCandidate
 
 	switch prefix {
 	case "assert":
-		candidates = []templateCandidate{
-			{name: "and", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with AND — all must pass", kind: CompletionItemKindFunction},
-			{name: "or", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with OR — at least one must pass", kind: CompletionItemKindFunction},
-			{name: "any", detail: "any", doc: "Accept any value (always passes)", kind: CompletionItemKindFunction},
-			{name: "contains", detail: "func(expected any) any", doc: "Assert value contains the expected substring or element", kind: CompletionItemKindFunction},
-			{name: "notContains", detail: "func(value any) any", doc: "Assert value does not contain the given substring or element", kind: CompletionItemKindFunction},
-			{name: "regexp", detail: "func(pattern string) any", doc: "Assert value matches the regular expression pattern", kind: CompletionItemKindFunction},
-			{name: "notZero", detail: "any", doc: "Assert value is not the zero value of its type", kind: CompletionItemKindFunction},
-			{name: "greaterThan", detail: "func(n any) any", doc: "Assert value is greater than the threshold", kind: CompletionItemKindFunction},
-			{name: "greaterThanOrEqual", detail: "func(n any) any", doc: "Assert value is greater than or equal to the threshold", kind: CompletionItemKindFunction},
-			{name: "lessThan", detail: "func(n any) any", doc: "Assert value is less than the threshold", kind: CompletionItemKindFunction},
-			{name: "lessThanOrEqual", detail: "func(n any) any", doc: "Assert value is less than or equal to the threshold", kind: CompletionItemKindFunction},
-			{name: "length", detail: "func(n int) any", doc: "Assert collection has the specified length", kind: CompletionItemKindFunction},
-		}
-	case "vars", "secrets":
+		candidates = assertCandidates()
+	case nsVars, nsSecrets:
 		if doc != nil {
 			for _, key := range extractBlockKeys(doc.Text, prefix) {
 				candidates = append(candidates, templateCandidate{name: key, kind: CompletionItemKindVariable})
@@ -1422,42 +1461,26 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 		for _, key := range s.configBlockKeys(prefix) {
 			candidates = append(candidates, templateCandidate{name: key, detail: "(from scenarigo.yaml)", kind: CompletionItemKindVariable})
 		}
-	case "steps":
+	case nsSteps:
 		if doc != nil {
 			for _, id := range extractStepIDs(doc.Text) {
 				candidates = append(candidates, templateCandidate{name: id, detail: "Step result", kind: CompletionItemKindVariable})
 			}
 		}
-	case "plugins":
+	case nsPlugins:
 		if doc != nil {
-			for _, name := range extractBlockKeys(doc.Text, "plugins") {
+			for _, name := range extractBlockKeys(doc.Text, nsPlugins) {
 				candidates = append(candidates, templateCandidate{name: name, detail: "Plugin", kind: CompletionItemKindModule})
 			}
 		}
 		// Also look for plugins defined in the config file.
-		for _, name := range s.configBlockKeys("plugins") {
+		for _, name := range s.configBlockKeys(nsPlugins) {
 			candidates = append(candidates, templateCandidate{name: name, detail: "Plugin (from scenarigo.yaml)", kind: CompletionItemKindModule})
 		}
 	default:
 		// Handle plugins.<name> — complete exported symbols from plugin source.
-		if strings.HasPrefix(prefix, "plugins.") {
-			pluginAlias := strings.TrimPrefix(prefix, "plugins.")
-			if sourceDir := s.resolvePluginSourceDir(doc, pluginAlias); sourceDir != "" {
-				if syms := s.getPluginSymbols(sourceDir); syms != nil {
-					for _, sym := range syms.Symbols {
-						kind := CompletionItemKindVariable
-						if sym.IsFunc {
-							kind = CompletionItemKindFunction
-						}
-						candidates = append(candidates, templateCandidate{
-							name:   sym.Name,
-							detail: sym.Signature,
-							doc:    sym.Doc,
-							kind:   kind,
-						})
-					}
-				}
-			}
+		if alias, ok := strings.CutPrefix(prefix, "plugins."); ok {
+			candidates = s.pluginSymbolCandidates(doc, alias)
 		}
 	}
 
@@ -1518,9 +1541,10 @@ func (s *Server) completeKeys(sch *yamlschema.Schema, ctx *yamlutil.CursorContex
 		}
 
 		insertText := f.Name + ": "
-		if f.Type == yamlschema.FieldTypeObject {
+		switch f.Type {
+		case yamlschema.FieldTypeObject:
 			insertText = f.Name + ":"
-		} else if f.Type == yamlschema.FieldTypeArray {
+		case yamlschema.FieldTypeArray:
 			insertText = f.Name + ":"
 		}
 
@@ -1731,10 +1755,10 @@ func (s *Server) publishDiagnostics(uri string) {
 	diagnostics := []Diagnostic{}
 
 	sch := yamlschema.DetectSchemaType(doc.Text)
-	if sch == nil {
+	switch {
+	case sch == nil:
 		// Not a scenarigo YAML file; send empty diagnostics and stay silent.
-	} else if doc.Parsed == nil {
-		// Check if YAML parsing failed.
+	case doc.Parsed == nil:
 		diagnostics = append(diagnostics, Diagnostic{
 			Range: Range{
 				Start: Position{Line: 0, Character: 0},
@@ -1743,7 +1767,7 @@ func (s *Server) publishDiagnostics(uri string) {
 			Severity: DiagnosticSeverityError,
 			Message:  "Invalid YAML syntax",
 		})
-	} else {
+	default:
 		diagnostics = append(diagnostics, s.validateDocument(doc, sch)...)
 	}
 
@@ -1833,13 +1857,7 @@ func (s *Server) validateMappingValue(text string, mv *ast.MappingValueNode, fie
 	// Validate enum values.
 	if len(field.EnumValues) > 0 && mv.Value != nil {
 		if sv, ok := mv.Value.(*ast.StringNode); ok {
-			valid := false
-			for _, ev := range field.EnumValues {
-				if sv.Value == ev {
-					valid = true
-					break
-				}
-			}
+			valid := slices.Contains(field.EnumValues, sv.Value)
 			if !valid {
 				valTok := mv.Value.GetToken()
 				if valTok != nil {
@@ -1920,9 +1938,23 @@ func (s *Server) validateRequiredFields(text string, node *ast.MappingNode, fiel
 	}
 }
 
+// acceptedNodeTypes lists the YAML node types a field type accepts. Strings
+// are accepted everywhere because they may hold template expressions, and
+// scalars are accepted as strings.
+var acceptedNodeTypes = map[yamlschema.FieldType][]string{
+	yamlschema.FieldTypeBool:     {"bool", "string"},
+	yamlschema.FieldTypeString:   {"string", "int", "float", "bool"},
+	yamlschema.FieldTypeDuration: {"string", "int", "float", "bool"},
+	yamlschema.FieldTypeInt:      {"int", "string"},
+	yamlschema.FieldTypeFloat:    {"int", "float", "string"},
+	yamlschema.FieldTypeObject:   {"object", "string", "null"},
+	yamlschema.FieldTypeArray:    {"array", "string", "null"},
+}
+
 func (s *Server) validateFieldType(text string, value ast.Node, field *yamlschema.FieldInfo, keyName string, diags *[]Diagnostic) {
-	if field.Type == yamlschema.FieldTypeAny || field.Type == yamlschema.FieldTypeMap {
-		return // Accept anything.
+	accepted, ok := acceptedNodeTypes[field.Type]
+	if !ok {
+		return // Any and Map accept anything.
 	}
 
 	// Skip type checking for template expressions and alias nodes.
@@ -1942,76 +1974,19 @@ func (s *Server) validateFieldType(text string, value ast.Node, field *yamlschem
 		return
 	}
 
-	var mismatch string
-	switch field.Type {
-	case yamlschema.FieldTypeBool:
-		switch value.(type) {
-		case *ast.BoolNode:
-			// OK.
-		case *ast.StringNode:
-			// Strings are accepted (template expressions, etc.).
-		default:
-			mismatch = describeNodeType(value)
-		}
-	case yamlschema.FieldTypeString, yamlschema.FieldTypeDuration:
-		switch value.(type) {
-		case *ast.StringNode, *ast.IntegerNode, *ast.FloatNode, *ast.BoolNode:
-			// OK: YAML scalars are acceptable as strings.
-		default:
-			mismatch = describeNodeType(value)
-		}
-	case yamlschema.FieldTypeInt:
-		switch value.(type) {
-		case *ast.IntegerNode:
-			// OK.
-		case *ast.StringNode:
-			// Strings are accepted (template expressions).
-		default:
-			mismatch = describeNodeType(value)
-		}
-	case yamlschema.FieldTypeFloat:
-		switch value.(type) {
-		case *ast.IntegerNode, *ast.FloatNode:
-			// OK.
-		case *ast.StringNode:
-			// Strings are accepted (template expressions).
-		default:
-			mismatch = describeNodeType(value)
-		}
-	case yamlschema.FieldTypeObject:
-		switch value.(type) {
-		case *ast.MappingNode:
-			// OK.
-		case *ast.StringNode:
-			// Strings are accepted (template expressions like "{{vars.xxx}}").
-		case *ast.NullNode:
-			// OK: null is acceptable for optional objects.
-		default:
-			mismatch = describeNodeType(value)
-		}
-	case yamlschema.FieldTypeArray:
-		switch value.(type) {
-		case *ast.SequenceNode:
-			// OK.
-		case *ast.StringNode:
-			// Strings are accepted (template expressions).
-		case *ast.NullNode:
-			// OK.
-		default:
-			mismatch = describeNodeType(value)
-		}
+	got := describeNodeType(value)
+	if slices.Contains(accepted, got) {
+		return
 	}
-
-	if mismatch != "" {
-		tok := value.GetToken()
-		if tok != nil {
-			*diags = append(*diags, Diagnostic{
-				Range:    tokenRange(text, tok.Position.Line, tok.Position.Column, len(value.String())),
-				Severity: DiagnosticSeverityWarning,
-				Message:  fmt.Sprintf("field %q expects %s, got %s", keyName, field.Type, mismatch),
-			})
-		}
+	tok := value.GetToken()
+	if tok == nil {
+		return
 	}
+	*diags = append(*diags, Diagnostic{
+		Range:    tokenRange(text, tok.Position.Line, tok.Position.Column, len(value.String())),
+		Severity: DiagnosticSeverityWarning,
+		Message:  fmt.Sprintf("field %q expects %s, got %s", keyName, field.Type, got),
+	})
 }
 
 func describeNodeType(node ast.Node) string {
@@ -2135,7 +2110,27 @@ func scanTemplateRefs(text string) []templateRef {
 
 // identifySymbol determines what symbol the cursor is on.
 // Returns a 2-element path like ["vars", "myVar"] or ["steps", "login"], and the declaration range.
-func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange *Range) {
+// identifyTemplateSymbol resolves the vars/secrets/steps symbol named by a
+// template expression, or nil when the expression names something else.
+func identifyTemplateSymbol(doc *document, tmplExpr string) ([]string, *Range) {
+	tmplExpr = strings.TrimSpace(tmplExpr)
+	// Handle "<-" operator: only consider the left-hand side.
+	if before, _, ok := strings.Cut(tmplExpr, "<-"); ok {
+		tmplExpr = strings.TrimSpace(before)
+	}
+	parts := strings.Split(tmplExpr, ".")
+	if len(parts) < 2 {
+		return nil, nil
+	}
+	root := parts[0]
+	if root != nsVars && root != nsSecrets && root != nsSteps {
+		return nil, nil
+	}
+	sp := []string{root, parts[1]}
+	return sp, findDeclRange(doc, sp)
+}
+
+func identifySymbol(doc *document, pos Position) ([]string, *Range) {
 	if doc.Parsed == nil {
 		return nil, nil
 	}
@@ -2143,24 +2138,7 @@ func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange
 	// First check if cursor is inside a template expression.
 	// Use getFullTemplateExpr to get the complete expression (not just up to cursor).
 	if tmplExpr, ok := getFullTemplateExpr(doc.Text, pos); ok {
-		tmplExpr = strings.TrimSpace(tmplExpr)
-		if tmplExpr == "" {
-			return nil, nil
-		}
-		// Handle "<-" operator: only consider the left-hand side.
-		if arrowIdx := strings.Index(tmplExpr, "<-"); arrowIdx >= 0 {
-			tmplExpr = strings.TrimSpace(tmplExpr[:arrowIdx])
-		}
-		parts := strings.Split(tmplExpr, ".")
-		if len(parts) >= 2 {
-			root := parts[0]
-			if root == "vars" || root == "secrets" || root == "steps" {
-				sp := []string{root, parts[1]}
-				dr := findDeclRange(doc, sp)
-				return sp, dr
-			}
-		}
-		return nil, nil
+		return identifyTemplateSymbol(doc, tmplExpr)
 	}
 
 	// Check YAML structure: is cursor on a vars/secrets key or step id value?
@@ -2178,7 +2156,7 @@ func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange
 	// Check if cursor is on a child key of vars/secrets.
 	if len(ctx.Path) >= 1 {
 		parent := ctx.Path[len(ctx.Path)-1]
-		if (parent == "vars" || parent == "secrets") && ctx.Type == yamlutil.CursorContextKey {
+		if (parent == nsVars || parent == nsSecrets) && ctx.Type == yamlutil.CursorContextKey {
 			keyName := extractKeyFromLine(currentLine)
 			if keyName != "" {
 				r := keyRange(pos.Line, currentLine, keyName)
@@ -2190,7 +2168,7 @@ func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange
 	// Check if this is a key under vars/secrets when we're on the value side.
 	if len(ctx.Path) >= 2 {
 		grandParent := ctx.Path[len(ctx.Path)-2]
-		if grandParent == "vars" || grandParent == "secrets" {
+		if grandParent == nsVars || grandParent == nsSecrets {
 			keyName := ctx.Path[len(ctx.Path)-1]
 			r := keyRange(pos.Line, currentLine, keyName)
 			return []string{grandParent, keyName}, &r
@@ -2202,12 +2180,10 @@ func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange
 		lastKey := ctx.Path[len(ctx.Path)-1]
 		if lastKey == "id" && ctx.PartialValue != "" {
 			// Verify it's under steps.
-			for _, key := range ctx.Path {
-				if key == "steps" {
-					idValue := ctx.PartialValue
-					r := valueRange(pos.Line, currentLine, idValue)
-					return []string{"steps", idValue}, &r
-				}
+			if slices.Contains(ctx.Path, nsSteps) {
+				idValue := ctx.PartialValue
+				r := valueRange(pos.Line, currentLine, idValue)
+				return []string{nsSteps, idValue}, &r
 			}
 		}
 	}
@@ -2217,15 +2193,13 @@ func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange
 		keyName := extractKeyFromLine(currentLine)
 		if keyName == "id" {
 			// Get the value from the same line.
-			colonIdx := strings.Index(currentLine, ":")
-			if colonIdx >= 0 {
-				val := strings.TrimSpace(currentLine[colonIdx+1:])
+			_, after, ok := strings.Cut(currentLine, ":")
+			if ok {
+				val := strings.TrimSpace(after)
 				if val != "" {
-					for _, key := range ctx.Path {
-						if key == "steps" {
-							r := valueRange(pos.Line, currentLine, val)
-							return []string{"steps", val}, &r
-						}
+					if slices.Contains(ctx.Path, nsSteps) {
+						r := valueRange(pos.Line, currentLine, val)
+						return []string{nsSteps, val}, &r
 					}
 				}
 			}
@@ -2238,14 +2212,14 @@ func identifySymbol(doc *document, pos Position) (symbolPath []string, declRange
 // extractKeyFromLine extracts the YAML key from a line like "  myKey: value" or "  - myKey: value".
 func extractKeyFromLine(line string) string {
 	trimmed := strings.TrimSpace(line)
-	if strings.HasPrefix(trimmed, "- ") {
-		trimmed = strings.TrimPrefix(trimmed, "- ")
+	if after, ok := strings.CutPrefix(trimmed, "- "); ok {
+		trimmed = after
 	}
-	colonIdx := strings.Index(trimmed, ":")
-	if colonIdx < 0 {
+	before, _, ok := strings.Cut(trimmed, ":")
+	if !ok {
 		return ""
 	}
-	return strings.TrimSpace(trimmed[:colonIdx])
+	return strings.TrimSpace(before)
 }
 
 // extractBlockKeys extracts top-level keys under the given block name (e.g. "vars", "secrets").
@@ -2373,9 +2347,9 @@ func extractStepIDs(text string) []string {
 			// Look for "id: <value>" lines.
 			key := extractKeyFromLine(line)
 			if key == "id" {
-				colonIdx := strings.Index(trimmed, ":")
-				if colonIdx >= 0 {
-					val := strings.TrimSpace(trimmed[colonIdx+1:])
+				_, after, ok := strings.Cut(trimmed, ":")
+				if ok {
+					val := strings.TrimSpace(after)
 					// Remove surrounding quotes if present.
 					val = strings.Trim(val, `"'`)
 					if val != "" {
@@ -2434,7 +2408,7 @@ func (s *Server) references(doc *document, params ReferenceParams) []Location {
 	}
 
 	symbolPath, declRange := identifySymbol(doc, params.Position)
-	if symbolPath == nil || len(symbolPath) < 2 {
+	if len(symbolPath) < 2 {
 		return nil
 	}
 
@@ -2457,10 +2431,7 @@ func (s *Server) references(doc *document, params ReferenceParams) []Location {
 		}
 		if ref.path[0] == symbolPath[0] && ref.path[1] == symbolPath[1] {
 			// Highlight just the matched prefix (e.g., "vars.myVar" portion).
-			matchEnd := ref.startCol + len(ref.path[0]) + 1 + len(ref.path[1])
-			if matchEnd > ref.endCol {
-				matchEnd = ref.endCol
-			}
+			matchEnd := min(ref.startCol+len(ref.path[0])+1+len(ref.path[1]), ref.endCol)
 			locs = append(locs, Location{
 				URI: params.TextDocument.URI,
 				Range: Range{
@@ -2486,7 +2457,7 @@ func findDeclRange(doc *document, symbolPath []string) *Range {
 	lines := strings.Split(doc.Text, "\n")
 
 	switch root {
-	case "vars", "secrets":
+	case nsVars, nsSecrets:
 		// Last-write-wins: collect all definitions (top-level + bind), return the last one.
 		var lastRange *Range
 
@@ -2504,17 +2475,17 @@ func findDeclRange(doc *document, symbolPath []string) *Range {
 		}
 
 		return lastRange
-	case "steps":
+	case nsSteps:
 		// Find the step with id: <name>.
 		for i, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			// Look for "id: <name>" or "- id: <name>".
 			s := trimmed
-			if strings.HasPrefix(s, "- ") {
-				s = strings.TrimPrefix(s, "- ")
+			if after, ok := strings.CutPrefix(s, "- "); ok {
+				s = after
 			}
-			if strings.HasPrefix(s, "id:") {
-				val := strings.TrimSpace(strings.TrimPrefix(s, "id:"))
+			if after, ok := strings.CutPrefix(s, "id:"); ok {
+				val := strings.TrimSpace(after)
 				if val == name {
 					r := valueRange(i, line, name)
 					return &r

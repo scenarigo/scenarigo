@@ -265,7 +265,7 @@ func TestE2E_ConfigVarsFromDisk(t *testing.T) {
 
 	// Write a config file.
 	configContent := "schemaVersion: config/v1\nvars:\n  e2eVar: hello\n  anotherE2EVar: world\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "scenarigo.yaml"), []byte(configContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "scenarigo.yaml"), []byte(configContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 

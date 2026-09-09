@@ -2,7 +2,6 @@ package lsp
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,7 +28,7 @@ type lspExpect struct {
 	CompletionLabels   *labelMatcher   `yaml:"completionLabels"`
 	DiagnosticMessages *messageMatcher `yaml:"diagnosticMessages"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
-	DefinitionURI      *uriMatcher     `yaml:"definitionURI"`
+	DefinitionURI      *uriMatcher     `yaml:"definitionUri"`
 	HoverContains      []string        `yaml:"hoverContains"`
 	HoverIsNull        *bool           `yaml:"hoverIsNull"`
 	SymbolNames        *labelMatcher   `yaml:"symbolNames"`
@@ -58,20 +57,20 @@ type uriMatcher struct {
 
 // parseCursorMarker finds and removes the $0 cursor marker from the document text.
 // Returns the cleaned text, 0-based line, 0-based character, and whether a marker was found.
-func parseCursorMarker(doc string) (text string, line, char int, found bool) {
-	idx := strings.Index(doc, "$0")
-	if idx < 0 {
+func parseCursorMarker(doc string) (string, int, int, bool) {
+	before, after, ok := strings.Cut(doc, "$0")
+	if !ok {
 		return doc, 0, 0, false
 	}
 
-	text = doc[:idx] + doc[idx+2:]
+	text := before + after
 
 	// Calculate the line from the byte offset. The character is counted in
 	// UTF-16 code units: the test client offers no encoding in initialize,
 	// so the server falls back to the LSP default.
-	prefix := doc[:idx]
-	line = strings.Count(prefix, "\n")
-	char = len(utf16.Encode([]rune(prefix[strings.LastIndex(prefix, "\n")+1:])))
+	prefix := before
+	line := strings.Count(prefix, "\n")
+	char := len(utf16.Encode([]rune(prefix[strings.LastIndex(prefix, "\n")+1:])))
 	return text, line, char, true
 }
 
@@ -163,14 +162,13 @@ func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 				t.Fatalf("mkdir: %v", err)
 			}
-			if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 				t.Fatalf("write file %s: %v", name, err)
 			}
 		}
 	}
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	rootURI := "file://" + rootDir
 	client.initialize(1, rootURI)
@@ -198,8 +196,7 @@ func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 	t.Helper()
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	root, file := newWorkspace(t)
 	client.initialize(1, root)
@@ -234,8 +231,7 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 func runDocumentSymbolFixture(t *testing.T, tc lspTestCase, docText string) {
 	t.Helper()
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	root, file := newWorkspace(t)
 	client.initialize(1, root)
@@ -293,8 +289,7 @@ func symbolNameList(symbols []DocumentSymbol) []string {
 func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
 	t.Helper()
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	root, file := newWorkspace(t)
 	client.initialize(1, root)
@@ -335,13 +330,12 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 			t.Fatalf("write file %s: %v", name, err)
 		}
 	}
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	rootURI := fmt.Sprintf("file://%s", tmpDir)
 	client.initialize(1, rootURI)
@@ -384,20 +378,10 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	}
 }
 
-func lineCharToOffset(lines []string, line, char int) int {
-	off := 0
-	for i := 0; i < line && i < len(lines); i++ {
-		off += len(lines[i]) + 1 // +1 for \n
-	}
-	off += char
-	return off
-}
-
 func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
 	t.Helper()
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	root, file := newWorkspace(t)
 	client.initialize(1, root)
@@ -431,8 +415,7 @@ func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line,
 func runReferencesFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
 	t.Helper()
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	root, file := newWorkspace(t)
 	client.initialize(1, root)

@@ -70,8 +70,8 @@ func (c *testClient) readMessage() json.RawMessage {
 		if line == "" {
 			break
 		}
-		if strings.HasPrefix(line, "Content-Length: ") {
-			n, err := strconv.Atoi(strings.TrimPrefix(line, "Content-Length: "))
+		if after, ok := strings.CutPrefix(line, "Content-Length: "); ok {
+			n, err := strconv.Atoi(after)
 			if err != nil {
 				c.t.Fatalf("parse Content-Length: %v", err)
 			}
@@ -98,7 +98,10 @@ func (c *testClient) readResponse() json.RawMessage {
 	if resp.Error != nil {
 		c.t.Fatalf("response error: %s", resp.Error.Message)
 	}
-	b, _ := json.Marshal(resp.Result)
+	b, err := json.Marshal(resp.Result)
+	if err != nil {
+		c.t.Fatalf("marshal result: %v", err)
+	}
 	return b
 }
 
@@ -251,8 +254,7 @@ func (c *testClient) shutdown(id int) {
 }
 
 func TestServer_Initialize(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	initResult := client.initialize(1, "file:///tmp")
 	if initResult.Capabilities.CompletionProvider == nil {
@@ -304,8 +306,17 @@ func labelList(items []CompletionItem) []string {
 // newWorkspace creates a temporary workspace root for a test and returns its
 // URI together with a helper that builds URIs of files below it, so that
 // tests never depend on files that happen to exist under /tmp.
-func newWorkspace(t *testing.T) (rootURI string, fileURI func(name string) string) {
+func newWorkspace(t *testing.T) (string, func(string) string) {
 	t.Helper()
 	dir := t.TempDir()
 	return pathToURI(dir), func(name string) string { return pathToURI(filepath.Join(dir, name)) }
+}
+
+// newRunningTestClient starts a server on in-process pipes and returns its
+// client. The server stops when the pipes are closed at the end of the test.
+func newRunningTestClient(t *testing.T) *testClient {
+	t.Helper()
+	srv, client := newTestClient(t)
+	go func() { _ = srv.Run(context.Background()) }()
+	return client
 }

@@ -184,10 +184,10 @@ func (d *Document) GetCursorContext(line, col int) *CursorContext {
 	if trimmed == "-" {
 		return keyContext("")
 	}
-	if strings.HasPrefix(trimmed, "- ") {
-		afterDash := strings.TrimPrefix(trimmed, "- ")
-		subColonIdx := strings.Index(afterDash, ":")
-		if subColonIdx < 0 {
+	if after, ok := strings.CutPrefix(trimmed, "- "); ok {
+		afterDash := after
+		found := strings.Contains(afterDash, ":")
+		if !found {
 			return keyContext(strings.TrimSpace(afterDash))
 		}
 	}
@@ -228,7 +228,8 @@ func (d *Document) GetCursorContext(line, col int) *CursorContext {
 //   - A line with lower indent that ends with ":" (no value) is a parent mapping.
 //
 // If siblingValues is non-nil, it also collects key=value pairs at the same indent level.
-func (d *Document) getPathAndSiblingsForIndent(line int, siblingValues map[string]string) (path []string, parentKeys []string) {
+func (d *Document) getPathAndSiblingsForIndent(line int, siblingValues map[string]string) ([]string, []string) {
+	var path, parentKeys []string
 	lines := strings.Split(d.Text, "\n")
 	if line >= len(lines) {
 		return nil, nil
@@ -290,26 +291,26 @@ func getIndent(line string) int {
 func extractKey(trimmedLine string) string {
 	// Handle "- key: value" (sequence item with mapping).
 	s := trimmedLine
-	if strings.HasPrefix(s, "- ") {
-		s = strings.TrimPrefix(s, "- ")
+	if after, ok := strings.CutPrefix(s, "- "); ok {
+		s = after
 	}
-	colonIdx := strings.Index(s, ":")
-	if colonIdx < 0 {
+	before, _, ok := strings.Cut(s, ":")
+	if !ok {
 		return ""
 	}
-	return strings.TrimSpace(s[:colonIdx])
+	return strings.TrimSpace(before)
 }
 
 func extractValue(trimmedLine string) string {
 	s := trimmedLine
-	if strings.HasPrefix(s, "- ") {
-		s = strings.TrimPrefix(s, "- ")
+	if after, ok := strings.CutPrefix(s, "- "); ok {
+		s = after
 	}
-	colonIdx := strings.Index(s, ":")
-	if colonIdx < 0 {
+	_, after, ok := strings.Cut(s, ":")
+	if !ok {
 		return ""
 	}
-	val := strings.TrimSpace(s[colonIdx+1:])
+	val := strings.TrimSpace(after)
 	// Strip quotes.
 	if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
 		val = val[1 : len(val)-1]

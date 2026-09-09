@@ -14,7 +14,7 @@ files:
     vars:
       globalVar: hello
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "scenarigo.yaml"
     startLine: 2
     startChar: 2

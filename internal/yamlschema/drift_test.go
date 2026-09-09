@@ -1,6 +1,7 @@
 package yamlschema
 
 import (
+	"maps"
 	"reflect"
 	"strings"
 	"testing"
@@ -86,9 +87,7 @@ func yamlFields(typ reflect.Type) map[string]reflect.StructField {
 		}
 		if sf.Anonymous {
 			if child := structType(sf.Type); child != nil {
-				for k, v := range yamlFields(child) {
-					out[k] = v
-				}
+				maps.Copy(out, yamlFields(child))
 			}
 			continue
 		}

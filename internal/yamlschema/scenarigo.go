@@ -73,7 +73,8 @@ func stepFields() []*FieldInfo {
 		{Name: "vars", Type: FieldTypeMap, Description: "Step-level variables"},
 		{Name: "secrets", Type: FieldTypeMap, Description: "Step-level secrets"},
 		{Name: "protocol", Type: FieldTypeString, Description: "Protocol to use (plugins can register more)", EnumValues: []string{"http", "grpc"}, OpenEnum: true},
-		{Name: "request", Type: FieldTypeObject, Description: "Request definition (protocol-specific)",
+		{
+			Name: "request", Type: FieldTypeObject, Description: "Request definition (protocol-specific)",
 			DynamicKey: "protocol",
 			DynamicChildren: func(discriminator string) []*FieldInfo {
 				switch discriminator {
@@ -86,7 +87,8 @@ func stepFields() []*FieldInfo {
 				}
 			},
 		},
-		{Name: "expect", Type: FieldTypeObject, Description: "Expected response (protocol-specific)",
+		{
+			Name: "expect", Type: FieldTypeObject, Description: "Expected response (protocol-specific)",
 			DynamicKey: "protocol",
 			DynamicChildren: func(discriminator string) []*FieldInfo {
 				switch discriminator {
@@ -220,7 +222,7 @@ func grpcRequestOptionFields() []*FieldInfo {
 // to ScenarioSchema (the most common type) so that completion and other
 // features remain available while the user is still typing.
 func DetectSchemaType(text string) *Schema {
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "schemaVersion:") {
 			value := strings.TrimSpace(trimmed[len("schemaVersion:"):])
