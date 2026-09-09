@@ -2,7 +2,6 @@ package lsp
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -131,8 +130,7 @@ func (c *testClient) readError() errorResponse {
 }
 
 func TestServer_ProtocolErrors(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	t.Run("parse error", func(t *testing.T) {
 		client.sendRaw(`{"jsonrpc":"2.0","id":1,`)

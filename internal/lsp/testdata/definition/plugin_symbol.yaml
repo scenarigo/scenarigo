@@ -20,7 +20,7 @@ files:
 
     func CreateClient() {}
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "plugin/src/main.go"
     startLine: 2
     startChar: 5
@@ -46,7 +46,7 @@ files:
 
     var ServerAddr string
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "plugin/src/main.go"
     startLine: 2
     startChar: 4
@@ -72,7 +72,7 @@ files:
 
     func CreateClient() {}
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "plugin/src/main.go"
     startLine: 2
     startChar: 5
@@ -100,7 +100,7 @@ files:
 
     func CreateClient() {}
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "test.yaml"
     startLine: 4
     startChar: 2

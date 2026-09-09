@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,8 +10,7 @@ import (
 )
 
 func TestEditorSession_OpenEditComplete(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 	root, file := newWorkspace(t)
 
 	client.initialize(1, root)
@@ -41,8 +39,7 @@ func TestEditorSession_OpenEditComplete(t *testing.T) {
 }
 
 func TestEditorSession_MultipleDocuments(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 	root, file := newWorkspace(t)
 
 	client.initialize(1, root)
@@ -71,8 +68,7 @@ func TestEditorSession_MultipleDocuments(t *testing.T) {
 }
 
 func TestEditorSession_EditAndDiagnostics(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 	root, file := newWorkspace(t)
 
 	client.initialize(1, root)
@@ -116,26 +112,26 @@ func TestEditorSession_EditAndDiagnostics(t *testing.T) {
 }
 
 func TestEditorSession_CodeAction_DidYouMean(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 	root, file := newWorkspace(t)
 
 	client.initialize(1, root)
 
 	// Open document with a typo: "protocl" instead of "protocol".
+	//nolint:misspell // the typo is the point of this test
 	docText := "schemaVersion: scenario/v1\ntitle: test\nsteps:\n  - title: step1\n    protocl: http\n"
 	diags := client.openDocumentAndGetDiagnostics(file("test.yaml"), docText)
 
 	// Find the diagnostic for the unknown field.
 	var unknownDiag *Diagnostic
 	for i, d := range diags.Diagnostics {
-		if d.Message == `unknown field "protocl"` {
+		if d.Message == `unknown field "protocl"` { //nolint:misspell // see docText
 			unknownDiag = &diags.Diagnostics[i]
 			break
 		}
 	}
 	if unknownDiag == nil {
-		t.Fatalf("expected diagnostic for protocl, got: %v", diagMessages(diags.Diagnostics))
+		t.Fatalf("expected diagnostic for protocl, got: %v", diagMessages(diags.Diagnostics)) //nolint:misspell // see docText
 	}
 
 	// Request code actions with the diagnostic.
@@ -164,8 +160,7 @@ func TestEditorSession_CodeAction_DidYouMean(t *testing.T) {
 }
 
 func TestEditorSession_ForeignModelineSkipped(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 	root, file := newWorkspace(t)
 
 	client.initialize(1, root)
@@ -193,8 +188,7 @@ func TestEditorSession_ForeignModelineSkipped(t *testing.T) {
 // TestEditorSession_FullWorkflow simulates a realistic editor workflow:
 // initialize → open → diagnostics → hover → symbols → references → close → shutdown.
 func TestEditorSession_FullWorkflow(t *testing.T) {
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 	root, file := newWorkspace(t)
 
 	// Initialize and verify capabilities.
@@ -274,7 +268,7 @@ func TestEditorSession_PluginExportCompletion(t *testing.T) {
 
 	// Write config file.
 	configContent := "schemaVersion: config/v1\nplugins:\n  myplugin.so:\n    src: ./plugin/src\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, "scenarigo.yaml"), []byte(configContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "scenarigo.yaml"), []byte(configContent), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
@@ -291,12 +285,11 @@ func CreateClient(ctx interface{}, addr string) interface{} { return nil }
 // DefaultTimeout is the default timeout for requests.
 var DefaultTimeout int
 `
-	if err := os.WriteFile(filepath.Join(srcDir, "main.go"), []byte(goSrc), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(srcDir, "main.go"), []byte(goSrc), 0o600); err != nil {
 		t.Fatalf("write go source: %v", err)
 	}
 
-	srv, client := newTestClient(t)
-	go srv.Run(context.Background())
+	client := newRunningTestClient(t)
 
 	rootURI := "file://" + tmpDir
 	client.initialize(1, rootURI)
@@ -374,8 +367,7 @@ func TestEditorSession_PositionEncoding(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			srv, client := newTestClient(t)
-			go srv.Run(context.Background())
+			client := newRunningTestClient(t)
 			root, file := newWorkspace(t)
 
 			result := client.initializeWith(1, InitializeParams{

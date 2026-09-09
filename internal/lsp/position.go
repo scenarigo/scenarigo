@@ -40,15 +40,15 @@ func lineAt(text string, line int) string {
 	if line < 0 {
 		return ""
 	}
-	for i := 0; i < line; i++ {
+	for range line {
 		nl := strings.IndexByte(text, '\n')
 		if nl < 0 {
 			return ""
 		}
 		text = text[nl+1:]
 	}
-	if nl := strings.IndexByte(text, '\n'); nl >= 0 {
-		return text[:nl]
+	if before, _, ok := strings.Cut(text, "\n"); ok {
+		return before
 	}
 	return text
 }
@@ -132,12 +132,6 @@ func (s *Server) decodePosition(text string, p Position) Position {
 	}
 	p.Character = byteColumnFromClient(line, p.Character, s.encoding)
 	return p
-}
-
-// decodeRange converts a range received from the client into the internal
-// byte-based form.
-func (s *Server) decodeRange(text string, r Range) Range {
-	return Range{Start: s.decodePosition(text, r.Start), End: s.decodePosition(text, r.End)}
 }
 
 // encodePosition converts an internal byte-based position into the client's

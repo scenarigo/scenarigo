@@ -9,5 +9,5 @@ operation: definition
 files:
   included.yaml: "title: included\n"
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "included.yaml"

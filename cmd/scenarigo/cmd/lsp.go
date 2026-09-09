@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 
 	"github.com/scenarigo/scenarigo/internal/lsp"
 	"github.com/spf13/cobra"
@@ -18,7 +19,7 @@ var lspCmd = &cobra.Command{
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		server := lsp.NewServer()
-		if err := server.Run(cmd.Context()); err != nil && err != context.Canceled {
+		if err := server.Run(cmd.Context()); err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
 		return nil

@@ -28,7 +28,7 @@ document: |
         url: '{{$0vars.token}}'
 operation: definition
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "test.yaml"
     startLine: 20
     startChar: 8

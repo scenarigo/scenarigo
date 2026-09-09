@@ -14,7 +14,7 @@ files:
     plugins:
       myPlugin: my_plugin.so
 expect:
-  definitionURI:
+  definitionUri:
     suffix: "scenarigo.yaml"
     startLine: 2
     startChar: 2
