@@ -33,7 +33,7 @@ type lspExpect struct {
 	FormattedText      *string         `yaml:"formattedText"`
 	SignatureLabel     *string         `yaml:"signatureLabel"`
 	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
-	ReferenceCount    *int            `yaml:"referenceCount"`
+	ReferenceCount     *int            `yaml:"referenceCount"`
 }
 
 type labelMatcher struct {

@@ -12,8 +12,8 @@ func init() {
 }
 
 var lspCmd = &cobra.Command{
-	Use:   "lsp",
-	Short: "start the LSP server",
+	Use:          "lsp",
+	Short:        "start the LSP server",
 	Long:         "Start the Language Server Protocol server for scenarigo YAML files (config and test scenarios).",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

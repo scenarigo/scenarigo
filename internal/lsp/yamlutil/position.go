@@ -129,8 +129,8 @@ type CursorContextType int
 
 const (
 	CursorContextUnknown CursorContextType = iota
-	CursorContextKey                        // Cursor is at a position where a key is expected
-	CursorContextValue                      // Cursor is at a position where a value is expected
+	CursorContextKey                       // Cursor is at a position where a key is expected
+	CursorContextValue                     // Cursor is at a position where a value is expected
 )
 
 // GetCursorContext analyzes the cursor position and returns context for completion.
