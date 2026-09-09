@@ -355,12 +355,12 @@ func TestE2E_Neovim(t *testing.T) {
 	)
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(),
-		"HOME="+workDir,                    // isolate from user config
-		"XDG_CONFIG_HOME="+workDir,         // no user plugins
-		"XDG_DATA_HOME="+workDir,           // no shared data
-		"XDG_STATE_HOME="+workDir,          // no state files
-		"SCENARIGO_BINARY="+e2eBinary,      // path to LSP server binary
-		"SCENARIGO_WORKDIR="+workDir,       // workspace directory
+		"HOME="+workDir,               // isolate from user config
+		"XDG_CONFIG_HOME="+workDir,    // no user plugins
+		"XDG_DATA_HOME="+workDir,      // no shared data
+		"XDG_STATE_HOME="+workDir,     // no state files
+		"SCENARIGO_BINARY="+e2eBinary, // path to LSP server binary
+		"SCENARIGO_WORKDIR="+workDir,  // workspace directory
 	)
 
 	output, err := cmd.CombinedOutput()

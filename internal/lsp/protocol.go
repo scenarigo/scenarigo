@@ -40,14 +40,14 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	TextDocumentSync   int                `json:"textDocumentSync"`
-	CompletionProvider *CompletionOptions `json:"completionProvider,omitempty"`
-	HoverProvider          bool               `json:"hoverProvider,omitempty"`
-	DefinitionProvider     bool               `json:"definitionProvider,omitempty"`
-	DocumentSymbolProvider bool               `json:"documentSymbolProvider,omitempty"`
-	CodeActionProvider         bool               `json:"codeActionProvider,omitempty"`
-	ReferencesProvider         bool                 `json:"referencesProvider,omitempty"`
-	DocumentFormattingProvider bool                 `json:"documentFormattingProvider,omitempty"`
+	TextDocumentSync           int                   `json:"textDocumentSync"`
+	CompletionProvider         *CompletionOptions    `json:"completionProvider,omitempty"`
+	HoverProvider              bool                  `json:"hoverProvider,omitempty"`
+	DefinitionProvider         bool                  `json:"definitionProvider,omitempty"`
+	DocumentSymbolProvider     bool                  `json:"documentSymbolProvider,omitempty"`
+	CodeActionProvider         bool                  `json:"codeActionProvider,omitempty"`
+	ReferencesProvider         bool                  `json:"referencesProvider,omitempty"`
+	DocumentFormattingProvider bool                  `json:"documentFormattingProvider,omitempty"`
 	SignatureHelpProvider      *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
 }
 
@@ -80,7 +80,7 @@ type DidOpenTextDocumentParams struct {
 }
 
 type DidChangeTextDocumentParams struct {
-	TextDocument   VersionedTextDocumentIdentifier `json:"textDocument"`
+	TextDocument   VersionedTextDocumentIdentifier  `json:"textDocument"`
 	ContentChanges []TextDocumentContentChangeEvent `json:"contentChanges"`
 }
 
@@ -182,9 +182,9 @@ type CodeActionContext struct {
 }
 
 type CodeAction struct {
-	Title       string        `json:"title"`
-	Kind        string        `json:"kind,omitempty"`
-	Diagnostics []Diagnostic  `json:"diagnostics,omitempty"`
+	Title       string         `json:"title"`
+	Kind        string         `json:"kind,omitempty"`
+	Diagnostics []Diagnostic   `json:"diagnostics,omitempty"`
 	Edit        *WorkspaceEdit `json:"edit,omitempty"`
 }
 

@@ -25,13 +25,13 @@ import (
 
 // Server is the LSP server.
 type Server struct {
-	reader           io.Reader
-	writer           io.Writer
-	logger           *log.Logger
-	docs             *documentStore
-	config           serverConfig
-	rootURI          string
-	pluginSymbolsMu  sync.Mutex
+	reader             io.Reader
+	writer             io.Writer
+	logger             *log.Logger
+	docs               *documentStore
+	config             serverConfig
+	rootURI            string
+	pluginSymbolsMu    sync.Mutex
 	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
 }
 
