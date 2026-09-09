@@ -1,0 +1,85 @@
+---
+name: "vars dot completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    myVar: hello
+    otherVar: world
+  steps:
+    - title: step1
+      request:
+        url: '{{vars.$0'
+operation: completion
+expect:
+  completionLabels:
+    contains: [myVar, otherVar]
+---
+name: "secrets dot completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  secrets:
+    apiKey: xxx
+    dbPass: yyy
+  steps:
+    - title: step1
+      request:
+        url: '{{secrets.$0'
+operation: completion
+expect:
+  completionLabels:
+    contains: [apiKey, dbPass]
+---
+name: "steps dot completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - id: login
+      title: login step
+      protocol: http
+    - id: fetchData
+      title: fetch data step
+      request:
+        url: '{{steps.$0'
+operation: completion
+expect:
+  completionLabels:
+    contains: [login, fetchData]
+---
+name: "vars partial filter"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    myVar: hello
+    otherVar: world
+  steps:
+    - title: step1
+      request:
+        url: '{{vars.my$0'
+operation: completion
+expect:
+  completionLabels:
+    contains: [myVar]
+    excludes: [otherVar]
+---
+name: "vars from config file"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      request:
+        url: '{{vars.$0'
+operation: completion
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    vars:
+      configVar: from-config
+      anotherVar: also-config
+expect:
+  completionLabels:
+    contains: [configVar, anotherVar]

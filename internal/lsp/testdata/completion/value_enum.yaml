@@ -1,0 +1,12 @@
+---
+name: "protocol value enum completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [http, grpc]

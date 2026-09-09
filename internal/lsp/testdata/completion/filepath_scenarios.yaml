@@ -1,0 +1,14 @@
+---
+name: "scenarios file path completion"
+document: |
+  schemaVersion: config/v1
+  scenarios:
+    - $0
+files:
+  scenario1.yaml: "schemaVersion: scenario/v1\n"
+  scenario2.yaml: "schemaVersion: scenario/v1\n"
+  testdir/a.yaml: "schemaVersion: scenario/v1\n"
+operation: completion
+expect:
+  completionLabels:
+    contains: [scenario1.yaml, scenario2.yaml, "testdir/"]

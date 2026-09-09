@@ -1,0 +1,30 @@
+---
+name: "missing required schemaVersion produces diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'missing required field "method"'
+---
+name: "all required fields present has no missing-field diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'missing required field "method"'
+      - 'missing required field "url"'
+      - 'missing required field "schemaVersion"'

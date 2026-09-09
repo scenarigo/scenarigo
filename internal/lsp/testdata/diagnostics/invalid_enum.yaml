@@ -1,0 +1,36 @@
+---
+name: "unknown protocol value produces an information diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: ftp
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - '"ftp" is not a built-in value for field "protocol" (built-in: http, grpc)'
+---
+name: "valid protocol value has no enum diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - '"http" is not a built-in value for field "protocol" (built-in: http, grpc)'
+---
+name: "unknown schemaVersion defaults to scenario schema"
+document: |
+  schemaVersion: invalid/v99
+  title: test
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1, config/v1)'

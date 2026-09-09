@@ -1,0 +1,9 @@
+---
+name: "no completions for non-scenarigo YAML"
+document: |
+  name: my-app
+  $0
+operation: completion
+expect:
+  completionLabels:
+    excludes: [schemaVersion, title, steps, scenarios]

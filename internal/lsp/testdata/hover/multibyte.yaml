@@ -1,0 +1,10 @@
+---
+name: "hover on a key after multibyte characters on the same line"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - {title: 日本語, prot$0ocol: http}
+operation: hover
+expect:
+  hoverContains:
+    - protocol
