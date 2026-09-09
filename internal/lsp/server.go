@@ -2120,13 +2120,11 @@ func describeNodeType(node ast.Node) string {
 }
 
 func (s *Server) sendResponse(id *json.RawMessage, result any, respErr *ResponseError) {
-	resp := Response{
-		JSONRPC: "2.0",
-		ID:      id,
-		Result:  result,
-		Error:   respErr,
+	if respErr != nil {
+		s.writeMessage(errorResponse{JSONRPC: "2.0", ID: id, Error: respErr})
+		return
 	}
-	s.writeMessage(resp)
+	s.writeMessage(Response{JSONRPC: "2.0", ID: id, Result: result})
 }
 
 func (s *Server) sendNotification(method string, params any) {
