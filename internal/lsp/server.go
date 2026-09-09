@@ -745,15 +745,14 @@ func (s *Server) readConfigText() (string, string, bool) {
 		return "", "", false
 	}
 	configPath := filepath.Join(rootPath, "scenarigo.yaml")
-	configURI := pathToURI(configPath)
-	if doc := s.docs.Get(configURI); doc != nil {
-		return doc.Text, configURI, true
+	if doc := s.docs.GetByPath(configPath); doc != nil {
+		return doc.Text, doc.URI, true
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return "", "", false
 	}
-	return string(data), configURI, true
+	return string(data), pathToURI(configPath), true
 }
 
 // findConfigDefinition searches for a variable definition in scenarigo.yaml.
@@ -1923,17 +1922,29 @@ func (s *Server) validateRequiredFields(text string, node *ast.MappingNode, fiel
 	}
 }
 
+// Labels of the YAML node types used in type diagnostics.
+const (
+	nodeTypeBool    = "bool"
+	nodeTypeInt     = "int"
+	nodeTypeFloat   = "float"
+	nodeTypeString  = "string"
+	nodeTypeObject  = "object"
+	nodeTypeArray   = "array"
+	nodeTypeNull    = "null"
+	nodeTypeUnknown = "unknown"
+)
+
 // acceptedNodeTypes lists the YAML node types a field type accepts. Strings
 // are accepted everywhere because they may hold template expressions, and
 // scalars are accepted as strings.
 var acceptedNodeTypes = map[yamlschema.FieldType][]string{
-	yamlschema.FieldTypeBool:     {"bool", "string"},
-	yamlschema.FieldTypeString:   {"string", "int", "float", "bool"},
-	yamlschema.FieldTypeDuration: {"string", "int", "float", "bool"},
-	yamlschema.FieldTypeInt:      {"int", "string"},
-	yamlschema.FieldTypeFloat:    {"int", "float", "string"},
-	yamlschema.FieldTypeObject:   {"object", "string", "null"},
-	yamlschema.FieldTypeArray:    {"array", "string", "null"},
+	yamlschema.FieldTypeBool:     {nodeTypeBool, nodeTypeString},
+	yamlschema.FieldTypeString:   {nodeTypeString, nodeTypeInt, nodeTypeFloat, nodeTypeBool},
+	yamlschema.FieldTypeDuration: {nodeTypeString, nodeTypeInt, nodeTypeFloat, nodeTypeBool},
+	yamlschema.FieldTypeInt:      {nodeTypeInt, nodeTypeString},
+	yamlschema.FieldTypeFloat:    {nodeTypeInt, nodeTypeFloat, nodeTypeString},
+	yamlschema.FieldTypeObject:   {nodeTypeObject, nodeTypeString, nodeTypeNull},
+	yamlschema.FieldTypeArray:    {nodeTypeArray, nodeTypeString, nodeTypeNull},
 }
 
 func (s *Server) validateFieldType(text string, value ast.Node, field *yamlschema.FieldInfo, keyName string, diags *[]Diagnostic) {
@@ -1977,21 +1988,21 @@ func (s *Server) validateFieldType(text string, value ast.Node, field *yamlschem
 func describeNodeType(node ast.Node) string {
 	switch node.(type) {
 	case *ast.BoolNode:
-		return "bool"
+		return nodeTypeBool
 	case *ast.IntegerNode:
-		return "int"
+		return nodeTypeInt
 	case *ast.FloatNode:
-		return "float"
+		return nodeTypeFloat
 	case *ast.StringNode, *ast.LiteralNode:
-		return "string"
+		return nodeTypeString
 	case *ast.MappingNode:
-		return "object"
+		return nodeTypeObject
 	case *ast.SequenceNode:
-		return "array"
+		return nodeTypeArray
 	case *ast.NullNode:
-		return "null"
+		return nodeTypeNull
 	default:
-		return "unknown"
+		return nodeTypeUnknown
 	}
 }
 
