@@ -11,17 +11,34 @@ type Request struct {
 	Params  json.RawMessage  `json:"params,omitempty"`
 }
 
+// Response is a successful JSON-RPC response. A successful response must
+// carry "result" even when it is null, so the field is never omitted.
 type Response struct {
 	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id"`
-	Result  any              `json:"result,omitempty"`
+	Result  any              `json:"result"`
 	Error   *ResponseError   `json:"error,omitempty"`
+}
+
+// errorResponse is a failed JSON-RPC response, which must not carry "result".
+type errorResponse struct {
+	JSONRPC string           `json:"jsonrpc"`
+	ID      *json.RawMessage `json:"id"`
+	Error   *ResponseError   `json:"error"`
 }
 
 type ResponseError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
+
+// JSON-RPC 2.0 error codes.
+const (
+	codeParseError     = -32700
+	codeInvalidRequest = -32600
+	codeMethodNotFound = -32601
+	codeInvalidParams  = -32602
+)
 
 type Notification struct {
 	JSONRPC string          `json:"jsonrpc"`
