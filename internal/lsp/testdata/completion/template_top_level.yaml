@@ -11,4 +11,4 @@ document: |
 operation: completion
 expect:
   completionLabels:
-    contains: [vars, secrets, plugins, request, response, steps, env, assert, size]
+    contains: [ctx, vars, secrets, plugins, request, response, steps, env, assert, size]
