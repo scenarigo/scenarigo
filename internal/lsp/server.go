@@ -1782,7 +1782,11 @@ func (s *Server) hover(doc *document, pos Position) *Hover {
 
 	content := fmt.Sprintf("**%s** (`%s`)\n\n%s", field.Name, field.Type, field.Description)
 	if len(field.EnumValues) > 0 {
-		content += fmt.Sprintf("\n\nAllowed values: `%s`", strings.Join(field.EnumValues, "`, `"))
+		label := "Allowed values"
+		if field.OpenEnum {
+			label = "Built-in values"
+		}
+		content += fmt.Sprintf("\n\n%s: `%s`", label, strings.Join(field.EnumValues, "`, `"))
 	}
 
 	return &Hover{
@@ -1913,14 +1917,20 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlsc
 			if !valid {
 				valTok := mv.Value.GetToken()
 				if valTok != nil {
-					*diags = append(*diags, Diagnostic{
+					diag := Diagnostic{
 						Range: Range{
 							Start: Position{Line: valTok.Position.Line - 1, Character: valTok.Position.Column - 1},
 							End:   Position{Line: valTok.Position.Line - 1, Character: valTok.Position.Column - 1 + len(sv.Value)},
 						},
 						Severity: DiagnosticSeverityWarning,
 						Message:  fmt.Sprintf("invalid value %q for field %q (allowed: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", ")),
-					})
+					}
+					if field.OpenEnum {
+						// Plugins can register more values, so only hint at a possible typo.
+						diag.Severity = DiagnosticSeverityInformation
+						diag.Message = fmt.Sprintf("%q is not a built-in value for field %q (built-in: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", "))
+					}
+					*diags = append(*diags, diag)
 				}
 			}
 		}
