@@ -1,0 +1,15 @@
+---
+name: "template completion after multibyte characters on the same line"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: 日本語のステップ
+      protocol: http
+      request:
+        url: "日本語/{{va$0"
+operation: completion
+expect:
+  completionLabels:
+    contains: [vars]
+    excludes: [secrets]

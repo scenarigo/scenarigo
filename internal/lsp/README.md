@@ -126,6 +126,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Schema auto-detection | Supported | Detects config vs. scenario from the `schemaVersion` value |
 | Non-scenarigo YAML coexistence | Supported | Silent when `schemaVersion` key is absent; skips files with `# yaml-language-server:` modeline |
 | Broken YAML handling | Supported | Caches last successful AST + text-based analysis hybrid |
+| Position encoding | Supported | Columns are exchanged in UTF-16 code units (the LSP default), or in bytes when the client offers `utf-8` in `general.positionEncodings` |
 
 ## Schema Detection
 
@@ -155,6 +156,8 @@ internal/lsp/
   server.go             # LSP server (handlers, completion, hover, diagnostics, codeAction)
   protocol.go           # LSP protocol type definitions (JSON-RPC, LSP types)
   document.go           # Document management (open/change/close + AST cache)
+  transport.go          # JSON-RPC framing over stdio
+  position.go           # Column unit conversions (bytes, runes, UTF-16)
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
 

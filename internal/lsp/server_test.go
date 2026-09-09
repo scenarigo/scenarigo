@@ -155,7 +155,12 @@ func (c *testClient) complete(id int, uri string, line, char int) CompletionList
 
 func (c *testClient) initialize(id int, rootURI string) InitializeResult {
 	c.t.Helper()
-	c.sendRequest(id, "initialize", InitializeParams{RootURI: rootURI})
+	return c.initializeWith(id, InitializeParams{RootURI: rootURI})
+}
+
+func (c *testClient) initializeWith(id int, params InitializeParams) InitializeResult {
+	c.t.Helper()
+	c.sendRequest(id, "initialize", params)
 	resp := c.readResponse()
 	var result InitializeResult
 	if err := json.Unmarshal(resp, &result); err != nil {
