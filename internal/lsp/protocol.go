@@ -49,7 +49,18 @@ type Notification struct {
 // LSP protocol types (subset needed for MVP).
 
 type InitializeParams struct {
-	RootURI string `json:"rootUri,omitempty"`
+	RootURI      string             `json:"rootUri,omitempty"`
+	Capabilities ClientCapabilities `json:"capabilities"`
+}
+
+type ClientCapabilities struct {
+	General *GeneralClientCapabilities `json:"general,omitempty"`
+}
+
+type GeneralClientCapabilities struct {
+	// PositionEncodings lists the encodings of Position.Character the client
+	// supports, in order of preference. Absent means utf-16 only.
+	PositionEncodings []string `json:"positionEncodings,omitempty"`
 }
 
 type InitializeResult struct {
@@ -57,6 +68,7 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
+	PositionEncoding       string                `json:"positionEncoding,omitempty"`
 	TextDocumentSync       int                   `json:"textDocumentSync"`
 	CompletionProvider     *CompletionOptions    `json:"completionProvider,omitempty"`
 	HoverProvider          bool                  `json:"hoverProvider,omitempty"`

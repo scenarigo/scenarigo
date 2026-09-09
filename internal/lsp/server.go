@@ -26,7 +26,8 @@ type Server struct {
 	logger             *log.Logger
 	docs               *documentStore
 	rootURI            string
-	writeMu            sync.Mutex // serializes writeMessage
+	encoding           positionEncoding // unit of Position.Character on the wire, see position.go
+	writeMu            sync.Mutex       // serializes writeMessage
 	shutdownRequested  bool
 	pluginSymbolsMu    sync.Mutex
 	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
@@ -90,17 +91,21 @@ func (s *Server) handleMessage(req *Request) {
 
 func (s *Server) handleInitialize(req *Request) {
 	// Read rootUri if present.
-	var initParams struct {
-		RootURI string `json:"rootUri"`
-	}
+	var initParams InitializeParams
 	if req.Params != nil {
 		if err := json.Unmarshal(req.Params, &initParams); err == nil {
 			s.rootURI = initParams.RootURI
 		}
 	}
+	var offered []string
+	if initParams.Capabilities.General != nil {
+		offered = initParams.Capabilities.General.PositionEncodings
+	}
+	s.encoding = negotiateEncoding(offered)
 
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
+			PositionEncoding: string(s.encoding),
 			TextDocumentSync: 1, // Full sync.
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: []string{":", " ", "\n"},
@@ -177,7 +182,12 @@ func (s *Server) handleCompletion(req *Request) {
 		return
 	}
 
-	items := s.complete(doc, params.Position)
+	items := s.complete(doc, s.decodePosition(doc.Text, params.Position))
+	for i := range items {
+		if items[i].TextEdit != nil {
+			items[i].TextEdit.Range = s.encodeRange(doc.Text, items[i].TextEdit.Range)
+		}
+	}
 	if items == nil {
 		items = []CompletionItem{}
 	}
@@ -200,7 +210,7 @@ func (s *Server) handleHover(req *Request) {
 		return
 	}
 
-	hover := s.hover(doc, params.Position)
+	hover := s.hover(doc, s.decodePosition(doc.Text, params.Position))
 	if hover == nil {
 		s.sendResponse(req.ID, nil, nil)
 		return
@@ -221,11 +231,13 @@ func (s *Server) handleDefinition(req *Request) {
 		return
 	}
 
+	params.Position = s.decodePosition(doc.Text, params.Position)
 	loc := s.definition(doc, params)
 	if loc == nil {
 		s.sendResponse(req.ID, nil, nil)
 		return
 	}
+	*loc = s.encodeLocation(*loc)
 	s.sendResponse(req.ID, loc, nil)
 }
 
@@ -249,6 +261,7 @@ func (s *Server) handleDocumentSymbol(req *Request) {
 	}
 
 	symbols := s.documentSymbols(doc)
+	s.encodeSymbols(doc.Text, symbols)
 	s.sendResponse(req.ID, symbols, nil)
 }
 
@@ -283,7 +296,8 @@ func (s *Server) handleCodeAction(req *Request) {
 		unknownKey = strings.TrimSuffix(unknownKey, `"`)
 
 		// Get valid fields at this position using cursor context.
-		ctx := doc.Parsed.GetCursorContext(diag.Range.Start.Line, diag.Range.Start.Character)
+		start := s.decodePosition(doc.Text, diag.Range.Start)
+		ctx := doc.Parsed.GetCursorContext(start.Line, start.Character)
 		if ctx == nil {
 			continue
 		}
@@ -335,7 +349,7 @@ func (s *Server) handleSignatureHelp(req *Request) {
 		return
 	}
 
-	help := s.signatureHelp(doc, params.Position)
+	help := s.signatureHelp(doc, s.decodePosition(doc.Text, params.Position))
 	if help == nil {
 		s.sendResponse(req.ID, nil, nil)
 		return
@@ -475,12 +489,12 @@ func (s *Server) documentSymbols(doc *document) []DocumentSymbol {
 		if d.Body == nil {
 			continue
 		}
-		symbols = append(symbols, s.nodeToSymbols(d.Body)...)
+		symbols = append(symbols, s.nodeToSymbols(doc.Text, d.Body)...)
 	}
 	return symbols
 }
 
-func (s *Server) nodeToSymbols(node ast.Node) []DocumentSymbol {
+func (s *Server) nodeToSymbols(text string, node ast.Node) []DocumentSymbol {
 	if node == nil {
 		return nil
 	}
@@ -489,37 +503,30 @@ func (s *Server) nodeToSymbols(node ast.Node) []DocumentSymbol {
 	case *ast.MappingNode:
 		var syms []DocumentSymbol
 		for _, mv := range n.Values {
-			syms = append(syms, s.mappingValueToSymbol(mv))
+			syms = append(syms, s.mappingValueToSymbol(text, mv))
 		}
 		return syms
 	case *ast.MappingValueNode:
-		sym := s.mappingValueToSymbol(n)
+		sym := s.mappingValueToSymbol(text, n)
 		return []DocumentSymbol{sym}
 	default:
 		return nil
 	}
 }
 
-func (s *Server) mappingValueToSymbol(mv *ast.MappingValueNode) DocumentSymbol {
+func (s *Server) mappingValueToSymbol(text string, mv *ast.MappingValueNode) DocumentSymbol {
 	keyName := mv.Key.String()
 	tok := mv.Key.GetToken()
 
-	startLine := 0
-	startChar := 0
+	var selRange Range
 	if tok != nil {
-		startLine = tok.Position.Line - 1
-		startChar = tok.Position.Column - 1
-	}
-
-	selRange := Range{
-		Start: Position{Line: startLine, Character: startChar},
-		End:   Position{Line: startLine, Character: startChar + len(keyName)},
+		selRange = tokenRange(text, tok.Position.Line, tok.Position.Column, len(keyName))
 	}
 
 	sym := DocumentSymbol{
 		Name:           keyName,
 		Kind:           symbolKindForNode(mv.Value),
-		Range:          nodeRange(mv),
+		Range:          nodeRange(text, mv),
 		SelectionRange: selRange,
 	}
 
@@ -540,7 +547,7 @@ func (s *Server) mappingValueToSymbol(mv *ast.MappingValueNode) DocumentSymbol {
 		switch v := mv.Value.(type) {
 		case *ast.MappingNode:
 			for _, child := range v.Values {
-				sym.Children = append(sym.Children, s.mappingValueToSymbol(child))
+				sym.Children = append(sym.Children, s.mappingValueToSymbol(text, child))
 			}
 		case *ast.SequenceNode:
 			for i, item := range v.Values {
@@ -550,8 +557,8 @@ func (s *Server) mappingValueToSymbol(mv *ast.MappingValueNode) DocumentSymbol {
 					itemSym := DocumentSymbol{
 						Name:           fmt.Sprintf("[%d]", i),
 						Kind:           SymbolKindObject,
-						Range:          nodeRange(m),
-						SelectionRange: nodeRange(m),
+						Range:          nodeRange(text, m),
+						SelectionRange: nodeRange(text, m),
 					}
 					// Use "title" or first key as the name if available.
 					for _, child := range m.Values {
@@ -560,7 +567,7 @@ func (s *Server) mappingValueToSymbol(mv *ast.MappingValueNode) DocumentSymbol {
 								itemSym.Name = sv.Value
 							}
 						}
-						itemSym.Children = append(itemSym.Children, s.mappingValueToSymbol(child))
+						itemSym.Children = append(itemSym.Children, s.mappingValueToSymbol(text, child))
 					}
 					sym.Children = append(sym.Children, itemSym)
 				}
@@ -591,18 +598,13 @@ func symbolKindForNode(node ast.Node) int {
 	}
 }
 
-func nodeRange(node ast.Node) Range {
+func nodeRange(text string, node ast.Node) Range {
 	tok := node.GetToken()
 	if tok == nil {
 		return Range{}
 	}
-	startLine := tok.Position.Line - 1
-	startChar := tok.Position.Column - 1
 	// Approximate end position from the token.
-	return Range{
-		Start: Position{Line: startLine, Character: startChar},
-		End:   Position{Line: startLine, Character: startChar + len(tok.Value)},
-	}
+	return tokenRange(text, tok.Position.Line, tok.Position.Column, len(tok.Value))
 }
 
 func (s *Server) definition(doc *document, params DefinitionParams) *Location {
@@ -1693,7 +1695,7 @@ func (s *Server) hover(doc *document, pos Position) *Hover {
 	}
 
 	// Find node at position (convert from 0-based to 1-based).
-	nodePath := doc.Parsed.FindNodeAtPosition(pos.Line+1, pos.Character+1)
+	nodePath := doc.Parsed.FindNodeAtPosition(pos.Line+1, runeColumnFromByte(lineAt(doc.Text, pos.Line), pos.Character)+1)
 	if nodePath == nil || len(nodePath.Keys) == 0 {
 		return nil
 	}
@@ -1745,6 +1747,9 @@ func (s *Server) publishDiagnostics(uri string) {
 		diagnostics = append(diagnostics, s.validateDocument(doc, sch)...)
 	}
 
+	for i := range diagnostics {
+		diagnostics[i].Range = s.encodeRange(doc.Text, diagnostics[i].Range)
+	}
 	s.sendNotification("textDocument/publishDiagnostics", PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
@@ -1752,6 +1757,7 @@ func (s *Server) publishDiagnostics(uri string) {
 }
 
 func (s *Server) validateDocument(doc *document, sch *yamlschema.Schema) []Diagnostic {
+	text := doc.Text
 	if doc.Parsed == nil || doc.Parsed.File == nil {
 		return nil
 	}
@@ -1760,12 +1766,12 @@ func (s *Server) validateDocument(doc *document, sch *yamlschema.Schema) []Diagn
 		if d.Body == nil {
 			continue
 		}
-		s.validateNode(d.Body, sch.Fields, nil, &diags)
+		s.validateNode(text, d.Body, sch.Fields, nil, &diags)
 	}
 	return diags
 }
 
-func (s *Server) validateNode(node ast.Node, fields []*yamlschema.FieldInfo, siblingValues map[string]string, diags *[]Diagnostic) {
+func (s *Server) validateNode(text string, node ast.Node, fields []*yamlschema.FieldInfo, siblingValues map[string]string, diags *[]Diagnostic) {
 	if node == nil || fields == nil {
 		return
 	}
@@ -1787,16 +1793,16 @@ func (s *Server) validateNode(node ast.Node, fields []*yamlschema.FieldInfo, sib
 		}
 		// Second pass: validate each key.
 		for _, mv := range n.Values {
-			s.validateMappingValue(mv, fields, siblings, diags)
+			s.validateMappingValue(text, mv, fields, siblings, diags)
 		}
 		// Third pass: check required fields.
-		s.validateRequiredFields(n, fields, presentKeys, diags)
+		s.validateRequiredFields(text, n, fields, presentKeys, diags)
 	case *ast.MappingValueNode:
-		s.validateMappingValue(n, fields, siblingValues, diags)
+		s.validateMappingValue(text, n, fields, siblingValues, diags)
 	}
 }
 
-func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlschema.FieldInfo, siblings map[string]string, diags *[]Diagnostic) {
+func (s *Server) validateMappingValue(text string, mv *ast.MappingValueNode, fields []*yamlschema.FieldInfo, siblings map[string]string, diags *[]Diagnostic) {
 	if mv.Key == nil {
 		return
 	}
@@ -1816,10 +1822,7 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlsc
 		// Unknown key.
 		if tok != nil {
 			*diags = append(*diags, Diagnostic{
-				Range: Range{
-					Start: Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
-					End:   Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1 + len(keyName)},
-				},
+				Range:    tokenRange(text, tok.Position.Line, tok.Position.Column, len(keyName)),
 				Severity: DiagnosticSeverityWarning,
 				Message:  fmt.Sprintf("unknown field %q", keyName),
 			})
@@ -1841,10 +1844,7 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlsc
 				valTok := mv.Value.GetToken()
 				if valTok != nil {
 					diag := Diagnostic{
-						Range: Range{
-							Start: Position{Line: valTok.Position.Line - 1, Character: valTok.Position.Column - 1},
-							End:   Position{Line: valTok.Position.Line - 1, Character: valTok.Position.Column - 1 + len(sv.Value)},
-						},
+						Range:    tokenRange(text, valTok.Position.Line, valTok.Position.Column, len(sv.Value)),
 						Severity: DiagnosticSeverityWarning,
 						Message:  fmt.Sprintf("invalid value %q for field %q (allowed: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", ")),
 					}
@@ -1861,7 +1861,7 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlsc
 
 	// Validate type.
 	if mv.Value != nil {
-		s.validateFieldType(mv.Value, field, keyName, diags)
+		s.validateFieldType(text, mv.Value, field, keyName, diags)
 	}
 
 	// Recurse into child nodes.
@@ -1883,18 +1883,18 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlsc
 				// Map keys are user-defined; validate each value against the children.
 				for _, entry := range v.Values {
 					if m, ok := entry.Value.(*ast.MappingNode); ok {
-						s.validateNode(m, childFields, nil, diags)
+						s.validateNode(text, m, childFields, nil, diags)
 					}
 				}
 			} else {
-				s.validateNode(v, childFields, nil, diags)
+				s.validateNode(text, v, childFields, nil, diags)
 			}
 		case *ast.SequenceNode:
 			// For sequences with object items (e.g., steps), validate each item.
 			if field.Children != nil {
 				for _, item := range v.Values {
 					if m, ok := item.(*ast.MappingNode); ok {
-						s.validateNode(m, field.Children, nil, diags)
+						s.validateNode(text, m, field.Children, nil, diags)
 					}
 				}
 			}
@@ -1902,7 +1902,7 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlsc
 	}
 }
 
-func (s *Server) validateRequiredFields(node *ast.MappingNode, fields []*yamlschema.FieldInfo, presentKeys map[string]bool, diags *[]Diagnostic) {
+func (s *Server) validateRequiredFields(text string, node *ast.MappingNode, fields []*yamlschema.FieldInfo, presentKeys map[string]bool, diags *[]Diagnostic) {
 	for _, f := range fields {
 		if !f.Required || presentKeys[f.Name] {
 			continue
@@ -1913,17 +1913,14 @@ func (s *Server) validateRequiredFields(node *ast.MappingNode, fields []*yamlsch
 			continue
 		}
 		*diags = append(*diags, Diagnostic{
-			Range: Range{
-				Start: Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
-				End:   Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
-			},
+			Range:    tokenRange(text, tok.Position.Line, tok.Position.Column, 0),
 			Severity: DiagnosticSeverityWarning,
 			Message:  fmt.Sprintf("missing required field %q", f.Name),
 		})
 	}
 }
 
-func (s *Server) validateFieldType(value ast.Node, field *yamlschema.FieldInfo, keyName string, diags *[]Diagnostic) {
+func (s *Server) validateFieldType(text string, value ast.Node, field *yamlschema.FieldInfo, keyName string, diags *[]Diagnostic) {
 	if field.Type == yamlschema.FieldTypeAny || field.Type == yamlschema.FieldTypeMap {
 		return // Accept anything.
 	}
@@ -1940,7 +1937,7 @@ func (s *Server) validateFieldType(value ast.Node, field *yamlschema.FieldInfo, 
 		return // Cannot determine type statically.
 	case *ast.AnchorNode:
 		if v.Value != nil {
-			s.validateFieldType(v.Value, field, keyName, diags)
+			s.validateFieldType(text, v.Value, field, keyName, diags)
 		}
 		return
 	}
@@ -2009,10 +2006,7 @@ func (s *Server) validateFieldType(value ast.Node, field *yamlschema.FieldInfo, 
 		tok := value.GetToken()
 		if tok != nil {
 			*diags = append(*diags, Diagnostic{
-				Range: Range{
-					Start: Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1},
-					End:   Position{Line: tok.Position.Line - 1, Character: tok.Position.Column - 1 + len(value.String())},
-				},
+				Range:    tokenRange(text, tok.Position.Line, tok.Position.Column, len(value.String())),
 				Severity: DiagnosticSeverityWarning,
 				Message:  fmt.Sprintf("field %q expects %s, got %s", keyName, field.Type, mismatch),
 			})
@@ -2056,7 +2050,11 @@ func (s *Server) handleReferences(req *Request) {
 		return
 	}
 
+	params.Position = s.decodePosition(doc.Text, params.Position)
 	locs := s.references(doc, params)
+	for i := range locs {
+		locs[i] = s.encodeLocation(locs[i])
+	}
 	if locs == nil {
 		locs = []Location{}
 	}

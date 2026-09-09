@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/goccy/go-yaml"
 )
@@ -65,15 +66,12 @@ func parseCursorMarker(doc string) (text string, line, char int, found bool) {
 
 	text = doc[:idx] + doc[idx+2:]
 
-	// Calculate line and character from the byte offset.
+	// Calculate the line from the byte offset. The character is counted in
+	// UTF-16 code units: the test client offers no encoding in initialize,
+	// so the server falls back to the LSP default.
 	prefix := doc[:idx]
 	line = strings.Count(prefix, "\n")
-	lastNewline := strings.LastIndex(prefix, "\n")
-	if lastNewline < 0 {
-		char = len(prefix)
-	} else {
-		char = len(prefix) - lastNewline - 1
-	}
+	char = len(utf16.Encode([]rune(prefix[strings.LastIndex(prefix, "\n")+1:])))
 	return text, line, char, true
 }
 

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 func TestEditorSession_OpenEditComplete(t *testing.T) {
@@ -340,5 +342,73 @@ var DefaultTimeout int
 			}
 			break
 		}
+	}
+}
+
+// TestEditorSession_PositionEncoding checks that columns after multibyte
+// characters are exchanged in the negotiated unit: UTF-16 code units by
+// default, bytes when the client offers utf-8.
+func TestEditorSession_PositionEncoding(t *testing.T) {
+	const (
+		docText        = "schemaVersion: scenario/v1\nsteps:\n  - {title: 日本語, protocol: http, badKey: 1}\n"
+		beforeProtocol = "  - {title: 日本語, "
+		beforeBadKey   = beforeProtocol + "protocol: http, "
+	)
+	tests := []struct {
+		name     string
+		offered  []string
+		encoding string
+		col      func(prefix string) int
+	}{
+		{
+			name:     "utf-16 by default",
+			encoding: "utf-16",
+			col:      func(prefix string) int { return len(utf16.Encode([]rune(prefix))) },
+		},
+		{
+			name:     "utf-8 when offered",
+			offered:  []string{"utf-8", "utf-16"},
+			encoding: "utf-8",
+			col:      func(prefix string) int { return len(prefix) },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, client := newTestClient(t)
+			go srv.Run(context.Background())
+			root, file := newWorkspace(t)
+
+			result := client.initializeWith(1, InitializeParams{
+				RootURI:      root,
+				Capabilities: ClientCapabilities{General: &GeneralClientCapabilities{PositionEncodings: tt.offered}},
+			})
+			if result.Capabilities.PositionEncoding != tt.encoding {
+				t.Fatalf("positionEncoding = %q, want %q", result.Capabilities.PositionEncoding, tt.encoding)
+			}
+
+			uri := file("test.yaml")
+			diags := client.openDocumentAndGetDiagnostics(uri, docText)
+			var badKey *Diagnostic
+			for i := range diags.Diagnostics {
+				if strings.Contains(diags.Diagnostics[i].Message, "badKey") {
+					badKey = &diags.Diagnostics[i]
+				}
+			}
+			if badKey == nil {
+				t.Fatalf("no diagnostic for badKey: %v", diagMessages(diags.Diagnostics))
+			}
+			want := Range{
+				Start: Position{Line: 2, Character: tt.col(beforeBadKey)},
+				End:   Position{Line: 2, Character: tt.col(beforeBadKey) + len("badKey")},
+			}
+			if badKey.Range != want {
+				t.Errorf("badKey range = %+v, want %+v", badKey.Range, want)
+			}
+
+			hoverResp := client.hover(2, uri, 2, tt.col(beforeProtocol))
+			if !strings.Contains(string(hoverResp), "**protocol**") {
+				t.Errorf("hover at the protocol key = %s", hoverResp)
+			}
+		})
 	}
 }
