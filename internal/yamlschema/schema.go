@@ -12,6 +12,9 @@ type FieldInfo struct {
 	Description string
 	// EnumValues lists allowed values (if any).
 	EnumValues []string
+	// OpenEnum marks EnumValues as the built-in values only: other values
+	// are legal because plugins can register more (for example protocols).
+	OpenEnum bool
 	// Children lists child fields (for object types).
 	Children []*FieldInfo
 	// Deprecated marks the field as deprecated.

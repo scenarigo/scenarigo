@@ -110,7 +110,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Feature | Status | Description |
 |---|---|---|
 | Unknown key detection | Supported | Warns on keys not in the schema |
-| Enum value validation | Supported | Warns on values not in the allowed set (lists allowed values) |
+| Enum value validation | Supported | Warns on values not in the allowed set (lists allowed values); `protocol` only gets an information diagnostic because plugins can register more protocols |
 | YAML syntax errors | Supported | Reports parse failures |
 | Type checking | Supported | Type mismatches (string/int/bool/object/array); template expressions are accepted |
 | Required field validation | Supported | Warns when required fields are missing (e.g., `method`/`url` in HTTP request) |

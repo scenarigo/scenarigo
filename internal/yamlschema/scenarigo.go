@@ -72,7 +72,7 @@ func stepFields() []*FieldInfo {
 		{Name: "continueOnError", Type: FieldTypeBool, Description: "Continue even if this step fails"},
 		{Name: "vars", Type: FieldTypeMap, Description: "Step-level variables"},
 		{Name: "secrets", Type: FieldTypeMap, Description: "Step-level secrets"},
-		{Name: "protocol", Type: FieldTypeString, Description: "Protocol to use", EnumValues: []string{"http", "grpc"}},
+		{Name: "protocol", Type: FieldTypeString, Description: "Protocol to use (plugins can register more)", EnumValues: []string{"http", "grpc"}, OpenEnum: true},
 		{Name: "request", Type: FieldTypeObject, Description: "Request definition (protocol-specific)",
 			DynamicKey: "protocol",
 			DynamicChildren: func(discriminator string) []*FieldInfo {
