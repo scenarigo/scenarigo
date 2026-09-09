@@ -5,7 +5,7 @@
 --   nvim --clean -u NONE -S demo.lua
 --
 -- Builds a scenario file from scratch using LSP features,
--- then demonstrates hover, definition jump, diagnostics, and formatting.
+-- then demonstrates hover, definition jump, and diagnostics.
 
 -- Find the scenarigo binary.
 local root = vim.fn.fnamemodify(vim.fn.resolve(debug.getinfo(1, "S").source:sub(2)), ":h")
@@ -35,7 +35,7 @@ function DEMO_STATUS()
   return demo_status
 end
 
-local TOTAL_STEPS = 19
+local TOTAL_STEPS = 18
 local step_num = 0
 -- Debug logging: set DEMO_DBG=1 to enable trace output.
 local dbg_file = nil
@@ -101,16 +101,6 @@ local function run_queue()
           if not found then
             table.insert(errors, "MISSING: " .. chk.desc .. " (" .. chk.pattern .. ")")
           end
-        end
-        -- Verify timeout comes after bind within the Login step.
-        -- (After formatting, schema order is: expect, bind, timeout.)
-        local bind_line, timeout_line
-        for i, l in ipairs(lines) do
-          if l:match("^    bind:") then bind_line = i end
-          if l:match("^    timeout:") then timeout_line = i end
-        end
-        if bind_line and timeout_line and timeout_line < bind_line then
-          table.insert(errors, "ORDER: timeout (line " .. timeout_line .. ") before bind (line " .. bind_line .. ")")
         end
         if #errors > 0 then
           io.stderr:write("\nCHECK FAILED:\n")
@@ -499,7 +489,6 @@ local client_id = vim.lsp.start({
   name = "scenarigo",
   cmd = { binary, "lsp" },
   root_dir = root,
-  init_options = { formatting = true },
 })
 
 if not client_id then
@@ -841,33 +830,6 @@ enqueue(function(next)
       end
     end
     next()
-  end, PAUSE)
-end)
-
--- 18. Formatting — reorder keys
-enqueue(function(next)
-  show("Formatting — reorder keys to match schema order")
-  vim.defer_fn(function()
-    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    local sv_line, title_line
-    for i, l in ipairs(lines) do
-      if l:match("^schemaVersion:") then sv_line = i end
-      if l:match("^title:") then title_line = i; break end
-    end
-    if sv_line and title_line then
-      local sv = lines[sv_line]
-      local tl = lines[title_line]
-      vim.api.nvim_buf_set_lines(bufnr, sv_line - 1, sv_line, false, { tl })
-      vim.api.nvim_buf_set_lines(bufnr, title_line - 1, title_line, false, { sv })
-      vim.cmd("redraw")
-      vim.defer_fn(function()
-        vim.lsp.buf.format({ async = false })
-        vim.cmd("redraw")
-        vim.defer_fn(next, LONG_PAUSE)
-      end, PAUSE)
-    else
-      next()
-    end
   end, PAUSE)
 end)
 

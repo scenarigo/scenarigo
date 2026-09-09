@@ -70,35 +70,6 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 ```
 
-## Configuration
-
-The server accepts `initializationOptions` to configure features.
-
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `formatting` | `bool` | `false` | Enable `textDocument/formatting` (schema key ordering) |
-
-### Neovim example
-
-```lua
-lspconfig.scenarigo.setup({
-  init_options = {
-    formatting = true, -- enable schema-based key ordering
-  },
-})
-```
-
-### Vim (vim-lsp) example
-
-```vim
-au User lsp_setup call lsp#register_server(#{
-  \ name: 'scenarigo',
-  \ cmd: ['scenarigo', 'lsp'],
-  \ allowlist: ['yaml'],
-  \ initialization_options: {'formatting': v:true},
-  \ })
-```
-
 ## Feature Matrix
 
 ### LSP Methods
@@ -115,7 +86,6 @@ au User lsp_setup call lsp#register_server(#{
 | `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors |
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
-| `textDocument/formatting` | Supported | Key reordering to match schema field order |
 | `textDocument/references` | Supported | Find references to variables |
 | `textDocument/rename` | Not yet | Rename symbols |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
@@ -212,7 +182,7 @@ Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateCon
 
 Single-operation tests declared in YAML under `testdata/{operation}/`. Each fixture specifies a document (with `$0` cursor marker), an operation, and expected results. **New tests should be added here whenever possible** — no Go code changes needed.
 
-Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `documentSymbol`, `formatting`, `signatureHelp`, `references`.
+Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `documentSymbol`, `signatureHelp`, `references`.
 
 #### Session Tests (multi-step Go tests)
 
@@ -222,7 +192,7 @@ Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `docum
 
 Gated behind the `e2e_lsp` build tag. These tests build the real `scenarigo` binary via `make build` and test:
 
-- **Binary stdio tests** — launch `scenarigo lsp` as a subprocess, communicate via stdin/stdout pipes. Tests full lifecycle, shutdown/exit behavior, stdin close handling, config file reads from disk, and formatting.
+- **Binary stdio tests** — launch `scenarigo lsp` as a subprocess, communicate via stdin/stdout pipes. Tests full lifecycle, shutdown/exit behavior, stdin close handling, and config file reads from disk.
 - **Neovim integration** (`TestE2E_Neovim`) — launches headless Neovim (`nvim --headless --clean`) with a Lua test script that uses `vim.lsp.start` to connect to the server. Tests client attach, completion, hover, diagnostics, and diagnostics-after-edit through Neovim's real LSP client. Skipped if `nvim` is not available.
 
 ### File Layout
@@ -240,7 +210,6 @@ internal/lsp/
     definition/           # Definition fixtures
     hover/                # Hover fixtures
     documentSymbol/       # Document symbol fixtures
-    formatting/           # Formatting fixtures
     signatureHelp/        # Signature help fixtures
     references/           # References fixtures
     e2e_nvim/

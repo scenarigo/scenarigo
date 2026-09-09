@@ -12,7 +12,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,15 +28,9 @@ type Server struct {
 	writer             io.Writer
 	logger             *log.Logger
 	docs               *documentStore
-	config             serverConfig
 	rootURI            string
 	pluginSymbolsMu    sync.Mutex
 	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
-}
-
-// serverConfig holds user-configurable settings.
-type serverConfig struct {
-	Formatting bool `json:"formatting"`
 }
 
 // NewServer creates a new LSP server that communicates over stdio.
@@ -47,7 +40,6 @@ func NewServer() *Server {
 		writer: os.Stdout,
 		logger: log.New(os.Stderr, "[scenarigo-lsp] ", log.LstdFlags),
 		docs:   newDocumentStore(),
-		config: serverConfig{Formatting: false},
 	}
 }
 
@@ -153,8 +145,6 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleDocumentSymbol(req)
 	case "textDocument/codeAction":
 		s.handleCodeAction(req)
-	case "textDocument/formatting":
-		s.handleFormatting(req)
 	case "textDocument/signatureHelp":
 		s.handleSignatureHelp(req)
 	case "textDocument/references":
@@ -171,16 +161,12 @@ func (s *Server) handleMessage(req *Request) {
 }
 
 func (s *Server) handleInitialize(req *Request) {
-	// Read initializationOptions and rootUri if present.
+	// Read rootUri if present.
 	var initParams struct {
-		RootURI               string        `json:"rootUri"`
-		InitializationOptions *serverConfig `json:"initializationOptions"`
+		RootURI string `json:"rootUri"`
 	}
 	if req.Params != nil {
 		if err := json.Unmarshal(req.Params, &initParams); err == nil {
-			if initParams.InitializationOptions != nil {
-				s.config = *initParams.InitializationOptions
-			}
 			s.rootURI = initParams.RootURI
 		}
 	}
@@ -191,12 +177,11 @@ func (s *Server) handleInitialize(req *Request) {
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: []string{":", " ", "\n"},
 			},
-			HoverProvider:              true,
-			DefinitionProvider:         true,
-			DocumentSymbolProvider:     true,
-			CodeActionProvider:         true,
-			ReferencesProvider:         true,
-			DocumentFormattingProvider: s.config.Formatting,
+			HoverProvider:          true,
+			DefinitionProvider:     true,
+			DocumentSymbolProvider: true,
+			CodeActionProvider:     true,
+			ReferencesProvider:     true,
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
 			},
@@ -412,35 +397,6 @@ func (s *Server) handleCodeAction(req *Request) {
 	}
 
 	s.sendResponse(req.ID, actions, nil)
-}
-
-func (s *Server) handleFormatting(req *Request) {
-	var params DocumentFormattingParams
-	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("formatting unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
-		return
-	}
-
-	if !s.config.Formatting {
-		s.sendResponse(req.ID, nil, nil)
-		return
-	}
-
-	doc := s.docs.Get(params.TextDocument.URI)
-	if doc == nil || doc.Parsed == nil {
-		s.sendResponse(req.ID, nil, nil)
-		return
-	}
-
-	sch := schema.DetectSchemaType(doc.Text)
-	if sch == nil {
-		s.sendResponse(req.ID, nil, nil)
-		return
-	}
-
-	edits := s.formatDocument(doc, sch)
-	s.sendResponse(req.ID, edits, nil)
 }
 
 func (s *Server) handleSignatureHelp(req *Request) {
@@ -1784,472 +1740,6 @@ func completeFilePathInDir(dir, partial string) []CompletionItem {
 		})
 	}
 	return items
-}
-
-func (s *Server) formatDocument(doc *document, sch *schema.Schema) []TextEdit {
-	if doc.Parsed == nil || doc.Parsed.File == nil {
-		return nil
-	}
-
-	// Iteratively apply formatting passes.
-	//
-	// Why iterative: formatNode reorders out-of-order keys at a single
-	// mapping level and returns immediately — it cannot recurse into
-	// children because reordering invalidates the AST line numbers that
-	// child nodes rely on. By applying the edit, re-parsing to get a
-	// fresh AST, and running another pass, deeper levels get their turn.
-	//
-	// In practice this converges in 2–3 iterations (one per nesting
-	// level that needs reordering). Each pass is cheap: scenario files
-	// are small and goccy/go-yaml parsing takes sub-millisecond. The
-	// loop runs only on explicit textDocument/formatting requests, not
-	// on every keystroke, so performance is not a concern.
-	//
-	// An alternative single-pass approach would update the lines array
-	// in-place after reordering and recompute child positions, but the
-	// added complexity is not justified given the negligible cost of
-	// re-parsing.
-	text := doc.Text
-	parsed := doc.Parsed
-	for range 10 { // bounded iterations to prevent infinite loops
-		lines := strings.Split(text, "\n")
-		var edits []TextEdit
-		for _, d := range parsed.File.Docs {
-			if d.Body == nil {
-				continue
-			}
-			edits = append(edits, s.formatNode(d.Body, sch.Fields, lines)...)
-		}
-		if len(edits) == 0 {
-			break
-		}
-		// Apply edits to text and re-parse for the next pass.
-		newText := applyEditsToText(text, edits)
-		newParsed := yamlutil.Parse(newText)
-		if newParsed == nil || newParsed.File == nil {
-			break
-		}
-		text = newText
-		parsed = newParsed
-	}
-
-	// If the text changed, return a single edit replacing the whole document.
-	if text == doc.Text {
-		return nil
-	}
-	origLines := strings.Split(doc.Text, "\n")
-	lastLine := len(origLines) - 1
-	return []TextEdit{{
-		Range: Range{
-			Start: Position{Line: 0, Character: 0},
-			End:   Position{Line: lastLine, Character: len(origLines[lastLine])},
-		},
-		NewText: text,
-	}}
-}
-
-// formatNode reorders keys in a mapping to match the schema field order.
-func (s *Server) formatNode(node ast.Node, fields []*schema.FieldInfo, lines []string) []TextEdit {
-	if node == nil || fields == nil {
-		return nil
-	}
-
-	mapping, ok := node.(*ast.MappingNode)
-	if !ok {
-		return nil
-	}
-
-	if len(mapping.Values) <= 1 {
-		return nil // Nothing to reorder.
-	}
-
-	// Build schema order map.
-	order := make(map[string]int, len(fields))
-	for i, f := range fields {
-		order[f.Name] = i
-	}
-
-	// Check if already in order.
-	inOrder := true
-	lastOrder := -1
-	for _, mv := range mapping.Values {
-		if mv.Key == nil {
-			continue
-		}
-		idx, exists := order[mv.Key.String()]
-		if !exists {
-			idx = len(fields) // Unknown keys go at the end.
-		}
-		if idx < lastOrder {
-			inOrder = false
-			break
-		}
-		lastOrder = idx
-	}
-	if inOrder {
-		// Already in schema order. Recurse into children.
-		return s.formatChildren(mapping, fields, lines)
-	}
-
-	// Skip reordering if the mapping has cross-entry anchor/alias dependencies,
-	// because reordering could place an alias before its anchor definition.
-	if hasAnchorAliasDependency(mapping) {
-		return s.formatChildren(mapping, fields, lines)
-	}
-
-	// Determine line ranges for each mapping value.
-	// Pass 1: compute startLine (including leading comments) for all entries.
-	type entry struct {
-		mv        *ast.MappingValueNode
-		keyLine   int // 0-based, the actual key line
-		startLine int // 0-based inclusive (may include leading comments)
-		endLine   int // 0-based inclusive
-		order     int
-	}
-
-	var entries []entry
-	for i, mv := range mapping.Values {
-		if mv.Key == nil {
-			continue
-		}
-		tok := mv.Key.GetToken()
-		if tok == nil {
-			return nil // Can't determine position, bail out.
-		}
-		keyLine := tok.Position.Line - 1 // Convert to 0-based.
-		indent := getIndentFromLine(lines, keyLine)
-
-		// Include leading comment lines that are contiguous with this key
-		// at the same or deeper indentation.
-		startLine := findLeadingCommentStart(lines, keyLine, indent)
-
-		idx, exists := order[mv.Key.String()]
-		if !exists {
-			idx = len(fields) + i // Preserve relative order of unknown keys.
-		}
-		entries = append(entries, entry{mv: mv, keyLine: keyLine, startLine: startLine, endLine: 0, order: idx})
-		_ = i // used above
-	}
-
-	if len(entries) == 0 {
-		return nil
-	}
-
-	// Pass 2: compute endLine for each entry.
-	// For non-last entries: endLine = next entry's startLine - 1, trimming trailing blank lines.
-	// For the last entry: use findEntryEnd heuristic.
-	for i := range entries {
-		if i+1 < len(entries) {
-			endLine := entries[i+1].startLine - 1
-			// Trim trailing blank lines so they stay as separators rather than
-			// being attached to this entry and moved during reordering.
-			for endLine > entries[i].keyLine && strings.TrimSpace(lines[endLine]) == "" {
-				endLine--
-			}
-			entries[i].endLine = endLine
-		} else {
-			entries[i].endLine = s.findEntryEnd(lines, entries[i].keyLine, getIndentFromLine(lines, entries[i].keyLine))
-		}
-	}
-
-	// Sort entries by schema order (stable to preserve unknown key order).
-	sorted := make([]entry, len(entries))
-	copy(sorted, entries)
-	for i := 1; i < len(sorted); i++ {
-		for j := i; j > 0 && sorted[j].order < sorted[j-1].order; j-- {
-			sorted[j], sorted[j-1] = sorted[j-1], sorted[j]
-		}
-	}
-
-	// Check if sort actually changed anything.
-	changed := false
-	for i := range entries {
-		if entries[i].startLine != sorted[i].startLine {
-			changed = true
-			break
-		}
-	}
-	if !changed {
-		return s.formatChildren(mapping, fields, lines)
-	}
-
-	// Build the replacement text.
-	rangeStart := entries[0].startLine
-	rangeEnd := entries[len(entries)-1].endLine
-
-	var newLines []string
-	for _, e := range sorted {
-		for l := e.startLine; l <= e.endLine && l < len(lines); l++ {
-			newLines = append(newLines, lines[l])
-		}
-	}
-
-	edit := TextEdit{
-		Range: Range{
-			Start: Position{Line: rangeStart, Character: 0},
-			End:   Position{Line: rangeEnd + 1, Character: 0},
-		},
-		NewText: strings.Join(newLines, "\n") + "\n",
-	}
-
-	// Return without recursing into children: the reorder changed line
-	// positions, so child AST nodes now point to wrong lines.
-	// formatDocument's iterative loop will re-parse and handle children
-	// in a subsequent pass.
-	return []TextEdit{edit}
-}
-
-func (s *Server) formatChildren(mapping *ast.MappingNode, fields []*schema.FieldInfo, lines []string) []TextEdit {
-	// Build siblings map for DynamicChildren resolution.
-	siblings := make(map[string]string)
-	for _, mv := range mapping.Values {
-		if mv.Key == nil || mv.Value == nil {
-			continue
-		}
-		if sv, ok := mv.Value.(*ast.StringNode); ok {
-			siblings[mv.Key.String()] = sv.Value
-		}
-	}
-
-	var edits []TextEdit
-	for _, mv := range mapping.Values {
-		if mv.Key == nil || mv.Value == nil {
-			continue
-		}
-		keyName := mv.Key.String()
-
-		// Find the field definition for this key.
-		var field *schema.FieldInfo
-		for _, f := range fields {
-			if f.Name == keyName {
-				field = f
-				break
-			}
-		}
-		if field == nil {
-			continue
-		}
-
-		// Resolve child fields (static or dynamic).
-		var childFields []*schema.FieldInfo
-		if field.DynamicChildren != nil {
-			discriminator := ""
-			if field.DynamicKey != "" {
-				discriminator = siblings[field.DynamicKey]
-			}
-			childFields = field.DynamicChildren(discriminator)
-		} else {
-			childFields = field.Children
-		}
-
-		if childFields != nil {
-			edits = append(edits, s.formatNode(mv.Value, childFields, lines)...)
-		}
-		// Handle sequence items (e.g., steps).
-		if seq, ok := mv.Value.(*ast.SequenceNode); ok && field.Children != nil {
-			for _, item := range seq.Values {
-				edits = append(edits, s.formatNode(item, field.Children, lines)...)
-			}
-		}
-	}
-	return edits
-}
-
-// applyEditsToText applies TextEdits to text, returning the modified text.
-// Edits must not overlap. They are applied in reverse order to preserve positions.
-func applyEditsToText(text string, edits []TextEdit) string {
-	lines := strings.Split(text, "\n")
-	lineOffset := func(line, char int) int {
-		off := 0
-		for i := 0; i < line && i < len(lines); i++ {
-			off += len(lines[i]) + 1
-		}
-		return off + char
-	}
-	// Apply in reverse order to preserve positions.
-	sorted := make([]TextEdit, len(edits))
-	copy(sorted, edits)
-	sort.Slice(sorted, func(i, j int) bool {
-		si, sj := sorted[i].Range.Start, sorted[j].Range.Start
-		if si.Line != sj.Line {
-			return si.Line > sj.Line
-		}
-		return si.Character > sj.Character
-	})
-	for _, e := range sorted {
-		start := lineOffset(e.Range.Start.Line, e.Range.Start.Character)
-		end := lineOffset(e.Range.End.Line, e.Range.End.Character)
-		if start > len(text) {
-			start = len(text)
-		}
-		if end > len(text) {
-			end = len(text)
-		}
-		text = text[:start] + e.NewText + text[end:]
-		lines = strings.Split(text, "\n")
-	}
-	return text
-}
-
-func (s *Server) findEntryEnd(lines []string, startLine, indent int) int {
-	inBlockScalar := false
-	blockScalarBaseIndent := 0
-	for i := startLine + 1; i < len(lines); i++ {
-		line := lines[i]
-		trimmed := strings.TrimSpace(line)
-
-		if inBlockScalar {
-			if trimmed == "" {
-				continue // blank lines are part of block scalar
-			}
-			lineIndent := len(line) - len(strings.TrimLeft(line, " "))
-			if lineIndent > blockScalarBaseIndent {
-				continue // still inside block scalar content
-			}
-			// Block scalar ended, fall through to normal processing.
-			inBlockScalar = false
-		}
-
-		if trimmed == "" {
-			continue
-		}
-		lineIndent := len(line) - len(strings.TrimLeft(line, " "))
-
-		// Check if this line introduces a block scalar value (e.g., "key: |" or "key: >-").
-		if isBlockScalarLine(trimmed) {
-			inBlockScalar = true
-			blockScalarBaseIndent = lineIndent
-			continue
-		}
-
-		if lineIndent <= indent && !strings.HasPrefix(trimmed, "#") {
-			return i - 1
-		}
-	}
-	// Last line of file.
-	end := len(lines) - 1
-	for end > startLine && strings.TrimSpace(lines[end]) == "" {
-		end--
-	}
-	return end
-}
-
-// isBlockScalarLine checks if a trimmed line contains a block scalar indicator
-// as a value (e.g., "key: |", "body: >-", "key: |2").
-func isBlockScalarLine(trimmed string) bool {
-	colonIdx := strings.Index(trimmed, ":")
-	if colonIdx < 0 {
-		return false
-	}
-	after := strings.TrimSpace(trimmed[colonIdx+1:])
-	if after == "" {
-		return false
-	}
-	// Strip trailing comment (e.g., "| # comment").
-	if commentIdx := strings.Index(after, " #"); commentIdx >= 0 {
-		after = strings.TrimSpace(after[:commentIdx])
-	}
-	// Valid block scalar indicators: |, >, |+, |-, >+, >-, |2, >2, |+2, |-2, etc.
-	if after == "" {
-		return false
-	}
-	if after[0] != '|' && after[0] != '>' {
-		return false
-	}
-	for _, ch := range after[1:] {
-		if ch != '+' && ch != '-' && (ch < '0' || ch > '9') {
-			return false
-		}
-	}
-	return true
-}
-
-// findLeadingCommentStart scans backward from keyLine to find contiguous comment
-// lines at the same or deeper indent. Returns the first comment line, or keyLine
-// if no leading comments are found.
-func findLeadingCommentStart(lines []string, keyLine, indent int) int {
-	start := keyLine
-	for i := keyLine - 1; i >= 0; i-- {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			break // blank line ends the comment block
-		}
-		if !strings.HasPrefix(trimmed, "#") {
-			break // not a comment
-		}
-		lineIndent := len(lines[i]) - len(strings.TrimLeft(lines[i], " "))
-		if lineIndent < indent {
-			break // comment at a shallower indent belongs to a parent
-		}
-		start = i
-	}
-	return start
-}
-
-// hasAnchorAliasDependency checks if any anchor defined in one entry of the mapping
-// is referenced by an alias in a different entry. Reordering such a mapping could
-// place an alias before its anchor, producing invalid YAML.
-func hasAnchorAliasDependency(mapping *ast.MappingNode) bool {
-	type anchorInfo struct {
-		entryIdx int
-	}
-	anchors := make(map[string]int) // anchor name -> entry index
-
-	for i, mv := range mapping.Values {
-		ast.Walk(&anchorCollector{anchors: anchors, idx: i}, mv)
-	}
-
-	if len(anchors) == 0 {
-		return false
-	}
-
-	// Check if any alias references an anchor from a different entry.
-	for i, mv := range mapping.Values {
-		var found bool
-		ast.Walk(&aliasChecker{anchors: anchors, idx: i, found: &found}, mv)
-		if found {
-			return true
-		}
-	}
-	return false
-}
-
-type anchorCollector struct {
-	anchors map[string]int
-	idx     int
-}
-
-func (c *anchorCollector) Visit(node ast.Node) ast.Visitor {
-	if n, ok := node.(*ast.AnchorNode); ok && n.Name != nil {
-		c.anchors[n.Name.String()] = c.idx
-	}
-	return c
-}
-
-type aliasChecker struct {
-	anchors map[string]int
-	idx     int
-	found   *bool
-}
-
-func (c *aliasChecker) Visit(node ast.Node) ast.Visitor {
-	if *c.found {
-		return nil
-	}
-	if n, ok := node.(*ast.AliasNode); ok && n.Value != nil {
-		if anchorIdx, exists := c.anchors[n.Value.String()]; exists && anchorIdx != c.idx {
-			*c.found = true
-			return nil
-		}
-	}
-	return c
-}
-
-func getIndentFromLine(lines []string, line int) int {
-	if line >= len(lines) {
-		return 0
-	}
-	return len(lines[line]) - len(strings.TrimLeft(lines[line], " "))
 }
 
 func (s *Server) hover(doc *document, pos Position) *Hover {
