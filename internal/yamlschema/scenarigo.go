@@ -13,9 +13,7 @@ func ConfigSchema() *Schema {
 			{Name: "secrets", Type: FieldTypeMap, Description: "Secret variables (not displayed in logs)"},
 			{Name: "scenarios", Type: FieldTypeArray, Description: "Paths to scenario files or directories", IsFilePath: true},
 			{Name: "pluginDirectory", Type: FieldTypeString, Description: "Directory for plugin builds", IsFilePath: true},
-			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin definitions", IsFilePath: true, Children: []*FieldInfo{
-				// Each plugin key maps to PluginConfig
-			}},
+			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin definitions keyed by plugin name", Children: pluginConfigFields()},
 			{Name: "protocols", Type: FieldTypeObject, Description: "Protocol-specific options", Children: []*FieldInfo{
 				{Name: "grpc", Type: FieldTypeObject, Description: "gRPC protocol options", Children: grpcOptionFields()},
 			}},
@@ -113,6 +111,12 @@ func stepFields() []*FieldInfo {
 	}
 }
 
+func pluginConfigFields() []*FieldInfo {
+	return []*FieldInfo{
+		{Name: "src", Type: FieldTypeString, Description: "Go module path or local directory of the plugin source", IsFilePath: true},
+	}
+}
+
 func retryFields() []*FieldInfo {
 	return []*FieldInfo{
 		{Name: "constant", Type: FieldTypeObject, Description: "Constant backoff retry policy", Children: []*FieldInfo{
@@ -163,6 +167,7 @@ func grpcRequestFields() []*FieldInfo {
 		{Name: "metadata", Type: FieldTypeMap, Description: "gRPC metadata (headers)"},
 		{Name: "message", Type: FieldTypeAny, Description: "Request message"},
 		{Name: "options", Type: FieldTypeObject, Description: "gRPC request options", Children: grpcRequestOptionFields()},
+		{Name: "body", Type: FieldTypeAny, Description: "Request message (deprecated: use message)", Deprecated: true},
 	}
 }
 
@@ -177,6 +182,7 @@ func grpcExpectFields() []*FieldInfo {
 		}},
 		{Name: "header", Type: FieldTypeMap, Description: "Expected response headers"},
 		{Name: "trailer", Type: FieldTypeMap, Description: "Expected response trailers"},
+		{Name: "body", Type: FieldTypeAny, Description: "Expected response message (deprecated: use message)", Deprecated: true},
 	}
 }
 
@@ -197,7 +203,12 @@ func grpcRequestOptionFields() []*FieldInfo {
 		}},
 		{Name: "auth", Type: FieldTypeObject, Description: "Authentication options", Children: []*FieldInfo{
 			{Name: "insecure", Type: FieldTypeBool, Description: "Use insecure connection"},
-			{Name: "tls", Type: FieldTypeObject, Description: "TLS configuration"},
+			{Name: "tls", Type: FieldTypeObject, Description: "TLS configuration", Children: []*FieldInfo{
+				{Name: "minVersion", Type: FieldTypeString, Description: "Minimum acceptable TLS version (default: 1.2)"},
+				{Name: "maxVersion", Type: FieldTypeString, Description: "Maximum acceptable TLS version (default: 1.3)"},
+				{Name: "certificate", Type: FieldTypeString, Description: "Path to the CA certificate file", IsFilePath: true},
+				{Name: "skip", Type: FieldTypeBool, Description: "Skip server certificate verification"},
+			}},
 		}},
 	}
 }
