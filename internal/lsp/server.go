@@ -1408,6 +1408,7 @@ func (s *Server) completeTemplate(doc *document, expr string) []CompletionItem {
 
 	// Top-level template names available in scenarigo.
 	topLevel := []templateCandidate{
+		{name: "ctx", detail: "Execution context (for plugin functions)", kind: CompletionItemKindVariable},
 		{name: "vars", detail: "Scenario/step variables", kind: CompletionItemKindVariable},
 		{name: "secrets", detail: "Secret variables", kind: CompletionItemKindVariable},
 		{name: "plugins", detail: "Plugin exports", kind: CompletionItemKindVariable},
