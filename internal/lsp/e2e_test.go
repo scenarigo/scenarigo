@@ -283,34 +283,6 @@ func TestE2E_ConfigVarsFromDisk(t *testing.T) {
 	}
 }
 
-// TestE2E_FormattingRoundTrip verifies formatting works through the real binary.
-func TestE2E_FormattingRoundTrip(t *testing.T) {
-	client := startServer(t)
-
-	client.initialize(1, "file:///tmp")
-
-	// Open a document with unordered keys.
-	docText := "schemaVersion: scenario/v1\nsteps:\n  - title: step1\n    protocol: http\ntitle: test\n"
-	client.openDocument("file:///tmp/test.yaml", docText)
-
-	resp := client.formatting(2, "file:///tmp/test.yaml")
-
-	var edits []TextEdit
-	if string(resp) != "null" {
-		if err := json.Unmarshal(resp, &edits); err != nil {
-			t.Fatalf("unmarshal text edits: %v", err)
-		}
-	}
-	// We just verify it doesn't error — the exact formatting is tested in unit tests.
-	// But if edits are returned, the result should be valid.
-	if len(edits) > 0 {
-		result := applyTextEdits(docText, edits)
-		if result == "" {
-			t.Error("formatting produced empty result")
-		}
-	}
-}
-
 // TestE2E_Neovim runs a full LSP session inside headless Neovim.
 // This tests the real editor integration: LSP client attach, completion,
 // hover, diagnostics, and diagnostics-after-edit — all driven by Neovim's

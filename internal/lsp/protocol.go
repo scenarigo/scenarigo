@@ -40,15 +40,14 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	TextDocumentSync           int                   `json:"textDocumentSync"`
-	CompletionProvider         *CompletionOptions    `json:"completionProvider,omitempty"`
-	HoverProvider              bool                  `json:"hoverProvider,omitempty"`
-	DefinitionProvider         bool                  `json:"definitionProvider,omitempty"`
-	DocumentSymbolProvider     bool                  `json:"documentSymbolProvider,omitempty"`
-	CodeActionProvider         bool                  `json:"codeActionProvider,omitempty"`
-	ReferencesProvider         bool                  `json:"referencesProvider,omitempty"`
-	DocumentFormattingProvider bool                  `json:"documentFormattingProvider,omitempty"`
-	SignatureHelpProvider      *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
+	TextDocumentSync       int                   `json:"textDocumentSync"`
+	CompletionProvider     *CompletionOptions    `json:"completionProvider,omitempty"`
+	HoverProvider          bool                  `json:"hoverProvider,omitempty"`
+	DefinitionProvider     bool                  `json:"definitionProvider,omitempty"`
+	DocumentSymbolProvider bool                  `json:"documentSymbolProvider,omitempty"`
+	CodeActionProvider     bool                  `json:"codeActionProvider,omitempty"`
+	ReferencesProvider     bool                  `json:"referencesProvider,omitempty"`
+	SignatureHelpProvider  *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
 }
 
 type SignatureHelpOptions struct {
@@ -258,13 +257,6 @@ type ReferenceContext struct {
 	IncludeDeclaration bool `json:"includeDeclaration"`
 }
 
-// Formatting types.
-
-type DocumentFormattingParams struct {
-	TextDocument TextDocumentIdentifier `json:"textDocument"`
-	Options      FormattingOptions      `json:"options"`
-}
-
 // SignatureHelp types.
 
 type SignatureHelpParams struct {
@@ -287,12 +279,4 @@ type SignatureInformation struct {
 type ParameterInformation struct {
 	Label         string `json:"label"`
 	Documentation string `json:"documentation,omitempty"`
-}
-
-type FormattingOptions struct {
-	TabSize                int  `json:"tabSize"`
-	InsertSpaces           bool `json:"insertSpaces"`
-	TrimTrailingWhitespace bool `json:"trimTrailingWhitespace,omitempty"`
-	InsertFinalNewline     bool `json:"insertFinalNewline,omitempty"`
-	TrimFinalNewlines      bool `json:"trimFinalNewlines,omitempty"`
 }

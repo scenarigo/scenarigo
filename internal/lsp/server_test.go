@@ -29,7 +29,6 @@ func newTestClient(t *testing.T) (*Server, *testClient) {
 		writer: outW,
 		logger: log.New(io.Discard, "", 0),
 		docs:   newDocumentStore(),
-		config: serverConfig{Formatting: true},
 	}
 	return srv, &testClient{t: t, inW: inW, outR: bufio.NewReader(outR)}
 }
@@ -232,15 +231,6 @@ func (c *testClient) codeAction(id int, uri string, r Range, diags []Diagnostic)
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Range:        r,
 		Context:      CodeActionContext{Diagnostics: diags},
-	})
-	return c.readResponse()
-}
-
-func (c *testClient) formatting(id int, uri string) json.RawMessage {
-	c.t.Helper()
-	c.sendRequest(id, "textDocument/formatting", DocumentFormattingParams{
-		TextDocument: TextDocumentIdentifier{URI: uri},
-		Options:      FormattingOptions{TabSize: 2, InsertSpaces: true},
 	})
 	return c.readResponse()
 }
