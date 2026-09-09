@@ -40,3 +40,31 @@ func TestGetCursorContext_ProtocolValue(t *testing.T) {
 		t.Errorf("expected value context, got %d", ctx.Type)
 	}
 }
+
+func TestFindNodeAtPosition_FlowMapping(t *testing.T) {
+	doc := Parse("steps:\n  - {title: 日本語, protocol: http}\n")
+	if doc == nil {
+		t.Fatal("parse failed")
+	}
+	// Columns are 1-based rune indexes: "  - {title: 日本語, protocol: http}"
+	tests := []struct {
+		col  int
+		want string
+	}{
+		{col: 6, want: "title"},     // on "title"
+		{col: 13, want: "title"},    // on the value of title
+		{col: 19, want: "protocol"}, // on "protocol"
+		{col: 29, want: "protocol"}, // on the value of protocol
+		{col: 40, want: "title"},    // past the end of the line: first key on the line, as before
+	}
+	for _, tt := range tests {
+		path := doc.FindNodeAtPosition(2, tt.col)
+		if path == nil {
+			t.Errorf("col %d: no node", tt.col)
+			continue
+		}
+		if got := path.Keys[len(path.Keys)-1]; got != tt.want {
+			t.Errorf("col %d: key = %q (path %v), want %q", tt.col, got, path.Keys, tt.want)
+		}
+	}
+}
