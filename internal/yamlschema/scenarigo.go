@@ -168,6 +168,7 @@ func grpcRequestFields() []*FieldInfo {
 		{Name: "method", Type: FieldTypeString, Description: "gRPC method name"},
 		{Name: "metadata", Type: FieldTypeMap, Description: "gRPC metadata (headers)"},
 		{Name: "message", Type: FieldTypeAny, Description: "Request message"},
+		{Name: "messages", Type: FieldTypeArray, Description: "Request messages for client streaming and bidirectional streaming RPCs"},
 		{Name: "options", Type: FieldTypeObject, Description: "gRPC request options", Children: grpcRequestOptionFields()},
 		{Name: "body", Type: FieldTypeAny, Description: "Request message (deprecated: use message)", Deprecated: true},
 	}
@@ -177,6 +178,7 @@ func grpcExpectFields() []*FieldInfo {
 	return []*FieldInfo{
 		{Name: "code", Type: FieldTypeString, Description: "Expected gRPC status code (e.g. \"OK\", \"NotFound\")"},
 		{Name: "message", Type: FieldTypeAny, Description: "Expected response message"},
+		{Name: "messages", Type: FieldTypeAny, Description: "Expected response messages of a server streaming or bidirectional streaming RPC"},
 		{Name: "status", Type: FieldTypeObject, Description: "Expected gRPC status", Children: []*FieldInfo{
 			{Name: "code", Type: FieldTypeString, Description: "Status code"},
 			{Name: "message", Type: FieldTypeString, Description: "Status message"},
