@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -442,5 +443,18 @@ func TestEditorSession_EncodedWorkspaceURI(t *testing.T) {
 	}
 	if want := root + "/included.yaml"; loc.URI != want {
 		t.Errorf("definition URI = %q, want %q", loc.URI, want)
+	}
+
+	// An open scenarigo.yaml buffer must win over the file on disk even when
+	// the client encodes its URI differently (Neovim uses lowercase hex).
+	lowerHex := regexp.MustCompile(`%[0-9A-F]{2}`)
+	configURI := lowerHex.ReplaceAllStringFunc(root+"/scenarigo.yaml", strings.ToLower)
+	if configURI == root+"/scenarigo.yaml" {
+		t.Fatalf("expected an upper-case escape in %s", root)
+	}
+	client.openDocument(configURI, "schemaVersion: config/v1\nvars:\n  bufferOnlyVar: 1\n")
+	list = client.complete(4, uri, 5, 17)
+	if labels := labelList(list.Items); !slices.Contains(labels, "bufferOnlyVar") {
+		t.Errorf("expected bufferOnlyVar from the open buffer in completions, got %v", labels)
 	}
 }
