@@ -155,11 +155,12 @@ internal/lsp/
   server.go             # LSP server (handlers, completion, hover, diagnostics, codeAction)
   protocol.go           # LSP protocol type definitions (JSON-RPC, LSP types)
   document.go           # Document management (open/change/close + AST cache)
-  schema/
-    schema.go           # Schema type definitions (FieldInfo, FindField, ChildFields)
-    scenarigo.go        # scenarigo-specific schema (Config, Scenario, HTTP, gRPC)
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
+
+internal/yamlschema/
+  schema.go             # Field schema types (FieldInfo, FindField, ChildFields)
+  scenarigo.go          # Config and scenario field definitions shared with other tools
 ```
 
 ## Testing

@@ -18,8 +18,8 @@ import (
 
 	"github.com/goccy/go-yaml/ast"
 
-	"github.com/scenarigo/scenarigo/internal/lsp/schema"
 	"github.com/scenarigo/scenarigo/internal/lsp/yamlutil"
+	"github.com/scenarigo/scenarigo/internal/yamlschema"
 )
 
 // Server is the LSP server.
@@ -318,7 +318,7 @@ func (s *Server) handleDocumentSymbol(req *Request) {
 		return
 	}
 
-	sch := schema.DetectSchemaType(doc.Text)
+	sch := yamlschema.DetectSchemaType(doc.Text)
 	if sch == nil {
 		s.sendResponse(req.ID, []DocumentSymbol{}, nil)
 		return
@@ -342,7 +342,7 @@ func (s *Server) handleCodeAction(req *Request) {
 		return
 	}
 
-	sch := schema.DetectSchemaType(doc.Text)
+	sch := yamlschema.DetectSchemaType(doc.Text)
 	if sch == nil {
 		s.sendResponse(req.ID, []CodeAction{}, nil)
 		return
@@ -365,7 +365,7 @@ func (s *Server) handleCodeAction(req *Request) {
 			continue
 		}
 
-		var validFields []*schema.FieldInfo
+		var validFields []*yamlschema.FieldInfo
 		if ctx.Type == yamlutil.CursorContextKey || ctx.Type == yamlutil.CursorContextUnknown {
 			validFields = sch.ChildFields(ctx.Path, ctx.SiblingValues)
 		}
@@ -687,7 +687,7 @@ func (s *Server) definition(doc *document, params DefinitionParams) *Location {
 	if doc.Parsed == nil {
 		return nil
 	}
-	if schema.DetectSchemaType(doc.Text) == nil {
+	if yamlschema.DetectSchemaType(doc.Text) == nil {
 		return nil
 	}
 
@@ -1334,7 +1334,7 @@ func pathToURI(path string) string {
 }
 
 func (s *Server) complete(doc *document, pos Position) []CompletionItem {
-	sch := schema.DetectSchemaType(doc.Text)
+	sch := yamlschema.DetectSchemaType(doc.Text)
 	if sch == nil {
 		return nil
 	}
@@ -1564,7 +1564,7 @@ func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []Co
 	return items
 }
 
-func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext, pos Position) []CompletionItem {
+func (s *Server) completeKeys(sch *yamlschema.Schema, ctx *yamlutil.CursorContext, pos Position) []CompletionItem {
 	fields := sch.ChildFields(ctx.Path, ctx.SiblingValues)
 	if fields == nil {
 		return nil
@@ -1593,9 +1593,9 @@ func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext, p
 		}
 
 		insertText := f.Name + ": "
-		if f.Type == schema.FieldTypeObject {
+		if f.Type == yamlschema.FieldTypeObject {
 			insertText = f.Name + ":"
-		} else if f.Type == schema.FieldTypeArray {
+		} else if f.Type == yamlschema.FieldTypeArray {
 			insertText = f.Name + ":"
 		}
 
@@ -1612,7 +1612,7 @@ func (s *Server) completeKeys(sch *schema.Schema, ctx *yamlutil.CursorContext, p
 	return items
 }
 
-func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
+func (s *Server) completeValues(sch *yamlschema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
 	if len(ctx.Path) == 0 {
 		return nil
 	}
@@ -1623,7 +1623,7 @@ func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext,
 		// won't match a schema field. Check if the parent is a file-path map field.
 		if len(ctx.Path) >= 2 {
 			parentField := sch.FindField(ctx.Path[:len(ctx.Path)-1])
-			if parentField != nil && parentField.Type == schema.FieldTypeMap && parentField.IsFilePath {
+			if parentField != nil && parentField.Type == yamlschema.FieldTypeMap && parentField.IsFilePath {
 				if dir := s.resolvePluginBuildDir(); dir != "" {
 					return completeFilePathInDir(dir, ctx.PartialValue)
 				}
@@ -1650,7 +1650,7 @@ func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext,
 	}
 
 	// Bool values.
-	if field.Type == schema.FieldTypeBool {
+	if field.Type == yamlschema.FieldTypeBool {
 		return []CompletionItem{
 			{Label: "true", Kind: CompletionItemKindValue},
 			{Label: "false", Kind: CompletionItemKindValue},
@@ -1667,7 +1667,7 @@ func (s *Server) completeValues(sch *schema.Schema, ctx *yamlutil.CursorContext,
 
 // completeFilePathFromContext checks if the current path refers to a file-path
 // array field (e.g., scenarios) and offers filesystem completion.
-func (s *Server) completeFilePathFromContext(sch *schema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
+func (s *Server) completeFilePathFromContext(sch *yamlschema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
 	if len(ctx.Path) == 0 {
 		return nil
 	}
@@ -1761,7 +1761,7 @@ func completeFilePathInDir(dir, partial string) []CompletionItem {
 }
 
 func (s *Server) hover(doc *document, pos Position) *Hover {
-	sch := schema.DetectSchemaType(doc.Text)
+	sch := yamlschema.DetectSchemaType(doc.Text)
 	if sch == nil {
 		return nil
 	}
@@ -1801,7 +1801,7 @@ func (s *Server) publishDiagnostics(uri string) {
 
 	diagnostics := []Diagnostic{}
 
-	sch := schema.DetectSchemaType(doc.Text)
+	sch := yamlschema.DetectSchemaType(doc.Text)
 	if sch == nil {
 		// Not a scenarigo YAML file; send empty diagnostics and stay silent.
 	} else if doc.Parsed == nil {
@@ -1824,7 +1824,7 @@ func (s *Server) publishDiagnostics(uri string) {
 	})
 }
 
-func (s *Server) validateDocument(doc *document, sch *schema.Schema) []Diagnostic {
+func (s *Server) validateDocument(doc *document, sch *yamlschema.Schema) []Diagnostic {
 	if doc.Parsed == nil || doc.Parsed.File == nil {
 		return nil
 	}
@@ -1838,7 +1838,7 @@ func (s *Server) validateDocument(doc *document, sch *schema.Schema) []Diagnosti
 	return diags
 }
 
-func (s *Server) validateNode(node ast.Node, fields []*schema.FieldInfo, siblingValues map[string]string, diags *[]Diagnostic) {
+func (s *Server) validateNode(node ast.Node, fields []*yamlschema.FieldInfo, siblingValues map[string]string, diags *[]Diagnostic) {
 	if node == nil || fields == nil {
 		return
 	}
@@ -1869,7 +1869,7 @@ func (s *Server) validateNode(node ast.Node, fields []*schema.FieldInfo, sibling
 	}
 }
 
-func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema.FieldInfo, siblings map[string]string, diags *[]Diagnostic) {
+func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*yamlschema.FieldInfo, siblings map[string]string, diags *[]Diagnostic) {
 	if mv.Key == nil {
 		return
 	}
@@ -1877,7 +1877,7 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema
 	tok := mv.Key.GetToken()
 
 	// Find matching field in schema.
-	var field *schema.FieldInfo
+	var field *yamlschema.FieldInfo
 	for _, f := range fields {
 		if f.Name == keyName {
 			field = f
@@ -1933,7 +1933,7 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema
 
 	// Recurse into child nodes.
 	if mv.Value != nil {
-		var childFields []*schema.FieldInfo
+		var childFields []*yamlschema.FieldInfo
 		if field.DynamicChildren != nil {
 			discriminator := ""
 			if field.DynamicKey != "" && siblings != nil {
@@ -1960,7 +1960,7 @@ func (s *Server) validateMappingValue(mv *ast.MappingValueNode, fields []*schema
 	}
 }
 
-func (s *Server) validateRequiredFields(node *ast.MappingNode, fields []*schema.FieldInfo, presentKeys map[string]bool, diags *[]Diagnostic) {
+func (s *Server) validateRequiredFields(node *ast.MappingNode, fields []*yamlschema.FieldInfo, presentKeys map[string]bool, diags *[]Diagnostic) {
 	for _, f := range fields {
 		if !f.Required || presentKeys[f.Name] {
 			continue
@@ -1981,8 +1981,8 @@ func (s *Server) validateRequiredFields(node *ast.MappingNode, fields []*schema.
 	}
 }
 
-func (s *Server) validateFieldType(value ast.Node, field *schema.FieldInfo, keyName string, diags *[]Diagnostic) {
-	if field.Type == schema.FieldTypeAny || field.Type == schema.FieldTypeMap {
+func (s *Server) validateFieldType(value ast.Node, field *yamlschema.FieldInfo, keyName string, diags *[]Diagnostic) {
+	if field.Type == yamlschema.FieldTypeAny || field.Type == yamlschema.FieldTypeMap {
 		return // Accept anything.
 	}
 
@@ -2005,7 +2005,7 @@ func (s *Server) validateFieldType(value ast.Node, field *schema.FieldInfo, keyN
 
 	var mismatch string
 	switch field.Type {
-	case schema.FieldTypeBool:
+	case yamlschema.FieldTypeBool:
 		switch value.(type) {
 		case *ast.BoolNode:
 			// OK.
@@ -2014,14 +2014,14 @@ func (s *Server) validateFieldType(value ast.Node, field *schema.FieldInfo, keyN
 		default:
 			mismatch = describeNodeType(value)
 		}
-	case schema.FieldTypeString, schema.FieldTypeDuration:
+	case yamlschema.FieldTypeString, yamlschema.FieldTypeDuration:
 		switch value.(type) {
 		case *ast.StringNode, *ast.IntegerNode, *ast.FloatNode, *ast.BoolNode:
 			// OK: YAML scalars are acceptable as strings.
 		default:
 			mismatch = describeNodeType(value)
 		}
-	case schema.FieldTypeInt:
+	case yamlschema.FieldTypeInt:
 		switch value.(type) {
 		case *ast.IntegerNode:
 			// OK.
@@ -2030,7 +2030,7 @@ func (s *Server) validateFieldType(value ast.Node, field *schema.FieldInfo, keyN
 		default:
 			mismatch = describeNodeType(value)
 		}
-	case schema.FieldTypeFloat:
+	case yamlschema.FieldTypeFloat:
 		switch value.(type) {
 		case *ast.IntegerNode, *ast.FloatNode:
 			// OK.
@@ -2039,7 +2039,7 @@ func (s *Server) validateFieldType(value ast.Node, field *schema.FieldInfo, keyN
 		default:
 			mismatch = describeNodeType(value)
 		}
-	case schema.FieldTypeObject:
+	case yamlschema.FieldTypeObject:
 		switch value.(type) {
 		case *ast.MappingNode:
 			// OK.
@@ -2050,7 +2050,7 @@ func (s *Server) validateFieldType(value ast.Node, field *schema.FieldInfo, keyN
 		default:
 			mismatch = describeNodeType(value)
 		}
-	case schema.FieldTypeArray:
+	case yamlschema.FieldTypeArray:
 		switch value.(type) {
 		case *ast.SequenceNode:
 			// OK.
@@ -2526,7 +2526,7 @@ func valueRange(line int, lineText, value string) Range {
 }
 
 func (s *Server) references(doc *document, params ReferenceParams) []Location {
-	if schema.DetectSchemaType(doc.Text) == nil {
+	if yamlschema.DetectSchemaType(doc.Text) == nil {
 		return nil
 	}
 
