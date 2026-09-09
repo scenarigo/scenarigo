@@ -1,8 +1,6 @@
 package lsp
 
 import (
-	"bufio"
-	"context"
 	"encoding/json"
 	"fmt"
 	goast "go/ast"
@@ -12,7 +10,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -29,6 +26,8 @@ type Server struct {
 	logger             *log.Logger
 	docs               *documentStore
 	rootURI            string
+	writeMu            sync.Mutex // serializes writeMessage
+	shutdownRequested  bool
 	pluginSymbolsMu    sync.Mutex
 	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
 }
@@ -43,82 +42,6 @@ func NewServer() *Server {
 	}
 }
 
-// Run starts the LSP server main loop.
-// It blocks until the context is canceled, the input stream is closed, or
-// an "exit" notification is received.
-func (s *Server) Run(ctx context.Context) error {
-	type readResult struct {
-		body []byte
-		err  error
-	}
-	ch := make(chan readResult, 1)
-
-	go func() {
-		reader := bufio.NewReader(s.reader)
-		for {
-			body, err := readMessage(reader)
-			ch <- readResult{body, err}
-			if err != nil {
-				return
-			}
-		}
-	}()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case result := <-ch:
-			if result.err != nil {
-				if result.err == io.EOF {
-					return nil
-				}
-				return result.err
-			}
-
-			var req Request
-			if err := json.Unmarshal(result.body, &req); err != nil {
-				s.logger.Printf("failed to unmarshal request: %v", err)
-				continue
-			}
-
-			s.handleMessage(&req)
-		}
-	}
-}
-
-// readMessage reads a single LSP message (headers + body) from the reader.
-func readMessage(reader *bufio.Reader) ([]byte, error) {
-	contentLength := -1
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, err
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		if strings.HasPrefix(line, "Content-Length: ") {
-			n, err := strconv.Atoi(strings.TrimPrefix(line, "Content-Length: "))
-			if err != nil {
-				return nil, fmt.Errorf("invalid Content-Length: %w", err)
-			}
-			contentLength = n
-		}
-	}
-
-	if contentLength < 0 {
-		return nil, fmt.Errorf("missing Content-Length header")
-	}
-
-	body := make([]byte, contentLength)
-	if _, err := io.ReadFull(reader, body); err != nil {
-		return nil, err
-	}
-	return body, nil
-}
-
 func (s *Server) handleMessage(req *Request) {
 	switch req.Method {
 	case "initialize":
@@ -126,9 +49,14 @@ func (s *Server) handleMessage(req *Request) {
 	case "initialized":
 		// No action needed.
 	case "shutdown":
+		s.shutdownRequested = true
 		s.sendResponse(req.ID, nil, nil)
 	case "exit":
-		os.Exit(0)
+		// The exit code is 0 only when shutdown was requested first.
+		if s.shutdownRequested {
+			os.Exit(0)
+		}
+		os.Exit(1)
 	case "textDocument/didOpen":
 		s.handleDidOpen(req)
 	case "textDocument/didChange":
@@ -153,7 +81,7 @@ func (s *Server) handleMessage(req *Request) {
 		if req.ID != nil {
 			// Unknown request - return method not found.
 			s.sendResponse(req.ID, nil, &ResponseError{
-				Code:    -32601,
+				Code:    codeMethodNotFound,
 				Message: "method not found: " + req.Method,
 			})
 		}
@@ -239,8 +167,7 @@ func (s *Server) handleDidClose(req *Request) {
 func (s *Server) handleCompletion(req *Request) {
 	var params CompletionParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("completion unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
+		s.sendResponse(req.ID, nil, invalidParams("completion", err))
 		return
 	}
 
@@ -263,8 +190,7 @@ func (s *Server) handleCompletion(req *Request) {
 func (s *Server) handleHover(req *Request) {
 	var params HoverParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("hover unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
+		s.sendResponse(req.ID, nil, invalidParams("hover", err))
 		return
 	}
 
@@ -285,8 +211,7 @@ func (s *Server) handleHover(req *Request) {
 func (s *Server) handleDefinition(req *Request) {
 	var params DefinitionParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("definition unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
+		s.sendResponse(req.ID, nil, invalidParams("definition", err))
 		return
 	}
 
@@ -307,8 +232,7 @@ func (s *Server) handleDefinition(req *Request) {
 func (s *Server) handleDocumentSymbol(req *Request) {
 	var params DocumentSymbolParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("documentSymbol unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
+		s.sendResponse(req.ID, nil, invalidParams("documentSymbol", err))
 		return
 	}
 
@@ -331,8 +255,7 @@ func (s *Server) handleDocumentSymbol(req *Request) {
 func (s *Server) handleCodeAction(req *Request) {
 	var params CodeActionParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("codeAction unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
+		s.sendResponse(req.ID, nil, invalidParams("codeAction", err))
 		return
 	}
 
@@ -402,8 +325,7 @@ func (s *Server) handleCodeAction(req *Request) {
 func (s *Server) handleSignatureHelp(req *Request) {
 	var params SignatureHelpParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("signatureHelp unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
+		s.sendResponse(req.ID, nil, invalidParams("signatureHelp", err))
 		return
 	}
 
@@ -2119,47 +2041,12 @@ func describeNodeType(node ast.Node) string {
 	}
 }
 
-func (s *Server) sendResponse(id *json.RawMessage, result any, respErr *ResponseError) {
-	if respErr != nil {
-		s.writeMessage(errorResponse{JSONRPC: "2.0", ID: id, Error: respErr})
-		return
-	}
-	s.writeMessage(Response{JSONRPC: "2.0", ID: id, Result: result})
-}
-
-func (s *Server) sendNotification(method string, params any) {
-	p, _ := json.Marshal(params)
-	notif := Notification{
-		JSONRPC: "2.0",
-		Method:  method,
-		Params:  p,
-	}
-	s.writeMessage(notif)
-}
-
-func (s *Server) writeMessage(msg any) {
-	body, err := json.Marshal(msg)
-	if err != nil {
-		s.logger.Printf("marshal error: %v", err)
-		return
-	}
-	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	if _, err := fmt.Fprint(s.writer, header); err != nil {
-		s.logger.Printf("write header error: %v", err)
-		return
-	}
-	if _, err := s.writer.Write(body); err != nil {
-		s.logger.Printf("write body error: %v", err)
-	}
-}
-
 // --- textDocument/references ---
 
 func (s *Server) handleReferences(req *Request) {
 	var params ReferenceParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		s.logger.Printf("references unmarshal error: %v", err)
-		s.sendResponse(req.ID, nil, nil)
+		s.sendResponse(req.ID, nil, invalidParams("references", err))
 		return
 	}
 
