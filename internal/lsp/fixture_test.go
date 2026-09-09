@@ -19,7 +19,7 @@ import (
 type lspTestCase struct {
 	Name      string            `yaml:"name"`
 	Document  string            `yaml:"document"`
-	Operation string            `yaml:"operation"` // completion, diagnostics, definition
+	Operation string            `yaml:"operation"` // see runSingleFixture for the supported operations
 	Files     map[string]string `yaml:"files"`
 	Expect    lspExpect         `yaml:"expect"`
 }

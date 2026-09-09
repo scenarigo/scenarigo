@@ -12,8 +12,8 @@ import (
 )
 
 // Run starts the LSP server main loop.
-// It blocks until the context is canceled, the input stream is closed, or
-// an "exit" notification is received.
+// It blocks until the context is canceled or the input stream is closed.
+// An "exit" notification terminates the process instead of returning.
 func (s *Server) Run(ctx context.Context) error {
 	type readResult struct {
 		body []byte
