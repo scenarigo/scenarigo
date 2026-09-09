@@ -46,6 +46,7 @@ steps:
 - **Retry Policies** - Built-in retry with constant or exponential backoff strategies
 - **Conditional Execution** - Control test flow with conditional step execution
 - **ytt Integration** - Advanced templating and overlay capabilities for test scenarios
+- **Editor Support** - Language server (`scenarigo lsp`) with completion, diagnostics, hover, and definition jumps for scenario files (experimental)
 
 ## Quick Start
 
@@ -199,6 +200,7 @@ Available Commands:
   dump        dump test scenario files
   help        Help about any command
   list        list the test scenario files
+  lsp         start the LSP server
   plugin      provide operations for plugins
   run         run test scenarios
   version     print scenarigo version
@@ -2482,3 +2484,11 @@ Each example directory contains:
 - `scenarigo.yaml` - Configuration file
 - `scenarios/` - Test scenario files
 - `README.md` (in some examples) - Detailed explanation
+
+## Editor Support (experimental)
+
+`scenarigo lsp` starts a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) server over stdio for `scenarigo.yaml` and scenario files.
+It provides completion, hover, diagnostics, definition jumps, references, and signature help for template functions.
+The server stays silent on YAML files without a `schemaVersion` key, so it can be registered for all YAML files next to another YAML language server.
+
+See [internal/lsp/README.md](internal/lsp/README.md) for the editor setup (Neovim, Vim) and the feature matrix.
