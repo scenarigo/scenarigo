@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 // lspTestCase represents a single LSP test case loaded from a YAML fixture file.
@@ -88,7 +90,7 @@ func loadFixtures(t *testing.T, path string) []lspTestCase {
 	for {
 		var tc lspTestCase
 		if err := dec.Decode(&tc); err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			t.Fatalf("decode fixture %s: %v", path, err)
