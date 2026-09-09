@@ -158,9 +158,8 @@ func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	t.Helper()
 
 	// Use a temp dir when auxiliary files are specified (e.g. file path completion).
-	rootDir := "/tmp"
+	rootDir := t.TempDir()
 	if len(tc.Files) > 0 {
-		rootDir = t.TempDir()
 		for name, content := range tc.Files {
 			p := filepath.Join(rootDir, name)
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -204,9 +203,10 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.initialize(1, "file:///tmp")
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
 
-	uri := "file:///tmp/test.yaml"
+	uri := file("test.yaml")
 	diags := client.openDocumentAndGetDiagnostics(uri, docText)
 
 	if tc.Expect.DiagnosticCount != nil {
@@ -239,9 +239,10 @@ func runDocumentSymbolFixture(t *testing.T, tc lspTestCase, docText string) {
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.initialize(1, "file:///tmp")
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
 
-	uri := "file:///tmp/test.yaml"
+	uri := file("test.yaml")
 	client.openDocument(uri, docText)
 
 	resp := client.documentSymbol(2, uri)
@@ -297,9 +298,10 @@ func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char in
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.initialize(1, "file:///tmp")
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
 
-	uri := "file:///tmp/test.yaml"
+	uri := file("test.yaml")
 	client.openDocument(uri, docText)
 
 	resp := client.hover(2, uri, line, char)
@@ -399,9 +401,10 @@ func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line,
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.initialize(1, "file:///tmp")
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
 
-	uri := "file:///tmp/test.yaml"
+	uri := file("test.yaml")
 	client.openDocument(uri, docText)
 
 	resp := client.signatureHelp(2, uri, line, char)
@@ -433,9 +436,10 @@ func runReferencesFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	srv, client := newTestClient(t)
 	go srv.Run(context.Background())
 
-	client.initialize(1, "file:///tmp")
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
 
-	uri := "file:///tmp/test.yaml"
+	uri := file("test.yaml")
 	client.openDocument(uri, docText)
 
 	resp := client.references(2, uri, line, char)

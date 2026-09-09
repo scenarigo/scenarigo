@@ -92,9 +92,10 @@ func startServer(t *testing.T, args ...string) *testClient {
 // initialize → open → diagnostics → complete → hover → symbols → shutdown → exit.
 func TestE2E_FullLifecycle(t *testing.T) {
 	client := startServer(t)
+	root, file := newWorkspace(t)
 
 	// Initialize.
-	initResult := client.initialize(1, "file:///tmp")
+	initResult := client.initialize(1, root)
 	if initResult.Capabilities.CompletionProvider == nil {
 		t.Fatal("expected completion provider")
 	}
@@ -104,24 +105,24 @@ func TestE2E_FullLifecycle(t *testing.T) {
 
 	// Open document and get diagnostics.
 	docText := "schemaVersion: scenario/v1\ntitle: e2e test\nsteps:\n  - title: step1\n    protocol: http\n    request:\n      method: GET\n      url: http://example.com\n"
-	diags := client.openDocumentAndGetDiagnostics("file:///tmp/test.yaml", docText)
+	diags := client.openDocumentAndGetDiagnostics(file("test.yaml"), docText)
 	if len(diags.Diagnostics) != 0 {
 		t.Errorf("expected no diagnostics for valid document, got: %v", diagMessages(diags.Diagnostics))
 	}
 
 	// Completion.
-	list := client.complete(2, "file:///tmp/test.yaml", 8, 6)
+	list := client.complete(2, file("test.yaml"), 8, 6)
 	_ = list // verify no error
 
 	// Hover.
-	hoverResp := client.hover(3, "file:///tmp/test.yaml", 4, 5)
+	hoverResp := client.hover(3, file("test.yaml"), 4, 5)
 	var hoverResult Hover
 	if err := json.Unmarshal(hoverResp, &hoverResult); err != nil {
 		t.Fatalf("unmarshal hover: %v", err)
 	}
 
 	// Document symbols.
-	symResp := client.documentSymbol(4, "file:///tmp/test.yaml")
+	symResp := client.documentSymbol(4, file("test.yaml"))
 	var symbols []DocumentSymbol
 	if err := json.Unmarshal(symResp, &symbols); err != nil {
 		t.Fatalf("unmarshal symbols: %v", err)
@@ -155,9 +156,10 @@ func TestE2E_ShutdownExit(t *testing.T) {
 	}
 
 	client := &testClient{t: t, inW: stdin, outR: bufio.NewReader(stdout)}
+	root, _ := newWorkspace(t)
 
 	// Initialize + shutdown.
-	client.initialize(1, "file:///tmp")
+	client.initialize(1, root)
 	client.shutdown(2)
 
 	// Send exit notification.
@@ -214,11 +216,12 @@ func TestE2E_StdinClose(t *testing.T) {
 // TestE2E_DiagnosticsOnEdit verifies diagnostics are published when a document is edited.
 func TestE2E_DiagnosticsOnEdit(t *testing.T) {
 	client := startServer(t)
+	root, file := newWorkspace(t)
 
-	client.initialize(1, "file:///tmp")
+	client.initialize(1, root)
 
 	// Open valid document.
-	diags := client.openDocumentAndGetDiagnostics("file:///tmp/test.yaml",
+	diags := client.openDocumentAndGetDiagnostics(file("test.yaml"),
 		"schemaVersion: scenario/v1\ntitle: test\n")
 	if len(diags.Diagnostics) != 0 {
 		t.Errorf("expected no diagnostics initially, got: %v", diagMessages(diags.Diagnostics))
@@ -228,7 +231,7 @@ func TestE2E_DiagnosticsOnEdit(t *testing.T) {
 	badText := "schemaVersion: scenario/v1\ntitle: test\nbadKey: value\n"
 	client.sendNotification("textDocument/didChange", DidChangeTextDocumentParams{
 		TextDocument: VersionedTextDocumentIdentifier{
-			TextDocumentIdentifier: TextDocumentIdentifier{URI: "file:///tmp/test.yaml"},
+			TextDocumentIdentifier: TextDocumentIdentifier{URI: file("test.yaml")},
 			Version:                2,
 		},
 		ContentChanges: []TextDocumentContentChangeEvent{{Text: badText}},

@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 )
 
 type testClient struct {
@@ -113,7 +112,6 @@ func (c *testClient) openDocument(uri, text string) {
 			Text:       text,
 		},
 	})
-	time.Sleep(10 * time.Millisecond)
 	c.readMessage() // diagnostics
 }
 
@@ -127,7 +125,6 @@ func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiag
 			Text:       text,
 		},
 	})
-	time.Sleep(10 * time.Millisecond)
 	raw := c.readMessage()
 	var notif Notification
 	if err := json.Unmarshal(raw, &notif); err != nil {
@@ -176,7 +173,6 @@ func (c *testClient) changeDocument(uri string, version int, newText string) {
 		},
 		ContentChanges: []TextDocumentContentChangeEvent{{Text: newText}},
 	})
-	time.Sleep(10 * time.Millisecond)
 	c.readMessage() // diagnostics after change
 }
 
@@ -185,7 +181,6 @@ func (c *testClient) closeDocument(uri string) {
 	c.sendNotification("textDocument/didClose", DidCloseTextDocumentParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 	})
-	time.Sleep(10 * time.Millisecond)
 	c.readMessage() // clear diagnostics notification
 }
 
@@ -299,4 +294,13 @@ func labelList(items []CompletionItem) []string {
 		labels = append(labels, item.Label)
 	}
 	return labels
+}
+
+// newWorkspace creates a temporary workspace root for a test and returns its
+// URI together with a helper that builds URIs of files below it, so that
+// tests never depend on files that happen to exist under /tmp.
+func newWorkspace(t *testing.T) (rootURI string, fileURI func(name string) string) {
+	t.Helper()
+	dir := t.TempDir()
+	return pathToURI(dir), func(name string) string { return pathToURI(filepath.Join(dir, name)) }
 }
