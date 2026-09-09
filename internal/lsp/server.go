@@ -845,45 +845,43 @@ func (s *Server) findPluginSymbolDefinition(doc *document, pluginAlias, symbolNa
 
 	// Parse Go files to find the symbol's location.
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, sourceDir, nil, 0)
+	files, err := parseGoPackageFiles(fset, sourceDir, 0)
 	if err != nil {
 		return nil
 	}
 
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				switch d := decl.(type) {
-				case *goast.FuncDecl:
-					if d.Recv == nil && d.Name.Name == symbolName {
-						pos := fset.Position(d.Name.Pos())
-						return &Location{
-							URI: pathToURI(pos.Filename),
-							Range: Range{
-								Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
-								End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
-							},
-						}
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *goast.FuncDecl:
+				if d.Recv == nil && d.Name.Name == symbolName {
+					pos := fset.Position(d.Name.Pos())
+					return &Location{
+						URI: pathToURI(pos.Filename),
+						Range: Range{
+							Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
+							End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
+						},
 					}
-				case *goast.GenDecl:
-					if d.Tok != token.VAR {
+				}
+			case *goast.GenDecl:
+				if d.Tok != token.VAR {
+					continue
+				}
+				for _, spec := range d.Specs {
+					vs, ok := spec.(*goast.ValueSpec)
+					if !ok {
 						continue
 					}
-					for _, spec := range d.Specs {
-						vs, ok := spec.(*goast.ValueSpec)
-						if !ok {
-							continue
-						}
-						for _, name := range vs.Names {
-							if name.Name == symbolName {
-								pos := fset.Position(name.Pos())
-								return &Location{
-									URI: pathToURI(pos.Filename),
-									Range: Range{
-										Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
-										End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
-									},
-								}
+					for _, name := range vs.Names {
+						if name.Name == symbolName {
+							pos := fset.Position(name.Pos())
+							return &Location{
+								URI: pathToURI(pos.Filename),
+								Range: Range{
+									Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
+									End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
+								},
 							}
 						}
 					}
@@ -937,44 +935,64 @@ type pluginSymbols struct {
 	Symbols []pluginSymbol
 }
 
+// parseGoPackageFiles parses the non-test Go files in dir one by one.
+// parser.ParseDir is deprecated together with ast.Package.
+func parseGoPackageFiles(fset *token.FileSet, dir string, mode parser.Mode) ([]*goast.File, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var files []*goast.File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, mode)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
+}
+
 // extractGoExportedSymbols parses Go source files in dir and returns exported symbols with signatures and docs.
 func extractGoExportedSymbols(dir string) (*pluginSymbols, error) {
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
+	files, err := parseGoPackageFiles(fset, dir, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
 	var syms pluginSymbols
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				switch d := decl.(type) {
-				case *goast.FuncDecl:
-					if d.Recv == nil && d.Name.IsExported() {
-						syms.Symbols = append(syms.Symbols, pluginSymbol{
-							Name:      d.Name.Name,
-							Signature: formatFuncSignature(d),
-							Doc:       cleanDocComment(d.Doc),
-							IsFunc:    true,
-						})
-					}
-				case *goast.GenDecl:
-					if d.Tok != token.VAR {
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *goast.FuncDecl:
+				if d.Recv == nil && d.Name.IsExported() {
+					syms.Symbols = append(syms.Symbols, pluginSymbol{
+						Name:      d.Name.Name,
+						Signature: formatFuncSignature(d),
+						Doc:       cleanDocComment(d.Doc),
+						IsFunc:    true,
+					})
+				}
+			case *goast.GenDecl:
+				if d.Tok != token.VAR {
+					continue
+				}
+				for _, spec := range d.Specs {
+					vs, ok := spec.(*goast.ValueSpec)
+					if !ok {
 						continue
 					}
-					for _, spec := range d.Specs {
-						vs, ok := spec.(*goast.ValueSpec)
-						if !ok {
-							continue
-						}
-						for _, name := range vs.Names {
-							if name.IsExported() {
-								syms.Symbols = append(syms.Symbols, pluginSymbol{
-									Name:      name.Name,
-									Signature: formatVarType(vs),
-									Doc:       cleanDocComment(firstNonNil(vs.Doc, d.Doc)),
-								})
-							}
+					for _, name := range vs.Names {
+						if name.IsExported() {
+							syms.Symbols = append(syms.Symbols, pluginSymbol{
+								Name:      name.Name,
+								Signature: formatVarType(vs),
+								Doc:       cleanDocComment(firstNonNil(vs.Doc, d.Doc)),
+							})
 						}
 					}
 				}
