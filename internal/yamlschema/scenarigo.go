@@ -1,4 +1,4 @@
-package schema
+package yamlschema
 
 // Scenarigo schema definitions for config and scenario YAML files.
 
