@@ -161,7 +161,7 @@ func execute(ctx context.Context, in reflect.Value, data any) (reflect.Value, er
 			v = converted
 		}
 		// keep the original address
-		if in.Type().Kind() == reflect.Ptr && v.Type().Kind() == reflect.Ptr {
+		if in.Type().Kind() == reflect.Pointer && v.Type().Kind() == reflect.Pointer {
 			if v.Elem().Type().AssignableTo(in.Elem().Type()) {
 				if err := reflectutil.Set(in.Elem(), v.Elem()); err != nil {
 					return reflect.Value{}, err
@@ -300,7 +300,7 @@ func replaceFuncs(in reflect.Value, s *funcStash) (reflect.Value, error) {
 
 func isNil(v reflect.Value) bool {
 	switch v.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
 		return v.IsNil()
 	default:
 		return false
