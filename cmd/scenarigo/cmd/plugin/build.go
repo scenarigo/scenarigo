@@ -44,9 +44,14 @@ import (
 const (
 	versionTooHighErrorPattern = `^go: go.mod requires go >= ([\d\.]+) .+$`
 	toolchainLocal             = "local"
-	oldScenarigoModPath        = "github.com/zoncoen/scenarigo"
-	newScenarigoModPath        = "github.com/scenarigo/scenarigo"
-	develVersion               = "(devel)"
+	// toolchainAuto lets the go command pick the toolchain from go.mod, the
+	// way it does by default. A WASM plugin builds with it: unlike a .so,
+	// whose toolchain must be exactly the one that built the scenarigo
+	// binary, a .wasm has no ABI tie to the binary at all.
+	toolchainAuto       = "auto"
+	oldScenarigoModPath = "github.com/zoncoen/scenarigo"
+	newScenarigoModPath = "github.com/scenarigo/scenarigo"
+	develVersion        = "(devel)"
 )
 
 var (
@@ -182,7 +187,6 @@ func buildRunWithOpts(cmd *cobra.Command, args []string, opts *buildOpts) error 
 		return err
 	}
 	debugLogf(cmd, "found go command: %s", goCmd)
-	debugLogf(cmd, "set GOTOOLCHAIN=%s", toolchain)
 
 	pbs := make([]*pluginBuilder, 0, cfg.Plugins.Len())
 	pluginModules := map[string]*overrideModule{}
@@ -440,11 +444,22 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 		opts.wasm = true
 	}
 
+	// A WASM plugin has no ABI tie to the scenarigo binary, so every go
+	// command scenarigo runs for it - downloading a remote module included -
+	// uses GOTOOLCHAIN=auto and go.mod decides the toolchain. A .so must be
+	// built with exactly the toolchain that built the binary (local, under a
+	// devel build), or plugin.Open rejects it, so it keeps the pinned one.
+	tc := toolchain
+	if opts != nil && opts.wasm {
+		tc = toolchainAuto
+	}
+	debugLogf(cmd, "%s: set GOTOOLCHAIN=%s", out, tc)
+
 	mod := filepathutil.From(root, item.Value.Src)
 	var src string
 	clean := func() {}
 	if _, err := os.Stat(mod); err != nil {
-		m, s, r, err := downloadModule(ctx(cmd), goCmd, item.Value.Src)
+		m, s, r, err := downloadModule(ctx(cmd), goCmd, tc, item.Value.Src)
 		if err != nil {
 			return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
 		}
@@ -466,7 +481,7 @@ func createPluginBuilder(cmd *cobra.Command, goCmd string, pluginModules map[str
 	}
 	// NOTE: All module names must be unique and different from the standard modules.
 	defaultModName := filepath.Join("plugins", strings.TrimSuffix(out, filepath.Ext(out)))
-	pb, err := newPluginBuilder(cmd, goCmd, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
+	pb, err := newPluginBuilder(cmd, goCmd, tc, out, mod, src, filepathutil.From(pluginDir, out), defaultModName)
 	if err != nil {
 		return nil, clean, fmt.Errorf("failed to build plugin %s: %w", out, err)
 	}
@@ -564,7 +579,7 @@ func checkGowork(ctx context.Context, goCmd string, pbs []*pluginBuilder) (strin
 
 	files := []goworkConfig{}
 	for _, pb := range pbs {
-		gowork, err := execute(ctx, pb.dir, goCmd, "env", "GOWORK")
+		gowork, err := executeWithEnvs(ctx, pb.toolchain, nil, pb.dir, goCmd, "env", "GOWORK")
 		if err != nil {
 			return "", fmt.Errorf("failed to build plugin %s: %w", pb.out, err)
 		}
@@ -690,7 +705,7 @@ func checkGoVersion(ctx context.Context, goCmd, minVer string) error {
 	return nil
 }
 
-func downloadModule(ctx context.Context, goCmd, p string) (string, string, *modfile.Require, error) {
+func downloadModule(ctx context.Context, goCmd, tc, p string) (string, string, *modfile.Require, error) {
 	tempDir, err := os.MkdirTemp("", "scenarigo-plugin-gomod-")
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to create a temporary directory: %w", err)
@@ -699,10 +714,10 @@ func downloadModule(ctx context.Context, goCmd, p string) (string, string, *modf
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	if _, err := execute(ctx, tempDir, goCmd, "mod", "init", "download_module"); err != nil {
+	if _, err := executeWithEnvs(ctx, tc, nil, tempDir, goCmd, "mod", "init", "download_module"); err != nil {
 		return "", "", nil, fmt.Errorf("failed to initialize go.mod: %w", err)
 	}
-	if _, err := execute(ctx, tempDir, goCmd, downloadCmd(p)...); err != nil {
+	if _, err := executeWithEnvs(ctx, tc, nil, tempDir, goCmd, downloadCmd(p)...); err != nil {
 		return "", "", nil, fmt.Errorf("failed to download %s: %w", p, err)
 	}
 	mod, src, req, err := modSrcPath(tempDir, p)
@@ -761,7 +776,12 @@ func copyModule(cmd *cobra.Command, mod string) (string, func(), error) {
 }
 
 type pluginBuilder struct {
-	name            string
+	name string
+	// toolchain is the GOTOOLCHAIN every go command scenarigo runs for this
+	// plugin uses: auto for a WASM plugin, the toolchain that built the
+	// scenarigo binary for a .so (local, under a devel build), whose ABI
+	// requires exactly the one that built the binary.
+	toolchain       string
 	dir             string
 	src             string
 	gomodPath       string
@@ -778,7 +798,7 @@ type pluginBuilder struct {
 	migrated bool
 }
 
-func newPluginBuilder(cmd *cobra.Command, goCmd, name, mod, src, out, defaultModName string) (*pluginBuilder, error) {
+func newPluginBuilder(cmd *cobra.Command, goCmd, tc, name, mod, src, out, defaultModName string) (*pluginBuilder, error) {
 	ctx := ctx(cmd)
 	dir := mod
 	info, err := os.Stat(mod)
@@ -792,10 +812,10 @@ func newPluginBuilder(cmd *cobra.Command, goCmd, name, mod, src, out, defaultMod
 
 	gomodPath := filepath.Join(dir, "go.mod")
 	if _, err := os.Stat(gomodPath); err != nil {
-		if _, err := execute(ctx, dir, goCmd, "mod", "init"); err != nil {
+		if _, err := executeWithEnvs(ctx, tc, nil, dir, goCmd, "mod", "init"); err != nil {
 			// ref. https://github.com/golang/go/wiki/Modules#why-does-go-mod-init-give-the-error-cannot-determine-module-path-for-source-directory
 			if strings.Contains(err.Error(), "cannot determine module path") {
-				if _, err := execute(ctx, dir, goCmd, "mod", "init", defaultModName); err != nil {
+				if _, err := executeWithEnvs(ctx, tc, nil, dir, goCmd, "mod", "init", defaultModName); err != nil {
 					return nil, fmt.Errorf("failed to initialize go.mod: %w", err)
 				}
 			} else {
@@ -804,7 +824,7 @@ func newPluginBuilder(cmd *cobra.Command, goCmd, name, mod, src, out, defaultMod
 		}
 	}
 
-	if err := modTidy(cmd, dir, goCmd); err != nil {
+	if err := modTidy(cmd, tc, dir, goCmd); err != nil {
 		if ok, verr := asVersionTooHighError(err); ok {
 			err = fmt.Errorf("re-install scenarigo command with go%s: %w", verr.requiredVersion, err)
 		}
@@ -824,6 +844,7 @@ func newPluginBuilder(cmd *cobra.Command, goCmd, name, mod, src, out, defaultMod
 
 	return &pluginBuilder{
 		name:            name,
+		toolchain:       tc,
 		dir:             dir,
 		src:             src,
 		gomodPath:       gomodPath,
@@ -834,11 +855,11 @@ func newPluginBuilder(cmd *cobra.Command, goCmd, name, mod, src, out, defaultMod
 	}, nil
 }
 
-func modTidy(cmd *cobra.Command, dir, goCmd string) error {
+func modTidy(cmd *cobra.Command, tc, dir, goCmd string) error {
 	ctx := ctx(cmd)
 
 	if tidyCmd := os.Getenv("GO_MOD_TIDY"); tidyCmd != "" {
-		if _, err := execute(ctx, dir, goCmd, strings.Split(tidyCmd, " ")...); err != nil {
+		if _, err := executeWithEnvs(ctx, tc, nil, dir, goCmd, strings.Split(tidyCmd, " ")...); err != nil {
 			return err
 		}
 		return nil
@@ -855,7 +876,7 @@ func modTidy(cmd *cobra.Command, dir, goCmd string) error {
 		}
 	}
 	for i := uint64(0); i <= retry; i++ {
-		_, err = execute(ctx, dir, goCmd, "mod", "tidy")
+		_, err = executeWithEnvs(ctx, tc, nil, dir, goCmd, "mod", "tidy")
 		if err == nil {
 			return nil
 		}
@@ -907,7 +928,7 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 				_, _ = f.Write(gowork)
 			}
 		}()
-		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "work", "use", "."); err != nil {
+		if _, err := executeWithEnvs(ctx, pb.toolchain, envs, pb.dir, goCmd, "work", "use", "."); err != nil {
 			return fmt.Errorf(`"go work use ." failed: %w`, err)
 		}
 	}
@@ -929,15 +950,18 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 		pluginVersion := getPluginScenarigoVersion(pb.dir)
 		scenarigoVersion := selectWasmPluginScenarigoVersion(currentVersion, pluginVersion)
 
-		if _, err := execute(ctx, pb.dir, goCmd, "get", fmt.Sprintf("github.com/scenarigo/scenarigo@%s", scenarigoVersion)); err != nil {
+		if _, err := executeWithEnvs(ctx, pb.toolchain, nil, pb.dir, goCmd, "get", fmt.Sprintf("github.com/scenarigo/scenarigo@%s", scenarigoVersion)); err != nil {
 			return fmt.Errorf("failed to go get github.com/scenarigo/scenarigo: %w", err)
 		}
-		if err := modTidy(cmd, filepath.Dir(pb.gomodPath), goCmd); err != nil {
+		if err := modTidy(cmd, pb.toolchain, filepath.Dir(pb.gomodPath), goCmd); err != nil {
 			return err
 		}
 
 		// To replace net.Listen and net.Dialer.DialContext and crypto/x509.Certificate.Verify and exec.Command.Start etc.
 		// Without doing this, it is not possible to use http(s) and exec.Command feature in the wasm plugin.
+		// The library resolves GOROOT by running the go command itself, with
+		// the ambient environment: that one call is outside the toolchain
+		// selection above, as it was outside the pin before it.
 		overlayFile, err := wasiext.CreateOverlay(ctx, wasiext.WithGoCommandPath(goCmd))
 		if err != nil {
 			return fmt.Errorf("failed to create overlay file: %w", err)
@@ -945,7 +969,7 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 		defer overlayFile.Close()
 
 		envs = append(envs, "GOOS=wasip1", "GOARCH=wasm")
-		if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-overlay", overlayFile.Path(), "-o", pb.out); err != nil {
+		if _, err := executeWithEnvs(ctx, pb.toolchain, envs, pb.dir, goCmd, "build", "-overlay", overlayFile.Path(), "-o", pb.out); err != nil {
 			// The generated main file is part of the package being
 			// analyzed, so this runs before the deferred removal.
 			if retry := pb.migrateExtractorCalls(cmd, goCmd, envs, []string{"-overlay", overlayFile.Path()}, []string{mainPath}, pb.dir, "", opts); retry != nil {
@@ -956,7 +980,7 @@ func (pb *pluginBuilder) build(cmd *cobra.Command, goCmd string, overrideKeys []
 		return nil
 	}
 
-	if _, err := executeWithEnvs(ctx, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
+	if _, err := executeWithEnvs(ctx, pb.toolchain, envs, pb.dir, goCmd, "build", "-buildmode=plugin", "-o", pb.out, pb.src); err != nil {
 		if retry := pb.migrateExtractorCalls(cmd, goCmd, envs, nil, nil, pb.buildPkgDir(), pb.buildTarget(), opts); retry != nil {
 			return retry
 		}
@@ -1003,9 +1027,10 @@ func (pb *pluginBuilder) migrateExtractorCalls(cmd *cobra.Command, goCmd string,
 		pb.migratedSources = map[string]migratedSource{}
 	}
 	res, err := migrateExtractorCalls(ctx(cmd), &migration{
-		dir:    pb.dir,
-		goCmd:  goCmd,
-		pkgDir: pkgDir,
+		dir:       pb.dir,
+		goCmd:     goCmd,
+		pkgDir:    pkgDir,
+		toolchain: pb.toolchain,
 		// The restore guard owns pb.migratedSources; recording straight into
 		// it means a panic that never lets the migration return still leaves
 		// the guard holding every file already rewritten.
@@ -1014,7 +1039,7 @@ func (pb *pluginBuilder) migrateExtractorCalls(cmd *cobra.Command, goCmd string,
 				pb.migratedSources[path] = s
 			}
 		},
-		env:        commandEnv(envs),
+		env:        commandEnv(pb.toolchain, envs),
 		buildFlags: buildFlags,
 		skipFiles:  skipFiles,
 		target:     target,
@@ -1094,21 +1119,22 @@ func (pb *pluginBuilder) restoreMigratedSources(cmd *cobra.Command) {
 	pb.migratedSources = nil
 }
 
-func execute(ctx context.Context, wd, name string, args ...string) (string, error) {
-	return executeWithEnvs(ctx, nil, wd, name, args...)
-}
-
 // commandEnv returns the environment every go command runs with: the process
-// environment, envs, and the toolchain selection.
-func commandEnv(envs []string) []string {
-	return append(os.Environ(), append(slices.Clone(envs), fmt.Sprintf("GOTOOLCHAIN=%s", toolchain))...)
+// environment, envs, and the toolchain selection. tc selects the toolchain
+// for this command; the empty string falls back to the one that built the
+// scenarigo binary.
+func commandEnv(tc string, envs []string) []string {
+	if tc == "" {
+		tc = toolchain
+	}
+	return append(os.Environ(), append(slices.Clone(envs), fmt.Sprintf("GOTOOLCHAIN=%s", tc))...)
 }
 
-func executeWithEnvs(ctx context.Context, envs []string, wd, name string, args ...string) (string, error) {
+func executeWithEnvs(ctx context.Context, tc string, envs []string, wd, name string, args ...string) (string, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = commandEnv(envs)
+	cmd.Env = commandEnv(tc, envs)
 	if wd != "" {
 		cmd.Dir = wd
 	}
@@ -1403,7 +1429,7 @@ func (pb *pluginBuilder) editGoMod(cmd *cobra.Command, goCmd string, edit func(*
 	if _, err := f.Write(edited); err != nil {
 		return fmt.Errorf("failed to edit %s: %w", pb.gomodPath, err)
 	}
-	if err := modTidy(cmd, filepath.Dir(pb.gomodPath), goCmd); err != nil {
+	if err := modTidy(cmd, pb.toolchain, filepath.Dir(pb.gomodPath), goCmd); err != nil {
 		return err
 	}
 

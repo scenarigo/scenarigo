@@ -2131,7 +2131,7 @@ require (
 				var stdout bytes.Buffer
 				cmd.SetOut(&stdout)
 				cmd.SetErr(&stdout)
-				pb, err := newPluginBuilder(cmd, goCmd, "test.so", gomod, test.src, filepath.Join(tmpDir, "test.so"), "test")
+				pb, err := newPluginBuilder(cmd, goCmd, toolchain, "test.so", gomod, test.src, filepath.Join(tmpDir, "test.so"), "test")
 				if err != nil {
 					t.Fatalf("failed to create plugin builder: %s", err)
 				}
@@ -2418,16 +2418,16 @@ func setupGitServer(t *testing.T, goCmd string) {
 		fmt.Sprintf("GOMODCACHE=%s", filepath.Join(tempDir, ".cache")),
 	}
 	t.Cleanup(func() {
-		if _, err := executeWithEnvs(ctx, envs, tempDir, goCmd, "clean", "-modcache"); err != nil {
+		if _, err := executeWithEnvs(ctx, "", envs, tempDir, goCmd, "clean", "-modcache"); err != nil {
 			t.Errorf("go clean -modcache failed: %s", err)
 		}
 	})
 
 	// create git objects for test repositories
-	if _, err := executeWithEnvs(ctx, envs, tempDir, "git", "config", "--global", "user.name", "scenarigo-test"); err != nil {
+	if _, err := executeWithEnvs(ctx, "", envs, tempDir, "git", "config", "--global", "user.name", "scenarigo-test"); err != nil {
 		t.Fatalf("git config failed: %s", err)
 	}
-	if _, err := executeWithEnvs(ctx, envs, tempDir, "git", "config", "--global", "user.email", "scenarigo-test@example.com"); err != nil {
+	if _, err := executeWithEnvs(ctx, "", envs, tempDir, "git", "config", "--global", "user.email", "scenarigo-test@example.com"); err != nil {
 		t.Fatalf("git config failed: %s", err)
 	}
 	repoDir := filepath.Join("testdata", "git")
@@ -2441,7 +2441,7 @@ func setupGitServer(t *testing.T, goCmd string) {
 		}
 		wd := filepath.Join(repoDir, e.Name())
 		if _, err := os.Stat(filepath.Join(wd, "go.mod")); err == nil {
-			if _, err := executeWithEnvs(ctx, envs, wd, goCmd, "mod", "tidy"); err != nil {
+			if _, err := executeWithEnvs(ctx, "", envs, wd, goCmd, "mod", "tidy"); err != nil {
 				t.Fatalf("go mod tidy failed: %s", err)
 			}
 			t.Cleanup(func() {
@@ -2449,33 +2449,33 @@ func setupGitServer(t *testing.T, goCmd string) {
 			})
 		}
 		if _, err := os.Stat(filepath.Join(wd, "v2", "go.mod")); err == nil {
-			if _, err := executeWithEnvs(ctx, envs, filepath.Join(wd, "v2"), goCmd, "mod", "tidy"); err != nil {
+			if _, err := executeWithEnvs(ctx, "", envs, filepath.Join(wd, "v2"), goCmd, "mod", "tidy"); err != nil {
 				t.Fatalf("go mod tidy failed: %s", err)
 			}
 			t.Cleanup(func() {
 				os.RemoveAll(filepath.Join(wd, "v2", "go.sum"))
 			})
 		}
-		if _, err := executeWithEnvs(ctx, envs, wd, "git", "init"); err != nil {
+		if _, err := executeWithEnvs(ctx, "", envs, wd, "git", "init"); err != nil {
 			t.Fatalf("git init failed: %s", err)
 		}
 		t.Cleanup(func() {
 			os.RemoveAll(filepath.Join(wd, ".git"))
 		})
-		if _, err := executeWithEnvs(ctx, envs, wd, "git", "add", "-A"); err != nil {
+		if _, err := executeWithEnvs(ctx, "", envs, wd, "git", "add", "-A"); err != nil {
 			t.Fatalf("git add failed: %s", err)
 		}
-		if _, err := executeWithEnvs(ctx, envs, wd, "git", "commit", "-m", "commit"); err != nil {
+		if _, err := executeWithEnvs(ctx, "", envs, wd, "git", "commit", "-m", "commit"); err != nil {
 			t.Fatalf("git commit failed: %s", err)
 		}
-		if _, err := executeWithEnvs(ctx, envs, wd, "git", "tag", "v1.0.0"); err != nil {
+		if _, err := executeWithEnvs(ctx, "", envs, wd, "git", "tag", "v1.0.0"); err != nil {
 			t.Fatalf("git tag failed: %s", err)
 		}
-		if _, err := executeWithEnvs(ctx, envs, wd, "git", "tag", "v1.1.0"); err != nil {
+		if _, err := executeWithEnvs(ctx, "", envs, wd, "git", "tag", "v1.1.0"); err != nil {
 			t.Fatalf("git tag failed: %s", err)
 		}
 		if _, err := os.Stat(filepath.Join(wd, "v2")); err == nil {
-			if _, err := executeWithEnvs(ctx, envs, wd, "git", "tag", "v2.0.0"); err != nil {
+			if _, err := executeWithEnvs(ctx, "", envs, wd, "git", "tag", "v2.0.0"); err != nil {
 				t.Fatalf("git tag failed: %s", err)
 			}
 		}
@@ -2573,7 +2573,7 @@ func TestCheckGowork(t *testing.T) {
 			pbs := make([]*pluginBuilder, 0, len(test.plugins))
 			for _, p := range test.plugins {
 				mod := filepath.Join("testdata", "gowork", p)
-				pb, err := newPluginBuilder(cmd, "go", "test.so", mod, "", "/path/to/gen/test.so", "plugins/test")
+				pb, err := newPluginBuilder(cmd, "go", toolchain, "test.so", mod, "", "/path/to/gen/test.so", "plugins/test")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -2729,6 +2729,23 @@ func TestRewriteQueryGoV1(t *testing.T) {
 		if got := rewriteQueryGoV1(path); got != expect {
 			t.Errorf("rewriteQueryGoV1(%q) = %q, want %q", path, got, expect)
 		}
+	}
+}
+
+func TestCommandEnv(t *testing.T) {
+	for name, test := range map[string]struct {
+		tc     string
+		expect string
+	}{
+		"explicit": {toolchainAuto, "GOTOOLCHAIN=auto"},
+		"fallback": {"", "GOTOOLCHAIN=" + toolchain},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := commandEnv(test.tc, nil)
+			if got := env[len(env)-1]; got != test.expect {
+				t.Errorf("expected %q but got %q", test.expect, got)
+			}
+		})
 	}
 }
 
@@ -3079,6 +3096,73 @@ func Q(_ *plugin.Context) *query.Query { return query.New() }
 		if !strings.Contains(string(b), "\"github.com/zoncoen/query-go\"") {
 			t.Errorf("the cached source lost its v1 import:\n%s", b)
 		}
+	})
+
+	t.Run("a WASM build runs go with GOTOOLCHAIN=auto", func(t *testing.T) {
+		// A .so must be built with exactly the toolchain that built the
+		// scenarigo binary, so every go command scenarigo runs for it uses
+		// that pin. A WASM plugin has no ABI tie to the binary, so every one
+		// of its commands uses auto and go.mod stays in charge. Capture what
+		// the go command is really handed by pointing SCENARIGO_GO at a
+		// recording wrapper, and require every capture to match - one command
+		// on the wrong toolchain is one too many.
+		if runtime.GOOS == "windows" {
+			t.Skip("the wrapper is a shell script")
+		}
+		realGo, err := exec.LookPath("go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		build := func(t *testing.T, name, out string, opts *buildOpts) []string {
+			t.Helper()
+			tmp := t.TempDir()
+			capture := filepath.Join(tmp, "gotoolchain.txt")
+			wrapper := filepath.Join(tmp, "go")
+			// The wrapper reads its paths from the environment so nothing
+			// has to be quoted into the script.
+			create(t, wrapper, "#!/bin/sh\nprintf '%s\n' \"${GOTOOLCHAIN:-unset}\" >>\"$SCENARIGO_TEST_CAPTURE\"\nexec \"$SCENARIGO_TEST_REAL_GO\" \"$@\"\n")
+			if err := os.Chmod(wrapper, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("SCENARIGO_GO", wrapper)
+			t.Setenv("SCENARIGO_TEST_CAPTURE", capture)
+			t.Setenv("SCENARIGO_TEST_REAL_GO", realGo)
+			// Hold the ambient selection steady: GOWORK unset so checkGowork
+			// really asks go env GOWORK per plugin, GOTOOLCHAIN unset so the
+			// one call the wasi-go library makes on its own records "unset"
+			// rather than whatever the machine happens to export.
+			t.Setenv("GOWORK", "")
+			t.Setenv("GOTOOLCHAIN", "")
+			_, cmd, stderr := setup(t, name, out, migrated)
+			if err := buildRunWithOpts(cmd, []string{}, opts); err != nil {
+				t.Fatalf("unexpected error: %s\n%s", err, stderr.String())
+			}
+			b, err := os.ReadFile(capture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return strings.Fields(string(b))
+		}
+		assertAll := func(t *testing.T, got []string, want string) {
+			t.Helper()
+			if len(got) == 0 {
+				t.Fatal("no go command was captured")
+			}
+			for _, tc := range got {
+				if tc == "unset" {
+					// The wasi-go library resolves GOROOT with the ambient
+					// environment; that call is outside the selection.
+					continue
+				}
+				if tc != want {
+					t.Errorf("a go command ran with GOTOOLCHAIN=%s, want %s: %q", tc, want, got)
+					return
+				}
+			}
+		}
+
+		assertAll(t, build(t, "tcwasm", "plugin.wasm", &buildOpts{wasm: true}), toolchainAuto)
+		assertAll(t, build(t, "tcso", "plugin.so", &buildOpts{}), toolchain)
 	})
 
 	t.Run("build fails after the migration", func(t *testing.T) {

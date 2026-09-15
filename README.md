@@ -1950,7 +1950,7 @@ func Greet(ctx *plugin.Context, name string) string {
 
 ### How to build plugins
 
-Go plugin can be built with `go build -buildmode=plugin`, but we recommend you use `scenarigo plugin build` instead. The wrapper command requires `go` command installed in your machine. Scenarigo always builds plugins with the same go version that is used to build its own. Because of that, scenarigo add `toolchain` directive to the `go.mod` files of plugins.
+Go plugin can be built with `go build -buildmode=plugin`, but we recommend you use `scenarigo plugin build` instead. The wrapper command requires `go` command installed in your machine. Scenarigo always builds `.so` plugins with the same go version that is used to build its own, since the Go plugin ABI accepts nothing else; because of that, scenarigo adds a `toolchain` directive to the `go.mod` files of those plugins (a scenarigo built with a development version of Go runs them with `GOTOOLCHAIN=local` and removes the directive instead). A WASM plugin has no such tie to the scenarigo binary, so its go commands run with `GOTOOLCHAIN=auto` and the plugin's own `go.mod` decides the toolchain, unpinned.
 
 Scenarigo builds plugins according to the configuration.
 

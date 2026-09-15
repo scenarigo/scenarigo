@@ -33,7 +33,7 @@ func migrationModule(t *testing.T) ([]byte, []byte) {
 	create(t, filepath.Join(dir, "main.go"), "package main\n\nimport _ \"github.com/scenarigo/scenarigo/plugin\"\n")
 	tidy := exec.Command("go", "mod", "tidy")
 	tidy.Dir = dir
-	tidy.Env = commandEnv([]string{"GOWORK=off"})
+	tidy.Env = commandEnv("", []string{"GOWORK=off"})
 	if out, err := tidy.CombinedOutput(); err != nil {
 		t.Fatalf("go mod tidy failed: %s\n%s", err, out)
 	}
@@ -52,7 +52,7 @@ func runMigration(t *testing.T, dir string, skipFiles ...string) (*migrationResu
 	t.Helper()
 	return migrateExtractorCalls(t.Context(), &migration{
 		dir:       dir,
-		env:       commandEnv([]string{"GOWORK=off"}),
+		env:       commandEnv("", []string{"GOWORK=off"}),
 		skipFiles: skipFiles,
 	})
 }
@@ -594,7 +594,7 @@ func F(ctx *plugin.Context) bool {
 		create(t, filepath.Join(dir, "helper.go"), strings.Replace(src, "func F(", "func G(", 1))
 		res, err := migrateExtractorCalls(t.Context(), &migration{
 			dir:    dir,
-			env:    commandEnv([]string{"GOWORK=off"}),
+			env:    commandEnv("", []string{"GOWORK=off"}),
 			target: filepath.Join(dir, "main.go"),
 		})
 		if err != nil {
@@ -627,7 +627,7 @@ func D(ctx *plugin.Context) bool {
 		res, err := migrateExtractorCalls(t.Context(), &migration{
 			dir:    dir,
 			pkgDir: filepath.Join(dir, "plugin"),
-			env:    commandEnv([]string{"GOWORK=off"}),
+			env:    commandEnv("", []string{"GOWORK=off"}),
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
@@ -654,7 +654,7 @@ func D(ctx *plugin.Context) bool {
 		res, err := migrateExtractorCalls(t.Context(), &migration{
 			dir:    dir,
 			pkgDir: dir,
-			env:    commandEnv([]string{"GOWORK=off"}),
+			env:    commandEnv("", []string{"GOWORK=off"}),
 			target: filepath.Join(dir, "main.go"),
 		})
 		if err != nil {
@@ -715,7 +715,7 @@ func H(ctx *plugin.Context) bool {
 		create(t, filepath.Join(dir, "main.go"), "package main\n\nimport _ \"fmt\"\n\n"+strings.TrimPrefix(src, "package main\n"))
 		deps, err := buildDeps(t.Context(), &migration{
 			dir: dir,
-			env: commandEnv([]string{"GOWORK=off"}),
+			env: commandEnv("", []string{"GOWORK=off"}),
 		}, dir, ".")
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
@@ -739,7 +739,7 @@ func H(ctx *plugin.Context) bool {
 		create(t, filepath.Join(dir, "main.go"), "package main\n\nimport _ \"example.com/vendored\"\n\nfunc main() {}\n")
 		deps, err := buildDeps(t.Context(), &migration{
 			dir: dir,
-			env: commandEnv([]string{"GOWORK=off"}),
+			env: commandEnv("", []string{"GOWORK=off"}),
 		}, dir, ".")
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
@@ -847,7 +847,7 @@ func TestMigration_RecordsTheOriginalBeforeWriting(t *testing.T) {
 	recorded := 0
 	_, err := migrateExtractorCalls(t.Context(), &migration{
 		dir: dir,
-		env: commandEnv([]string{"GOWORK=off"}),
+		env: commandEnv("", []string{"GOWORK=off"}),
 		record: func(path string, s migratedSource) {
 			recorded++
 			cur, err := os.ReadFile(path)
@@ -899,7 +899,7 @@ func TestMigration_LoaderUsesTheSelectedGoCommand(t *testing.T) {
 	res, err := migrateExtractorCalls(t.Context(), &migration{
 		dir:   dir,
 		goCmd: wrapper,
-		env:   commandEnv([]string{"GOWORK=off"}),
+		env:   commandEnv("", []string{"GOWORK=off"}),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
