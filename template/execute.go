@@ -126,6 +126,10 @@ func execute(ctx context.Context, in reflect.Value, data any) (reflect.Value, er
 				fieldName := reflectutil.StructFieldToKey(v.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
 			}
+			if x.IsValid() && x.Kind() == reflect.Pointer && field.Kind() == reflect.Pointer &&
+				x.Type() == field.Type() && x.Pointer() == field.Pointer() {
+				continue // same pointer and type: the field was executed in place, skip the redundant write
+			}
 			if err := reflectutil.Set(field, x); err != nil {
 				fieldName := reflectutil.StructFieldToKey(v.Type().Field(i))
 				return reflect.Value{}, errors.WithPath(err, fieldName)
@@ -146,6 +150,13 @@ func execute(ctx context.Context, in reflect.Value, data any) (reflect.Value, er
 
 	// keep the original type as much as possible
 	if in.IsValid() && v.IsValid() {
+		// v is still the value behind the pointer and was executed in place, so there
+		// is nothing to write back. Copying it into itself races with other goroutines
+		// that share the pointed-to object, such as the cached plugin instances.
+		if in.Kind() == reflect.Pointer && v.CanAddr() && in.Elem().CanAddr() &&
+			v.UnsafeAddr() == in.Elem().UnsafeAddr() && v.Type() == in.Elem().Type() {
+			return in, nil
+		}
 		if converted, err := convert(in.Type())(v, nil); err == nil {
 			v = converted
 		}
