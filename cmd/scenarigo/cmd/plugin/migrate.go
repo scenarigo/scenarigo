@@ -41,7 +41,10 @@ type migration struct {
 	goCmd string
 	// pkgDir is the directory of the package the build compiles. It is dir
 	// unless the plugin lives in a subdirectory of its module.
-	pkgDir     string
+	pkgDir string
+	// toolchain is the GOTOOLCHAIN the plugin's go commands run with; empty
+	// falls back to the one that built the scenarigo binary.
+	toolchain  string
 	env        []string
 	buildFlags []string
 	// skipFiles are generated sources that must not be rewritten.
@@ -296,7 +299,7 @@ func (m *migration) loadEnv() []string {
 // other modules' sources, which the migration must not rewrite.
 func buildDeps(ctx context.Context, m *migration, dir, pattern string) ([]string, error) {
 	args := append([]string{"list", "-deps", "-f", "{{.ImportPath}}\t{{.Dir}}"}, m.buildFlags...)
-	out, err := executeWithEnvs(ctx, m.env, dir, m.goCommand(), append(args, pattern)...)
+	out, err := executeWithEnvs(ctx, m.toolchain, m.env, dir, m.goCommand(), append(args, pattern)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list the plugin dependencies: %w", err)
 	}
