@@ -2,6 +2,7 @@ package template
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -334,6 +335,135 @@ func TestTemplate_Execute(t *testing.T) {
 				"panic": func() { panic("omg") },
 			},
 			expectError: "omg",
+		},
+	}
+	runExecute(t, tests)
+}
+
+func TestTemplate_Execute_IndexExpr(t *testing.T) {
+	data := map[string]any{
+		"vars": map[string]any{
+			"array":  []string{"a", "b", "c"},
+			"index":  1,
+			"uindex": uint(2),
+			"map": map[string]string{
+				"foo":         "FOO",
+				"foo.bar-baz": "QUX",
+			},
+			"key":     "foo",
+			"keys":    map[string]string{"ref": "foo"},
+			"jsonNum": json.Number("2"),
+			"jsonFlt": json.Number("1.5"),
+			"jsonBig": json.Number("9223372036854775808"),
+		},
+	}
+	tests := map[string]executeTestCase{
+		"integer literal index": {
+			str:    "{{vars.array[1]}}",
+			data:   data,
+			expect: "b",
+		},
+		"index by variable": {
+			str:    "{{vars.array[vars.index]}}",
+			data:   data,
+			expect: "b",
+		},
+		"index by unsigned integer variable": {
+			str:    "{{vars.array[vars.uindex]}}",
+			data:   data,
+			expect: "c",
+		},
+		"index by JSON number variable": {
+			str:    "{{vars.array[vars.jsonNum]}}",
+			data:   data,
+			expect: "c",
+		},
+		"index by expression": {
+			str:    "{{vars.array[1+1]}}",
+			data:   data,
+			expect: "c",
+		},
+		"key by string literal": {
+			str:    `{{vars.map["foo"]}}`,
+			data:   data,
+			expect: "FOO",
+		},
+		"key by string literal containing special characters": {
+			str:    `{{vars.map["foo.bar-baz"]}}`,
+			data:   data,
+			expect: "QUX",
+		},
+		"key by variable": {
+			str:    "{{vars.map[vars.key]}}",
+			data:   data,
+			expect: "FOO",
+		},
+		"key by nested index expression": {
+			str:    `{{vars.map[vars.keys["ref"]]}}`,
+			data:   data,
+			expect: "FOO",
+		},
+		"key not found": {
+			str:         `{{vars.map["missing"]}}`,
+			data:        data,
+			expectError: `".vars.map.missing" not found`,
+		},
+		"index out of range": {
+			str:         "{{vars.array[3]}}",
+			data:        data,
+			expectError: `".vars.array[3]" not found`,
+		},
+		"negative index": {
+			str:         "{{vars.array[-1]}}",
+			data:        data,
+			expectError: "index must not be negative but got -1",
+		},
+		"float index": {
+			str:         "{{vars.array[1.5]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got float64",
+		},
+		"non-integer JSON number index": {
+			str:         "{{vars.array[vars.jsonFlt]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got 1.5",
+		},
+		"out of range JSON number index": {
+			str:         "{{vars.array[vars.jsonBig]}}",
+			data:        data,
+			expectError: "index 9223372036854775808 overflows int",
+		},
+		"bool index": {
+			str:         "{{vars.array[true]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got bool",
+		},
+		"nil index": {
+			str:         "{{vars.array[nil]}}",
+			data:        data,
+			expectError: "expected an integer or string index but got nil",
+		},
+		"undefined variable index": {
+			str:  "{{vars.map[vars.missing]}}",
+			data: data,
+			// the failure of the index expression is reported as-is, not as a
+			// failure to build the query
+			expectError: `failed to execute: {{vars.map[vars.missing]}}: ".vars.missing" not found`,
+		},
+		"undefined variable index with coalescing operator": {
+			str:    `{{vars.map[vars.missing] ?? "default"}}`,
+			data:   data,
+			expect: "default",
+		},
+		"defined() with index by variable": {
+			str:    "{{defined(vars.map[vars.key])}}",
+			data:   data,
+			expect: true,
+		},
+		"defined() with undefined variable index": {
+			str:    "{{defined(vars.map[vars.missing])}}",
+			data:   data,
+			expect: false,
 		},
 	}
 	runExecute(t, tests)

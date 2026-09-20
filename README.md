@@ -1347,6 +1347,26 @@ vars:
   text: 'foo-{{"bar"}}-baz' # text: 'foo-bar-baz'
 ```
 
+You can access an element of an array or a map by an index expression. The index accepts an arbitrary expression that evaluates to an integer (for arrays) or a string (for maps). A map value whose key is a valid identifier can also be accessed with selector notation (`vars.map.foo` is equivalent to `vars.map["foo"]`); the string index is useful when the key is held in a variable or is not a valid identifier (e.g. contains dots or hyphens).
+
+```yaml
+vars:
+  array: [a, b, c]
+  index: 1
+  map:
+    foo.bar: FOO
+  key: foo.bar
+```
+
+```
+{{vars.array[0]}}            # a
+{{vars.array[vars.index]}}   # b
+{{vars.map["foo.bar"]}}      # FOO
+{{vars.map[vars.key]}}       # FOO
+```
+
+The base of an index expression must be a variable reference; the result of a function call can not be indexed. A number decoded from a JSON response body is always an index, so a map whose keys are numeric strings must be accessed by a string (e.g. `{{vars.map[string(response.body.id)]}}`).
+
 ### Syntax
 
 The grammar of the template is defined below, using `|` for alternatives, `[]` for optional, `{}` for repeated, `()` for grouping, and `...` for character range.
@@ -1361,7 +1381,7 @@ UnaryExpr       = [UnaryOp] (
 UnaryOp         = "!" | "-"
 ParenExpr       = "(" Expr ")"
 SelectorExpr    = Expr "." IDENT
-IndexExpr       = Expr "[" INT "]"
+IndexExpr       = Expr "[" Expr "]"
 CallExpr        = Expr "(" [Expr {"," Expr}] ")"
 BinaryExpr      = Expr BinaryOp Expr
 BinaryOp        = "+" | "-" | "*" | "/" | "%" |
