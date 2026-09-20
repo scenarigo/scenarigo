@@ -1,0 +1,10 @@
+---
+name: "schemaVersion value completion with existing schema"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [steps, vars]

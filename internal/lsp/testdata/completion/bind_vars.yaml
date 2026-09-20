@@ -1,0 +1,23 @@
+---
+name: "bind.vars keys appear in template completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com
+      bind:
+        vars:
+          authToken: "{{response.body.token}}"
+          userId: "{{response.body.id}}"
+    - title: step2
+      protocol: http
+      request:
+        url: '{{vars.$0}}'
+operation: completion
+expect:
+  completionLabels:
+    contains: [authToken, userId]

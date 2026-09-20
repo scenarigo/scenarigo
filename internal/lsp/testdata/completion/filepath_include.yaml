@@ -1,0 +1,31 @@
+---
+name: "include file path completion"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - include: $0
+files:
+  helper.yaml: "title: helper\n"
+  other.yaml: "title: other\n"
+  subdir/nested.yaml: "title: nested\n"
+operation: completion
+expect:
+  completionLabels:
+    contains: [helper.yaml, other.yaml, "subdir/"]
+    excludes: [test.yaml]
+---
+name: "include file path completion with partial"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - include: hel$0
+files:
+  helper.yaml: "title: helper\n"
+  other.yaml: "title: other\n"
+operation: completion
+expect:
+  completionLabels:
+    contains: [helper.yaml]
+    excludes: [other.yaml]
