@@ -3,8 +3,6 @@ package template
 import (
 	"testing"
 	"time"
-
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestTypeFunctions(t *testing.T) {
@@ -32,7 +30,7 @@ func TestTypeFunctions(t *testing.T) {
 		"bool(*bool)": {
 			str: `{{bool(v)}}`,
 			data: map[string]any{
-				"v": testutil.ToPtr(true),
+				"v": new(true),
 			},
 			expect: true,
 		},

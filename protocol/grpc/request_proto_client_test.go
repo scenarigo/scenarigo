@@ -20,7 +20,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/grpcstream"
-	"github.com/scenarigo/scenarigo/internal/ptr"
 	"github.com/scenarigo/scenarigo/internal/testutil"
 	testpb "github.com/scenarigo/scenarigo/testdata/gen/pb/test"
 	"google.golang.org/grpc/codes"
@@ -64,7 +63,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -86,7 +85,7 @@ func TestProtoClient(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -130,7 +129,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -217,7 +216,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -242,7 +241,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -394,7 +393,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -410,7 +409,7 @@ func TestProtoClient(t *testing.T) {
 				Message: yaml.MapSlice{},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -430,7 +429,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -445,7 +444,7 @@ func TestProtoClient(t *testing.T) {
 				Message: yaml.MapSlice{},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -465,7 +464,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -490,7 +489,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -513,7 +512,7 @@ func TestProtoClient(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -606,7 +605,7 @@ func TestProtoClientServerStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -632,7 +631,7 @@ func TestProtoClientServerStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -654,7 +653,7 @@ func TestProtoClientServerStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -680,7 +679,7 @@ func TestProtoClientServerStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -767,7 +766,7 @@ func TestProtoClientClientStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -784,7 +783,7 @@ func TestProtoClientClientStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -810,7 +809,7 @@ func TestProtoClientClientStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -831,7 +830,7 @@ func TestProtoClientClientStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -854,7 +853,7 @@ func TestProtoClientClientStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -957,7 +956,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -999,7 +998,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1041,7 +1040,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1081,7 +1080,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1128,7 +1127,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1161,7 +1160,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1190,7 +1189,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 				},
 				Options: &RequestOptions{
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1222,7 +1221,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1245,7 +1244,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1273,7 +1272,7 @@ func TestProtoClientBidiStreaming(t *testing.T) {
 						},
 					},
 					Auth: &AuthOption{
-						Insecure: ptr.To(true),
+						Insecure: new(true),
 					},
 				},
 			},
@@ -1438,7 +1437,7 @@ func TestProtoClientBidiStreaming_DeadlockGuard(t *testing.T) {
 					},
 				},
 				Options: &RequestOptions{
-					Auth: &AuthOption{Insecure: ptr.To(true)},
+					Auth: &AuthOption{Insecure: new(true)},
 				},
 			}
 
@@ -1501,7 +1500,7 @@ func TestProtoClientBidiStreaming_InterruptedWaitIsNotUndefined(t *testing.T) {
 			},
 		},
 		Options: &RequestOptions{
-			Auth: &AuthOption{Insecure: ptr.To(true)},
+			Auth: &AuthOption{Insecure: new(true)},
 		},
 	}
 
@@ -1633,7 +1632,7 @@ func TestProtoClientStreaming_TransportErrorStaysStatus(t *testing.T) {
 				},
 			},
 			Auth: &AuthOption{
-				Insecure: ptr.To(true),
+				Insecure: new(true),
 			},
 		},
 	}

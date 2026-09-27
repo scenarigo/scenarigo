@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestTimeType_Name(t *testing.T) {
@@ -70,7 +69,7 @@ func TestTimeType_Convert(t *testing.T) {
 			expect: Time(tm),
 		},
 		"any[*time]": {
-			v:      Any{testutil.ToPtr(tm)},
+			v:      Any{new(tm)},
 			expect: Time(tm),
 		},
 		"string": {

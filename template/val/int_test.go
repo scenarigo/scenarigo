@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestIntType_Name(t *testing.T) {
@@ -68,7 +67,7 @@ func TestIntType_Convert(t *testing.T) {
 			expect: Int(1),
 		},
 		"any[*int]": {
-			v:      Any{testutil.ToPtr(1)},
+			v:      Any{new(1)},
 			expect: Int(1),
 		},
 		"uint": {

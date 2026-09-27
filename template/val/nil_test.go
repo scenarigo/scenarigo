@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestNilType_Name(t *testing.T) {
@@ -30,7 +29,7 @@ func TestNilType_NewValue(t *testing.T) {
 			expect: Nil{(*int)(nil)},
 		},
 		"not nil": {
-			v:           testutil.ToPtr(1),
+			v:           new(1),
 			expectError: ErrUnsupportedType.Error(),
 		},
 		"int": {

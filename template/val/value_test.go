@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestNewValue(t *testing.T) {
@@ -51,8 +50,8 @@ func TestNewValue(t *testing.T) {
 			expect: Nil{(*int)(nil)},
 		},
 		"*int": {
-			v:      testutil.ToPtr(1),
-			expect: Any{testutil.ToPtr(1)},
+			v:      new(1),
+			expect: Any{new(1)},
 		},
 		"Value": {
 			v:      Int(0),
