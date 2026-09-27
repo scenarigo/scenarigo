@@ -974,12 +974,12 @@ func replaceStructType(t reflect.Type) reflect.Type {
 		return reflect.ArrayOf(t.Len(), replaceStructType(t.Elem()))
 	case reflect.Func:
 		args := make([]reflect.Type, 0, t.NumIn())
-		for i := range t.NumIn() {
-			args = append(args, replaceStructType(t.In(i)))
+		for in := range t.Ins() {
+			args = append(args, replaceStructType(in))
 		}
 		ret := make([]reflect.Type, 0, t.NumOut())
-		for i := range t.NumOut() {
-			ret = append(ret, replaceStructType(t.Out(i)))
+		for out := range t.Outs() {
+			ret = append(ret, replaceStructType(out))
 		}
 		return reflect.FuncOf(args, ret, false)
 	case reflect.Struct:

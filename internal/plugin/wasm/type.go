@@ -391,15 +391,15 @@ func (t *StructType) String() string {
 func newFuncType(v reflect.Value) (*Type, error) {
 	t := v.Type()
 	ret := &Type{Kind: FUNC, Func: &FuncType{}}
-	for i := range t.NumIn() {
-		typ, err := NewType(newZeroValue(t.In(i)))
+	for in := range t.Ins() {
+		typ, err := NewType(newZeroValue(in))
 		if err != nil {
 			return nil, err
 		}
 		ret.Func.Args = append(ret.Func.Args, typ)
 	}
-	for i := range t.NumOut() {
-		typ, err := NewType(newZeroValue(t.Out(i)))
+	for out := range t.Outs() {
+		typ, err := NewType(newZeroValue(out))
 		if err != nil {
 			return nil, err
 		}

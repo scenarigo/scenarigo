@@ -160,8 +160,8 @@ func DetectGRPCMethodType(method reflect.Value) GRPCMethodType {
 			// response) and has no Recv. This holds for both the classic and
 			// the generic protoc-gen-go-grpc stream clients.
 			streamType := mt.Out(0)
-			for i := range streamType.NumMethod() {
-				if streamType.Method(i).Name == "Recv" {
+			for method := range streamType.Methods() {
+				if method.Name == "Recv" {
 					return GRPCMethodBidiStream
 				}
 			}
