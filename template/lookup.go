@@ -97,10 +97,7 @@ func (t *Template) appendIndexQuery(ctx context.Context, q *query.Query, expr as
 	switch rv.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i := rv.Int()
-		if i < 0 {
-			return nil, errors.Errorf("index must not be negative but got %d", i)
-		}
-		if i > math.MaxInt {
+		if i < math.MinInt || i > math.MaxInt {
 			return nil, errors.Errorf("index %d overflows int", i)
 		}
 		return q.Index(int(i)), nil

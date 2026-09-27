@@ -413,9 +413,14 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 			expectError: `".vars.array[3]" not found`,
 		},
 		"negative index": {
-			str:         "{{vars.array[-1]}}",
+			str:    "{{vars.array[-1]}}",
+			data:   data,
+			expect: "c",
+		},
+		"negative index out of range": {
+			str:         "{{vars.array[-4]}}",
 			data:        data,
-			expectError: "index must not be negative but got -1",
+			expectError: `".vars.array[-4]" not found`,
 		},
 		"float index": {
 			str:         "{{vars.array[1.5]}}",
