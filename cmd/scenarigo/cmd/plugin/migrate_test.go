@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -958,6 +961,73 @@ func TestMigrationGoCommand(t *testing.T) {
 		}
 		if got := m.loadEnv(); len(got) != 1 || got[0] != "PATH=/usr/bin" {
 			t.Errorf("expected the environment to be left alone but got %q", got)
+		}
+	})
+}
+
+func TestCheckLoaded_ImportFailure(t *testing.T) {
+	// A failed import leaves an incomplete placeholder package behind, and
+	// the loaded package still has its types, so without this check the
+	// migration finds no extractor calls and reports nothing. This happens
+	// when the go/packages in this binary cannot read the export data that
+	// the go command writes.
+	const (
+		path = "github.com/scenarigo/scenarigo/plugin"
+		src  = "package main\n\nimport \"" + path + "\"\n\nvar _ = plugin.Context{}\n"
+		msg  = "could not import " + path + " (export data version 5 is greater than maximum supported version 4)"
+	)
+	load := func(t *testing.T, complete bool, typeErrs ...string) *packages.Package {
+		t.Helper()
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, "main.go", src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		imp := types.NewPackage(path, "plugin")
+		if complete {
+			imp.MarkComplete()
+		}
+		pkg := types.NewPackage("main", "main")
+		pkg.SetImports([]*types.Package{imp})
+		p := &packages.Package{
+			PkgPath:         "main",
+			Fset:            fset,
+			Types:           pkg,
+			TypesInfo:       &types.Info{},
+			Syntax:          []*ast.File{file},
+			CompiledGoFiles: []string{"main.go"},
+		}
+		for _, m := range typeErrs {
+			p.TypeErrors = append(p.TypeErrors, types.Error{Fset: fset, Pos: file.Imports[0].Path.Pos(), Msg: m})
+		}
+		return p
+	}
+
+	t.Run("the type error of the import is reported", func(t *testing.T) {
+		pkg := load(t, false, msg)
+		// An error elsewhere that names the path is not the import's.
+		other := types.Error{Fset: pkg.Fset, Pos: pkg.Syntax[0].Decls[1].Pos(), Msg: "undefined: " + path + ".Context"}
+		pkg.TypeErrors = append([]types.Error{other}, pkg.TypeErrors...)
+		err := checkLoaded([]*packages.Package{pkg})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !strings.Contains(err.Error(), msg) {
+			t.Errorf("expected the error to carry %q but got %q", msg, err)
+		}
+	})
+	t.Run("the path is reported without a type error", func(t *testing.T) {
+		err := checkLoaded([]*packages.Package{load(t, false)})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !strings.Contains(err.Error(), "could not import "+path) {
+			t.Errorf("expected the error to name %s but got %q", path, err)
+		}
+	})
+	t.Run("a complete import passes", func(t *testing.T) {
+		if err := checkLoaded([]*packages.Package{load(t, true)}); err != nil {
+			t.Errorf("unexpected error: %s", err)
 		}
 	})
 }
