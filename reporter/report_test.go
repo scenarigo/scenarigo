@@ -338,7 +338,7 @@ func TestTestDuration(t *testing.T) {
 					t.Fatal(err)
 				}
 				if got, expect := d, test.duration; got != expect {
-					t.Fatalf("expect %q but got %q", expect, got)
+					t.Fatalf("expect %s but got %s", time.Duration(expect), time.Duration(got))
 				}
 			})
 			t.Run("yaml", func(t *testing.T) {
@@ -354,7 +354,7 @@ func TestTestDuration(t *testing.T) {
 					t.Fatal(err)
 				}
 				if got, expect := d, test.duration; got != expect {
-					t.Fatalf("expect %q but got %q", expect, got)
+					t.Fatalf("expect %s but got %s", time.Duration(expect), time.Duration(got))
 				}
 			})
 		})
