@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/grpc/plugin/src
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.27.0
 
 require (
 	github.com/scenarigo/scenarigo v0.26.2
