@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
-	"github.com/scenarigo/scenarigo/internal/ptr"
 )
 
 func TestLogRecorder(t *testing.T) {
@@ -27,11 +25,11 @@ func TestLogRecorder(t *testing.T) {
 				strs:      []string{"info", "error", "skip"},
 				infoIdxs:  []int{0},
 				errorIdxs: []int{1},
-				skipIdx:   ptr.To(2),
+				skipIdx:   new(2),
 			},
 			expectInfo:  []string{"info"},
 			expectError: []string{"error"},
-			expectSkip:  ptr.To("skip"),
+			expectSkip:  new("skip"),
 		},
 		"setReplacer first": {
 			f: func(r *logRecorder) {
@@ -44,11 +42,11 @@ func TestLogRecorder(t *testing.T) {
 				strs:      []string{"info XXX", "error XXX", "skip XXX"},
 				infoIdxs:  []int{0},
 				errorIdxs: []int{1},
-				skipIdx:   ptr.To(2),
+				skipIdx:   new(2),
 			},
 			expectInfo:  []string{"info XXX"},
 			expectError: []string{"error XXX"},
-			expectSkip:  ptr.To("skip XXX"),
+			expectSkip:  new("skip XXX"),
 		},
 		"setReplacer last": {
 			f: func(r *logRecorder) {
@@ -61,11 +59,11 @@ func TestLogRecorder(t *testing.T) {
 				strs:      []string{"info XXX", "error XXX", "skip XXX"},
 				infoIdxs:  []int{0},
 				errorIdxs: []int{1},
-				skipIdx:   ptr.To(2),
+				skipIdx:   new(2),
 			},
 			expectInfo:  []string{"info XXX"},
 			expectError: []string{"error XXX"},
-			expectSkip:  ptr.To("skip XXX"),
+			expectSkip:  new("skip XXX"),
 		},
 	}
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestDurationType_Name(t *testing.T) {
@@ -69,7 +68,7 @@ func TestDurationType_Convert(t *testing.T) {
 			expect: Duration(time.Second),
 		},
 		"any[*time.Duration]": {
-			v:      Any{testutil.ToPtr(time.Second)},
+			v:      Any{new(time.Second)},
 			expect: Duration(time.Second),
 		},
 		"int": {

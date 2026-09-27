@@ -12,7 +12,6 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestNew(t *testing.T) {
@@ -195,7 +194,7 @@ func TestTemplate_Execute(t *testing.T) {
 			data: map[string]any{
 				"s": echoStruct{},
 				"p": &echoStruct{},
-				"d": testutil.ToPtr("d"),
+				"d": new("d"),
 			},
 			expect: "abbcdd",
 		},

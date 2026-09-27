@@ -1,6 +1,6 @@
 module test
 
-go 1.25.0
+go 1.26.0
 
 replace github.com/scenarigo/scenarigo => ../../../..
 
@@ -21,7 +21,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
-	github.com/jhump/protoreflect v1.18.0 // indirect
+	github.com/jhump/protoreflect v1.18.1 // indirect
 	github.com/jhump/protoreflect/v2 v2.0.0-beta.2 // indirect
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect

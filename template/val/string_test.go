@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/scenarigo/scenarigo/internal/testutil"
 )
 
 func TestStringType_Name(t *testing.T) {
@@ -67,7 +66,7 @@ func TestStringType_Convert(t *testing.T) {
 			expect: String("test"),
 		},
 		"any[*string]": {
-			v:      Any{testutil.ToPtr("test")},
+			v:      Any{new("test")},
 			expect: String("test"),
 		},
 		"int": {
