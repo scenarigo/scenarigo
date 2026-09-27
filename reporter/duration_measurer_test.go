@@ -92,13 +92,21 @@ func TestDurationMeasurer(t *testing.T) {
 	close(ch)
 	wg.Wait()
 
-	if expect, got := 40*durationTestUnit, parent.duration.Truncate(5*durationTestUnit); got != expect {
-		t.Errorf("expected %s but got %s", expect, got)
-	}
-	if expect, got := 30*durationTestUnit, child1.getDuration().Truncate(5*durationTestUnit); got != expect {
-		t.Errorf("expected %s but got %s", expect, got)
-	}
-	if expect, got := 20*durationTestUnit, child2.getDuration().Truncate(5*durationTestUnit); got != expect {
-		t.Errorf("expected %s but got %s", expect, got)
+	// Each duration is a union of intervals that start in different
+	// goroutines, so a goroutine scheduled late shortens it slightly, while
+	// oversleeping lengthens it. Truncating would turn a value just short of
+	// the expected one into the step below, so the check allows a margin on
+	// both sides instead, narrow enough that the ranges of the three expected
+	// values do not overlap.
+	for name, d := range map[string]struct {
+		expect, got time.Duration
+	}{
+		"parent": {40 * durationTestUnit, parent.duration},
+		"child1": {30 * durationTestUnit, child1.getDuration()},
+		"child2": {20 * durationTestUnit, child2.getDuration()},
+	} {
+		if d.got < d.expect-4*durationTestUnit || d.got >= d.expect+5*durationTestUnit {
+			t.Errorf("%s: expected %s but got %s", name, d.expect, d.got)
+		}
 	}
 }
