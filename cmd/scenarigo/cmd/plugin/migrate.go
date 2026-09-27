@@ -327,8 +327,9 @@ func vendored(path, dir string) bool {
 }
 
 // checkLoaded reports the first package whose sources were not parsed and
-// type-checked. Other errors are expected: the build just failed, and go list
-// reports that failure too while it tries to export the package.
+// type-checked, or that was type-checked without one of its imports. Other
+// errors are expected: the build just failed, and go list reports that failure
+// too while it tries to export the package.
 func checkLoaded(pkgs []*packages.Package) error {
 	for _, pkg := range pkgs {
 		if pkg.Types == nil || pkg.TypesInfo == nil || len(pkg.Syntax) != len(pkg.CompiledGoFiles) {
@@ -337,8 +338,55 @@ func checkLoaded(pkgs []*packages.Package) error {
 			}
 			return fmt.Errorf("failed to load the plugin package %s", pkg.PkgPath)
 		}
+		if err := importFailure(pkg); err != nil {
+			return fmt.Errorf("failed to load the plugin packages: %w", err)
+		}
 	}
 	return nil
+}
+
+// importFailure returns the error of the first import that the type checker
+// could not resolve. The package still has its types then, but no call through
+// that import can be recognized: when it is the scenarigo package, the
+// migration silently finds nothing to do, as when the go command writes export
+// data that the go/packages linked into this binary cannot read. The other
+// failures - a missing package, an import cycle, a failed cgo preprocessing -
+// fail the rebuild as well, so no migration could make the build pass.
+//
+// A failed import is told apart by its package: the type checker puts an
+// incomplete placeholder in its place, while a package read from export data
+// or type-checked from source is complete even when it has errors.
+func importFailure(pkg *packages.Package) error {
+	for _, imp := range pkg.Types.Imports() {
+		if imp.Complete() {
+			continue
+		}
+		// The message is matched by the position of the import spec rather
+		// than by its text: other errors can name the path too.
+		for _, e := range pkg.TypeErrors {
+			if importPathAt(pkg, e.Pos) == imp.Path() {
+				return e
+			}
+		}
+		return fmt.Errorf("could not import %s", imp.Path())
+	}
+	return nil
+}
+
+// importPathAt returns the path of the import spec at pos, if any.
+func importPathAt(pkg *packages.Package, pos token.Pos) string {
+	for _, f := range pkg.Syntax {
+		for _, spec := range f.Imports {
+			if spec.Pos() <= pos && pos < spec.End() {
+				p, err := strconv.Unquote(spec.Path.Value)
+				if err != nil {
+					return ""
+				}
+				return p
+			}
+		}
+	}
+	return ""
 }
 
 // buildPattern is the argument that names what the build compiles, as the go
