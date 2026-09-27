@@ -345,6 +345,7 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 			"array":  []string{"a", "b", "c"},
 			"index":  1,
 			"uindex": uint(2),
+			"ubig":   uint64(math.MaxUint64),
 			"map": map[string]string{
 				"foo":         "FOO",
 				"foo.bar-baz": "QUX",
@@ -354,6 +355,7 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 			"jsonNum": json.Number("2"),
 			"jsonFlt": json.Number("1.5"),
 			"jsonBig": json.Number("9223372036854775808"),
+			"jsonNeg": json.Number("-1"),
 		},
 	}
 	tests := map[string]executeTestCase{
@@ -436,6 +438,16 @@ func TestTemplate_Execute_IndexExpr(t *testing.T) {
 			str:         "{{vars.array[vars.jsonBig]}}",
 			data:        data,
 			expectError: "index 9223372036854775808 overflows int",
+		},
+		"negative JSON number index": {
+			str:    "{{vars.array[vars.jsonNeg]}}",
+			data:   data,
+			expect: "c",
+		},
+		"out of range unsigned index": {
+			str:         "{{vars.array[vars.ubig]}}",
+			data:        data,
+			expectError: "index 18446744073709551615 overflows int",
 		},
 		"bool index": {
 			str:         "{{vars.array[true]}}",
