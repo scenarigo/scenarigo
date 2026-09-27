@@ -1,6 +1,6 @@
 module github.com/scenarigo/scenarigo/examples/default-value-with-nullish-coalescing-operator/plugin
 
-go 1.25.0
+go 1.26.0
 
 toolchain go1.27.1
 
