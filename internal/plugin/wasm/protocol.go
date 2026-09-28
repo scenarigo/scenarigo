@@ -3,6 +3,7 @@ package wasm
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"google.golang.org/grpc/metadata"
 
@@ -43,6 +44,38 @@ type Response struct {
 	Command     CommandResponse              `json:"command"`
 	Context     *context.SerializableContext `json:"context"`
 	Error       string                       `json:"error"`
+	// IdlePollInterval is the plugin's current idle polling interval, or zero
+	// when it has not enabled idle polling. A host that predates the field
+	// ignores it, and the plugin then keeps waiting the way it always has.
+	IdlePollInterval time.Duration `json:"idlePollInterval,omitempty"`
+}
+
+// MinIdlePollInterval is the shortest idle polling interval. Each poll costs
+// the host about a millisecond of CPU time, so an idle host spends roughly
+// 1ms/(interval+1ms) of a CPU core polling: about a tenth at this minimum,
+// against about a half at 1ms.
+const MinIdlePollInterval = 10 * time.Millisecond
+
+// ValidateIdlePollInterval reports whether d is an interval a plugin may set:
+// zero, which stops polling, or at least MinIdlePollInterval.
+func ValidateIdlePollInterval(d time.Duration) error {
+	if d == 0 || d >= MinIdlePollInterval {
+		return nil
+	}
+	return fmt.Errorf("idle poll interval %s must be zero or at least %s", d, MinIdlePollInterval)
+}
+
+// NormalizeIdlePollInterval returns d raised to MinIdlePollInterval, or zero
+// (no polling) when d is not positive. The host applies it to what arrives in
+// a response, which it has no way to reject.
+func NormalizeIdlePollInterval(d time.Duration) time.Duration {
+	switch {
+	case d <= 0:
+		return 0
+	case d < MinIdlePollInterval:
+		return MinIdlePollInterval
+	}
+	return d
 }
 
 // CommandRequest is an interface for all command request types.
@@ -617,10 +650,11 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 //nolint:cyclop
 func (r *Response) UnmarshalJSON(b []byte) error {
 	var res struct {
-		CommandType Command                      `json:"type"`
-		Command     json.RawMessage              `json:"command"`
-		Context     *context.SerializableContext `json:"context"`
-		Error       string                       `json:"error"`
+		CommandType      Command                      `json:"type"`
+		Command          json.RawMessage              `json:"command"`
+		Context          *context.SerializableContext `json:"context"`
+		Error            string                       `json:"error"`
+		IdlePollInterval time.Duration                `json:"idlePollInterval"`
 	}
 	if err := json.Unmarshal(b, &res); err != nil {
 		return err
@@ -628,6 +662,7 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 	r.CommandType = res.CommandType
 	r.Context = res.Context
 	r.Error = res.Error
+	r.IdlePollInterval = res.IdlePollInterval
 	switch res.CommandType {
 	case InitCommand:
 		var v InitCommandResponse

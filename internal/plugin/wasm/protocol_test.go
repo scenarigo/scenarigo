@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/scenarigo/scenarigo/context"
 )
@@ -1093,4 +1094,78 @@ func TestToCommandRequestErrorCase(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for wrong type conversion")
 	}
+}
+
+func TestNormalizeIdlePollInterval(t *testing.T) {
+	tests := map[string]struct {
+		in, expect time.Duration
+	}{
+		"negative":           {in: -time.Second, expect: 0},
+		"zero":               {in: 0, expect: 0},
+		"one nanosecond":     {in: time.Nanosecond, expect: MinIdlePollInterval},
+		"just under the min": {in: MinIdlePollInterval - 1, expect: MinIdlePollInterval},
+		"the min":            {in: MinIdlePollInterval, expect: MinIdlePollInterval},
+		"longer":             {in: 50 * time.Millisecond, expect: 50 * time.Millisecond},
+		"max":                {in: time.Duration(1<<63 - 1), expect: time.Duration(1<<63 - 1)},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := NormalizeIdlePollInterval(test.in); got != test.expect {
+				t.Fatalf("expected %s but got %s", test.expect, got)
+			}
+		})
+	}
+}
+
+func TestValidateIdlePollInterval(t *testing.T) {
+	tests := map[string]struct {
+		in    time.Duration
+		valid bool
+	}{
+		"negative":           {in: -time.Second},
+		"minus one":          {in: -1},
+		"zero":               {in: 0, valid: true},
+		"one nanosecond":     {in: time.Nanosecond},
+		"a millisecond":      {in: time.Millisecond},
+		"just under the min": {in: MinIdlePollInterval - 1},
+		"the min":            {in: MinIdlePollInterval, valid: true},
+		"longer":             {in: 50 * time.Millisecond, valid: true},
+		"max":                {in: time.Duration(1<<63 - 1), valid: true},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateIdlePollInterval(test.in)
+			if test.valid && err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			if !test.valid && err == nil {
+				t.Fatal("no error")
+			}
+		})
+	}
+}
+
+func TestResponseIdlePollIntervalJSON(t *testing.T) {
+	t.Run("round trip", func(t *testing.T) {
+		b, err := json.Marshal(&Response{CommandType: SetupCommand, IdlePollInterval: 10 * time.Millisecond})
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := DecodeResponse(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.IdlePollInterval != 10*time.Millisecond {
+			t.Fatalf("expected 10ms but got %s", res.IdlePollInterval)
+		}
+	})
+	t.Run("omitted when zero", func(t *testing.T) {
+		b, err := json.Marshal(&Response{CommandType: SetupCommand})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if contains(string(b), "idlePollInterval") {
+			t.Fatalf("unexpected field in %s", b)
+		}
+	})
 }

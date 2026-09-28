@@ -20,6 +20,19 @@
 // read_length/read functions to receive the request, processes it, and calls
 // the host-exported write function to send back the response.
 //
+// # Idle polling
+//
+// The guest is single-threaded: its goroutines run only while control is
+// inside the guest, so a server that a setup started in the guest answers
+// nothing while the guest waits in read_length. A guest that calls
+// SetIdlePollInterval reports the interval in every response, and read_length
+// then returns wasmNoRequest to it when no request came in within that
+// interval; the guest sleeps briefly, running its other goroutines, and calls
+// read_length again. The interval travels in the response rather than through
+// a new host function so that a plugin built with a newer scenarigo still
+// instantiates on an older host (which ignores the field and never polls), and
+// a guest that never asked for it never sees wasmNoRequest.
+//
 // # Goroutine and resource ownership
 //
 // openWasmPlugin starts a background goroutine that runs InstantiateModule.
@@ -55,12 +68,13 @@
 //
 // # Host function context awareness
 //
-// Both read_length and write host functions select on ctx.Done() to avoid
+// The read_length and write host functions select on ctx.Done() to avoid
 // deadlock during shutdown:
 //
-//   - read_length: Without the check, <-reqCh blocks forever since no more
-//     requests are sent after Close(). cancelFn() alone cannot interrupt a Go
-//     channel receive.
+//   - read_length: Without the check, <-reqCh blocks forever (or, for a guest
+//     that polls, returns wasmNoRequest forever) since no more requests are
+//     sent after Close(). cancelFn() alone cannot interrupt a Go channel
+//     receive.
 //   - write: After read_length returns 0 on cancellation, the guest may still
 //     call write. Since resCh is unbuffered and no reader exists during
 //     shutdown, the send would block forever.
@@ -75,6 +89,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"net/http"
 	"net/http/httputil"
 	"os"
@@ -82,6 +97,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	wasi "github.com/goccy/wasi-go"
@@ -172,22 +189,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 	host := r.NewHostModuleBuilder("scenarigo")
 	host.NewFunctionBuilder().WithGoModuleFunction(
 		api.GoModuleFunc(func(ctx gocontext.Context, mod api.Module, stack []uint64) {
-			plg := getPluginFromContext(ctx)
-			if plg == nil {
-				panic("failed to get plugin from context")
-			}
-			// Wait for the next request or context cancellation.
-			// The ctx.Done() case is essential: without it, Close() would deadlock
-			// because cancelFn() cannot interrupt a Go channel receive (<-reqCh),
-			// so the InstantiateModule goroutine would never finish and <-done would block forever.
-			select {
-			case <-ctx.Done():
-				stack[0] = 0
-				return
-			case req := <-plg.reqCh:
-				plg.req = req
-				stack[0] = uint64(len(req))
-			}
+			stack[0] = receiveRequest(ctx)
 		}),
 		[]api.ValueType{},
 		[]api.ValueType{api.ValueTypeI32},
@@ -240,6 +242,7 @@ func openWasmPlugin(path string) (Plugin, error) {
 		wasiSystem:  sys,
 		reqCh:       make(chan []byte, 1),
 		resCh:       make(chan []byte),
+		idlePollSet: make(chan struct{}, 1),
 		stdoutR:     stdoutR,
 		stderrR:     stderrR,
 		stdoutW:     stdoutW,
@@ -279,6 +282,49 @@ func openWasmPlugin(path string) (Plugin, error) {
 
 type pluginKey struct{}
 
+// wasmNoRequest is what read_length returns to a guest that polls when no
+// request came in within its idle polling interval. A request is never this
+// long: the guest reads it into memory of at most 4 GiB along with everything
+// else.
+const wasmNoRequest = math.MaxUint32
+
+// receiveRequest waits for the next request and returns its length, or 0 on
+// cancellation, or wasmNoRequest once the guest's idle polling interval passes
+// first. The ctx.Done() case is essential: without it, Close() would deadlock
+// because cancelFn() cannot interrupt a Go channel receive (<-reqCh), so the
+// InstantiateModule goroutine would never finish and <-done would block
+// forever.
+func receiveRequest(ctx gocontext.Context) uint64 {
+	plg := getPluginFromContext(ctx)
+	if plg == nil {
+		panic("failed to get plugin from context")
+	}
+	for {
+		// The guest calls read_length right after write, before call() has
+		// stored the interval from that response, so the wait starts over
+		// whenever the interval changes.
+		var timeout <-chan time.Time
+		var timer *time.Timer
+		if d := time.Duration(plg.idlePollInterval.Load()); d > 0 {
+			timer = time.NewTimer(d)
+			timeout = timer.C
+		}
+		select {
+		case <-ctx.Done():
+			return 0
+		case req := <-plg.reqCh:
+			plg.req = req
+			return uint64(len(req))
+		case <-timeout:
+			return wasmNoRequest
+		case <-plg.idlePollSet:
+			if timer != nil {
+				timer.Stop()
+			}
+		}
+	}
+}
+
 func getPluginFromContext(ctx gocontext.Context) *WasmPlugin {
 	v := ctx.Value(pluginKey{})
 	if v == nil {
@@ -312,6 +358,12 @@ type WasmPlugin struct {
 	// reqCh is buffered (size 1) so write() can send without blocking on the goroutine.
 	reqCh chan []byte
 	resCh chan []byte
+
+	// idlePollInterval is the guest's idle polling interval (a time.Duration)
+	// from its latest response, zero when it does not poll. idlePollSet
+	// (buffered, size 1) wakes read_length when call() changes it.
+	idlePollInterval atomic.Int64
+	idlePollSet      chan struct{}
 
 	// Pipe file descriptors for capturing WASM module's stdout/stderr.
 	stdoutR int
@@ -396,6 +448,13 @@ func (p *WasmPlugin) call(ctx *Context, req *wasm.Request) (wasm.CommandResponse
 		})
 		if ok {
 			curReporter.SyncFromSerializable(res.Context.ReporterID, res.Context.ReporterMap)
+		}
+	}
+	interval := int64(wasm.NormalizeIdlePollInterval(res.IdlePollInterval))
+	if old := p.idlePollInterval.Swap(interval); old != interval {
+		select {
+		case p.idlePollSet <- struct{}{}:
+		default:
 		}
 	}
 	if res.Error != "" {
