@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 jobs:
   bump-indirect-modules:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
