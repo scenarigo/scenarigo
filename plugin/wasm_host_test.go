@@ -729,3 +729,16 @@ func TestSetIdlePollIntervalGoPlugin(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckRequestLength(t *testing.T) {
+	for _, n := range []uint64{0, 1, wasmNoRequest - 1} {
+		if err := checkRequestLength(n); err != nil {
+			t.Errorf("%d: unexpected error: %s", n, err)
+		}
+	}
+	for _, n := range []uint64{wasmNoRequest, wasmNoRequest + 1} {
+		if err := checkRequestLength(n); err == nil {
+			t.Errorf("%d: no error", n)
+		}
+	}
+}

@@ -283,9 +283,8 @@ func openWasmPlugin(path string) (Plugin, error) {
 type pluginKey struct{}
 
 // wasmNoRequest is what read_length returns to a guest that polls when no
-// request came in within its idle polling interval. A request is never this
-// long: the guest reads it into memory of at most 4 GiB along with everything
-// else.
+// request came in within its idle polling interval. write rejects a request
+// this long or longer.
 const wasmNoRequest = math.MaxUint32
 
 // receiveRequest waits for the next request and returns its length, or 0 on
@@ -472,6 +471,16 @@ func convertCommandResponse[T wasm.CommandResponse](v wasm.CommandResponse) (T, 
 	return ret, nil
 }
 
+// checkRequestLength rejects a request read_length cannot hand to the guest:
+// the length travels as an i32, and the longest one is the idle polling
+// sentinel.
+func checkRequestLength(n uint64) error {
+	if n >= wasmNoRequest {
+		return fmt.Errorf("request of %d bytes is too large for a WASM plugin", n)
+	}
+	return nil
+}
+
 // write sends a request to the WASM module.
 // If the module has already terminated, it returns the module's error immediately.
 //
@@ -480,6 +489,9 @@ func convertCommandResponse[T wasm.CommandResponse](v wasm.CommandResponse) (T, 
 // and Go's select would pick one at random. The first non-blocking check
 // on done ensures we always detect a closed module before attempting to send.
 func (p *WasmPlugin) write(cmd []byte) error {
+	if err := checkRequestLength(uint64(len(cmd))); err != nil {
+		return err
+	}
 	select {
 	case <-p.done:
 		return fmt.Errorf("plugin closed: %w", p.modErr)
