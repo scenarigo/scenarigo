@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -18,6 +19,14 @@ import (
 )
 
 func init() {
+	// This example starts its test servers inside the plugin to stay
+	// self-contained. A WASM plugin is single-threaded, so without idle
+	// polling they would answer nothing while scenarigo is not calling the
+	// plugin. Idle polling is a workaround that costs CPU time; a real test
+	// target should run as its own process instead.
+	if err := plugin.SetIdlePollInterval(50 * time.Millisecond); err != nil {
+		panic(err)
+	}
 	plugin.RegisterSetup(startServer)
 	plugin.RegisterSetup(startTLSServer)
 	plugin.RegisterSetup(createClients)

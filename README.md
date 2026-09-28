@@ -1968,6 +1968,23 @@ func Greet(ctx *plugin.Context, name string) string {
 - `{{plugins.greet.Greet("World")}}` => `"Hello, World"` (context is auto-injected)
 - `{{plugins.greet.Greet(ctx, "World")}}` => `"Hello, World"` (explicit context also works)
 
+#### Goroutines in WASM plugins
+
+A WASM plugin is single-threaded, and its goroutines run only while Scenarigo is calling the plugin. A goroutine that has to keep running between calls, such as a server that a setup function starts in the plugin, answers nothing until the next call, and a scenario that waits for it hangs. Keep such work out of WASM plugins: run a server under test as its own process, for one, rather than inside a plugin.
+
+`plugin.SetIdlePollInterval` is a workaround for a plugin that cannot do so, not a way to make such goroutines work as they would natively; avoid it where you can. With it, the waiting plugin wakes up at the given interval to run its goroutines.
+
+```go main.go
+func init() {
+	if err := plugin.SetIdlePollInterval(50 * time.Millisecond); err != nil {
+		panic(err)
+	}
+	plugin.RegisterSetup(startServer)
+}
+```
+
+The interval trades CPU time for latency. Each wake-up costs Scenarigo about a millisecond of CPU time, so an idle Scenarigo spends roughly a tenth of a CPU core at 10ms and a fiftieth at 50ms. A request to such a goroutine while the plugin is idle waits for about two wake-ups, around 100ms at 50ms, because a connection and its request each need the plugin awake. 50ms is a reasonable start. The interval must be zero, which stops polling, or at least 10ms; `SetIdlePollInterval` returns an error for any other value. Plugins that do not call the function are not affected, and a Go plugin (`.so`) only validates the interval.
+
 ### How to build plugins
 
 Go plugin can be built with `go build -buildmode=plugin`, but we recommend you use `scenarigo plugin build` instead. The wrapper command requires `go` command installed in your machine. Scenarigo always builds `.so` plugins with the same go version that is used to build its own, since the Go plugin ABI accepts nothing else; because of that, scenarigo adds a `toolchain` directive to the `go.mod` files of those plugins (a scenarigo built with a development version of Go runs them with `GOTOOLCHAIN=local` and removes the directive instead). A WASM plugin has no such tie to the scenarigo binary, so its go commands run with `GOTOOLCHAIN=auto` and the plugin's own `go.mod` decides the toolchain, unpinned.

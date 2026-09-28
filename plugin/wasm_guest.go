@@ -14,6 +14,8 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
+	"sync/atomic"
+	"time"
 	"unsafe"
 
 	_ "github.com/goccy/wasi-go/ext/wasip1"
@@ -97,8 +99,50 @@ func writePluginContent(content []byte) {
 	)
 }
 
+// idlePollInterval is set by SetIdlePollInterval and reported to the host in
+// every response.
+var idlePollInterval atomic.Int64
+
+// SetIdlePollInterval makes the plugin run its goroutines while it waits for
+// the next call from scenarigo. A WASM plugin is single-threaded, and its
+// goroutines otherwise run only during a call: a server that a setup starts in
+// the plugin, for one, accepts no connection between calls.
+//
+// This is a workaround that keeps such a plugin from hanging, not a way to
+// make its goroutines run as they would natively, and it costs CPU time while
+// the plugin is idle. Prefer keeping work that has to run between calls, such
+// as a server under test, out of the plugin; call this function, from init or
+// from the setup that starts the goroutines, only when that is not possible.
+//
+// The interval is the longest such a goroutine waits to run; each poll costs
+// scenarigo about a millisecond of CPU time, so a shorter interval costs more.
+// It must be zero, which stops polling, or at least 10ms; any other value
+// returns an error and leaves the current setting as it is. A scenarigo that
+// predates this function ignores the setting.
+//
+// scenarigo learns the interval from the plugin's answer to a call, so a new
+// setting takes effect once the plugin answers the next one. Call it from init
+// or from code a call runs, such as a setup: set from a goroutine while the
+// plugin is idle, it waits for the next call, and a zero does not stop the
+// polling until then.
+func SetIdlePollInterval(d time.Duration) error {
+	if err := wasm.ValidateIdlePollInterval(d); err != nil {
+		return err
+	}
+	idlePollInterval.Store(int64(d))
+	return nil
+}
+
 func readPluginContent() string {
 	length := scenarigo_read_length()
+	for length == wasmNoRequest {
+		// Sleeping hands control to the scheduler, which runs the other
+		// goroutines and polls the network until the timer fires. Shorter
+		// sleeps did not reliably get a waiting connection served in local
+		// measurements (200µs failed under the race detector).
+		time.Sleep(time.Millisecond)
+		length = scenarigo_read_length()
+	}
 	if length == 0 {
 		return ""
 	}
@@ -138,6 +182,8 @@ func Register(initFn, syncFn DefinitionFunc) {
 						CommandType: req.CommandType,
 						Context:     sctx,
 						Error:       errMsg,
+
+						IdlePollInterval: time.Duration(idlePollInterval.Load()),
 					})
 					writePluginContent(b)
 				}
@@ -148,6 +194,7 @@ func Register(initFn, syncFn DefinitionFunc) {
 			if h.ctx != nil {
 				res.Context = h.ctx.ToSerializable()
 			}
+			res.IdlePollInterval = time.Duration(idlePollInterval.Load())
 			finished = true
 			b, _ := json.Marshal(res)
 			writePluginContent(b)

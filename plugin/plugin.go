@@ -10,8 +10,11 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"time"
 
 	query "github.com/zoncoen/query-go/v2"
+
+	"github.com/scenarigo/scenarigo/internal/plugin/wasm"
 )
 
 var (
@@ -59,6 +62,14 @@ func Open(path string) (Plugin, error) {
 // SetupFunc represents a setup function.
 // If it returns non-nil teardown, the function will be called later.
 type SetupFunc func(ctx *Context) (newCtx *Context, teardown func(*Context))
+
+// SetIdlePollInterval does nothing but validate d: a Go plugin runs its
+// goroutines on its own. The WASM counterpart makes a WASM plugin run them
+// between calls, and both reject the same values so that a plugin behaves the
+// same whichever way it is built.
+func SetIdlePollInterval(d time.Duration) error {
+	return wasm.ValidateIdlePollInterval(d)
+}
 
 // RegisterSetup registers a function to setup for plugin.
 // Plugins must call this function in their init function if it registers the setup process.

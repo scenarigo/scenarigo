@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"time"
 
 	"github.com/goccy/wasi-go-net/wasip1"
 	"google.golang.org/grpc"
@@ -45,6 +46,9 @@ func setupServer(ctx *plugin.Context) (*plugin.Context, func(*plugin.Context)) {
 		ctx.Reporter().Fatalf("unexpected error: %s", err)
 	}
 	ServerAddr = ln.Addr().String()
+	if err := plugin.SetIdlePollInterval(10 * time.Millisecond); err != nil {
+		ctx.Reporter().Fatalf("unexpected error: %s", err)
+	}
 
 	go func() {
 		if err := s.Serve(ln); err != nil && !errors.Is(err, grpc.ErrServerStopped) {

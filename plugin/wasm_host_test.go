@@ -5,10 +5,13 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"syscall"
 	"testing"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/plugin/wasm"
 	"github.com/scenarigo/scenarigo/reporter"
 )
 
@@ -547,4 +551,194 @@ func TestWasmPluginClose(t *testing.T) {
 			t.Fatal("read() should return an error after Close()")
 		}
 	})
+}
+
+func TestWasmGuestServesWhileIdle(t *testing.T) {
+	// The guest is single-threaded: its goroutines, including a server a
+	// setup starts, run only while control is inside the guest. The test
+	// plugin's server setup calls SetIdlePollInterval; without it, the guest
+	// would wait in read_length and accept no connection until another plugin
+	// call comes in.
+	wasmPath := buildWasmPlugin(t)
+	plg, err := openWasmPlugin(wasmPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wasmPlugin := plg.(*WasmPlugin)
+	defer wasmPlugin.Close()
+	ctx := context.New(reporter.FromT(t))
+	ctx, teardown := wasmPlugin.GetSetup()(ctx)
+	defer teardown(ctx)
+
+	v, err := wasmPlugin.ExtractByKey(gocontext.Background(), "ServerAddr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, ok := v.(string)
+	if !ok || addr == "" {
+		t.Fatalf("unexpected server address: %v", v)
+	}
+
+	// No plugin call is in flight from here on. The guest's gRPC server has
+	// to answer the HTTP/2 connection preface with its own SETTINGS frame.
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	preface := append([]byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"), 0, 0, 0, 0x4, 0, 0, 0, 0, 0)
+	if _, err := conn.Write(preface); err != nil {
+		t.Fatal(err)
+	}
+	header := make([]byte, 9)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		t.Fatalf("the idle guest did not answer: %s", err)
+	}
+	if header[3] != 0x4 {
+		t.Fatalf("expected a SETTINGS frame but got frame type %d", header[3])
+	}
+}
+
+func TestReceiveRequestIdlePolling(t *testing.T) {
+	newPlugin := func() (*WasmPlugin, gocontext.Context) {
+		plg := &WasmPlugin{
+			reqCh:       make(chan []byte, 1),
+			idlePollSet: make(chan struct{}, 1),
+		}
+		ctx, cancel := gocontext.WithCancel(gocontext.Background())
+		t.Cleanup(cancel)
+		return plg, withPlugin(ctx, plg)
+	}
+	receive := func(ctx gocontext.Context) <-chan uint64 {
+		ch := make(chan uint64, 1)
+		go func() { ch <- receiveRequest(ctx) }()
+		return ch
+	}
+
+	t.Run("a guest that does not poll waits for the request", func(t *testing.T) {
+		plg, ctx := newPlugin()
+		got := receive(ctx)
+		select {
+		case n := <-got:
+			t.Fatalf("returned %d without a request", n)
+		case <-time.After(100 * time.Millisecond):
+		}
+		plg.reqCh <- []byte("abc")
+		if n := <-got; n != 3 {
+			t.Fatalf("expected 3 but got %d", n)
+		}
+	})
+
+	t.Run("an interval set while waiting takes effect", func(t *testing.T) {
+		// The guest calls read_length before call() stores the interval from
+		// the response it has just written.
+		plg, ctx := newPlugin()
+		got := receive(ctx)
+		time.Sleep(10 * time.Millisecond)
+		plg.idlePollInterval.Store(int64(time.Millisecond))
+		plg.idlePollSet <- struct{}{}
+		select {
+		case n := <-got:
+			if n != wasmNoRequest {
+				t.Fatalf("expected wasmNoRequest but got %d", n)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("the new interval did not wake read_length")
+		}
+	})
+
+	t.Run("an interval cleared while waiting stops polling", func(t *testing.T) {
+		plg, ctx := newPlugin()
+		plg.idlePollInterval.Store(int64(time.Hour))
+		got := receive(ctx)
+		time.Sleep(10 * time.Millisecond)
+		plg.idlePollInterval.Store(0)
+		plg.idlePollSet <- struct{}{}
+		select {
+		case n := <-got:
+			t.Fatalf("returned %d without a request", n)
+		case <-time.After(100 * time.Millisecond):
+		}
+		plg.reqCh <- []byte("a")
+		if n := <-got; n != 1 {
+			t.Fatalf("expected 1 but got %d", n)
+		}
+	})
+}
+
+func TestWasmPluginCallNormalizesIdlePollInterval(t *testing.T) {
+	// A response is external input that the host cannot reject, unlike
+	// SetIdlePollInterval: it clamps the interval to one it can live with.
+	tests := map[string]struct {
+		interval string
+		expect   time.Duration
+	}{
+		"absent":             {interval: "", expect: 0},
+		"negative":           {interval: `,"idlePollInterval":-5`, expect: 0},
+		"one nanosecond":     {interval: `,"idlePollInterval":1`, expect: 10 * time.Millisecond},
+		"fifty milliseconds": {interval: `,"idlePollInterval":50000000`, expect: 50 * time.Millisecond},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			defer w.Close()
+			// Fd puts the file in blocking mode, so it is called once, before
+			// SetNonblock: readFromPipe reads until the pipe is empty.
+			fd := int(r.Fd())
+			if err := syscall.SetNonblock(fd, true); err != nil {
+				t.Fatal(err)
+			}
+			plg := &WasmPlugin{
+				reqCh:       make(chan []byte, 1),
+				resCh:       make(chan []byte),
+				done:        make(chan struct{}),
+				idlePollSet: make(chan struct{}, 1),
+				stdoutR:     fd,
+			}
+			go func() {
+				<-plg.reqCh
+				plg.resCh <- []byte(`{"type":"init","command":{}` + test.interval + `}`)
+			}()
+			if _, err := plg.call(nil, wasm.NewInitRequest()); err != nil {
+				t.Fatal(err)
+			}
+			if got := time.Duration(plg.idlePollInterval.Load()); got != test.expect {
+				t.Fatalf("expected %s but got %s", test.expect, got)
+			}
+		})
+	}
+}
+
+func TestSetIdlePollIntervalGoPlugin(t *testing.T) {
+	// A Go plugin ignores the interval but rejects what a WASM plugin rejects.
+	for _, d := range []time.Duration{-1, time.Millisecond} {
+		if err := SetIdlePollInterval(d); err == nil {
+			t.Errorf("%s: no error", d)
+		}
+	}
+	for _, d := range []time.Duration{0, 50 * time.Millisecond} {
+		if err := SetIdlePollInterval(d); err != nil {
+			t.Errorf("%s: unexpected error: %s", d, err)
+		}
+	}
+}
+
+func TestCheckRequestLength(t *testing.T) {
+	for _, n := range []uint64{0, 1, wasmNoRequest - 1} {
+		if err := checkRequestLength(n); err != nil {
+			t.Errorf("%d: unexpected error: %s", n, err)
+		}
+	}
+	for _, n := range []uint64{wasmNoRequest, wasmNoRequest + 1} {
+		if err := checkRequestLength(n); err == nil {
+			t.Errorf("%d: no error", n)
+		}
+	}
 }
