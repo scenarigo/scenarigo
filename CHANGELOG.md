@@ -1,5 +1,50 @@
 # CHANGELOG
 
+## [v0.27.0](https://github.com/scenarigo/scenarigo/compare/v0.26.2...v0.27.0) - 2026-09-29
+
+### New Features
+- feat(grpc): support custom client with reflection API by @goccy in https://github.com/scenarigo/scenarigo/pull/703
+- feat(grpc): add gRPC streaming support by @zoncoen in https://github.com/scenarigo/scenarigo/pull/733
+- feat!: migrate to query-go v2 by @zoncoen in https://github.com/scenarigo/scenarigo/pull/822
+- feat(plugin): migrate plugin sources to the query-go v2 API by @zoncoen in https://github.com/scenarigo/scenarigo/pull/830
+- feat(plugin): build WASM plugins with GOTOOLCHAIN=auto by @zoncoen in https://github.com/scenarigo/scenarigo/pull/832
+- feat(template): support non-literal index expressions by @zoncoen in https://github.com/scenarigo/scenarigo/pull/817
+- feat(plugin): add opt-in idle polling for WASM plugins by @zoncoen in https://github.com/scenarigo/scenarigo/pull/845
+### Bug Fixes
+- fix(plugin): report an unresolved import in the extractor migration by @zoncoen in https://github.com/scenarigo/scenarigo/pull/842
+- fix(template): stop writing a shared struct back into itself by @utahta in https://github.com/scenarigo/scenarigo/pull/833
+### Code Refactoring
+- perf(plugin): cache service descriptors resolved via gRPC reflection in WASM guest by @zoncoen in https://github.com/scenarigo/scenarigo/pull/784
+- chore: require Go 1.26 by @zoncoen in https://github.com/scenarigo/scenarigo/pull/840
+### Dependency Upgrades
+- chore(deps): bump github.com/zoncoen/query-go from 1.3.2 to 1.4.0 in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/787
+- chore(deps): bump the github-actions group across 1 directory with 4 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/790
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/785
+- chore(deps): bump the github-actions group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/793
+- chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.0 in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/794
+- chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.0 in /plugin/testdata/wasm/src in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/795
+- chore(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.1 in /examples/wasm/plugin/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/804
+- chore(deps): bump google.golang.org/grpc from 1.82.0 to 1.82.1 in /examples/default-value-with-nullish-coalescing-operator/plugin/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/805
+- chore(deps): bump google.golang.org/grpc from 1.82.0 to 1.82.1 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/806
+- chore(deps): bump the go-minor group across 1 directory with 4 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/807
+- chore(deps): bump the github-actions group across 1 directory with 4 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/809
+- chore(deps): bump google.golang.org/grpc from 1.82.0 to 1.83.0 in /plugin/testdata/wasm/src in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/808
+- chore(deps): bump google.golang.org/protobuf from 1.36.11 to 1.36.12 in the go-patch group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/814
+- chore(deps): bump google.golang.org/protobuf from 1.36.11 to 1.36.12 in /plugin/testdata/wasm/src in the go-patch group across 1 directory by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/815
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/798
+- chore(deps): bump google.golang.org/grpc from 1.82.1 to 1.83.1 in /examples/wasm/plugin/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/825
+- chore(deps): bump google.golang.org/grpc from 1.83.0 to 1.83.1 by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/826
+- chore(deps): bump google.golang.org/grpc from 1.83.0 to 1.84.0 in /plugin/testdata/wasm/src in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/837
+- chore(deps): bump the github-actions group across 1 directory with 3 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/834
+- chore(deps): bump github.com/jhump/protoreflect from 1.18.0 to 1.18.1 in the go-patch group across 1 directory by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/836
+- chore(deps): bump golang.org/x/tools to v0.50.0 by @zoncoen in https://github.com/scenarigo/scenarigo/pull/841
+- chore(deps): bump google.golang.org/grpc from 1.83.1 to 1.84.0 in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/846
+- chore(deps): bump google.golang.org/grpc from 1.83.1 to 1.83.2 in /examples/wasm/plugin/src by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/838
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/839
+### Testing
+- test(reporter): make TestRun_NilPanic Go-version independent by @zoncoen in https://github.com/scenarigo/scenarigo/pull/791
+- test(reporter): allow a late goroutine in TestDurationMeasurer by @zoncoen in https://github.com/scenarigo/scenarigo/pull/843
+
 ## [v0.26.2](https://github.com/scenarigo/scenarigo/compare/v0.26.1...v0.26.2) - 2026-06-11
 
 ### Bug Fixes
