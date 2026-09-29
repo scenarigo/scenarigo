@@ -1,0 +1,44 @@
+---
+name: "hover on title shows field description"
+document: |
+  schemaVersion: scenario/v1
+  $0title: test
+operation: hover
+expect:
+  hoverContains:
+    - "**title**"
+    - "string"
+---
+name: "hover on steps shows field description"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  $0steps:
+    - title: step1
+operation: hover
+expect:
+  hoverContains:
+    - "**steps**"
+---
+name: "hover on protocol shows enum values"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      $0protocol: http
+operation: hover
+expect:
+  hoverContains:
+    - "**protocol**"
+    - "http"
+    - "grpc"
+---
+name: "hover on whitespace returns null"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  $0
+operation: hover
+expect:
+  hoverIsNull: true

@@ -1,0 +1,16 @@
+---
+name: "unknown fields produce diagnostics"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  unknownField: hello
+  steps:
+    - title: step1
+      protocol: http
+      badKey: value
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'unknown field "unknownField"'
+      - 'unknown field "badKey"'

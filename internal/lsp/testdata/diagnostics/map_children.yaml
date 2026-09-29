@@ -1,0 +1,26 @@
+---
+name: "map keys are user-defined and values are validated against the children"
+document: |
+  schemaVersion: config/v1
+  plugins:
+    myplugin:
+      src: ./plugin
+      unknownOption: true
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'unknown field "unknownOption"'
+    excludes:
+      - 'unknown field "myplugin"'
+---
+name: "map without children accepts any keys"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    myplugin: plugin.so
+  vars:
+    anything: goes
+operation: diagnostics
+expect:
+  diagnosticCount: 0
