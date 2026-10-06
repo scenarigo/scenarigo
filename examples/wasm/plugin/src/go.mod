@@ -5,9 +5,9 @@ go 1.26.0
 toolchain go1.27.1
 
 require (
-	github.com/scenarigo/scenarigo v0.26.2
-	google.golang.org/grpc v1.83.2
-	google.golang.org/protobuf v1.36.11
+	github.com/scenarigo/scenarigo v0.27.0
+	google.golang.org/grpc v1.84.0
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -23,28 +23,28 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
-	github.com/jhump/protoreflect v1.18.0 // indirect
+	github.com/jhump/protoreflect v1.18.1 // indirect
 	github.com/jhump/protoreflect/v2 v2.0.0-beta.2 // indirect
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-encoding v0.0.2 // indirect
-	github.com/mattn/go-isatty v0.0.22 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
-	github.com/zoncoen/query-go v1.3.2 // indirect
-	github.com/zoncoen/query-go/extractor/protobuf v0.1.4 // indirect
-	github.com/zoncoen/query-go/extractor/yaml v0.2.2 // indirect
-	golang.org/x/mod v0.38.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	github.com/zoncoen/query-go/extractor/protobuf/v2 v2.0.0 // indirect
+	github.com/zoncoen/query-go/extractor/yaml/v2 v2.0.0 // indirect
+	github.com/zoncoen/query-go/v2 v2.0.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 )
 
 replace github.com/scenarigo/scenarigo v0.21.3 => ../../../..
