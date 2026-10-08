@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [v0.27.1](https://github.com/scenarigo/scenarigo/compare/v0.27.0...v0.27.1) - 2026-10-08
+
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/tools from 0.50.0 to 0.51.0 in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/850
+
 ## [v0.27.0](https://github.com/scenarigo/scenarigo/compare/v0.26.2...v0.27.0) - 2026-09-29
 
 ### New Features
