@@ -1,0 +1,53 @@
+---
+name: "plugins dot completion from document"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  plugins:
+    grpc: grpc.so
+    myPlugin: my_plugin.so
+  steps:
+    - title: step1
+      request:
+        url: '{{plugins.$0'
+operation: completion
+expect:
+  completionLabels:
+    contains: [grpc, myPlugin]
+---
+name: "plugins dot completion from config"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      request:
+        url: '{{plugins.$0'
+operation: completion
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      configPlugin: config_plugin.so
+      anotherPlugin: another.so
+expect:
+  completionLabels:
+    contains: [configPlugin, anotherPlugin]
+---
+name: "plugins dot completion partial filter"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  plugins:
+    grpc: grpc.so
+    graphql: graphql.so
+    myPlugin: my_plugin.so
+  steps:
+    - title: step1
+      request:
+        url: '{{plugins.gr$0'
+operation: completion
+expect:
+  completionLabels:
+    contains: [grpc, graphql]
+    excludes: [myPlugin]

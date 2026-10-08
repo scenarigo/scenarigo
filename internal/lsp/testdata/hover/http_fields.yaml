@@ -1,0 +1,28 @@
+---
+name: "hover on HTTP request method"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        $0method: GET
+operation: hover
+expect:
+  hoverContains:
+    - "**method**"
+---
+name: "hover on HTTP request url"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        $0url: http://example.com
+operation: hover
+expect:
+  hoverContains:
+    - "**url**"
