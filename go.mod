@@ -13,7 +13,7 @@ require (
 	github.com/golang/mock v1.7.0-rc.1
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/jhump/protoreflect v1.18.1
+	github.com/jhump/protoreflect v1.19.0
 	github.com/mattn/go-encoding v0.0.2
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/pkg/errors v0.9.1
@@ -25,7 +25,7 @@ require (
 	github.com/zoncoen/query-go/extractor/yaml/v2 v2.0.0
 	github.com/zoncoen/query-go/v2 v2.0.0
 	golang.org/x/mod v0.41.0
-	golang.org/x/sync v0.23.0
+	golang.org/x/sync v0.24.0
 	golang.org/x/text v0.42.0
 	golang.org/x/tools v0.51.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800
