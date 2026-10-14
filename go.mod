@@ -13,7 +13,7 @@ require (
 	github.com/golang/mock v1.7.0-rc.1
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/jhump/protoreflect v1.18.1
+	github.com/jhump/protoreflect v1.19.0
 	github.com/mattn/go-encoding v0.0.2
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/pkg/errors v0.9.1
@@ -24,10 +24,10 @@ require (
 	github.com/zoncoen/query-go/extractor/protobuf/v2 v2.0.0
 	github.com/zoncoen/query-go/extractor/yaml/v2 v2.0.0
 	github.com/zoncoen/query-go/v2 v2.0.0
-	golang.org/x/mod v0.41.0
-	golang.org/x/sync v0.23.0
-	golang.org/x/text v0.42.0
-	golang.org/x/tools v0.51.0
+	golang.org/x/mod v0.42.0
+	golang.org/x/sync v0.24.0
+	golang.org/x/text v0.43.0
+	golang.org/x/tools v0.52.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
@@ -47,7 +47,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stealthrocket/wazergo v0.19.1 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 )
