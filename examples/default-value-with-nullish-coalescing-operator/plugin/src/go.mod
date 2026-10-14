@@ -2,7 +2,7 @@ module github.com/scenarigo/scenarigo/examples/default-value-with-nullish-coales
 
 go 1.26.0
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 require github.com/scenarigo/scenarigo v0.27.0
 
@@ -17,7 +17,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
-	github.com/jhump/protoreflect v1.18.1 // indirect
+	github.com/jhump/protoreflect v1.19.0 // indirect
 	github.com/jhump/protoreflect/v2 v2.0.0-beta.2 // indirect
 	github.com/k14s/starlark-go v0.0.0-20200720175618-3a5c849cc368 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -28,10 +28,10 @@ require (
 	github.com/tetratelabs/wazero v1.12.0 // indirect
 	github.com/zoncoen/query-go/extractor/yaml/v2 v2.0.0 // indirect
 	github.com/zoncoen/query-go/v2 v2.0.0 // indirect
-	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
