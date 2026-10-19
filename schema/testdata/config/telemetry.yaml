@@ -1,0 +1,8 @@
+schemaVersion: config/v1
+telemetry:
+  tracing:
+    exporter: otlp
+  propagation:
+    traceparent: false
+    baggage: true
+    legacyHeaders: false

@@ -1,0 +1,5 @@
+schemaVersion: config/v1
+telemetry:
+  tracing:
+    exporter: otlp
+    sampler: always_on
