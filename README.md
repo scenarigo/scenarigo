@@ -1011,7 +1011,106 @@ For gRPC requests, Scenarigo adds the following metadata keys. The `-bin` suffix
 | `scenarigo-scenario-title-bin` | Title of the scenario |
 | `scenarigo-step-full-name-bin` | Full name of the step (filepath/scenario_title/step_title) |
 
-These headers/metadata are added automatically and cannot be disabled. The scenario filepath is normalized to a stable relative path when possible (relative to the current working directory).
+These headers/metadata are enabled by default. Set `telemetry.propagation.legacyHeaders: false` in the configuration file to stop sending them (see [Distributed Tracing](#distributed-tracing)). The scenario filepath is normalized to a stable relative path when possible (relative to the current working directory).
+
+### Distributed Tracing
+
+Scenarigo records every run as OpenTelemetry spans and propagates the W3C Trace Context and Baggage headers on each request, so a request seen on the server side can be mapped back to the run, scenario and step that sent it.
+
+**Span tree:**
+
+Each scenarigo run produces one trace for the run itself and one trace per top-level scenario. The scenario trace is linked to the run span and carries the run ID as an attribute.
+
+```text
+run (trace A)
+└── scenarios/echo.yaml                 # file
+scenario title (trace B, link -> run)   # scenario
+├── setup
+├── step title                          # step
+│   └── GET                             # request span (SpanKindClient)
+└── teardown
+```
+
+| Attribute | Set on | Description |
+|-----------|--------|-------------|
+| `scenarigo.run_id` | every span | Trace ID of the run span, shared by every scenario of one invocation |
+| `scenarigo.node` | node spans | `run`, `file`, `scenario`, `step`, `setup`, `teardown`, `include` or `substep` |
+| `scenarigo.filepath` | scenario, include | Scenario file path relative to the configuration file directory, with `/` separators |
+| `scenarigo.scenario_index` | scenario, include | Zero-based position of the scenario in its file |
+| `scenarigo.scenario_title` | scenario, include | Scenario title |
+| `scenarigo.step_index` | step | Zero-based position of the step in its scenario |
+| `scenarigo.step_name` | step | Step title |
+| `scenarigo.skipped` | node spans | `true` when the node was skipped |
+
+Request spans follow the OpenTelemetry semantic conventions v1.41.0: `http.request.method`, `server.address`, `server.port`, `url.scheme`, `url.path` and `http.response.status_code` for HTTP; `rpc.system.name`, `rpc.method` and `rpc.response.status_code` for gRPC; `error.type` on failure. `rpc.method` is `package.Service/Method` when the service is resolved by reflection or from proto files, and the bare method name for a client provided by a plugin. The full URL, the query string, headers and bodies are never recorded, and the values defined by `secrets` are masked in the attributes as they are in the logs (a port taken from a secret is left out).
+
+A node span is marked `Error` when the node failed. A request span is marked `Error` on a transport error, an HTTP response body that cannot be read, an HTTP status of 400 or above, a gRPC status other than `OK`, or when the gRPC metadata cannot be built from the scenario.
+
+**Request headers:**
+
+| Header / metadata key | Description |
+|-----------------------|-------------|
+| `traceparent` | W3C Trace Context naming the request span. A `traceparent` written in the scenario is replaced, together with its `tracestate`. |
+| `baggage` | W3C Baggage with the `scenarigo.*` members below. Members written in the scenario are kept; only `scenarigo.*` members are replaced, and a member that is not valid W3C Baggage is dropped with a warning. |
+
+| Baggage member | Description |
+|----------------|-------------|
+| `scenarigo.run_id` | Same as the `scenarigo.run_id` attribute |
+| `scenarigo.filepath` | Same as the `scenarigo.filepath` attribute |
+| `scenarigo.scenario_index` | Same as the `scenarigo.scenario_index` attribute |
+| `scenarigo.step_index` | Same as the `scenarigo.step_index` attribute |
+| `scenarigo.root_filepath` | `scenarigo.filepath` of the top-level scenario, the root of the trace |
+| `scenarigo.root_scenario_index` | `scenarigo.scenario_index` of the top-level scenario |
+| `scenarigo.scenario_title` | Scenario title, dropped first when the members scenarigo adds exceed 2048 bytes |
+| `scenarigo.step_name` | Step title, dropped second |
+| `scenarigo.truncated` | `true` when a member was dropped |
+
+Inside an included scenario, `scenarigo.filepath`, `scenarigo.scenario_index` and `scenarigo.scenario_title` describe the included file, while the `scenarigo.root_*` members keep naming the scenario that started the trace. A receiver can therefore group requests by top-level scenario from the header alone, without a trace backend.
+
+The W3C limits (8192 bytes, 64 members) are respected: when the baggage written in the scenario leaves no room, scenarigo adds nothing, keeps the scenario's value as it is and logs a warning.
+
+**Configuration:**
+
+```yaml
+telemetry:
+  tracing:
+    exporter: none        # none (default) or otlp
+  propagation:
+    traceparent: true     # default true
+    baggage: true         # default true
+    legacyHeaders: true   # default true: the Scenarigo-* headers / scenarigo-*-bin metadata above
+```
+
+With `exporter: otlp`, spans are exported over OTLP using the standard `OTEL_EXPORTER_OTLP_*` environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, ...). The protocol is `http/protobuf` unless `OTEL_EXPORTER_OTLP_PROTOCOL` (or `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`) selects `grpc`; `http/json` is not supported. The resource has `service.name=scenarigo` and `service.version` set to the scenarigo version; `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` override them. Every span is sampled. Export failures are written to stderr and never fail the run; the final flush waits at most 10 seconds.
+
+With `exporter: none`, spans are still created so that the IDs on the wire and in the reports are consistent, but nothing is exported.
+
+**Reports:**
+
+The JSON report has `runId` at the top level, `spanId` on files, `traceId`, `spanId` and `scenarioIndex` on scenarios, and `spanId` and `stepIndex` on steps. The JUnit report has a `scenarigo.run_id` property on each `testsuite` and `trace-id` and `scenario-index` attributes on each `testcase`.
+
+**Plugins:**
+
+Plugins that send requests with their own clients can propagate the same headers and create spans under the current node:
+
+```go
+func SendWithTrace(ctx *plugin.Context) {
+    req, _ := http.NewRequestWithContext(ctx.RequestContext(), http.MethodGet, "http://example.com", nil)
+    ctx.Inject(propagation.HeaderCarrier(req.Header)) // traceparent and baggage, as configured
+
+    tracer := ctx.Tracer("my-plugin")
+    spanCtx, span := tracer.Start(ctx.RequestContext(), "custom work")
+    defer span.End()
+    _ = spanCtx
+
+    _ = ctx.RunID()             // run ID
+    _, _ = ctx.ScenarioIndex()  // (index, ok)
+    _, _ = ctx.StepIndex()      // (index, ok)
+    _ = ctx.StepName()
+    _ = ctx.RootScenarioFilepath()  // the top-level scenario, see the baggage members above
+    _, _ = ctx.RootScenarioIndex()  // (index, ok)
+}
+```
 
 ### Variables
 
