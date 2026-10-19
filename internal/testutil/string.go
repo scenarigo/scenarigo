@@ -51,7 +51,10 @@ func ReplaceOutput(s string, opts ...ReplaceOption) string {
 		ReplaceFilepath,
 		ReplacePluginOpen,
 	}
-	if !cfg.keepScenarigoHeaders {
+	if cfg.keepScenarigoHeaders {
+		// The W3C headers carry random IDs, so they never stay in a golden file.
+		funcs = append(funcs, RemoveTraceHeaders)
+	} else {
 		funcs = append(funcs, RemoveScenarigoHeaders)
 	}
 
@@ -122,14 +125,35 @@ func ReplacePluginOpen(s string) string {
 	return wasmPluginOpenPattern.ReplaceAllString(s, "open ${1}: no such file or directory")
 }
 
-var scenarigoHeaderKeys = map[string]struct{}{
+var legacyHeaderKeys = map[string]struct{}{
 	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioFilepathKey) + ":": {},
 	http.CanonicalHeaderKey(protocolmeta.ScenarigoScenarioTitleKey) + ":":    {},
 	http.CanonicalHeaderKey(protocolmeta.ScenarigoStepFullNameKey) + ":":     {},
 }
 
-// RemoveScenarigoHeaders drops scenarigo-specific request headers from output.
+// traceHeaderKeys hold random IDs. gRPC metadata dumps keep the keys lowercase.
+var traceHeaderKeys = map[string]struct{}{
+	http.CanonicalHeaderKey(protocolmeta.TraceparentHeader) + ":": {},
+	http.CanonicalHeaderKey(protocolmeta.TracestateHeader) + ":":  {},
+	http.CanonicalHeaderKey(protocolmeta.BaggageHeader) + ":":     {},
+	protocolmeta.TraceparentHeader + ":":                          {},
+	protocolmeta.TracestateHeader + ":":                           {},
+	protocolmeta.BaggageHeader + ":":                              {},
+}
+
+// RemoveScenarigoHeaders drops the HTTP headers scenarigo adds on its own
+// (Scenarigo-*, traceparent, tracestate, baggage) from output. The gRPC
+// scenarigo-*-bin metadata stays: the golden files dump it.
 func RemoveScenarigoHeaders(s string) string {
+	return RemoveTraceHeaders(removeHeaders(s, legacyHeaderKeys))
+}
+
+// RemoveTraceHeaders drops the traceparent, tracestate and baggage headers from output.
+func RemoveTraceHeaders(s string) string {
+	return removeHeaders(s, traceHeaderKeys)
+}
+
+func removeHeaders(s string, keys map[string]struct{}) string {
 	lines := strings.Split(s, "\n")
 	out := make([]string, 0, len(lines))
 	skipValue := false
@@ -142,7 +166,7 @@ func RemoveScenarigoHeaders(s string) string {
 			}
 			skipValue = false
 		}
-		if _, ok := scenarigoHeaderKeys[trimmed]; ok {
+		if _, ok := keys[trimmed]; ok {
 			skipValue = true
 			continue
 		}
