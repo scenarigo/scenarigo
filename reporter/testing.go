@@ -42,6 +42,7 @@ func FromT(t *testing.T, opts ...Option) Reporter {
 	t.Cleanup(func() {
 		go stop()
 		<-r.done
+		r.context.shutdownTracerProvider()
 		if r.Failed() {
 			t.Fail()
 		}

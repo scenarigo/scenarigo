@@ -8,7 +8,7 @@ import (
 
 // RunWithRetry runs f as a subtest of r called name with retry.
 func RunWithRetry(ctx context.Context, r Reporter, name string, f func(Reporter), policy RetryPolicy) bool {
-	return r.runWithRetry(name, f, policy)
+	return r.runWithRetry(name, f, policy, runOptions{newTrace: newTraceRequested(ctx)})
 }
 
 // RetryPolicy is an interface for the retry backoff policies.

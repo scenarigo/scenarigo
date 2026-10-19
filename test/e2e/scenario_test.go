@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -479,6 +480,12 @@ func TestRunner_GenerateTestReport(t *testing.T) {
 				cmp.FilterValues(func(_, _ reporter.ReportLogs) bool {
 					return true
 				}, cmp.Ignore()),
+				// The IDs come from the trace and span IDs, which are random.
+				cmpopts.IgnoreFields(reporter.TestReport{}, "RunID"),
+				cmpopts.IgnoreFields(reporter.ScenarioFileReport{}, "SpanID", "RunID"),
+				cmpopts.IgnoreFields(reporter.ScenarioReport{}, "TraceID", "SpanID"),
+				cmpopts.IgnoreFields(reporter.StepReport{}, "SpanID"),
+				cmpopts.IgnoreFields(reporter.SubStepReport{}, "SpanID"),
 			); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
