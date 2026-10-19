@@ -482,7 +482,7 @@ func TestRequest_Invoke(t *testing.T) {
 			}
 
 			// ensure that ctx.WithRequest and ctx.WithResponse are called
-			if diff := cmp.Diff(test.requestDump, ctx.Request()); diff != "" {
+			if diff := cmp.Diff(test.requestDump, ctx.Request(), ignoreW3CHeaders); diff != "" {
 				t.Errorf("differs: (-want +got)\n%s", diff)
 			}
 			if diff := cmp.Diff((*ResponseExtractor)(&test.response), ctx.Response(), cmpopts.IgnoreFields(ResponseExtractor{}, "Header")); diff != "" {

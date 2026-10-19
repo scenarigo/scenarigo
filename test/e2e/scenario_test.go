@@ -443,29 +443,34 @@ func TestRunner_GenerateTestReport(t *testing.T) {
 							Result: reporter.TestResultPassed,
 							Scenarios: []reporter.ScenarioReport{
 								{
-									Name:   "/echo",
-									File:   "testdata/scenarios/report.yaml",
-									Result: reporter.TestResultPassed,
+									Name:          "/echo",
+									File:          "testdata/scenarios/report.yaml",
+									Result:        reporter.TestResultPassed,
+									ScenarioIndex: new(0),
 									Steps: []reporter.StepReport{
 										{
-											Name:   "include",
-											Result: reporter.TestResultPassed,
+											Name:      "include",
+											Result:    reporter.TestResultPassed,
+											StepIndex: new(0),
 											SubSteps: []reporter.SubStepReport{
 												{
-													Name:   "included.yaml",
-													Result: reporter.TestResultPassed,
+													Name:          "included.yaml",
+													Result:        reporter.TestResultPassed,
+													ScenarioIndex: new(0),
 													SubSteps: []reporter.SubStepReport{
 														{
-															Name:   "step plugin",
-															Result: reporter.TestResultPassed,
+															Name:      "step plugin",
+															Result:    reporter.TestResultPassed,
+															StepIndex: new(0),
 														},
 													},
 												},
 											},
 										},
 										{
-											Name:   "POST /echo",
-											Result: reporter.TestResultPassed,
+											Name:      "POST /echo",
+											Result:    reporter.TestResultPassed,
+											StepIndex: new(1),
 										},
 									},
 								},
