@@ -34,6 +34,7 @@ type Scenario struct {
 	Anchors anchors `yaml:"anchors,omitempty"`
 
 	filepath    string        // YAML filepath
+	index       *int          // position in the YAML file, nil when not loaded from one
 	Node        ast.Node      `yaml:"-"`
 	colorConfig *color.Config // Color configuration for error reporting
 
@@ -57,6 +58,7 @@ func (s *Scenario) UnmarshalYAML(b []byte) error {
 func (s *Scenario) Reset() error {
 	// Preserve metadata that should be kept across reset.
 	filepath := s.filepath
+	index := s.index
 	node := s.Node
 	colorConfig := s.colorConfig
 
@@ -66,12 +68,26 @@ func (s *Scenario) Reset() error {
 
 	// Restore metadata lost by unmarshalling.
 	s.setMetadata(filepath, node, colorConfig)
+	s.index = index
 	return nil
 }
 
 // Filepath returns YAML filepath of s.
 func (s *Scenario) Filepath() string {
 	return s.filepath
+}
+
+// Index returns the zero-based position of the scenario in its YAML file,
+// and false when the scenario was not loaded from a file.
+func (s *Scenario) Index() (int, bool) {
+	if s.index == nil {
+		return 0, false
+	}
+	return *s.index, true
+}
+
+func (s *Scenario) setIndex(i int) {
+	s.index = &i
 }
 
 // setMetadata sets metadata fields that are not part of YAML.

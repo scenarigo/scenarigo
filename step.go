@@ -62,6 +62,7 @@ func runStep(ctx *context.Context, scenario *schema.Scenario, s *schema.Step, st
 		}
 		currentNode := ctx.Node()
 		ctx.Reporter().Run(testName, func(rptr reporter.Reporter) {
+			reporter.SetNodeKind(rptr, reporter.NodeKindInclude)
 			ctx = RunScenario(ctx.WithReporter(rptr).WithNode(scenarios[0].Node), scenarios[0])
 		})
 		if ctx.Reporter().Failed() {

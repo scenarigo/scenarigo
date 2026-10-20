@@ -8,10 +8,13 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/reporter"
+	"github.com/scenarigo/scenarigo/schema"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
 )
@@ -384,4 +387,81 @@ loop:
 	}
 	sort.Strings(tests)
 	return strings.Join(append(tests, trailing), "\n")
+}
+
+func TestSetupTracing(t *testing.T) {
+	newCmd := func() (*cobra.Command, *bytes.Buffer) {
+		var stderr bytes.Buffer
+		cmd := &cobra.Command{}
+		cmd.SetErr(&stderr)
+		return cmd, &stderr
+	}
+	tracingConfig := func(exporter string) *schema.Config {
+		return &schema.Config{Telemetry: schema.TelemetryConfig{Tracing: schema.TracingConfig{Exporter: exporter}}}
+	}
+
+	t.Run("tracing off", func(t *testing.T) {
+		for name, cfg := range map[string]*schema.Config{"nil config": nil, "none": tracingConfig("none"), "empty": tracingConfig("")} {
+			cmd, stderr := newCmd()
+			opts, shutdown, err := setupTracing(cmd, cfg)
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %s", name, err)
+			}
+			if len(opts) != 0 {
+				t.Errorf("%s: expected no reporter option, got %d", name, len(opts))
+			}
+			shutdown()
+			if stderr.Len() != 0 {
+				t.Errorf("%s: stderr = %q", name, stderr.String())
+			}
+		}
+	})
+
+	t.Run("unknown exporter", func(t *testing.T) {
+		cmd, _ := newCmd()
+		if _, _, err := setupTracing(cmd, tracingConfig("jaeger")); err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("otlp", func(t *testing.T) {
+		var mu sync.Mutex
+		var exports int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			exports++
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+		for _, key := range []string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"} {
+			t.Setenv(key, "") // registers the restore
+			if err := os.Unsetenv(key); err != nil {
+				t.Fatal(err)
+			}
+		}
+		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", srv.URL)
+
+		cmd, stderr := newCmd()
+		opts, shutdown, err := setupTracing(cmd, tracingConfig(schema.TracingExporterOTLP))
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if len(opts) != 1 {
+			t.Fatalf("expected the tracer provider option, got %d options", len(opts))
+		}
+		reporter.Run(func(r reporter.Reporter) {
+			r.Run("scenario", func(r reporter.Reporter) {})
+		}, opts...)
+		shutdown()
+
+		mu.Lock()
+		defer mu.Unlock()
+		if exports == 0 {
+			t.Error("shutdown must flush the spans to the collector")
+		}
+		if stderr.Len() != 0 {
+			t.Errorf("stderr = %q", stderr.String())
+		}
+	})
 }

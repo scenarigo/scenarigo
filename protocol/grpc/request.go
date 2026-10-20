@@ -21,6 +21,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	query "github.com/zoncoen/query-go/v2"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
@@ -300,23 +301,65 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 	if err != nil {
 		return ctx, nil, err
 	}
-	ctx, err = r.appendMetadata(ctx)
-	if err != nil {
-		return ctx, nil, err
-	}
 
 	sc, _ := client.(streamingServiceClient)
 	isStreamClient := sc != nil && sc.isStreamingClient()
 	isStreamServer := sc != nil && sc.isStreamingServer()
 
+	// Validated before the span starts: a request rejected here was never sent.
 	if err := r.validateMessageFields(isStreamClient, isStreamServer); err != nil {
 		return ctx, nil, err
 	}
 
-	if isStreamClient || isStreamServer {
-		return r.invokeStreaming(ctx, sc)
+	// The request span is the parent named by the traceparent metadata.
+	attrs := protocolmeta.GRPCRequestAttributes(ctx.RunID(), fullMethodName(client, r.Method))
+	if s := ctx.Secrets(); s != nil {
+		attrs = protocolmeta.MaskAttributes(attrs, s.ReplaceAll)
 	}
-	return r.invokeUnary(ctx, client)
+	reqCtx, span := protocolmeta.StartClientSpan(ctx.RequestContext(), protocolmeta.GRPCTracerName, r.Method, attrs...)
+	defer span.End()
+	ctx = ctx.WithRequestContext(reqCtx)
+
+	ctx, err = r.appendMetadata(ctx)
+	if err != nil {
+		protocolmeta.RecordSendError(span, err)
+		return ctx, nil, err
+	}
+
+	var resp any
+	if isStreamClient || isStreamServer {
+		ctx, resp, err = r.invokeStreaming(ctx, sc)
+	} else {
+		ctx, resp, err = r.invokeUnary(ctx, client)
+	}
+	recordResult(span, resp, err)
+	return ctx, resp, err
+}
+
+// fullMethodNamer is implemented by clients that know the "/package.Service/Method" name.
+type fullMethodNamer interface {
+	fullMethod() string
+}
+
+func fullMethodName(client serviceClient, method string) string {
+	if c, ok := client.(fullMethodNamer); ok {
+		if name := c.fullMethod(); name != "" {
+			return name
+		}
+	}
+	return method
+}
+
+func recordResult(span trace.Span, resp any, err error) {
+	if err != nil {
+		protocolmeta.RecordSendError(span, err)
+		return
+	}
+	code := codes.OK
+	if r, ok := resp.(*response); ok && r != nil {
+		code = r.Status.Code()
+	}
+	protocolmeta.RecordGRPCStatus(span, code)
 }
 
 func (r *Request) invokeUnary(ctx *context.Context, client serviceClient) (*context.Context, any, error) {
@@ -541,15 +584,22 @@ func (r *Request) appendMetadata(ctx *context.Context) (*context.Context, error)
 			}
 		}
 	}
-	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioFilepathBinKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
-	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioTitleBinKey, ctx.ScenarioTitle())
-	pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoStepFullNameBinKey, ctx.Reporter().Name())
-	if len(pairs) == 0 {
-		return ctx, nil
+	if ctx.LegacyHeadersEnabled() {
+		pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioFilepathBinKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
+		pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoScenarioTitleBinKey, ctx.ScenarioTitle())
+		pairs = appendScenarigoMetadata(pairs, protocolmeta.ScenarigoStepFullNameBinKey, ctx.Reporter().Name())
 	}
-	return ctx.WithRequestContext(
-		metadata.AppendToOutgoingContext(ctx.RequestContext(), pairs...),
-	), nil
+
+	// Work on a copy of the outgoing metadata: the W3C headers replace values
+	// (traceparent, tracestate, merged baggage), which AppendToOutgoingContext cannot.
+	reqCtx := ctx.RequestContext()
+	md, _ := metadata.FromOutgoingContext(reqCtx)
+	md = md.Copy()
+	for i := 0; i+1 < len(pairs); i += 2 {
+		md.Append(pairs[i], pairs[i+1])
+	}
+	ctx.InjectRequestHeaders(reqCtx, protocolmeta.MDCarrier(md))
+	return ctx.WithRequestContext(metadata.NewOutgoingContext(reqCtx, md)), nil
 }
 
 func appendScenarigoMetadata(pairs []string, key string, value string) []string {

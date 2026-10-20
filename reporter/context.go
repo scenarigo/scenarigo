@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/scenarigo/scenarigo/color"
 )
 
@@ -88,6 +90,11 @@ type testContext struct {
 
 	// for FromT
 	matcher *matcher
+
+	// tracerProvider creates the node spans. ownsTracerProvider is set when the
+	// default provider was created here and must be shut down with the run.
+	tracerProvider     trace.TracerProvider
+	ownsTracerProvider bool
 }
 
 func newTestContext(opts ...Option) *testContext {
@@ -101,6 +108,7 @@ func newTestContext(opts ...Option) *testContext {
 	for _, opt := range opts {
 		opt(ctx)
 	}
+	ctx.ensureTracerProvider()
 	return ctx
 }
 

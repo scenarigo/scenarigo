@@ -83,6 +83,17 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 		return ctx, nil, err
 	}
 
+	// The request span is the parent named by the traceparent header. Its
+	// context goes on the request so that a transport propagating context sees it.
+	attrs := protocolmeta.HTTPRequestAttributes(ctx.RunID(), req)
+	if s := ctx.Secrets(); s != nil {
+		attrs = protocolmeta.MaskAttributes(attrs, s.ReplaceAll)
+	}
+	reqCtx, span := protocolmeta.StartClientSpan(ctx.RequestContext(), protocolmeta.HTTPTracerName, req.Method, attrs...)
+	defer span.End()
+	req = req.WithContext(reqCtx)
+	ctx.InjectRequestHeaders(reqCtx, protocolmeta.HeaderCarrier(req.Header))
+
 	//nolint:exhaustruct
 	reqDump := &Request{
 		Method: req.Method,
@@ -99,12 +110,15 @@ func (r *Request) Invoke(ctx *context.Context) (*context.Context, any, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		protocolmeta.RecordSendError(span, err)
 		return ctx, nil, errors.Errorf("failed to send request: %s", err)
 	}
 	defer resp.Body.Close()
+	protocolmeta.RecordHTTPResponse(span, resp.StatusCode)
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
+		protocolmeta.RecordSendError(span, err)
 		return ctx, nil, errors.Errorf("failed to read response body: %s", err)
 	}
 
@@ -237,9 +251,11 @@ func (r *Request) buildRequest(ctx *context.Context) (*http.Request, any, error)
 	if header.Get("User-Agent") == "" {
 		header.Set("User-Agent", defaultUserAgent)
 	}
-	setScenarigoHeader(header, protocolmeta.ScenarigoScenarioFilepathKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
-	setScenarigoHeader(header, protocolmeta.ScenarigoScenarioTitleKey, ctx.ScenarioTitle())
-	setScenarigoHeader(header, protocolmeta.ScenarigoStepFullNameKey, ctx.Reporter().Name())
+	if ctx.LegacyHeadersEnabled() {
+		setScenarigoHeader(header, protocolmeta.ScenarigoScenarioFilepathKey, protocolmeta.NormalizeScenarioFilepath(ctx.ScenarioFilepath()))
+		setScenarigoHeader(header, protocolmeta.ScenarigoScenarioTitleKey, ctx.ScenarioTitle())
+		setScenarigoHeader(header, protocolmeta.ScenarigoStepFullNameKey, ctx.Reporter().Name())
+	}
 
 	var reader io.Reader
 	var body any

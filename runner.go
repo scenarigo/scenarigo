@@ -44,6 +44,7 @@ type Runner struct {
 	inputConfig     schema.InputConfig
 	reportConfig    schema.ReportConfig
 	configNode      ast.Node
+	propagation     schema.PropagationConfig
 }
 
 // NewRunner returns a new test runner.
@@ -74,6 +75,7 @@ func WithConfig(config *schema.Config) func(*Runner) error {
 
 		r.vars = config.Vars
 		r.secrets = config.Secrets
+		r.propagation = config.Telemetry.Propagation
 
 		r.rootDir = config.Root
 		scenarios := make([]string, len(config.Scenarios))
@@ -194,6 +196,8 @@ func (r *Runner) ScenarioFiles() []string {
 func (r *Runner) Run(ctx *context.Context) {
 	// setup context
 	ctx = ctx.WithColorConfig(r.colorConfig)
+	ctx = ctx.WithTelemetryConfig(r.telemetryConfig())
+	ctx = ctx.WithRunID(reporter.RunID(ctx.Reporter()))
 	var baseVars any
 	if r.vars != nil {
 		vars, err := ctx.ExecuteTemplate(r.vars)
@@ -286,6 +290,7 @@ FILE_LOOP:
 			}
 		}
 		ctx.Run(testName, func(ctx *context.Context) {
+			reporter.SetNodeKind(ctx.Reporter(), reporter.NodeKindFile)
 			ctx.Reporter().Parallel()
 			scns, err := schema.LoadScenarios(f, opts...)
 			if err != nil {
@@ -296,6 +301,7 @@ FILE_LOOP:
 	}
 	for i, reader := range r.scenarioReaders {
 		ctx.Run(fmt.Sprint(i), func(ctx *context.Context) {
+			reporter.SetNodeKind(ctx.Reporter(), reporter.NodeKindFile)
 			ctx.Reporter().Parallel()
 			scns, err := schema.LoadScenariosFromReader(reader, schema.WithColorConfig(ctx.ColorConfig()))
 			if err != nil {
@@ -332,9 +338,13 @@ func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, bas
 			scenarioCtx = scenarioCtx.WithSecrets(clonedSecrets)
 		}
 
+		// Each top-level scenario is its own trace, linked to the run span.
+		scenarioCtx = scenarioCtx.WithRequestContext(reporter.WithNewTrace(scenarioCtx.RequestContext()))
+
 		// Run scenario with retry policy
 		var attempts int
 		context.RunWithRetry(scenarioCtx, scn.Title, func(ctx *context.Context) {
+			reporter.SetNodeKind(ctx.Reporter(), reporter.NodeKindScenario)
 			ctx.Reporter().Parallel()
 
 			attempts++
@@ -352,6 +362,18 @@ func (r *Runner) runScenarios(ctx *context.Context, scns []*schema.Scenario, bas
 
 			_ = RunScenario(ctx, scn)
 		}, scn.Retry)
+	}
+}
+
+// telemetryConfig converts the propagation settings for the context package,
+// which cannot import schema. Unset fields mean enabled.
+func (r *Runner) telemetryConfig() context.TelemetryConfig {
+	enabled := func(b *bool) bool { return b == nil || *b }
+	return context.TelemetryConfig{
+		Traceparent:   enabled(r.propagation.Traceparent),
+		Baggage:       enabled(r.propagation.Baggage),
+		LegacyHeaders: enabled(r.propagation.LegacyHeaders),
+		RootDir:       r.rootDir,
 	}
 }
 

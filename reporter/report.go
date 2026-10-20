@@ -19,29 +19,38 @@ func GenerateTestReport(r Reporter) (*TestReport, error) {
 	if !r.isRoot() {
 		return nil, errors.New("must be a root reporter")
 	}
+	runID := r.getRunID()
 	report := &TestReport{
 		Name:   r.getName(),
 		Result: testResult(r),
+		RunID:  runID,
 	}
 	for _, file := range r.getChildren() {
 		fileReport := ScenarioFileReport{
 			Name:     file.getName(),
 			Result:   testResult(file),
 			Duration: TestDuration(file.getDuration()),
+			SpanID:   file.getSpanID(),
+			RunID:    runID,
 		}
 		for _, scenario := range file.getChildren() {
 			scenarioReport := ScenarioReport{
-				Name:     scenario.getName(),
-				File:     file.getName(),
-				Result:   testResult(scenario),
-				Duration: TestDuration(scenario.getDuration()),
+				Name:          scenario.getName(),
+				File:          file.getName(),
+				Result:        testResult(scenario),
+				Duration:      TestDuration(scenario.getDuration()),
+				TraceID:       scenario.getTraceID(),
+				SpanID:        scenario.getSpanID(),
+				ScenarioIndex: scenario.getScenarioIndex(),
 			}
 			for _, step := range scenario.getChildren() {
 				logs := step.getLogs()
 				stepReport := StepReport{
-					Name:     step.getName(),
-					Result:   testResult(step),
-					Duration: TestDuration(step.getDuration()),
+					Name:      step.getName(),
+					Result:    testResult(step),
+					Duration:  TestDuration(step.getDuration()),
+					SpanID:    step.getSpanID(),
+					StepIndex: step.getStepIndex(),
 					Logs: ReportLogs{
 						Info:  logs.infoLogs(),
 						Error: logs.errorLogs(),
@@ -67,9 +76,12 @@ func generateSubStepReports(r Reporter) []SubStepReport {
 	for i, child := range children {
 		logs := child.getLogs()
 		reports[i] = SubStepReport{
-			Name:     child.getName(),
-			Result:   testResult(child),
-			Duration: TestDuration(child.getDuration()),
+			Name:          child.getName(),
+			Result:        testResult(child),
+			Duration:      TestDuration(child.getDuration()),
+			SpanID:        child.getSpanID(),
+			ScenarioIndex: child.getScenarioIndex(),
+			StepIndex:     child.getStepIndex(),
 			Logs: ReportLogs{
 				Info:  logs.infoLogs(),
 				Error: logs.errorLogs(),
@@ -106,21 +118,40 @@ This struct can be marshalled as JUnit-like format XML.
 	fmt.Println(b)
 */
 type TestReport struct {
-	XMLName xml.Name             `json:"-"              xml:"testsuites"`
-	Name    string               `json:"name,omitempty" xml:"name,attr,omitempty"`
-	Result  TestResult           `json:"result"         xml:"-"`
-	Files   []ScenarioFileReport `json:"files"          xml:"testsuite"`
+	XMLName xml.Name             `json:"-"               xml:"testsuites"`
+	Name    string               `json:"name,omitempty"  xml:"name,attr,omitempty"`
+	Result  TestResult           `json:"result"          xml:"-"`
+	RunID   string               `json:"runId,omitempty" xml:"-"`
+	Files   []ScenarioFileReport `json:"files"           xml:"testsuite"`
 }
 
 // ScenarioFileReport represents a result report of a test scenario file.
 type ScenarioFileReport struct {
-	Name      string           `json:"name"      xml:"name,attr,omitempty"`
-	Result    TestResult       `json:"result"    xml:"-"`
-	Duration  TestDuration     `json:"duration"  xml:"time,attr"`
-	Scenarios []ScenarioReport `json:"scenarios" xml:"testcase"`
+	Name      string           `json:"name"             xml:"name,attr,omitempty"`
+	Result    TestResult       `json:"result"           xml:"-"`
+	Duration  TestDuration     `json:"duration"         xml:"time,attr"`
+	SpanID    string           `json:"spanId,omitempty" xml:"-"`
+	Scenarios []ScenarioReport `json:"scenarios"        xml:"testcase"`
+
+	// RunID is written as a JUnit <property> of the testsuite; JSON carries it once at the top level.
+	RunID string `json:"-" xml:"-"`
 }
 
-type xmlScenarioFileReport ScenarioFileReport
+type xmlScenarioFileReport struct {
+	Name       string           `xml:"name,attr,omitempty"`
+	Duration   TestDuration     `xml:"time,attr"`
+	Properties *xmlProperties   `xml:"properties,omitempty"`
+	Scenarios  []ScenarioReport `xml:"testcase"`
+}
+
+type xmlProperties struct {
+	Property []xmlProperty `xml:"property"`
+}
+
+type xmlProperty struct {
+	Name  string `xml:"name,attr"`
+	Value string `xml:"value,attr"`
+}
 
 // MarshalXML implements xml.Marshaler interface.
 func (r ScenarioFileReport) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
@@ -129,6 +160,14 @@ func (r ScenarioFileReport) MarshalXML(e *xml.Encoder, start xml.StartElement) e
 		if scenario.Result == TestResultFailed {
 			failures++
 		}
+	}
+	xr := xmlScenarioFileReport{
+		Name:      r.Name,
+		Duration:  r.Duration,
+		Scenarios: r.Scenarios,
+	}
+	if r.RunID != "" {
+		xr.Properties = &xmlProperties{Property: []xmlProperty{{Name: "scenarigo.run_id", Value: r.RunID}}}
 	}
 	start.Attr = append(start.Attr,
 		xml.Attr{
@@ -144,25 +183,30 @@ func (r ScenarioFileReport) MarshalXML(e *xml.Encoder, start xml.StartElement) e
 			Value: fmt.Sprint(failures),
 		},
 	)
-	return e.EncodeElement(xmlScenarioFileReport(r), start)
+	return e.EncodeElement(xr, start)
 }
 
 // ScenarioReport represents a result report of a test scenario.
 type ScenarioReport struct {
-	Name     string       `json:"name"`
-	File     string       `json:"-"`
-	Result   TestResult   `json:"result"`
-	Duration TestDuration `json:"duration"`
-	Steps    []StepReport `json:"steps"`
+	Name          string       `json:"name"`
+	File          string       `json:"-"`
+	Result        TestResult   `json:"result"`
+	Duration      TestDuration `json:"duration"`
+	TraceID       string       `json:"traceId,omitempty"`
+	SpanID        string       `json:"spanId,omitempty"`
+	ScenarioIndex *int         `json:"scenarioIndex,omitempty"`
+	Steps         []StepReport `json:"steps"`
 }
 
 type xmlScenarioReport struct {
-	Name      string                   `xml:"name,attr,omitempty"`
-	File      string                   `xml:"file,attr,omitempty"`
-	Duration  TestDuration             `xml:"time,attr"`
-	Failure   *xmlScenarioReportDetail `xml:"failure,omitempty"`
-	Skipped   *xmlScenarioReportDetail `xml:"skipped,omitempty"`
-	SystemOut *xmlCDATA                `xml:"system-out,omitempty"`
+	Name          string                   `xml:"name,attr,omitempty"`
+	File          string                   `xml:"file,attr,omitempty"`
+	Duration      TestDuration             `xml:"time,attr"`
+	TraceID       string                   `xml:"trace-id,attr,omitempty"`
+	ScenarioIndex *int                     `xml:"scenario-index,attr,omitempty"`
+	Failure       *xmlScenarioReportDetail `xml:"failure,omitempty"`
+	Skipped       *xmlScenarioReportDetail `xml:"skipped,omitempty"`
+	SystemOut     *xmlCDATA                `xml:"system-out,omitempty"`
 }
 
 type xmlScenarioReportDetail struct {
@@ -177,9 +221,11 @@ type xmlCDATA struct {
 // MarshalXML implements xml.Marshaler interface.
 func (r ScenarioReport) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	xr := &xmlScenarioReport{
-		Name:     r.Name,
-		File:     r.File,
-		Duration: r.Duration,
+		Name:          r.Name,
+		File:          r.File,
+		Duration:      r.Duration,
+		TraceID:       r.TraceID,
+		ScenarioIndex: r.ScenarioIndex,
 	}
 	switch r.Result {
 	case TestResultFailed:
@@ -216,11 +262,13 @@ func (r ScenarioReport) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 
 // StepReport represents a result report of a test scenario step.
 type StepReport struct {
-	Name     string          `json:"name"`
-	Result   TestResult      `json:"result"`
-	Duration TestDuration    `json:"duration"`
-	Logs     ReportLogs      `json:"logs"`
-	SubSteps []SubStepReport `json:"subSteps,omitempty"`
+	Name      string          `json:"name"`
+	Result    TestResult      `json:"result"`
+	Duration  TestDuration    `json:"duration"`
+	SpanID    string          `json:"spanId,omitempty"`
+	StepIndex *int            `json:"stepIndex,omitempty"`
+	Logs      ReportLogs      `json:"logs"`
+	SubSteps  []SubStepReport `json:"subSteps,omitempty"`
 }
 
 type ReportLogs struct {
@@ -231,11 +279,14 @@ type ReportLogs struct {
 
 // SubStepReport represents a result report of a test scenario sub step.
 type SubStepReport struct {
-	Name     string          `json:"name"`
-	Result   TestResult      `json:"result"`
-	Duration TestDuration    `json:"duration"`
-	Logs     ReportLogs      `json:"logs"`
-	SubSteps []SubStepReport `json:"subSteps,omitempty"`
+	Name          string          `json:"name"`
+	Result        TestResult      `json:"result"`
+	Duration      TestDuration    `json:"duration"`
+	SpanID        string          `json:"spanId,omitempty"`
+	ScenarioIndex *int            `json:"scenarioIndex,omitempty"`
+	StepIndex     *int            `json:"stepIndex,omitempty"`
+	Logs          ReportLogs      `json:"logs"`
+	SubSteps      []SubStepReport `json:"subSteps,omitempty"`
 }
 
 // TestResult represents a test result.

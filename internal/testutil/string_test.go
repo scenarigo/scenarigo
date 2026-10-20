@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -155,4 +156,53 @@ func TestRemoveScenarigoHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReplaceOutput_TraceHeaders(t *testing.T) {
+	in := strings.Join([]string{
+		"header:",
+		"  Baggage:",
+		"  - scenarigo.run_id=abc",
+		"  Scenarigo-Scenario-Title:",
+		"  - title",
+		"  Traceparent:",
+		"  - 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+		"  User-Agent:",
+		"  - scenarigo/v1.0.0",
+		"metadata:",
+		"  baggage:",
+		"  - scenarigo.run_id=abc",
+		"  traceparent:",
+		"  - 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+		"  version:",
+		"  - 1.0.0",
+	}, "\n")
+	t.Run("default removes legacy and trace headers", func(t *testing.T) {
+		expect := strings.Join([]string{
+			"header:",
+			"  User-Agent:",
+			"  - scenarigo/v1.0.0",
+			"metadata:",
+			"  version:",
+			"  - 1.0.0",
+		}, "\n")
+		if diff := cmp.Diff(expect, ReplaceOutput(in)); diff != "" {
+			t.Errorf("differs (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("KeepScenarigoHeaders still removes trace headers", func(t *testing.T) {
+		expect := strings.Join([]string{
+			"header:",
+			"  Scenarigo-Scenario-Title:",
+			"  - title",
+			"  User-Agent:",
+			"  - scenarigo/v1.0.0",
+			"metadata:",
+			"  version:",
+			"  - 1.0.0",
+		}, "\n")
+		if diff := cmp.Diff(expect, ReplaceOutput(in, KeepScenarigoHeaders())); diff != "" {
+			t.Errorf("differs (-want +got):\n%s", diff)
+		}
+	})
 }

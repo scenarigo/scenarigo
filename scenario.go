@@ -6,8 +6,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/errors"
+	"github.com/scenarigo/scenarigo/internal/protocolmeta"
 	"github.com/scenarigo/scenarigo/plugin"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/schema"
@@ -21,6 +24,18 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	ctx = ctx.WithSteps(steps)
 	ctx = ctx.WithScenarioFilepath(s.Filepath())
 	ctx = ctx.WithScenarioTitle(s.Title)
+	// An included scenario starts a fresh step layer; its steps set their own.
+	ctx = ctx.WithoutStep()
+	if idx, ok := s.Index(); ok {
+		ctx = ctx.WithScenarioIndex(idx)
+		reporter.SetScenarioIndex(ctx.Reporter(), idx)
+	}
+	ctx = ctx.EnsureRootScenario()
+	scenarioAttrs := []attribute.KeyValue{protocolmeta.AttrFilepath.String(ctx.NormalizedScenarioFilepath())}
+	if s.Title != "" {
+		scenarioAttrs = append(scenarioAttrs, protocolmeta.AttrScenarioTitle.String(s.Title))
+	}
+	reporter.SetSpanAttributes(ctx.Reporter(), scenarioAttrs...)
 
 	var setups setupFuncList
 	if s.Plugins != nil {
@@ -69,9 +84,14 @@ func RunScenario(ctx *context.Context, s *schema.Scenario) *context.Context {
 	for idx, step := range s.Steps {
 		var stepCtx *context.Context
 		var attempts int
-		ok := context.RunWithRetry(scnCtx, step.Title, func(ctx *context.Context) {
+		ok := context.RunWithRetry(scnCtx.WithStepIndex(idx).WithStepName(step.Title), step.Title, func(ctx *context.Context) {
 			stepCtx = ctx
 			attempts++
+			reporter.SetNodeKind(ctx.Reporter(), reporter.NodeKindStep)
+			reporter.SetStepIndex(ctx.Reporter(), idx)
+			if step.Title != "" {
+				reporter.SetSpanAttributes(ctx.Reporter(), protocolmeta.AttrStepName.String(step.Title))
+			}
 
 			if attempts > 1 {
 				// reset templates

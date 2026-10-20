@@ -16,6 +16,8 @@ import (
 	"unicode"
 
 	"github.com/cenkalti/backoff/v4"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/scenarigo/scenarigo/color"
 )
@@ -51,10 +53,19 @@ type Reporter interface {
 	Run(name string, f func(r Reporter)) bool
 	Teardown(name string, f func(r Reporter))
 	Cleanup(f func())
+	// Span returns the node span. Retry attempts share the span of the node they
+	// retry. The result is never nil; without tracing it is a no-op span.
+	Span() trace.Span
 
-	runWithRetry(string, func(t Reporter), RetryPolicy) bool
+	runWithRetry(string, func(t Reporter), RetryPolicy, runOptions) bool
 	setNoFailurePropagation()
 	setLogReplacer(LogReplacer)
+
+	// for tracing
+	setNodeKind(NodeKind)
+	setScenarioIndex(int)
+	setStepIndex(int)
+	setSpanAttributes(...attribute.KeyValue)
 
 	// for test reports
 	getName() string
@@ -62,6 +73,12 @@ type Reporter interface {
 	getLogs() *logRecorder
 	getChildren() []Reporter
 	isRoot() bool
+	getRunID() string
+	getNodeKind() NodeKind
+	getScenarioIndex() *int
+	getStepIndex() *int
+	getTraceID() string
+	getSpanID() string
 
 	// for test summary
 	printTestSummary()
@@ -97,6 +114,7 @@ func Run(f func(r Reporter), opts ...Option) bool {
 	}()
 
 	r = runWithTestContext(f, ctx)
+	ctx.shutdownTracerProvider()
 
 	// print global errors (e.g., invalid config)
 	if (r.Failed() && !r.noFailurePropagation) || r.context.verbose {
@@ -169,6 +187,20 @@ type reporter struct {
 	retryPolicy          RetryPolicy
 	retryable            bool
 	noFailurePropagation bool
+
+	// tracing
+	span          trace.Span
+	newTrace      bool // start a new trace instead of joining the parent's
+	remote        bool // restored from a WASM guest: never starts a span
+	runID         string
+	nodeKind      NodeKind
+	scenarioIndex *int
+	stepIndex     *int
+}
+
+// runOptions carries per-node settings that the public Run API cannot express.
+type runOptions struct {
+	newTrace bool
 }
 
 func newReporter() *reporter {
@@ -357,15 +389,16 @@ func (r *reporter) Run(name string, f func(t Reporter)) bool {
 	if r.inCleanup {
 		panic("reporter: Run called during cleanup")
 	}
-	return r.runWithRetry(name, f, nil)
+	return r.runWithRetry(name, f, nil, runOptions{})
 }
 
-func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPolicy) bool {
+func (r *reporter) runWithRetry(name string, f func(t Reporter), policy RetryPolicy, opts runOptions) bool {
 	if !r.context.matcher.match(r.goTestName, rewrite(name)) {
 		return true
 	}
 	child := r.spawn(name)
 	child.retryPolicy = policy
+	child.newTrace = opts.newTrace
 	if r.context.verbose {
 		r.context.printf("=== RUN   %s\n", child.goTestName)
 	}
@@ -397,6 +430,7 @@ func (r *reporter) spawn(name string) *reporter {
 	child.logs = r.logs.spawn()
 	child.durationMeasurer = r.durationMeasurer.spawn()
 	child.testing = r.testing
+	child.remote = r.remote // guest-side nodes never start spans
 	return child
 }
 
@@ -413,7 +447,9 @@ func (r *reporter) run(f func(r Reporter)) {
 		}
 		defer cancel()
 		var retried bool
+		attempt := 0
 		child, err := backoff.RetryNotifyWithData(func() (*reporter, error) {
+			attempt++
 			child := r.spawn("retryable")
 			child.name = r.name
 			child.goTestName = r.goTestName
@@ -429,6 +465,7 @@ func (r *reporter) run(f func(r Reporter)) {
 			return child, nil
 		}, b, func(err error, d time.Duration) {
 			retried = true
+			r.recordRetry(attempt)
 			r.Logf("retry after %s", d)
 		})
 		r.noFailurePropagation = child.noFailurePropagation
@@ -468,6 +505,7 @@ func (r *reporter) runFunc(f func(Reporter)) {
 
 func (r *reporter) start() func() {
 	r.durationMeasurer.start()
+	r.startSpan()
 	return func() {
 		r.durationMeasurer.stop()
 		err := recover()
@@ -553,6 +591,7 @@ func (r *reporter) start() func() {
 			r.inCleanup = false
 		}
 
+		r.endSpan()
 		r.done <- true
 	}
 }

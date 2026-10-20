@@ -222,7 +222,7 @@ func TestRequest_Invoke(t *testing.T) {
 					Metadata: scenarigoMetadata(t.Name(), "", ""),
 					Message:  &ProtoMessageYAMLMarshaler{req},
 				}
-				if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform()); diff != "" {
+				if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform(), ignoreW3CMetadata); diff != "" {
 					t.Errorf("differs: (-want +got)\n%s", diff)
 				}
 				if diff := cmp.Diff((*ResponseExtractor)(typedResult), ctx.Response(), protocmp.Transform(), cmpopts.IgnoreUnexported(status.Status{})); diff != "" {
@@ -270,7 +270,7 @@ func TestRequest_Invoke(t *testing.T) {
 					Metadata: scenarigoMetadata(t.Name(), "", ""),
 					Message:  &ProtoMessageYAMLMarshaler{req},
 				}
-				if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform()); diff != "" {
+				if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform(), ignoreW3CMetadata); diff != "" {
 					t.Errorf("differs: (-want +got)\n%s", diff)
 				}
 			})
@@ -307,7 +307,7 @@ func TestRequest_Invoke(t *testing.T) {
 			Metadata: scenarigoMetadata(t.Name(), "シナリオ", "テスト/シナリオ.yaml"),
 			Message:  &ProtoMessageYAMLMarshaler{req},
 		}
-		if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform()); diff != "" {
+		if diff := cmp.Diff((*RequestExtractor)(dumpReq), ctx.Request(), protocmp.Transform(), ignoreW3CMetadata); diff != "" {
 			t.Errorf("differs: (-want +got)\n%s", diff)
 		}
 	})
@@ -493,7 +493,7 @@ ok  	test.yaml	0.000s
 			}, reporter.WithWriter(&b), reporter.WithVerboseLog())
 
 			expect := strings.TrimPrefix(test.expect, "\n")
-			if diff := cmp.Diff(expect, testutil.ResetDuration(b.String())); diff != "" {
+			if diff := cmp.Diff(expect, testutil.RemoveScenarigoHeaders(testutil.ResetDuration(b.String()))); diff != "" {
 				t.Errorf("differs (-want +got):\n%s", diff)
 			}
 		})
