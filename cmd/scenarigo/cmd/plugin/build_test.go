@@ -2479,11 +2479,15 @@ func setupGitServer(t *testing.T, goCmd string) {
 				t.Fatalf("git tag failed: %s", err)
 			}
 		}
-		if err := os.Rename(
-			filepath.Join(repoDir, e.Name(), ".git"),
-			filepath.Join(tempDir, e.Name()),
-		); err != nil {
-			t.Fatalf("failed to rename: %s", err)
+		// Copy instead of os.Rename: the temporary directory can be on another
+		// filesystem than testdata (e.g. /tmp is tmpfs on ubuntu-26.04 runners),
+		// where a rename fails with EXDEV.
+		gitDir := filepath.Join(repoDir, e.Name(), ".git")
+		if err := os.CopyFS(filepath.Join(tempDir, e.Name()), os.DirFS(gitDir)); err != nil {
+			t.Fatalf("failed to copy %s: %s", gitDir, err)
+		}
+		if err := os.RemoveAll(gitDir); err != nil {
+			t.Fatalf("failed to remove %s: %s", gitDir, err)
 		}
 	}
 }
