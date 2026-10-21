@@ -1,0 +1,15 @@
+---
+name: "template expression partial match"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        url: '{{var$0'
+operation: completion
+expect:
+  completionLabels:
+    contains: [vars]
+    excludes: [plugins]

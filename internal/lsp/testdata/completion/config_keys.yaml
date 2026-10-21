@@ -1,0 +1,21 @@
+---
+name: "config top-level key completion"
+document: |
+  schemaVersion: config/v1
+  $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [scenarios, plugins, protocols, output, input, execution]
+---
+name: "plugin config key completion under a user-defined plugin name"
+document: |
+  schemaVersion: config/v1
+  plugins:
+    myplugin:
+      $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [src]
+    excludes: [scenarios, plugins]

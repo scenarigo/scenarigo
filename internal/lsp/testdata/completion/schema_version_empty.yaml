@@ -1,0 +1,8 @@
+---
+name: "schemaVersion value completion when empty"
+document: |
+  schemaVersion: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [scenario/v1, config/v1]

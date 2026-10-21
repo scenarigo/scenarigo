@@ -1,0 +1,21 @@
+---
+name: "grpc streaming messages are known fields"
+document: |
+  schemaVersion: scenario/v1
+  title: streaming
+  steps:
+    - title: bidi
+      protocol: grpc
+      request:
+        client: "{{vars.client}}"
+        method: BidiStreamEcho
+        messages:
+          - message: hello
+          - message: world
+      expect:
+        messages:
+          - message: hello
+          - message: world
+operation: diagnostics
+expect:
+  diagnosticCount: 0
