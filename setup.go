@@ -3,6 +3,7 @@ package scenarigo
 import (
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/plugin"
+	"github.com/scenarigo/scenarigo/reporter"
 )
 
 type setupFuncList []setupFunc
@@ -24,12 +25,14 @@ func (sl setupFuncList) setup(ctx *plugin.Context) (*plugin.Context, func(*plugi
 	var teardowns []teardownFunc
 	setupCtx := ctx
 	ctx.Run("setup", func(ctx *plugin.Context) {
+		reporter.SetNodeKind(ctx.Reporter(), reporter.NodeKindSetup)
 		for _, setup := range sl {
 			if ctx.Reporter().Failed() {
 				break
 			}
 			newCtx := ctx
 			ctx.Run(setup.name, func(ctx *context.Context) {
+				reporter.SetNodeKind(ctx.Reporter(), reporter.NodeKindSetup)
 				ctx, teardown := setup.f(ctx)
 				if ctx != nil {
 					newCtx = ctx

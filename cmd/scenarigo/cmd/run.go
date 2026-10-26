@@ -1,21 +1,57 @@
 package cmd
 
 import (
+	gocontext "context"
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/scenarigo/scenarigo"
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/scenarigo/scenarigo/color"
 	"github.com/scenarigo/scenarigo/context"
+	"github.com/scenarigo/scenarigo/internal/tracing"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/schema"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
 )
 
 // ErrTestFailed is the error returned when the test failed.
 var ErrTestFailed = errors.New("test failed")
+
+// tracingShutdownTimeout bounds the final flush of the trace exporter after the run.
+const tracingShutdownTimeout = 10 * time.Second
+
+// setupTracing builds the reporter options for the configured exporter (none
+// when tracing is off). The returned function flushes and shuts the exporter
+// down; export failures go to stderr and never fail the run.
+func setupTracing(cmd *cobra.Command, cfg *schema.Config) ([]reporter.Option, func(), error) {
+	noop := func() {}
+	if cfg == nil {
+		return nil, noop, nil
+	}
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = gocontext.Background()
+	}
+	tp, err := tracing.NewTracerProvider(ctx, cfg.Telemetry.Tracing.Exporter)
+	if err != nil {
+		return nil, noop, fmt.Errorf("failed to set up tracing: %w", err)
+	}
+	if tp == nil {
+		return nil, noop, nil
+	}
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		fmt.Fprintf(cmd.ErrOrStderr(), "WARN: telemetry: %s\n", err)
+	}))
+	return []reporter.Option{reporter.WithTracerProvider(tp)}, func() {
+		if err := tracing.Shutdown(tp, tracingShutdownTimeout); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "WARN: telemetry: failed to flush traces: %s\n", err)
+		}
+	}, nil
+}
 
 var (
 	verbose     bool
@@ -110,6 +146,13 @@ func run(cmd *cobra.Command, args []string) error {
 	if parallelNum > 0 {
 		reporterOpts = append(reporterOpts, reporter.WithMaxParallel(parallelNum))
 	}
+
+	tracingOpts, shutdownTracing, err := setupTracing(cmd, cfg)
+	if err != nil {
+		return err
+	}
+	reporterOpts = append(reporterOpts, tracingOpts...)
+	defer shutdownTracing()
 
 	var reportErr error
 	success := reporter.Run(

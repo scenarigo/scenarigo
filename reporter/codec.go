@@ -1,7 +1,11 @@
 package reporter
 
 import (
+	"context"
 	"fmt"
+	"slices"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/scenarigo/scenarigo/color"
 )
@@ -24,6 +28,17 @@ type SerializableReporter struct {
 	Retryable            bool                     `json:"retryable"`
 	NoFailurePropagation bool                     `json:"noFailurePropagation"`
 	Context              *SerializableTestContext `json:"context,omitempty"`
+
+	// Span context of the node span, for the guest to continue the trace.
+	// A reporter restored from these fields never starts a span of its own.
+	TraceID       string `json:"traceId,omitempty"`
+	SpanID        string `json:"spanId,omitempty"`
+	TraceFlags    string `json:"traceFlags,omitempty"`
+	TraceState    string `json:"traceState,omitempty"`
+	RunID         string `json:"runId,omitempty"`
+	NodeKind      string `json:"nodeKind,omitempty"`
+	ScenarioIndex *int   `json:"scenarioIndex,omitempty"`
+	StepIndex     *int   `json:"stepIndex,omitempty"`
 }
 
 // SerializableTestContext represents a serializable version of testContext struct.
@@ -45,16 +60,37 @@ func (r *reporter) ToSerializable(reporterMap map[string]*SerializableReporter) 
 		return id
 	}
 
+	// A sibling may call Parallel() or add a child while this tree is serialized.
+	r.m.Lock()
+	isParallel := r.isParallel
+	children := slices.Clone(r.children)
+	r.m.Unlock()
+
 	sr := &SerializableReporter{
 		Name:                 r.name,
 		GoTestName:           r.goTestName,
 		Depth:                r.depth,
 		Failed:               r.Failed(),
 		Skipped:              r.Skipped(),
-		IsParallel:           r.isParallel,
+		IsParallel:           isParallel,
 		Testing:              r.testing,
 		Retryable:            r.retryable,
 		NoFailurePropagation: r.noFailurePropagation,
+		RunID:                r.getRunID(),
+		NodeKind:             string(r.getNodeKind()),
+		ScenarioIndex:        r.getScenarioIndex(),
+		StepIndex:            r.getStepIndex(),
+	}
+	// Only the node's own span is serialized. A retry attempt or a guest-created
+	// node finds its span through its parent after restoration, and must not be
+	// reported with a span ID of its own.
+	if r.span != nil {
+		if sc := r.span.SpanContext(); sc.IsValid() {
+			sr.TraceID = sc.TraceID().String()
+			sr.SpanID = sc.SpanID().String()
+			sr.TraceFlags = sc.TraceFlags().String()
+			sr.TraceState = sc.TraceState().String()
+		}
 	}
 	reporterMap[id] = sr
 
@@ -71,9 +107,9 @@ func (r *reporter) ToSerializable(reporterMap map[string]*SerializableReporter) 
 	}
 
 	// Convert children
-	if len(r.children) > 0 {
-		sr.Children = make([]string, 0, len(r.children))
-		for _, child := range r.children {
+	if len(children) > 0 {
+		sr.Children = make([]string, 0, len(children))
+		for _, child := range children {
 			sr.Children = append(sr.Children, child.ToSerializable(reporterMap))
 		}
 	}
@@ -133,6 +169,12 @@ func (r *reporter) setFromSerializable(sr *SerializableReporter, reporterMap map
 	r.testing = sr.Testing
 	r.retryable = sr.Retryable
 	r.noFailurePropagation = sr.NoFailurePropagation
+	r.remote = true
+	r.runID = sr.RunID
+	r.nodeKind = NodeKind(sr.NodeKind)
+	r.scenarioIndex = sr.ScenarioIndex
+	r.stepIndex = sr.StepIndex
+	r.span = remoteSpan(sr)
 
 	if sr.Failed {
 		r.Fail()
@@ -242,4 +284,37 @@ func FromSerializableTestContext(sc *SerializableTestContext) *testContext {
 		ctx.testSummary = newTestSummary()
 	}
 	return ctx
+}
+
+// remoteSpan rebuilds a non-recording span from the serialized span context.
+// It returns nil when the serialized node had no valid span.
+func remoteSpan(sr *SerializableReporter) trace.Span {
+	if sr.TraceID == "" || sr.SpanID == "" {
+		return nil
+	}
+	traceID, err := trace.TraceIDFromHex(sr.TraceID)
+	if err != nil {
+		return nil
+	}
+	spanID, err := trace.SpanIDFromHex(sr.SpanID)
+	if err != nil {
+		return nil
+	}
+	cfg := trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, Remote: true}
+	if sr.TraceFlags != "" {
+		var flags trace.TraceFlags
+		if _, err := fmt.Sscanf(sr.TraceFlags, "%02x", &flags); err == nil {
+			cfg.TraceFlags = flags
+		}
+	}
+	if sr.TraceState != "" {
+		if ts, err := trace.ParseTraceState(sr.TraceState); err == nil {
+			cfg.TraceState = ts
+		}
+	}
+	sc := trace.NewSpanContext(cfg)
+	if !sc.IsValid() {
+		return nil
+	}
+	return trace.SpanFromContext(trace.ContextWithRemoteSpanContext(context.Background(), sc))
 }

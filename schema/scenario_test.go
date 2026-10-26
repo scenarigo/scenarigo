@@ -51,3 +51,44 @@ steps:
 		t.Error("Node is nil after Reset")
 	}
 }
+
+func TestScenario_Index(t *testing.T) {
+	p := &testProtocol{name: "test"}
+	protocol.Register(p)
+	defer protocol.Unregister(p.Name())
+
+	yml := `title: first
+steps:
+- title: s
+  protocol: test
+---
+title: second
+steps:
+- title: s
+  protocol: test
+`
+	scenarios, err := LoadScenariosFromReader(strings.NewReader(yml))
+	if err != nil {
+		t.Fatalf("failed to load scenario: %s", err)
+	}
+	if len(scenarios) != 2 {
+		t.Fatalf("expected 2 scenarios, got %d", len(scenarios))
+	}
+	for expect, scn := range scenarios {
+		got, ok := scn.Index()
+		if !ok || got != expect {
+			t.Errorf("Index() = (%d, %t), want (%d, true)", got, ok, expect)
+		}
+		if err := scn.Reset(); err != nil {
+			t.Fatalf("Reset() failed: %s", err)
+		}
+		got, ok = scn.Index()
+		if !ok || got != expect {
+			t.Errorf("after Reset: Index() = (%d, %t), want (%d, true)", got, ok, expect)
+		}
+	}
+
+	if _, ok := (&Scenario{}).Index(); ok {
+		t.Error("a scenario not loaded from a file must have no index")
+	}
+}

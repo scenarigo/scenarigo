@@ -12,6 +12,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestGenerateTestReport(t *testing.T) {
@@ -241,7 +242,14 @@ func checkReport(t *testing.T, r Reporter, expect *TestReport) {
 	if err != nil {
 		t.Fatalf("failed to generate report: %s", err)
 	}
-	if diff := cmp.Diff(expect, report); diff != "" {
+	// IDs change on every run; TestGenerateTestReport_IDs checks them against the recorded spans.
+	if diff := cmp.Diff(expect, report,
+		cmpopts.IgnoreFields(TestReport{}, "RunID"),
+		cmpopts.IgnoreFields(ScenarioFileReport{}, "SpanID", "RunID"),
+		cmpopts.IgnoreFields(ScenarioReport{}, "TraceID", "SpanID"),
+		cmpopts.IgnoreFields(StepReport{}, "SpanID"),
+		cmpopts.IgnoreFields(SubStepReport{}, "SpanID"),
+	); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }

@@ -34,13 +34,13 @@ type Context struct {
 
 // New returns a new scenarigo context.
 func New(r reporter.Reporter) *Context {
-	return newContext(context.Background(), context.Background(), r)
+	return newContext(context.Background(), reporterSpanContext(context.Background(), r), r)
 }
 
 // FromT creates a new context from t.
 func FromT(t *testing.T) *Context {
 	t.Helper()
-	return newContext(context.Background(), context.Background(), reporter.FromT(t))
+	return New(reporter.FromT(t))
 }
 
 func newContext(ctx context.Context, reqCtx context.Context, r reporter.Reporter) *Context {
@@ -70,7 +70,7 @@ func (c *Context) WithReporter(r reporter.Reporter) *Context {
 	if s := c.Secrets(); s != nil {
 		reporter.SetLogReplacer(c.reporter, s)
 	}
-	return newContext(c.ctx, c.reqCtx, r)
+	return newContext(c.ctx, reporterSpanContext(c.reqCtx, r), r)
 }
 
 // Reporter returns the reporter of context.
@@ -182,7 +182,7 @@ func (c *Context) Vars() Vars {
 	return nil
 }
 
-// WithSecrets returns a copy of c with v.
+// WithSecrets returns a copy of c with s appended to the secrets.
 func (c *Context) WithSecrets(s any) *Context {
 	if s == nil {
 		return c
@@ -309,7 +309,8 @@ func (c *Context) Run(name string, f func(*Context)) bool {
 func RunWithRetry(c *Context, name string, f func(*Context), policy reporter.RetryPolicy) bool {
 	reqCtx := c.RequestContext()
 	return reporter.RunWithRetry(reqCtx, c.Reporter(), name, func(r reporter.Reporter) {
-		reqCtx, cancel := context.WithCancel(reqCtx)
+		// The new-trace mark applies to this node only, never to the nodes it creates.
+		reqCtx, cancel := context.WithCancel(reporter.WithoutNewTrace(reqCtx))
 		defer cancel()
 		f(c.WithRequestContext(reqCtx).WithReporter(r))
 	}, policy)
@@ -318,6 +319,7 @@ func RunWithRetry(c *Context, name string, f func(*Context), policy reporter.Ret
 // Teardown registers a named function to be called when all parallel subtests complete.
 func (c *Context) Teardown(name string, f func(*Context)) {
 	c.Reporter().Teardown(name, func(r reporter.Reporter) {
+		reporter.SetNodeKind(r, reporter.NodeKindTeardown)
 		f(c.WithRequestContext(context.WithoutCancel(c.reqCtx)).WithReporter(r))
 	})
 }

@@ -1,0 +1,4 @@
+schemaVersion: config/v1
+telemetry:
+  tracing:
+    exporter: jaeger

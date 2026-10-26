@@ -26,6 +26,7 @@ type SerializableSecrets struct {
 // for communication between host and WASM plugins.
 type SerializableContext struct {
 	ScenarioFilepath string                         `json:"scenarioFilepath,omitempty"`
+	ScenarioTitle    string                         `json:"scenarioTitle,omitempty"`
 	PluginDir        string                         `json:"pluginDir,omitempty"`
 	Plugins          []map[string]any               `json:"plugins,omitempty"`
 	Vars             []any                          `json:"vars,omitempty"`
@@ -41,14 +42,44 @@ type SerializableContext struct {
 	// The reporter has parent and children fields, which are processed recursively.
 	// Since references can be circular, a ReporterMap is used to manage the references.
 	ReporterMap map[string]*reporter.SerializableReporter `json:"reporterMap"`
+
+	// Execution metadata. NormalizedFilepath is computed on the host: the guest
+	// has neither the configuration directory nor the host's working directory.
+	RunID              string           `json:"runId,omitempty"`
+	ScenarioIndex      *int             `json:"scenarioIndex,omitempty"`
+	StepIndex          *int             `json:"stepIndex,omitempty"`
+	StepName           string           `json:"stepName,omitempty"`
+	Telemetry          *TelemetryConfig `json:"telemetry,omitempty"`
+	NormalizedFilepath string           `json:"normalizedFilepath,omitempty"`
+	RootFilepath       string           `json:"rootFilepath,omitempty"`
+	RootScenarioIndex  *int             `json:"rootScenarioIndex,omitempty"`
 }
 
 // ToSerializable converts Context to SerializableContext.
 // This method serializes the context data for transmission to WASM plugins.
 func (c *Context) ToSerializable() *SerializableContext {
 	sc := &SerializableContext{
-		ScenarioFilepath: c.ScenarioFilepath(),
-		PluginDir:        c.PluginDir(),
+		ScenarioFilepath:   c.ScenarioFilepath(),
+		ScenarioTitle:      c.ScenarioTitle(),
+		PluginDir:          c.PluginDir(),
+		RunID:              c.RunID(),
+		StepName:           c.StepName(),
+		NormalizedFilepath: c.NormalizedScenarioFilepath(),
+	}
+	if i, ok := c.ScenarioIndex(); ok {
+		sc.ScenarioIndex = &i
+	}
+	if i, ok := c.StepIndex(); ok {
+		sc.StepIndex = &i
+	}
+	if cfg, ok := c.TelemetryConfig(); ok {
+		sc.Telemetry = &cfg
+	}
+	if c.hasRootScenario() {
+		sc.RootFilepath = c.RootScenarioFilepath()
+		if i, ok := c.RootScenarioIndex(); ok {
+			sc.RootScenarioIndex = &i
+		}
 	}
 
 	// Store ColorConfig enabled state for WASM plugins
@@ -120,12 +151,38 @@ func FromSerializableWithContext(ctx *Context, sc *SerializableContext) (*Contex
 		if err != nil {
 			return nil, err
 		}
-		ctx.reporter = r
+		ctx = newContext(ctx.ctx, reporterSpanContext(ctx.reqCtx, r), r)
 	}
 
 	// Set scenario filepath.
 	if sc.ScenarioFilepath != "" {
 		ctx = ctx.WithScenarioFilepath(sc.ScenarioFilepath)
+	}
+	if sc.ScenarioTitle != "" {
+		ctx = ctx.WithScenarioTitle(sc.ScenarioTitle)
+	}
+
+	// Set execution metadata.
+	if sc.RunID != "" {
+		ctx = ctx.WithRunID(sc.RunID)
+	}
+	if sc.ScenarioIndex != nil {
+		ctx = ctx.WithScenarioIndex(*sc.ScenarioIndex)
+	}
+	if sc.StepIndex != nil {
+		ctx = ctx.WithStepIndex(*sc.StepIndex)
+	}
+	if sc.StepName != "" {
+		ctx = ctx.WithStepName(sc.StepName)
+	}
+	if sc.Telemetry != nil {
+		ctx = ctx.WithTelemetryConfig(*sc.Telemetry)
+	}
+	if sc.NormalizedFilepath != "" {
+		ctx = ctx.withNormalizedFilepath(sc.NormalizedFilepath)
+	}
+	if sc.RootFilepath != "" || sc.RootScenarioIndex != nil {
+		ctx = ctx.withRootScenario(sc.RootFilepath, sc.RootScenarioIndex)
 	}
 
 	// Set plugin directory.

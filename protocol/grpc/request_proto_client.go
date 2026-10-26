@@ -300,3 +300,7 @@ func (client *protoClient) invokeBidiStream(ctx gocontext.Context, sCtx *context
 		return client.newStreamConn(streamCtx, &grpc.StreamDesc{ServerStreams: true, ClientStreams: true}, opts...)
 	})
 }
+
+func (client *protoClient) fullMethod() string {
+	return client.fullMethodName
+}

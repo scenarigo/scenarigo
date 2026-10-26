@@ -28,6 +28,7 @@ type Config struct {
 	Input           InputConfig                      `yaml:"input,omitempty"`
 	Output          OutputConfig                     `yaml:"output,omitempty"`
 	Execution       ExecutionConfig                  `yaml:"execution,omitempty"`
+	Telemetry       TelemetryConfig                  `yaml:"telemetry,omitempty"`
 
 	// absolute path to the configuration file
 	Root     string          `yaml:"-"`
@@ -115,6 +116,33 @@ type OutputConfig struct {
 	Colored *bool        `yaml:"colored,omitempty"`
 	Summary bool         `yaml:"summary,omitempty"`
 	Report  ReportConfig `yaml:"report,omitempty"`
+}
+
+// TelemetryConfig represents a telemetry configuration.
+type TelemetryConfig struct {
+	Tracing     TracingConfig     `yaml:"tracing,omitempty"`
+	Propagation PropagationConfig `yaml:"propagation,omitempty"`
+}
+
+// Exporter names accepted by telemetry.tracing.exporter.
+const (
+	TracingExporterNone = "none"
+	TracingExporterOTLP = "otlp"
+)
+
+// TracingConfig represents a tracing configuration.
+type TracingConfig struct {
+	// Exporter is TracingExporterNone (default) or TracingExporterOTLP. The OTLP
+	// exporter reads the OTEL_EXPORTER_OTLP_* environment variables.
+	Exporter string `yaml:"exporter,omitempty"`
+}
+
+// PropagationConfig selects the headers scenarigo adds to outgoing requests.
+// A nil field means enabled.
+type PropagationConfig struct {
+	Traceparent   *bool `yaml:"traceparent,omitempty"`
+	Baggage       *bool `yaml:"baggage,omitempty"`
+	LegacyHeaders *bool `yaml:"legacyHeaders,omitempty"`
 }
 
 // ReportConfig represents a report configuration.
@@ -209,6 +237,12 @@ func LoadConfigFromReader(r io.Reader, root string, opts ...LoadOption) (*Config
 
 func validate(c *Config, opt *loadOption) error {
 	var errs []error
+	switch c.Telemetry.Tracing.Exporter {
+	case "", TracingExporterNone, TracingExporterOTLP:
+	default:
+		errs = append(errs, errors.ErrorPathf("telemetry.tracing.exporter", "unknown exporter %q: use %s or %s",
+			c.Telemetry.Tracing.Exporter, TracingExporterNone, TracingExporterOTLP))
+	}
 	for i, p := range c.Scenarios {
 		if err := stat(c, p, (&yaml.PathBuilder{}).Root().Child("scenarios").Index(uint(i)).Build(), opt); err != nil {
 			errs = append(errs, err)
