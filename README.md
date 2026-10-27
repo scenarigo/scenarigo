@@ -1074,7 +1074,7 @@ The W3C limits (8192 bytes, 64 members) are respected: when the baggage written 
 ```yaml
 telemetry:
   tracing:
-    exporter: none        # none (default) or otlp
+    exporter: none        # none (default) or otlp; OTEL_TRACES_EXPORTER overrides it
   propagation:
     traceparent: true     # default true
     baggage: true         # default true
@@ -1084,6 +1084,8 @@ telemetry:
 With `exporter: otlp`, spans are exported over OTLP using the standard `OTEL_EXPORTER_OTLP_*` environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, ...). The protocol is `http/protobuf` unless `OTEL_EXPORTER_OTLP_PROTOCOL` (or `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`) selects `grpc`; `http/json` is not supported. The resource has `service.name=scenarigo` and `service.version` set to the scenarigo version; `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` override them. Every span is sampled. Export failures are written to stderr and never fail the run; the final flush waits at most 10 seconds.
 
 With `exporter: none`, spans are still created so that the IDs on the wire and in the reports are consistent, but nothing is exported.
+
+The environment variable `OTEL_TRACES_EXPORTER` selects the exporter per run and wins over `telemetry.tracing.exporter`, including when no configuration file is loaded. It accepts `otlp` or `none`; any other value, including a comma-separated list, is an error. The configuration file is shared through the repository, so leave `exporter` at its default and set `OTEL_TRACES_EXPORTER=otlp` only where a collector is reachable, for example in CI. Without the variable, `exporter: otlp` makes a local run try `localhost:4318` and print a warning when nothing listens there.
 
 **Reports:**
 

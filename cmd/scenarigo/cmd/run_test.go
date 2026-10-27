@@ -13,13 +13,27 @@ import (
 
 	"github.com/scenarigo/scenarigo/cmd/scenarigo/cmd/config"
 	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/internal/tracing"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/schema"
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/spf13/cobra"
 )
 
+// unsetenv unsets the variables for the test and restores them afterwards, so
+// the developer's shell does not steer the test.
+func unsetenv(t *testing.T, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		t.Setenv(key, "") // registers the restore
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestRun(t *testing.T) {
+	unsetenv(t, tracing.ExporterEnv)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -399,6 +413,7 @@ func TestSetupTracing(t *testing.T) {
 	tracingConfig := func(exporter string) *schema.Config {
 		return &schema.Config{Telemetry: schema.TelemetryConfig{Tracing: schema.TracingConfig{Exporter: exporter}}}
 	}
+	unsetenv(t, tracing.ExporterEnv)
 
 	t.Run("tracing off", func(t *testing.T) {
 		for name, cfg := range map[string]*schema.Config{"nil config": nil, "none": tracingConfig("none"), "empty": tracingConfig("")} {
@@ -424,7 +439,10 @@ func TestSetupTracing(t *testing.T) {
 		}
 	})
 
-	t.Run("otlp", func(t *testing.T) {
+	// startCollector points OTEL_EXPORTER_OTLP_ENDPOINT at an HTTP server that
+	// counts the export requests it receives.
+	startCollector := func(t *testing.T) func() int {
+		t.Helper()
 		var mu sync.Mutex
 		var exports int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -434,34 +452,93 @@ func TestSetupTracing(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		}))
 		t.Cleanup(srv.Close)
-		for _, key := range []string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"} {
-			t.Setenv(key, "") // registers the restore
-			if err := os.Unsetenv(key); err != nil {
-				t.Fatal(err)
-			}
-		}
+		unsetenv(t, "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", srv.URL)
+		return func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return exports
+		}
+	}
+	// runAndFlush runs one scenario under the options and shuts tracing down.
+	runAndFlush := func(t *testing.T, cmd *cobra.Command, cfg *schema.Config) ([]reporter.Option, error) {
+		t.Helper()
+		opts, shutdown, err := setupTracing(cmd, cfg)
+		if err != nil {
+			return nil, err
+		}
+		reporter.Run(func(r reporter.Reporter) {
+			r.Run("scenario", func(r reporter.Reporter) {})
+		}, opts...)
+		shutdown()
+		return opts, nil
+	}
 
+	t.Run("otlp", func(t *testing.T) {
+		exports := startCollector(t)
 		cmd, stderr := newCmd()
-		opts, shutdown, err := setupTracing(cmd, tracingConfig(schema.TracingExporterOTLP))
+		opts, err := runAndFlush(t, cmd, tracingConfig(schema.TracingExporterOTLP))
 		if err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		if len(opts) != 1 {
 			t.Fatalf("expected the tracer provider option, got %d options", len(opts))
 		}
-		reporter.Run(func(r reporter.Reporter) {
-			r.Run("scenario", func(r reporter.Reporter) {})
-		}, opts...)
-		shutdown()
-
-		mu.Lock()
-		defer mu.Unlock()
-		if exports == 0 {
+		if exports() == 0 {
 			t.Error("shutdown must flush the spans to the collector")
 		}
 		if stderr.Len() != 0 {
 			t.Errorf("stderr = %q", stderr.String())
+		}
+	})
+
+	t.Run("environment turns tracing on", func(t *testing.T) {
+		exports := startCollector(t)
+		t.Setenv(tracing.ExporterEnv, "otlp")
+		for name, cfg := range map[string]*schema.Config{"nil config": nil, "none": tracingConfig("none"), "empty": tracingConfig("")} {
+			cmd, stderr := newCmd()
+			before := exports()
+			opts, err := runAndFlush(t, cmd, cfg)
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %s", name, err)
+			}
+			if len(opts) != 1 {
+				t.Fatalf("%s: expected the tracer provider option, got %d options", name, len(opts))
+			}
+			if exports() == before {
+				t.Errorf("%s: shutdown must flush the spans to the collector", name)
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("%s: stderr = %q", name, stderr.String())
+			}
+		}
+	})
+
+	t.Run("environment turns tracing off", func(t *testing.T) {
+		exports := startCollector(t)
+		t.Setenv(tracing.ExporterEnv, "none")
+		cmd, stderr := newCmd()
+		opts, err := runAndFlush(t, cmd, tracingConfig(schema.TracingExporterOTLP))
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if len(opts) != 0 {
+			t.Errorf("expected no reporter option, got %d", len(opts))
+		}
+		if exports() != 0 {
+			t.Errorf("nothing must be exported, got %d requests", exports())
+		}
+		if stderr.Len() != 0 {
+			t.Errorf("stderr = %q", stderr.String())
+		}
+	})
+
+	t.Run("unsupported environment exporter", func(t *testing.T) {
+		t.Setenv(tracing.ExporterEnv, "console")
+		cmd, _ := newCmd()
+		_, _, err := setupTracing(cmd, tracingConfig("none"))
+		if err == nil || !strings.Contains(err.Error(), "console") {
+			t.Fatalf("expected an error naming the exporter, got %v", err)
 		}
 	})
 }

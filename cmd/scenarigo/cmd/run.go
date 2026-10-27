@@ -24,19 +24,26 @@ var ErrTestFailed = errors.New("test failed")
 // tracingShutdownTimeout bounds the final flush of the trace exporter after the run.
 const tracingShutdownTimeout = 10 * time.Second
 
-// setupTracing builds the reporter options for the configured exporter (none
-// when tracing is off). The returned function flushes and shuts the exporter
-// down; export failures go to stderr and never fail the run.
+// setupTracing builds the reporter options for the selected exporter (none
+// when tracing is off). OTEL_TRACES_EXPORTER wins over the configuration file,
+// and applies even when no configuration file was loaded. The returned function
+// flushes and shuts the exporter down; export failures go to stderr and never
+// fail the run.
 func setupTracing(cmd *cobra.Command, cfg *schema.Config) ([]reporter.Option, func(), error) {
 	noop := func() {}
-	if cfg == nil {
-		return nil, noop, nil
+	var configured string
+	if cfg != nil {
+		configured = cfg.Telemetry.Tracing.Exporter
+	}
+	exporter, err := tracing.ResolveExporter(configured)
+	if err != nil {
+		return nil, noop, fmt.Errorf("failed to set up tracing: %w", err)
 	}
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = gocontext.Background()
 	}
-	tp, err := tracing.NewTracerProvider(ctx, cfg.Telemetry.Tracing.Exporter)
+	tp, err := tracing.NewTracerProvider(ctx, exporter)
 	if err != nil {
 		return nil, noop, fmt.Errorf("failed to set up tracing: %w", err)
 	}

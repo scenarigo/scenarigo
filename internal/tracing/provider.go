@@ -24,6 +24,27 @@ const (
 	ExporterOTLP = schema.TracingExporterOTLP
 )
 
+// ExporterEnv is the OpenTelemetry environment variable that selects the
+// traces exporter. The configuration file is shared through the repository,
+// so this per-environment value wins over telemetry.tracing.exporter: CI can
+// turn tracing on without a local run also trying to reach a collector.
+const ExporterEnv = "OTEL_TRACES_EXPORTER"
+
+// ResolveExporter returns the exporter named by ExporterEnv, or the configured
+// one when the variable is unset or empty. The variable is matched exactly
+// against ExporterNone and ExporterOTLP: the comma-separated lists and the other
+// exporters the OpenTelemetry specification allows are an error here.
+func ResolveExporter(configured string) (string, error) {
+	switch env := os.Getenv(ExporterEnv); env {
+	case "":
+		return configured, nil
+	case ExporterNone, ExporterOTLP:
+		return env, nil
+	default:
+		return "", fmt.Errorf("unsupported exporter %q in %s: use %s or %s", env, ExporterEnv, ExporterNone, ExporterOTLP)
+	}
+}
+
 // NewTracerProvider returns the provider for the given exporter name, or nil
 // for "" and "none": the reporter then uses its own processor-less provider.
 // The OTLP exporter is configured by the OTEL_EXPORTER_OTLP_* environment

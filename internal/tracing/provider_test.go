@@ -50,6 +50,62 @@ func TestNewTracerProvider(t *testing.T) {
 	})
 }
 
+func TestResolveExporter(t *testing.T) {
+	tests := map[string]struct {
+		env        string
+		configured string
+		want       string
+		wantErr    string
+	}{
+		"unset keeps the configured otlp":      {configured: "otlp", want: "otlp"},
+		"unset keeps the configured none":      {configured: "none", want: "none"},
+		"unset keeps the empty configuration":  {configured: "", want: ""},
+		"env otlp turns tracing on":            {env: "otlp", configured: "none", want: "otlp"},
+		"env otlp without configuration":       {env: "otlp", configured: "", want: "otlp"},
+		"env none turns tracing off":           {env: "none", configured: "otlp", want: "none"},
+		"env does not validate the configured": {env: "none", configured: "jaeger", want: "none"},
+		"unsupported exporter":                 {env: "console", configured: "none", wantErr: `"console"`},
+		"several exporters":                    {env: "otlp,console", configured: "none", wantErr: `"otlp,console"`},
+		"surrounding whitespace":               {env: " otlp", configured: "none", wantErr: `" otlp"`},
+		"upper case":                           {env: "OTLP", configured: "none", wantErr: `"OTLP"`},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if test.env == "" {
+				t.Setenv(ExporterEnv, "") // registers the restore
+				if err := os.Unsetenv(ExporterEnv); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				t.Setenv(ExporterEnv, test.env)
+			}
+			got, err := ResolveExporter(test.configured)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) || !strings.Contains(err.Error(), ExporterEnv) {
+					t.Fatalf("expected an error naming %s and the value %s, got %v", ExporterEnv, test.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			if got != test.want {
+				t.Errorf("got %q, want %q", got, test.want)
+			}
+		})
+	}
+	t.Run("set but empty counts as unset", func(t *testing.T) {
+		t.Setenv(ExporterEnv, "")
+		got, err := ResolveExporter("otlp")
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if got != "otlp" {
+			t.Errorf("got %q, want %q", got, "otlp")
+		}
+	})
+}
+
 // isolateOTELEnv unsets the OTEL_* variables the OTLP exporters and the
 // resource detector read, so the caller's shell does not steer the test.
 func isolateOTELEnv(t *testing.T) {
