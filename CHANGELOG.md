@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.28.0](https://github.com/scenarigo/scenarigo/compare/v0.27.0...v0.28.0) - 2026-10-27
+
+### New Features
+- Add OpenTelemetry tracing and W3C trace context propagation by @zoncoen in https://github.com/scenarigo/scenarigo/pull/857
+### Dependency Upgrades
+- chore(deps): bump golang.org/x/tools from 0.50.0 to 0.51.0 in the go-minor group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/850
+- chore(deps): bump the github-actions group across 1 directory with 5 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/856
+- chore(deps): bump the go-minor group across 1 directory with 13 updates by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/864
+- chore(deps): bump Songmu/tagpr from 1.21.2 to 1.21.4 in the github-actions group across 1 directory by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/865
+### Testing
+- test(plugin): copy the test git repositories instead of renaming them by @zoncoen in https://github.com/scenarigo/scenarigo/pull/858
+- test(reporter): pin the durations TestReporter_Print* compare by @zoncoen in https://github.com/scenarigo/scenarigo/pull/859
+
 ## [v0.27.0](https://github.com/scenarigo/scenarigo/compare/v0.26.2...v0.27.0) - 2026-09-29
 
 ### New Features
