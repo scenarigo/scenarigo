@@ -85,6 +85,7 @@ func TestReporter_Print(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		var b bytes.Buffer
 		Run(func(r Reporter) {
+			pinDuration(t, r)
 			r.Run("test", func(r Reporter) {
 				r.Print("always shown")
 				r.Log("hidden log")
@@ -101,6 +102,7 @@ ok  	test	0.000s
 	t.Run("failure", func(t *testing.T) {
 		var b bytes.Buffer
 		Run(func(r Reporter) {
+			pinDuration(t, r)
 			r.Run("test", func(r Reporter) {
 				r.Print("always shown")
 				r.Log("hidden log")
@@ -124,6 +126,7 @@ func TestReporter_Printf(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		var b bytes.Buffer
 		Run(func(r Reporter) {
+			pinDuration(t, r)
 			r.Run("test", func(r Reporter) {
 				r.Printf("always %s", "shown")
 				r.Log("hidden log")
@@ -140,6 +143,7 @@ ok  	test	0.000s
 	t.Run("failure", func(t *testing.T) {
 		var b bytes.Buffer
 		Run(func(r Reporter) {
+			pinDuration(t, r)
 			r.Run("test", func(r Reporter) {
 				r.Printf("always %s", "shown")
 				r.Log("hidden log")
@@ -710,4 +714,15 @@ func TestRunCapturesStdout(t *testing.T) {
 	if !strings.Contains(out, "plugin output") {
 		t.Fatalf("captured stdout not printed:\n%s", out)
 	}
+}
+
+// pinDuration makes the durations that r and its children print constant, so
+// that the output does not depend on how long the test takes to run.
+func pinDuration(t *testing.T, r Reporter) {
+	t.Helper()
+	rptr, ok := r.(*reporter)
+	if !ok {
+		t.Fatalf("expected *reporter but got %T", r)
+	}
+	rptr.durationMeasurer = &fixedDurationMeasurer{}
 }
