@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	version  = "0.28.1"
+	version  = "0.28.2"
 	revision = "dev"
 	info, ok = debug.ReadBuildInfo()
 )
