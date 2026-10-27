@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [v0.28.1](https://github.com/scenarigo/scenarigo/compare/v0.28.0...v0.28.1) - 2026-10-27
+
+### New Features
+- cmd: let OTEL_TRACES_EXPORTER select the traces exporter by @zoncoen in https://github.com/scenarigo/scenarigo/pull/866
+
 ## [v0.28.0](https://github.com/scenarigo/scenarigo/compare/v0.27.0...v0.28.0) - 2026-10-27
 
 ### New Features
