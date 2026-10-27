@@ -133,7 +133,9 @@ const (
 // TracingConfig represents a tracing configuration.
 type TracingConfig struct {
 	// Exporter is TracingExporterNone (default) or TracingExporterOTLP. The OTLP
-	// exporter reads the OTEL_EXPORTER_OTLP_* environment variables.
+	// exporter reads the OTEL_EXPORTER_OTLP_* environment variables. The command
+	// lets OTEL_TRACES_EXPORTER override this value, so a shared configuration
+	// file does not force every environment to export.
 	Exporter string `yaml:"exporter,omitempty"`
 }
 
