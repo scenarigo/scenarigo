@@ -16,6 +16,7 @@ func TestContextSerializationRoundtrip(t *testing.T) {
 	// Use public API to set context properties
 	originalContext = originalContext.WithScenarioFilepath("/test/scenario.yaml")
 	originalContext = originalContext.WithPluginDir("/test/plugins")
+	originalContext = originalContext.WithRootDir("/test")
 	originalContext = originalContext.WithVars("testVar1")
 	originalContext = originalContext.WithVars(42)
 	originalContext = originalContext.WithVars(map[string]string{"key": "value"})
@@ -51,6 +52,11 @@ func TestContextSerializationRoundtrip(t *testing.T) {
 	if restored.PluginDir() != originalContext.PluginDir() {
 		t.Errorf("PluginDir mismatch: expected %s, got %s",
 			originalContext.PluginDir(), restored.PluginDir())
+	}
+
+	if restored.RootDir() != originalContext.RootDir() {
+		t.Errorf("RootDir mismatch: expected %s, got %s",
+			originalContext.RootDir(), restored.RootDir())
 	}
 
 	// Verify ColorConfig enabled state is preserved

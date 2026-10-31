@@ -1,0 +1,2 @@
+ok  	setup	0.000s
+ok  	testdata/testcases/scenarios/root-dir.yaml	0.000s

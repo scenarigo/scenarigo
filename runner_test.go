@@ -18,6 +18,7 @@ import (
 
 	"github.com/scenarigo/scenarigo/context"
 	"github.com/scenarigo/scenarigo/internal/testutil"
+	"github.com/scenarigo/scenarigo/plugin"
 	"github.com/scenarigo/scenarigo/reporter"
 	"github.com/scenarigo/scenarigo/schema"
 )
@@ -314,6 +315,73 @@ secrets:
 			}, reporter.WithWriter(&b))
 			if !ok {
 				t.Fatalf("scenario failed:\n%s", b.String())
+			}
+		})
+	}
+}
+
+func TestRunner_Context_RootDir(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootDir := t.TempDir()
+	scenarioDir := filepath.Join(rootDir, "scenarios")
+	if err := os.Mkdir(scenarioDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	scenarioPath := filepath.Join(scenarioDir, "test.yaml")
+	if err := os.WriteFile(scenarioPath, []byte(`
+steps:
+  - ref: '{{plugins.getRootDir}}'
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := map[string]struct {
+		opts   []func(*Runner) error
+		expect string
+	}{
+		"with config": {
+			opts: []func(*Runner) error{
+				WithConfig(&schema.Config{
+					Root:      rootDir,
+					Scenarios: []string{filepath.Join("scenarios", "test.yaml")},
+				}),
+			},
+			expect: rootDir,
+		},
+		"without config": {
+			opts: []func(*Runner) error{
+				WithScenarios(scenarioPath),
+			},
+			expect: wd,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			runner, err := NewRunner(test.opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var (
+				got string
+				b   bytes.Buffer
+			)
+			ok := reporter.Run(func(rptr reporter.Reporter) {
+				ctx := context.New(rptr).WithPlugins(map[string]any{
+					"getRootDir": plugin.StepFunc(func(ctx *context.Context, step *schema.Step) *context.Context {
+						got = ctx.RootDir()
+						return ctx
+					}),
+				})
+				runner.Run(ctx)
+			}, reporter.WithWriter(&b))
+			if !ok {
+				t.Fatalf("scenario failed:\n%s", b.String())
+			}
+			if got != test.expect {
+				t.Errorf("expect %q but got %q", test.expect, got)
 			}
 		})
 	}

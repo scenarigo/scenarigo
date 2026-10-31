@@ -28,6 +28,7 @@ type SerializableContext struct {
 	ScenarioFilepath string                         `json:"scenarioFilepath,omitempty"`
 	ScenarioTitle    string                         `json:"scenarioTitle,omitempty"`
 	PluginDir        string                         `json:"pluginDir,omitempty"`
+	RootDir          string                         `json:"rootDir,omitempty"`
 	Plugins          []map[string]any               `json:"plugins,omitempty"`
 	Vars             []any                          `json:"vars,omitempty"`
 	Secrets          *SerializableSecrets           `json:"secrets,omitempty"`
@@ -62,6 +63,7 @@ func (c *Context) ToSerializable() *SerializableContext {
 		ScenarioFilepath:   c.ScenarioFilepath(),
 		ScenarioTitle:      c.ScenarioTitle(),
 		PluginDir:          c.PluginDir(),
+		RootDir:            c.RootDir(),
 		RunID:              c.RunID(),
 		StepName:           c.StepName(),
 		NormalizedFilepath: c.NormalizedScenarioFilepath(),
@@ -194,6 +196,11 @@ func FromSerializableWithContext(ctx *Context, sc *SerializableContext) (*Contex
 		} else {
 			ctx = ctx.WithPluginDir(abs)
 		}
+	}
+
+	// Set root directory.
+	if sc.RootDir != "" {
+		ctx = ctx.WithRootDir(sc.RootDir)
 	}
 
 	// Set plugins

@@ -2069,6 +2069,39 @@ func Greet(ctx *plugin.Context, name string) string {
 - `{{plugins.greet.Greet("World")}}` => `"Hello, World"` (context is auto-injected)
 - `{{plugins.greet.Greet(ctx, "World")}}` => `"Hello, World"` (explicit context also works)
 
+#### Root Directory
+
+`ctx.RootDir()` returns the absolute path of the root directory of the run. It is the base directory to resolve relative paths such as `scenarios` and `pluginDirectory`, so it is the same for all plugins and scenarios in a run. The root directory is determined in the following order of precedence.
+
+1. The value of the `--root` flag (if a configuration file is used)
+2. The directory of the configuration file
+3. The working directory (if no configuration file is used, or the configuration is read from stdin without `--root`)
+
+Plugins can use it to load files with paths relative to the root directory.
+
+```go main.go
+package main
+
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/scenarigo/scenarigo/plugin"
+)
+
+func LoadFixture(ctx *plugin.Context, name string) (string, error) {
+	b, err := os.ReadFile(filepath.Join(ctx.RootDir(), "fixtures", name))
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+```
+
+- `{{plugins.fixture.LoadFixture("user.json")}}` => the content of `fixtures/user.json` under the root directory
+
+Note that `ctx.RootDir()` returns an empty string if the context is not created by the runner (e.g., `plugin.Setup` for unit testing).
+
 #### Goroutines in WASM plugins
 
 A WASM plugin is single-threaded, and its goroutines run only while Scenarigo is calling the plugin. A goroutine that has to keep running between calls, such as a server that a setup function starts in the plugin, answers nothing until the next call, and a scenario that waits for it hangs. Keep such work out of WASM plugins: run a server under test as its own process, for one, rather than inside a plugin.
