@@ -1,0 +1,7 @@
+title: root directory
+plugins:
+  rootdir: rootdir.so
+steps:
+- title: step and function
+  if: '{{plugins.rootdir.Check()}}'
+  ref: '{{plugins.rootdir.CheckStep}}'

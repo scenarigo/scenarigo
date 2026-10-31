@@ -1,0 +1,9 @@
+title: root directory
+scenarios:
+- filename: root-dir.yaml
+  success: true
+  output:
+    stdout: root-dir.txt
+  verbose: false
+  plugins:
+  - rootdir.so
