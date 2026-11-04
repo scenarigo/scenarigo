@@ -60,3 +60,38 @@ document: |
 operation: diagnostics
 expect:
   diagnosticCount: 0
+---
+name: "an empty exporter means the default"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    tracing:
+      exporter: ""
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an empty HTTP method means GET"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: ""
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an empty protocol is still reported"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: ""
+      request:
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - '"" is not a built-in value for field "protocol" (built-in: http, grpc)'

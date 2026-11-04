@@ -1858,28 +1858,7 @@ func (s *Server) validateMappingValue(text string, mv *ast.MappingValueNode, fie
 		return
 	}
 
-	// Validate enum values.
-	if len(field.EnumValues) > 0 && mv.Value != nil {
-		if sv, ok := mv.Value.(*ast.StringNode); ok {
-			valid := slices.Contains(field.EnumValues, sv.Value)
-			if !valid {
-				valTok := mv.Value.GetToken()
-				if valTok != nil {
-					diag := Diagnostic{
-						Range:    tokenRange(text, valTok.Position.Line, valTok.Position.Column, len(sv.Value)),
-						Severity: DiagnosticSeverityWarning,
-						Message:  fmt.Sprintf("invalid value %q for field %q (allowed: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", ")),
-					}
-					if field.OpenEnum {
-						// Plugins can register more values, so only hint at a possible typo.
-						diag.Severity = DiagnosticSeverityInformation
-						diag.Message = fmt.Sprintf("%q is not a built-in value for field %q (built-in: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", "))
-					}
-					*diags = append(*diags, diag)
-				}
-			}
-		}
-	}
+	validateEnumValue(text, mv.Value, field, keyName, diags)
 
 	// Validate type.
 	if mv.Value != nil {
@@ -1922,6 +1901,35 @@ func (s *Server) validateMappingValue(text string, mv *ast.MappingValueNode, fie
 			}
 		}
 	}
+}
+
+// validateEnumValue reports a value outside the enumerated values of field.
+// An empty value selects the default in every closed enumeration scenarigo
+// reads (schemaVersion, the HTTP method, the tracing exporter), so it is
+// reported only for open ones such as protocol, which has no default.
+func validateEnumValue(text string, value ast.Node, field *yamlschema.FieldInfo, keyName string, diags *[]Diagnostic) {
+	if len(field.EnumValues) == 0 || value == nil {
+		return
+	}
+	sv, ok := value.(*ast.StringNode)
+	if !ok || (sv.Value == "" && !field.OpenEnum) || slices.Contains(field.EnumValues, sv.Value) {
+		return
+	}
+	valTok := value.GetToken()
+	if valTok == nil {
+		return
+	}
+	diag := Diagnostic{
+		Range:    tokenRange(text, valTok.Position.Line, valTok.Position.Column, len(sv.Value)),
+		Severity: DiagnosticSeverityWarning,
+		Message:  fmt.Sprintf("invalid value %q for field %q (allowed: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", ")),
+	}
+	if field.OpenEnum {
+		// Plugins can register more values, so only hint at a possible typo.
+		diag.Severity = DiagnosticSeverityInformation
+		diag.Message = fmt.Sprintf("%q is not a built-in value for field %q (built-in: %s)", sv.Value, keyName, strings.Join(field.EnumValues, ", "))
+	}
+	*diags = append(*diags, diag)
 }
 
 func (s *Server) validateRequiredFields(text string, node *ast.MappingNode, fields []*yamlschema.FieldInfo, presentKeys map[string]bool, diags *[]Diagnostic) {
