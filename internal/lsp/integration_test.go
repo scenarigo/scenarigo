@@ -528,3 +528,53 @@ func TestEditorSession_TemplateTriggerCharacters(t *testing.T) {
 		t.Errorf("expected steps.yaml for an invoked completion, got %v", labels)
 	}
 }
+
+// TestEditorSession_ExamplesHaveNoErrorsOrWarnings opens every YAML file under
+// examples/ with its example directory as the workspace root, so that
+// scenarigo.yaml is found as in a real session, and requires that none of
+// these working scenarios gets an error or a warning.
+func TestEditorSession_ExamplesHaveNoErrorsOrWarnings(t *testing.T) {
+	examplesDir := filepath.Join("..", "..", "examples")
+	configs, err := filepath.Glob(filepath.Join(examplesDir, "*", "scenarigo.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configs) == 0 {
+		t.Fatal("no examples found")
+	}
+	opened := 0
+	for _, config := range configs {
+		dir, err := filepath.Abs(filepath.Dir(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Run(filepath.Base(dir), func(t *testing.T) {
+			client := newRunningTestClient(t)
+			client.initialize(1, pathToURI(dir))
+			err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+				if err != nil || d.IsDir() || filepath.Ext(path) != ".yaml" {
+					return err
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				diags := client.openDocumentAndGetDiagnostics(pathToURI(path), string(data))
+				opened++
+				rel, _ := filepath.Rel(dir, path)
+				for _, d := range diags.Diagnostics {
+					if d.Severity == DiagnosticSeverityError || d.Severity == DiagnosticSeverityWarning {
+						t.Errorf("%s:%d:%d: severity %d: %s", rel, d.Range.Start.Line+1, d.Range.Start.Character+1, d.Severity, d.Message)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if opened == 0 {
+		t.Fatal("no example files were opened")
+	}
+}
