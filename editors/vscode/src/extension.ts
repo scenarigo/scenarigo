@@ -1,10 +1,6 @@
 import * as vscode from 'vscode';
-import {
-  LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
-  TransportKind,
-} from 'vscode-languageclient/node';
+import { LanguageClient, LanguageClientOptions } from 'vscode-languageclient/node';
+import { expandHome, findExecutable } from './server';
 
 // The extension starts `scenarigo lsp` for YAML files. The server stays
 // silent on files without a schemaVersion key, so it coexists with other
@@ -12,43 +8,71 @@ import {
 
 let client: LanguageClient | undefined;
 
-function serverCommand(): string {
-  return vscode.workspace.getConfiguration('scenarigo').get<string>('path') || 'scenarigo';
+// Starts and stops run one after another, so that quick setting changes do
+// not leave several servers running.
+let queue: Promise<void> = Promise.resolve();
+
+function enqueue(task: () => Promise<void>): Promise<void> {
+  queue = queue.then(task, task);
+  return queue;
 }
 
-function serverOptions(): ServerOptions {
-  return { command: serverCommand(), args: ['lsp'], transport: TransportKind.stdio };
-}
-
-async function start(context: vscode.ExtensionContext): Promise<void> {
+async function startClient(): Promise<void> {
+  const configured = vscode.workspace.getConfiguration('scenarigo').get<string>('path') || 'scenarigo';
+  const command = findExecutable(expandHome(configured));
+  if (command === undefined) {
+    void vscode.window.showErrorMessage(
+      `Scenarigo: cannot find "${configured}". Set scenarigo.path to the absolute path of the scenarigo binary, or put scenarigo on the PATH.`,
+    );
+    return;
+  }
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: 'yaml' }],
   };
-  client = new LanguageClient('scenarigo', 'Scenarigo', serverOptions(), clientOptions);
+  // No transport: with one, the client adds --stdio to the arguments, which
+  // `scenarigo lsp` rejects. The server uses stdio anyway.
+  const started = new LanguageClient('scenarigo', 'Scenarigo', { command, args: ['lsp'] }, clientOptions);
+  client = started;
   try {
-    await client.start();
+    await started.start();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     void vscode.window.showErrorMessage(
-      `Scenarigo: cannot start "${serverCommand()} lsp": ${message}. Set scenarigo.path to the scenarigo binary.`,
+      `Scenarigo: cannot start "${command} lsp": ${message}. Check that this scenarigo has the lsp command.`,
     );
   }
-  context.subscriptions.push({ dispose: () => void client?.stop() });
+}
+
+async function stopClient(): Promise<void> {
+  const stopped = client;
+  client = undefined;
+  if (stopped === undefined) {
+    return;
+  }
+  try {
+    // A client whose start failed cannot be stopped, only disposed.
+    await (stopped.isRunning() ? stopped.stop() : stopped.dispose());
+  } catch {
+    // Stopped already.
+  }
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  await start(context);
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(async (event) => {
-      if (!event.affectsConfiguration('scenarigo.path')) {
-        return;
+    { dispose: () => void enqueue(stopClient) },
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('scenarigo.path')) {
+        return enqueue(async () => {
+          await stopClient();
+          await startClient();
+        });
       }
-      await client?.stop();
-      await start(context);
+      return undefined;
     }),
   );
+  await enqueue(startClient);
 }
 
-export async function deactivate(): Promise<void> {
-  await client?.stop();
+export function deactivate(): Promise<void> {
+  return enqueue(stopClient);
 }

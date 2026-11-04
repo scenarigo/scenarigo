@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "scenarigo.template.injection",
-  "injectionSelector": "L:source.yaml -comment",
+  "injectionSelector": "L:source.yaml -comment -meta.embedded.template.scenarigo",
   "patterns": [
     {
       "include": "#template"
@@ -26,13 +26,7 @@
         {
           "name": "string.quoted.double.scenarigo",
           "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.scenarigo",
-              "match": "\\\\."
-            }
-          ]
+          "end": "\""
         },
         {
           "name": "constant.numeric.scenarigo",
