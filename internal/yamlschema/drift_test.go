@@ -26,6 +26,7 @@ func TestSchemaMatchesGoStructs(t *testing.T) {
 		{name: "config.plugins.*", fields: mustFind(t, configFields, "plugins").Children, typ: schema.PluginConfig{}},
 		{name: "config.protocols.grpc", fields: mustFind(t, mustFind(t, configFields, "protocols").Children, "grpc").Children, typ: grpc.Option{}},
 		{name: "scenario", fields: ScenarioSchema().Fields, typ: schema.Scenario{}},
+		{name: "ytt", fields: YTTSchema().Fields, typ: schema.YTT{}},
 		{name: "scenario.steps[]", fields: stepFields(), typ: schema.Step{}},
 		{name: "step.request(http)", fields: httpRequestFields(), typ: http.Request{}},
 		{name: "step.expect(http)", fields: httpExpectFields(), typ: http.Expect{}},

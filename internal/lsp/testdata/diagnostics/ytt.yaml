@@ -1,0 +1,22 @@
+---
+name: "ytt/v1 document with files has no diagnostics"
+document: |
+  schemaVersion: ytt/v1
+  files:
+  - template.ytt.yaml
+  - values.ytt.yaml
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "unknown key in a ytt/v1 document is reported"
+document: |
+  schemaVersion: ytt/v1
+  files:
+  - template.ytt.yaml
+  steps: []
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'unknown field "steps"'

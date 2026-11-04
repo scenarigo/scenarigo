@@ -8,7 +8,7 @@ import "strings"
 func ConfigSchema() *Schema {
 	return &Schema{
 		Fields: []*FieldInfo{
-			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the configuration file", Required: true, EnumValues: []string{"config/v1", "scenario/v1"}},
+			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the configuration file", Required: true, EnumValues: schemaVersions("config/v1")},
 			{Name: "vars", Type: FieldTypeMap, Description: "Variables available in all scenarios"},
 			{Name: "secrets", Type: FieldTypeMap, Description: "Secret variables (not displayed in logs)"},
 			{Name: "scenarios", Type: FieldTypeArray, Description: "Paths to scenario files or directories", IsFilePath: true},
@@ -47,11 +47,34 @@ func ConfigSchema() *Schema {
 	}
 }
 
+// YTTSchema returns the schema for ytt/v1 documents, which list the ytt
+// files whose output is loaded as scenarios.
+func YTTSchema() *Schema {
+	return &Schema{
+		Fields: []*FieldInfo{
+			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the ytt input document", Required: true, EnumValues: schemaVersions("ytt/v1")},
+			{Name: "files", Type: FieldTypeArray, Description: "ytt files evaluated into scenarios, relative to this file", IsFilePath: true},
+		},
+	}
+}
+
+// schemaVersions lists the schemaVersion values, starting with the one of
+// the schema at hand.
+func schemaVersions(first string) []string {
+	versions := []string{first}
+	for _, v := range []string{"scenario/v1", "config/v1", "ytt/v1"} {
+		if v != first {
+			versions = append(versions, v)
+		}
+	}
+	return versions
+}
+
 // ScenarioSchema returns the schema for scenarigo test scenario YAML files.
 func ScenarioSchema() *Schema {
 	return &Schema{
 		Fields: []*FieldInfo{
-			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the scenario file", Required: true, EnumValues: []string{"scenario/v1", "config/v1"}},
+			{Name: "schemaVersion", Type: FieldTypeString, Description: "Schema version of the scenario file", Required: true, EnumValues: schemaVersions("scenario/v1")},
 			{Name: "title", Type: FieldTypeString, Description: "Scenario title"},
 			{Name: "description", Type: FieldTypeString, Description: "Scenario description"},
 			{Name: "plugins", Type: FieldTypeMap, Description: "Plugin name to path mapping", IsFilePath: true},
@@ -231,7 +254,8 @@ func grpcRequestOptionFields() []*FieldInfo {
 	}
 }
 
-// DetectSchemaType determines whether a YAML document is config or scenario.
+// DetectSchemaType determines whether a YAML document is config, scenario,
+// or ytt input.
 // Returns nil if the document has no "schemaVersion:" key, indicating it
 // is not a scenarigo YAML file and the LSP should remain silent.
 // When the key exists but the value is empty or unrecognized, it defaults
@@ -248,6 +272,8 @@ func DetectSchemaType(text string) *Schema {
 				return ConfigSchema()
 			case "scenario/v1":
 				return ScenarioSchema()
+			case "ytt/v1":
+				return YTTSchema()
 			default:
 				// Key exists but value is empty or unrecognized.
 				// Default to scenario schema so features stay active.

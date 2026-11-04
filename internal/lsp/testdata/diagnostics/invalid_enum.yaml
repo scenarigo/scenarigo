@@ -33,7 +33,7 @@ operation: diagnostics
 expect:
   diagnosticMessages:
     contains:
-      - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1, config/v1)'
+      - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1, config/v1, ytt/v1)'
 ---
 name: "unknown telemetry exporter is an error"
 document: |
