@@ -2,14 +2,19 @@ package lsp
 
 import (
 	"context"
+	"fmt"
 	goast "go/ast"
 	"go/parser"
 	"go/token"
+	"io"
+	"log"
+	"math"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/scenarigo/scenarigo/template"
 )
@@ -226,4 +231,129 @@ func stringConsts(t *testing.T, path string) map[string]string {
 		}
 	}
 	return consts
+}
+
+// TestDiagnosticsScaleLinearly checks that the diagnostics of a file take
+// time in proportion to its size, for the shapes of large files: many
+// documents, many steps, steps that bind variables, include steps, null
+// values (checked for ytt annotations), and long lines of plain values, of
+// templates, and of diagnostics, also with a non-ASCII character. Each case
+// measures publishing the diagnostics of a parsed document.
+func TestDiagnosticsScaleLinearly(t *testing.T) {
+	step := func(b *strings.Builder, i int) {
+		fmt.Fprintf(b, "  - id: s%d\n    protocol: http\n    request:\n      method: GET\n      url: \"http://{{vars.host}}/{{vars.missing}}\"\n    expect:\n      code: OK\n      body:\n        id: '{{steps.s%d.result}}'\n", i, i)
+	}
+	nonASCII := func(s string) string { return strings.Replace(s, `"key0"`, `"キー0"`, 1) }
+	cases := []struct {
+		name string
+		size int
+		text func(n int) string
+	}{
+		{name: "documents", size: 250, text: func(n int) string {
+			var b strings.Builder
+			for i := range n {
+				b.WriteString("---\nschemaVersion: scenario/v1\nvars:\n  host: example.com\nsteps:\n")
+				step(&b, i)
+			}
+			return b.String()
+		}},
+		{name: "steps", size: 250, text: func(n int) string {
+			var b strings.Builder
+			b.WriteString("schemaVersion: scenario/v1\nvars:\n  host: example.com\nsteps:\n")
+			for i := range n {
+				step(&b, i)
+			}
+			return b.String()
+		}},
+		{name: "binds", size: 2000, text: func(n int) string {
+			var b strings.Builder
+			b.WriteString("schemaVersion: scenario/v1\nsteps:\n")
+			for i := range n {
+				fmt.Fprintf(&b, "  - id: s%d\n    protocol: http\n    request:\n      method: GET\n      url: \"http://x/{{vars.v%d}}\"\n    bind:\n      vars:\n        v%d: '{{response.body}}'\n", i, i, i+1)
+			}
+			return b.String()
+		}},
+		{name: "include steps", size: 1000, text: func(n int) string {
+			var b strings.Builder
+			b.WriteString("schemaVersion: scenario/v1\nsteps:\n")
+			for i := range n {
+				fmt.Fprintf(&b, "  - id: s%d\n    include: missing%d.yaml\n    bind:\n      vars:\n        v%d: '{{vars.x}}'\n", i, i, i)
+			}
+			return b.String()
+		}},
+		{name: "nulls", size: 250, text: func(n int) string {
+			var b strings.Builder
+			b.WriteString("schemaVersion: scenario/v1\nsteps:\n")
+			for i := range n {
+				fmt.Fprintf(&b, "  - title: s%d\n    description:\n    protocol: http\n    request:\n      method: GET\n      url: http://x\n      header:\n      body:\n    expect:\n      body:\n", i)
+			}
+			return b.String()
+		}},
+		{name: "long line of nulls", size: 500, text: func(n int) string {
+			steps := make([]string, n)
+			for i := range steps {
+				steps[i] = fmt.Sprintf(`{title: s%d, description: null, protocol: http, request: {method: GET, url: "http://x"}}`, i)
+			}
+			return "schemaVersion: scenario/v1\nsteps: [" + strings.Join(steps, ", ") + "]\n"
+		}},
+		{name: "long line", size: 2500, text: func(n int) string { return longLine(n, "\"value %d\"") }},
+		{name: "long line of templates", size: 1000, text: func(n int) string { return longLine(n, "\"{{vars.host}}/%d\"") }},
+		// Each template gets an information diagnostic on the line.
+		{name: "long line of diagnostics", size: 1000, text: func(n int) string { return longLine(n, "\"{{vars.v%d}}\"") }},
+		{name: "long non-ASCII line of templates", size: 1000, text: func(n int) string { return nonASCII(longLine(n, "\"{{vars.host}}/%d\"")) }},
+		{name: "long non-ASCII line of diagnostics", size: 1000, text: func(n int) string { return nonASCII(longLine(n, "\"{{vars.v%d}}\"")) }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assertLinear(t, c.size, func(n int) time.Duration {
+				s := NewServer()
+				s.writer = io.Discard
+				s.logger = log.New(io.Discard, "", 0)
+				uri := pathToURI(filepath.Join(t.TempDir(), "test.yaml"))
+				s.docs.Open(uri, 1, c.text(n))
+				start := time.Now()
+				s.publishDiagnostics(uri)
+				return time.Since(start)
+			})
+		})
+	}
+}
+
+// longLine returns a scenario whose expected body is a flow mapping of n
+// keys on one line, the values formatted with their index.
+func longLine(n int, value string) string {
+	keys := make([]string, n)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("\"key%d\": "+value, i, i)
+	}
+	return "schemaVersion: scenario/v1\nvars:\n  host: example.com\nsteps:\n  - protocol: http\n    request:\n      method: GET\n      url: http://x\n    expect:\n      body: {" + strings.Join(keys, ", ") + "}\n"
+}
+
+// assertLinear compares eight runs at a size with one run at eight times
+// the size, and fails when the larger run takes three times as long or
+// more: linear code takes about as long, quadratic code about eight times as
+// long. A ratio rather than a time limit keeps the test valid on a slow
+// machine, and both measurements last about as long, so that other work on
+// the machine slows them alike. After a warm-up run, up to three rounds are
+// measured, keeping the fastest of each, until the ratio is under the limit.
+// Timings under the race detector are skipped.
+func assertLinear(t *testing.T, size int, run func(n int) time.Duration) {
+	t.Helper()
+	if raceSlowdown > 1 {
+		t.Skip("timings under the race detector")
+	}
+	run(size)
+	small, large := time.Duration(math.MaxInt64), time.Duration(math.MaxInt64)
+	for range 3 {
+		var sum time.Duration
+		for range 8 {
+			sum += run(size)
+		}
+		small, large = min(small, sum), min(large, run(8*size))
+		if large < 3*small || large < 100*time.Millisecond {
+			t.Logf("8 × %d: %v, %d: %v", size, small, 8*size, large)
+			return
+		}
+	}
+	t.Errorf("%v for 8 × %d, %v for %d: slower than linear", small, size, large, 8*size)
 }

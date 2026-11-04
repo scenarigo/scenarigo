@@ -72,6 +72,9 @@ func (s *documentStore) Update(uri string, version int, text string) {
 func (s *documentStore) Close(uri string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if doc := s.docs[uri]; doc != nil {
+		forgetLines(doc.Text)
+	}
 	delete(s.docs, uri)
 }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -58,6 +57,25 @@ func (d templateDefinitions) clone() templateDefinitions {
 func (d templateDefinitions) add(set map[string]bool, names []string) {
 	for _, n := range names {
 		set[n] = true
+	}
+}
+
+// addNew adds names to a set and returns those it did not hold yet.
+func (d templateDefinitions) addNew(set map[string]bool, names []string) []string {
+	var added []string
+	for _, n := range names {
+		if !set[n] {
+			set[n] = true
+			added = append(added, n)
+		}
+	}
+	return added
+}
+
+// removeNames removes names from a set.
+func removeNames(set map[string]bool, names []string) {
+	for _, n := range names {
+		delete(set, n)
 	}
 }
 
@@ -136,13 +154,15 @@ func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode,
 
 	for _, step := range v.sequence(v.entryValue(body, nsSteps)) {
 		entries := v.entries(step)
-		stepDefs := defs.clone()
-		c.defs = stepDefs
+		// The vars and secrets of a step are added for the step only and
+		// removed after it: copying the definitions for each step made
+		// scenarios of many steps quadratic.
+		c.defs = defs
 		c.walkYAML(v.entryValue(entries, "if"))
 		c.walkYAML(v.entryValue(entries, nsVars))
-		stepDefs.add(stepDefs.vars, v.keys(v.entryValue(entries, nsVars)))
+		stepVars := defs.addNew(defs.vars, v.keys(v.entryValue(entries, nsVars)))
 		c.walkYAML(v.entryValue(entries, nsSecrets))
-		stepDefs.add(stepDefs.secrets, v.keys(v.entryValue(entries, nsSecrets)))
+		stepSecrets := defs.addNew(defs.secrets, v.keys(v.entryValue(entries, nsSecrets)))
 		for _, n := range v.entryValues(entries, stepEvaluatedFields) {
 			c.walkYAML(n)
 		}
@@ -152,18 +172,24 @@ func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode,
 		// on top of these.
 		bind := v.entryValue(entries, "bind")
 		if include := v.stringValue(v.entryValue(entries, "include")); include != "" {
-			bindDefs := stepDefs.clone()
 			included, ok := templateDefinitions{}, false
 			if docPath != "" {
 				included, ok = s.scenarioNames(includedPath(docPath, include))
 			}
-			bindDefs.steps = included.steps
-			bindDefs.merge(templateDefinitions{vars: included.vars, secrets: included.secrets, steps: map[string]bool{}, plugins: map[string]bool{}})
-			c.defs = bindDefs
+			bindVars := defs.addNew(defs.vars, slices.Collect(maps.Keys(included.vars)))
+			bindSecrets := defs.addNew(defs.secrets, slices.Collect(maps.Keys(included.secrets)))
+			c.defs.steps = included.steps // c.defs is a copy of defs, sharing its sets
 			c.unresolved = !ok
+			c.walkYAML(bind)
+			c.unresolved = false
+			c.defs = defs
+			removeNames(defs.vars, bindVars)
+			removeNames(defs.secrets, bindSecrets)
+		} else {
+			c.walkYAML(bind)
 		}
-		c.walkYAML(bind)
-		c.unresolved = false
+		removeNames(defs.vars, stepVars)
+		removeNames(defs.secrets, stepSecrets)
 
 		bindEntries := v.entries(bind)
 		defs.add(defs.vars, v.keys(v.entryValue(bindEntries, nsVars)))
@@ -224,7 +250,9 @@ func (c *templateChecker) walkYAML(node ast.Node) {
 			c.walkYAML(v)
 		}
 	case *ast.StringNode:
-		if tok := n.GetToken(); tok != nil {
+		// The offset of a string costs its column: computed for templates
+		// only, a long line of plain values stays linear.
+		if tok := n.GetToken(); tok != nil && strings.Contains(n.Value, "{{") {
 			c.checkString(n.Value, c.lines.offset(c.text, tok.Position.Line, tok.Position.Column))
 		}
 	case *ast.LiteralNode:
@@ -448,44 +476,6 @@ func (d templateDefinitions) set(root string) map[string]bool {
 	return d.plugins
 }
 
-// lineIndex holds the byte offset at which each line of a text starts.
-type lineIndex []int
-
-func newLineIndex(text string) lineIndex {
-	idx := lineIndex{0}
-	for i := range len(text) {
-		if text[i] == '\n' {
-			idx = append(idx, i+1)
-		}
-	}
-	return idx
-}
-
-// lineStart returns the byte offset of the start of a 0-based line, or -1.
-func (idx lineIndex) lineStart(line int) int {
-	if line < 0 || line >= len(idx) {
-		return -1
-	}
-	return idx[line]
-}
-
-// offset converts a goccy/go-yaml position (1-based line, 1-based rune
-// column) into a byte offset of text, or -1.
-func (idx lineIndex) offset(text string, line, runeCol int) int {
-	start := idx.lineStart(line - 1)
-	if start < 0 {
-		return -1
-	}
-	return start + byteColumnFromRune(lineAt(text, line-1), runeCol-1)
-}
-
-// position converts a byte offset into an internal position.
-func (idx lineIndex) position(offset int) Position {
-	line := sort.Search(len(idx), func(i int) bool { return idx[i] > offset }) - 1
-	line = max(line, 0)
-	return Position{Line: line, Character: offset - idx[line]}
-}
-
 // valueMap maps rune indexes of a decoded YAML string value to positions in
 // the document.
 type valueMap struct {
@@ -535,7 +525,7 @@ func (m valueMap) runeRange(from, to int) Range {
 		// Unknown layout: point at the rest of the first line of the scalar.
 		start := m.lines.position(m.start)
 		end := start
-		end.Character += len(lineAt(m.text, start.Line)) - start.Character
+		end.Character += len(m.lines.text(m.text, start.Line)) - start.Character
 		return Range{Start: start, End: end}
 	}
 	end := len(m.offsets) - 1 // index of the end of the value

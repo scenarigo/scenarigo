@@ -18,8 +18,9 @@ func yttFillsValue(text string, mv *ast.MappingValueNode) bool {
 	if tok == nil {
 		return false
 	}
-	line := lineAt(text, tok.Position.Line-1)
-	start := byteColumnFromRune(line, tok.Position.Column-1)
+	lines, l := linesOf(text), tok.Position.Line-1
+	line := lines.text(text, l)
+	start := lines.byteColumn(text, l, tok.Position.Column-1)
 	rest, ok := strings.CutPrefix(line[start:], tok.Value)
 	if !ok {
 		return false // quoted or otherwise unusual key: keep checking

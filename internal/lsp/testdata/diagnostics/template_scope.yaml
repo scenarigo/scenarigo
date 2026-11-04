@@ -241,3 +241,23 @@ expect:
   diagnosticCount: 1
   diagnostics:
     - message: 'unknown template name "hots"'
+---
+name: "a step var named like a scenario var or a bound var leaves the name defined"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    shared: 1
+  steps:
+    - vars:
+        shared: 2
+        own: 3
+      protocol: http
+      request: {method: GET, url: '{{vars.shared}}/{{vars.own}}'}
+      bind:
+        vars:
+          own: '{{response.body}}'
+    - protocol: http
+      request: {method: GET, url: '{{vars.shared}}/{{vars.own}}'}
+operation: diagnostics
+expect:
+  diagnosticCount: 0
