@@ -1,0 +1,385 @@
+---
+name: "a template syntax error is an error at the parser's position"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.host'
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: "invalid template: expected '}}', found 'EOF'"
+      severity: 1
+      startLine: 5
+      startChar: 22
+      endLine: 5
+      endChar: 23
+---
+name: "an unknown root name is a warning on the name"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: 'http://{{hots}}/x'
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown template name "hots"'
+      severity: 2
+      startLine: 5
+      startChar: 21
+      endLine: 5
+      endChar: 25
+---
+name: "an unknown assertion is a warning, also in a left arrow key"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: http://example.com
+      expect:
+        body:
+          name: '{{assert.contain("a")}}'
+          tags:
+            '{{assert.contian <-}}': a
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown assertion "assert.contain"'
+      severity: 2
+      startLine: 8
+      startChar: 24
+      endLine: 8
+      endChar: 31
+    - message: 'unknown assertion "assert.contian"'
+      severity: 2
+      startLine: 10
+      startChar: 20
+      endLine: 10
+      endChar: 27
+---
+name: "an undefined step is a warning and a defined one is fine"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: login
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+    - if: '{{steps.lgoin.result == "passed" && steps.login.result == "passed"}}'
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'no step has the id "lgoin" in this scenario'
+      severity: 2
+      startLine: 7
+      startChar: 17
+      endLine: 7
+      endChar: 22
+---
+name: "a step of another document in the file is not defined"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      protocol: http
+      request:
+        url: http://example.com
+  ---
+  schemaVersion: scenario/v1
+  steps:
+    - if: '{{steps.first.result == "passed"}}'
+      protocol: http
+      request:
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'no step has the id "first" in this scenario'
+      severity: 2
+      startLine: 9
+      startChar: 17
+---
+name: "an undeclared plugin is a warning"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    grpc: grpc.so
+  steps:
+    - protocol: grpc
+      request:
+        client: '{{plugins.grpc.Client}}'
+        target: '{{plugins.nope.Addr}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'plugin "nope" is not declared in this file or scenarigo.yaml'
+      severity: 2
+      startLine: 7
+      startChar: 25
+      endLine: 7
+      endChar: 29
+---
+name: "undefined vars and secrets are information"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: 'http://{{vars.host}}/{{secrets.token}}'
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'vars.host is not defined in this file or scenarigo.yaml (a plugin setup may define it)'
+      severity: 3
+      startLine: 5
+      startChar: 26
+      endLine: 5
+      endChar: 30
+    - message: 'secrets.token is not defined in this file or scenarigo.yaml (a plugin setup may define it)'
+      severity: 3
+      startLine: 5
+      startChar: 43
+      endLine: 5
+      endChar: 48
+---
+name: "names defined in the scenario, its steps, bind and scenarigo.yaml are known"
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    vars:
+      fromConfig: 1
+    secrets:
+      configSecret: x
+    plugins:
+      plugin.so:
+        src: ./plugin
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    top: 1
+  secrets:
+    topSecret: x
+  steps:
+    - id: login
+      vars:
+        stepVar: 1
+      protocol: http
+      request:
+        method: GET
+        url: 'http://{{vars.top}}/{{vars.stepVar}}/{{vars.fromConfig}}/{{secrets.topSecret}}/{{secrets.configSecret}}'
+      bind:
+        vars:
+          bound: '{{response.body.id}}'
+        secrets:
+          token: '{{response.body.token}}'
+    - protocol: http
+      request:
+        method: GET
+        url: 'http://{{vars.bound}}/{{secrets.token}}/{{steps.login.result}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "defined() and the left of ?? may name missing values"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - if: '{{defined(vars.maybe) && defined(steps.maybe) && defined(maybe)}}'
+      protocol: http
+      request:
+        method: GET
+        url: '{{vars.host ?? "localhost"}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "builtins, ctx, env and the actual value are known"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{env.URL}}'
+        header:
+          X-Size: '{{string(size(request.header)) + type(ctx)}}'
+      expect:
+        body:
+          id: '{{$ != "" && int("1") == 1 && duration("1s") > duration("0s")}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "fields scenarigo does not evaluate are not checked"
+document: |
+  schemaVersion: scenario/v1
+  title: '{{not a template'
+  description: '{{nope}}'
+  steps:
+    - title: '{{nope'
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "positions in a block scalar"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: http://example.com
+        body: |
+          {
+            "name": "{{vars.name}}",
+            "id": "{{hots}}"
+          }
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'vars.name is not defined in this file or scenarigo.yaml (a plugin setup may define it)'
+      startLine: 7
+      startChar: 26
+      endChar: 30
+    - message: 'unknown template name "hots"'
+      startLine: 8
+      startChar: 19
+      endChar: 23
+---
+name: "positions in a double-quoted string with escapes"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: "say \"hi\" {{hots}}"
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown template name "hots"'
+      startLine: 4
+      startChar: 25
+      endChar: 29
+---
+name: "positions in a single-quoted string with escapes"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: 'it''s {{hots}}'
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown template name "hots"'
+      startLine: 4
+      startChar: 20
+      endChar: 24
+---
+name: "positions in a multi-line plain scalar"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: http://example.com/
+          {{hots}}
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown template name "hots"'
+      startLine: 5
+      startChar: 10
+      endChar: 14
+---
+name: "positions after multibyte characters are in UTF-16 units"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: '日本😀{{hots}}'
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown template name "hots"'
+      startLine: 4
+      startChar: 18
+      endChar: 22
+---
+name: "a syntax error in a block scalar is on its line"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: http://example.com
+        body: |
+          first
+          {{vars..x}}
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: "invalid template: expected 'ident', found '.'"
+      severity: 1
+      startLine: 7
+      startChar: 15
+      endChar: 16
+---
+name: "templates in scenarigo.yaml vars are checked"
+document: |
+  schemaVersion: config/v1
+  vars:
+    url: '{{env.URL}}'
+    bad: '{{vars.'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: "invalid template: expected 'ident', found 'EOF'"
+      severity: 1
+      startLine: 3
+---
+name: "a ytt/v1 document is not checked"
+document: |
+  schemaVersion: ytt/v1
+  files:
+  - '{{nope'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a value whose escapes cannot be aligned points at the first line of the scalar"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: "a\n{{hots}}"
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown template name "hots"'
+      startLine: 5
+      startChar: 11
+      endLine: 5
+      endChar: 24

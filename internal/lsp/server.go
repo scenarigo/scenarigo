@@ -1773,6 +1773,7 @@ func (s *Server) publishDiagnostics(uri string) {
 		})
 	default:
 		diagnostics = append(diagnostics, s.validateDocument(doc, sch)...)
+		diagnostics = append(diagnostics, s.templateDiagnostics(doc)...)
 	}
 
 	for i := range diagnostics {

@@ -83,7 +83,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/completion` | Supported | Key, value, and template completion |
 | `textDocument/hover` | Supported | Field description, type, and enum values |
 | `textDocument/definition` | Supported | Jump to included files |
-| `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors |
+| `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors, template expression errors |
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
 | `textDocument/references` | Supported | Find references to variables |
@@ -114,6 +114,9 @@ vim.api.nvim_create_autocmd("FileType", {
 | YAML syntax errors | Supported | Reports parse failures |
 | Type checking | Supported | Type mismatches (string/int/bool/object/array); template expressions are accepted |
 | Required field validation | Supported | Warns when required fields are missing (e.g., `method`/`url` in HTTP request) |
+| Template syntax errors | Supported | Parses `{{ }}` with scenarigo's own template parser and reports an error where `scenarigo run` would fail; only fields scenarigo evaluates are checked (`vars`, `secrets`, `anchors`, and the steps' `vars`, `secrets`, `if`, `request`, `expect`, `bind`, `ref`) |
+| Template names | Supported | Warns on unknown root names (other than `ctx`, `vars`, `secrets`, `plugins`, `steps`, `request`, `response`, `env`, `assert`, `$` and the built-in functions), unknown `assert.x`, `steps.<id>` without a step of that id in the scenario, and `plugins.<name>` not declared in the file or `scenarigo.yaml`; an undefined `vars.x`/`secrets.x` is only information because a plugin setup can add variables. Names inside `defined()` and on the left of `??` are not reported |
+| ytt templates | Supported | `ytt/v1` documents have their own schema; a null value followed by a `#@` annotation (`title: #@ params.title`) is filled in by ytt and not type-checked |
 
 ### Other Features
 
@@ -123,7 +126,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
 | Document Symbol | Supported | Hierarchical symbol tree from YAML structure; steps use their `title` as the symbol name |
 | Code Action | Supported | Suggests quick fixes for unknown fields using Levenshtein distance (<= 3) |
-| Schema auto-detection | Supported | Detects config vs. scenario from the `schemaVersion` value |
+| Schema auto-detection | Supported | Detects config, scenario, or ytt input from the `schemaVersion` value |
 | Non-scenarigo YAML coexistence | Supported | Silent when `schemaVersion` key is absent; skips files with `# yaml-language-server:` modeline |
 | Broken YAML handling | Supported | Caches last successful AST + text-based analysis hybrid |
 | Position encoding | Supported | Columns are exchanged in UTF-16 code units (the LSP default), or in bytes when the client offers `utf-8` in `general.positionEncodings` |
@@ -136,6 +139,7 @@ The LSP uses the `schemaVersion` key to decide how to handle a YAML file:
 |---|---|
 | `schemaVersion: scenario/v1` | Full LSP features using the scenario schema |
 | `schemaVersion: config/v1` | Full LSP features using the config schema |
+| `schemaVersion: ytt/v1` | Completion and diagnostics using the ytt input schema (`files`) |
 | `schemaVersion:` present, value empty or unrecognized | Defaults to scenario schema (most common type) so that completion and diagnostics remain active while the user is typing |
 | `schemaVersion` key absent | File is treated as non-scenarigo YAML — all features are disabled (no completions, diagnostics, hover, etc.) |
 | `# yaml-language-server: ...` modeline present | File is skipped entirely (not stored in memory), avoiding conflicts with other YAML language servers |
@@ -148,6 +152,7 @@ This design means the server can be registered for all `*.yaml` files without in
 |---|---|---|
 | Scenario | `scenario/v1` | Test scenario YAML files |
 | Config | `config/v1` | `scenarigo.yaml` configuration files |
+| ytt input | `ytt/v1` | Documents listing the ytt files evaluated into scenarios |
 
 ## Directory Structure
 
@@ -159,6 +164,8 @@ internal/lsp/
   transport.go          # JSON-RPC framing over stdio
   position.go           # Column unit conversions (bytes, runes, UTF-16)
   uri.go                # file URI <-> path conversions
+  template_diagnostics.go # Template expression diagnostics ({{ }})
+  ytt.go                # ytt annotation handling
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
 
@@ -181,7 +188,7 @@ The LSP server has three tiers of tests, each with a different purpose and cost.
 
 #### Unit / Fuzz Tests
 
-Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateContext`, `FuzzCompleteTemplate`, `FuzzGetCursorContext`) detect panics and edge cases via random input.
+Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateContext`, `FuzzCompleteTemplate`, `FuzzTemplateDiagnostics`, `FuzzGetCursorContext`) detect panics and edge cases via random input. The drift tests in `template_diagnostics_test.go` compare the template names the server knows with `assert/template_helpers.go`, `context/extract.go` and the template package.
 
 #### Fixture Tests (data-driven)
 
@@ -207,7 +214,8 @@ internal/lsp/
   server_test.go          # testClient (helpers, typed methods), TestServer_Initialize
   fixture_test.go         # YAML fixture loader, parseCursorMarker, per-operation runners
   integration_test.go     # Multi-step session tests (TestEditorSession_*)
-  server_fuzz_test.go     # FuzzGetTemplateContext, FuzzCompleteTemplate
+  server_fuzz_test.go     # FuzzGetTemplateContext, FuzzCompleteTemplate, FuzzTemplateDiagnostics
+  template_diagnostics_test.go # Drift tests: assert helpers, context roots, built-in functions
   position_test.go        # Column conversions between bytes, runes and UTF-16
   transport_test.go       # Message framing and protocol error responses
   uri_test.go             # file URI <-> path conversions
@@ -246,6 +254,29 @@ expect:
 ```
 
 `$0` marks the cursor position (required for completion, hover, definition, signatureHelp, and references).
+
+A diagnostics fixture can check the severity and range of a diagnostic, and create files next to the document (for example `scenarigo.yaml`). Lines and characters are 0-based; characters count UTF-16 code units.
+
+```yaml
+---
+name: "unknown root name"
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{hots}}'
+operation: diagnostics
+expect:
+  diagnostics:
+    - message: 'unknown template name "hots"'
+      severity: 2
+      startLine: 2
+      startChar: 8
+      endLine: 2
+      endChar: 12
+```
 
 ### Running Tests
 
