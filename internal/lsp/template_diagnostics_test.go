@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -245,9 +246,10 @@ func TestDiagnosticsScaleLinearly(t *testing.T) {
 	}
 	nonASCII := func(s string) string { return strings.Replace(s, `"key0"`, `"キー0"`, 1) }
 	cases := []struct {
-		name string
-		size int
-		text func(n int) string
+		name  string
+		size  int
+		text  func(n int) string
+		files func(n int) map[string]string // next to the document
 	}{
 		{name: "documents", size: 250, text: func(n int) string {
 			var b strings.Builder
@@ -281,6 +283,24 @@ func TestDiagnosticsScaleLinearly(t *testing.T) {
 			}
 			return b.String()
 		}},
+		// The included file grows with the document: its vars are looked
+		// up in the bind of every include step.
+		{name: "include steps of one file", size: 250, text: func(n int) string {
+			var b strings.Builder
+			b.WriteString("schemaVersion: scenario/v1\nsteps:\n")
+			for i := range n {
+				fmt.Fprintf(&b, "  - include: common.yaml\n    bind:\n      vars:\n        v%d: '{{vars.c%d}}'\n", i, i)
+			}
+			return b.String()
+		}, files: func(n int) map[string]string {
+			var b strings.Builder
+			b.WriteString("schemaVersion: scenario/v1\nvars:\n")
+			for i := range n {
+				fmt.Fprintf(&b, "  c%d: %d\n", i, i)
+			}
+			b.WriteString("steps:\n  - protocol: http\n    request:\n      method: GET\n      url: http://x\n")
+			return map[string]string{"common.yaml": b.String()}
+		}},
 		{name: "nulls", size: 250, text: func(n int) string {
 			var b strings.Builder
 			b.WriteString("schemaVersion: scenario/v1\nsteps:\n")
@@ -309,7 +329,15 @@ func TestDiagnosticsScaleLinearly(t *testing.T) {
 				s := NewServer()
 				s.writer = io.Discard
 				s.logger = log.New(io.Discard, "", 0)
-				uri := pathToURI(filepath.Join(t.TempDir(), "test.yaml"))
+				dir := t.TempDir()
+				if c.files != nil {
+					for name, text := range c.files(n) {
+						if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o600); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				uri := pathToURI(filepath.Join(dir, "test.yaml"))
 				s.docs.Open(uri, 1, c.text(n))
 				start := time.Now()
 				s.publishDiagnostics(uri)

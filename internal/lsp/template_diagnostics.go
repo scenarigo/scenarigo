@@ -174,17 +174,14 @@ func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode,
 		if include := v.stringValue(v.entryValue(entries, "include")); include != "" {
 			included, ok := templateDefinitions{}, false
 			if docPath != "" {
-				included, ok = s.scenarioNames(includedPath(docPath, include))
+				included, ok = s.includedNames(c, includedPath(docPath, include))
 			}
-			bindVars := defs.addNew(defs.vars, slices.Collect(maps.Keys(included.vars)))
-			bindSecrets := defs.addNew(defs.secrets, slices.Collect(maps.Keys(included.secrets)))
 			c.defs.steps = included.steps // c.defs is a copy of defs, sharing its sets
+			c.bound = included
 			c.unresolved = !ok
 			c.walkYAML(bind)
 			c.unresolved = false
-			c.defs = defs
-			removeNames(defs.vars, bindVars)
-			removeNames(defs.secrets, bindSecrets)
+			c.defs, c.bound = defs, templateDefinitions{}
 		} else {
 			c.walkYAML(bind)
 		}
@@ -198,6 +195,27 @@ func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode,
 			defs.steps[id] = true
 		}
 	}
+}
+
+// includedNames returns the names of the scenario at path, reading each
+// file once per checker: a scenario that includes a file many times would
+// otherwise read and parse it for each include step. The names are only
+// read, never changed.
+func (s *Server) includedNames(c *templateChecker, path string) (templateDefinitions, bool) {
+	if r, ok := c.included[path]; ok {
+		return r.defs, r.ok
+	}
+	defs, ok := s.scenarioNames(path)
+	if c.included == nil {
+		c.included = map[string]includedScenario{}
+	}
+	c.included[path] = includedScenario{defs: defs, ok: ok}
+	return defs, ok
+}
+
+type includedScenario struct {
+	defs templateDefinitions
+	ok   bool
 }
 
 // configDefinitions returns the names scenarigo.yaml defines.
@@ -227,6 +245,12 @@ type templateChecker struct {
 	// unresolved is set where the names come from a file that cannot be
 	// read, so that undefined names are not reported.
 	unresolved bool
+	// bound holds, in the bind of an include step, the names of the
+	// included scenario: its vars and secrets are seen on top of defs,
+	// without adding them to defs for each include step.
+	bound templateDefinitions
+	// included holds the names of the scenarios included so far, by path.
+	included map[string]includedScenario
 }
 
 // walkYAML checks the strings of a YAML subtree. Aliases are not followed:
@@ -443,10 +467,17 @@ func (c *templateChecker) checkPath(expr tmplast.Expr, m valueMap, optional bool
 			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("plugin %q is not declared in this file, scenarigo.yaml or a scenario that includes this file", name.Name))
 		}
 	case nsVars, nsSecrets:
-		if !optional && !c.unresolved && !c.defs.set(root.Name)[name.Name] && !c.includers().set(root.Name)[name.Name] {
+		if !optional && !c.unresolved && !c.defined(root.Name, name.Name) {
 			c.report(m, name, DiagnosticSeverityInformation, fmt.Sprintf("%s.%s is not defined before this point (a plugin setup may define it)", root.Name, name.Name))
 		}
 	}
+}
+
+// defined reports whether a name of vars or secrets is defined: in scope,
+// by the included scenario in the bind of an include step, or by a scenario
+// that includes this file.
+func (c *templateChecker) defined(root, name string) bool {
+	return c.defs.set(root)[name] || c.bound.set(root)[name] || c.includers().set(root)[name]
 }
 
 func (c *templateChecker) report(m valueMap, ident *tmplast.Ident, severity int, msg string) {
