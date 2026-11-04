@@ -20,3 +20,39 @@ expect:
   diagnosticMessages:
     contains:
       - 'unknown field "steps"'
+---
+name: "values that a ytt annotation fills in are not type-checked"
+document: |
+  #@ load("@ytt:data", "data")
+  #@ for params in data.values:
+  ---
+  schemaVersion: scenario/v1
+  title: #@ params.title
+  steps:
+  - title: #@ params.title
+    protocol: http
+    request:
+      method: #@ params.request.method
+      url: #@ params.request.url
+    #@ if/end hasattr(params, "timeout"):
+    timeout: #@ params.timeout
+  #@ end
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a null value without a ytt annotation is still type-checked"
+document: |
+  schemaVersion: scenario/v1
+  title: # plain comment
+  steps:
+  - title: step
+    protocol: http
+    request:
+      method: GET
+      url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'field "title" expects string, got null'

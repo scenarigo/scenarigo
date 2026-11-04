@@ -1861,7 +1861,7 @@ func (s *Server) validateMappingValue(text string, mv *ast.MappingValueNode, fie
 	validateEnumValue(text, mv.Value, field, keyName, diags)
 
 	// Validate type.
-	if mv.Value != nil {
+	if mv.Value != nil && !yttFillsValue(text, mv) {
 		s.validateFieldType(text, mv.Value, field, keyName, diags)
 	}
 
