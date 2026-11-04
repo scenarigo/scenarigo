@@ -15,6 +15,7 @@ type (
 	keyScenarioName     struct{}
 	keyScenarioFilepath struct{}
 	keyPluginDir        struct{}
+	keyRootDir          struct{}
 	keyPlugins          struct{}
 	keyVars             struct{}
 	keySecrets          struct{}
@@ -130,6 +131,32 @@ func (c *Context) WithPluginDir(path string) *Context {
 // PluginDir returns the plugins root directory.
 func (c *Context) PluginDir() string {
 	path, ok := c.ctx.Value(keyPluginDir{}).(string)
+	if ok {
+		return path
+	}
+	return ""
+}
+
+// WithRootDir returns a copy of c with the root directory of the run.
+func (c *Context) WithRootDir(path string) *Context {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		c.Reporter().Fatalf("failed to get absolute path: %s", err)
+	}
+	return newContext(
+		context.WithValue(c.ctx, keyRootDir{}, abs),
+		c.reqCtx,
+		c.reporter,
+	)
+}
+
+// RootDir returns the root directory of the run.
+// It is the base directory to resolve relative paths such as scenarios and pluginDirectory.
+// When a configuration file is used, it is the value of the --root flag or
+// the directory of the configuration file. Otherwise, it is the working directory.
+// It returns an empty string if the context is not created by the runner.
+func (c *Context) RootDir() string {
+	path, ok := c.ctx.Value(keyRootDir{}).(string)
 	if ok {
 		return path
 	}

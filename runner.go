@@ -195,6 +195,7 @@ func (r *Runner) ScenarioFiles() []string {
 // Run runs all tests.
 func (r *Runner) Run(ctx *context.Context) {
 	// setup context
+	ctx = ctx.WithRootDir(r.rootDir)
 	ctx = ctx.WithColorConfig(r.colorConfig)
 	ctx = ctx.WithTelemetryConfig(r.telemetryConfig())
 	ctx = ctx.WithRunID(reporter.RunID(ctx.Reporter()))

@@ -3,6 +3,7 @@ package context_test
 import (
 	gocontext "context"
 	"fmt"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,6 +28,21 @@ func TestContext(t *testing.T) {
 		ctx := context.FromT(t).WithScenarioFilepath(path)
 		if got := ctx.ScenarioFilepath(); got != path {
 			t.Errorf("expect %q but got %q", path, got)
+		}
+	})
+	t.Run("RootDir", func(t *testing.T) {
+		ctx := context.FromT(t)
+		if got := ctx.RootDir(); got != "" {
+			t.Errorf("expect empty but got %q", got)
+		}
+		path := "testdata"
+		expect, err := filepath.Abs(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx = ctx.WithRootDir(path)
+		if got := ctx.RootDir(); got != expect {
+			t.Errorf("expect %q but got %q", expect, got)
 		}
 	})
 	t.Run("node", func(t *testing.T) {
