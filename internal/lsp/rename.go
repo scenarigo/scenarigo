@@ -159,7 +159,7 @@ func (s *Server) planRename(doc *document, pos Position) (*renamePlan, error) {
 		return nil, nil //nolint:nilnil // nothing to rename
 	}
 	root, name := sym.root, sym.name
-	if d.version == "config/v1" {
+	if d.version == configSchemaVersion {
 		return nil, fmt.Errorf("cannot rename %s.%s: the names of a configuration file can be used by every scenario", root, name)
 	}
 	if s.rootURI == "" {

@@ -165,6 +165,29 @@ end, bufnr)
 vim.wait(5000, function() return hover_done end, 100)
 record("hover", hover_ok, hover_detail)
 
+-- Test: Code lens, and the client command it names, as the README shows it.
+local lens_uri = nil
+vim.lsp.commands["scenarigo.runScenario"] = function(command)
+  lens_uri = command.arguments[1]
+end
+local lens_done = false
+local lens_ok = false
+local lens_detail = ""
+client:request("textDocument/codeLens", { textDocument = vim.lsp.util.make_text_document_params(0) }, function(err, result)
+  if err then
+    lens_detail = "error: " .. vim.inspect(err)
+  elseif not result or #result ~= 1 or not result[1].command then
+    lens_detail = "lenses: " .. vim.inspect(result)
+  else
+    client:exec_cmd(result[1].command, { bufnr = 0 })
+    lens_ok = result[1].command.title == "Run" and lens_uri == vim.uri_from_bufnr(0)
+    lens_detail = "title: " .. result[1].command.title .. ", uri: " .. tostring(lens_uri)
+  end
+  lens_done = true
+end, 0)
+vim.wait(5000, function() return lens_done end, 100)
+record("codelens", lens_ok, lens_detail)
+
 -- Test: Diagnostics for valid document (should be 0).
 -- Wait a moment for initial diagnostics to settle.
 vim.wait(1000, function()

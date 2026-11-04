@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   CloseAction,
@@ -6,6 +8,7 @@ import {
   LanguageClient,
   LanguageClientOptions,
 } from 'vscode-languageclient/node';
+import { findRunDirectory, runCommandLine } from './run';
 import { checkLspCommand, expandHome, findExecutable } from './server';
 
 // The extension starts `scenarigo lsp` for YAML files. The server stays
@@ -55,8 +58,12 @@ function closableChannel(channel: vscode.OutputChannel): vscode.OutputChannel {
   };
 }
 
+function configuredPath(): string {
+  return vscode.workspace.getConfiguration('scenarigo').get<string>('path') || 'scenarigo';
+}
+
 async function startClient(): Promise<void> {
-  const configured = vscode.workspace.getConfiguration('scenarigo').get<string>('path') || 'scenarigo';
+  const configured = configuredPath();
   const command = findExecutable(expandHome(configured));
   if (command === undefined) {
     void vscode.window.showErrorMessage(
@@ -118,12 +125,35 @@ async function stopClient(): Promise<void> {
   }
 }
 
+// runScenario runs `scenarigo run <file>` in a terminal. The language server
+// shows it as the Run lens of a scenario file; it runs only when the user
+// clicks the lens or calls the command.
+async function runScenario(uri?: string): Promise<void> {
+  const target = uri ? vscode.Uri.parse(uri) : vscode.window.activeTextEditor?.document.uri;
+  if (!target || target.scheme !== 'file') {
+    return;
+  }
+  const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === target.toString());
+  if (doc?.isDirty) {
+    await doc.save();
+  }
+  const folder = vscode.workspace.getWorkspaceFolder(target)?.uri.fsPath;
+  const cwd = findRunDirectory(target.fsPath, folder, fs.existsSync);
+  const name = `scenarigo: ${path.basename(cwd)}`;
+  const terminal =
+    vscode.window.terminals.find((t) => t.name === name && (t.creationOptions as vscode.TerminalOptions).cwd === cwd) ??
+    vscode.window.createTerminal({ name, cwd });
+  terminal.show(true);
+  terminal.sendText(runCommandLine(configuredPath(), target.fsPath, cwd, process.platform));
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // The output channel is closed after the server has stopped, by
   // deactivate: VS Code disposes the subscriptions without waiting for
   // deactivate, and the client writes to the channel while it stops.
   output = closableChannel(vscode.window.createOutputChannel('Scenarigo'));
   context.subscriptions.push(
+    vscode.commands.registerCommand('scenarigo.runScenario', runScenario),
     { dispose: () => void enqueue(stopClient) },
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('scenarigo.path')) {

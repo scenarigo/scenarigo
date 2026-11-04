@@ -96,6 +96,7 @@ type ServerCapabilities struct {
 	SignatureHelpProvider  *SignatureHelpOptions        `json:"signatureHelpProvider,omitempty"`
 	RenameProvider         any                          `json:"renameProvider,omitempty"` // bool or RenameOptions
 	Workspace              *WorkspaceServerCapabilities `json:"workspace,omitempty"`
+	CodeLensProvider       *CodeLensOptions             `json:"codeLensProvider,omitempty"`
 }
 
 type SignatureHelpOptions struct {
@@ -450,4 +451,25 @@ type UnregistrationParams struct {
 type Unregistration struct {
 	ID     string `json:"id"`
 	Method string `json:"method"`
+}
+
+type CodeLensParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+}
+
+type CodeLens struct {
+	Range   Range    `json:"range"`
+	Command *Command `json:"command,omitempty"`
+}
+
+// Command is a command the client runs, such as scenarigo.runScenario,
+// which the VS Code extension implements.
+type Command struct {
+	Title     string `json:"title"`
+	Command   string `json:"command"`
+	Arguments []any  `json:"arguments,omitempty"`
+}
+
+type CodeLensOptions struct {
+	ResolveProvider bool `json:"resolveProvider"`
 }

@@ -1,0 +1,53 @@
+---
+name: "a scenario file gets a Run lens at its top"
+document: |
+  # comment
+  schemaVersion: scenario/v1
+  title: test
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["1:Run:scenarigo.runScenario"]
+---
+name: "a file with several scenarios gets one lens, on the first"
+document: |
+  schemaVersion: scenario/v1
+  title: first
+  ---
+  schemaVersion: scenario/v1
+  title: second
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a ytt/v1 file runs scenarios too"
+document: |
+  schemaVersion: ytt/v1
+  files: [template.ytt.yaml]
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a configuration file gets no lens"
+document: |
+  schemaVersion: config/v1
+  scenarios: [scenarios]
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "a YAML file that is not scenarigo's gets no lens"
+document: |
+  name: CI
+  on: push
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "a file that does not parse still gets a lens, to see the error when it runs"
+document: |
+  schemaVersion: scenario/v1
+  steps: [
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]

@@ -130,7 +130,7 @@ func (s *Server) walkTemplates(doc *document, diags *[]Diagnostic, hooks templat
 			continue
 		}
 		switch v.stringValue(v.entryValue(body, "schemaVersion")) {
-		case "config/v1":
+		case configSchemaVersion:
 			c.defs = config
 			c.walkYAML(v.entryValue(body, nsVars))
 			c.walkYAML(v.entryValue(body, nsSecrets))

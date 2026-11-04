@@ -108,6 +108,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleRename(req)
 	case "textDocument/prepareRename":
 		s.handlePrepareRename(req)
+	case "textDocument/codeLens":
+		s.handleCodeLens(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -153,8 +155,9 @@ func (s *Server) handleInitialize(req *Request) {
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
 			},
-			RenameProvider: renameProvider,
-			Workspace:      workspaceCapabilities(),
+			RenameProvider:   renameProvider,
+			CodeLensProvider: &CodeLensOptions{},
+			Workspace:        workspaceCapabilities(),
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
