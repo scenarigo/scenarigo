@@ -1,0 +1,94 @@
+---
+name: "prepare on a vars key"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+operation: prepareRename
+expect:
+  prepareRange: "2:2-6"
+---
+name: "prepare on a name inside a template"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    user: alice
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{size(vars.us$0er)}}'
+operation: prepareRename
+expect:
+  prepareRange: "7:24-28"
+---
+name: "prepare on a step id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: log$0in
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: prepareRename
+expect:
+  prepareRange: "2:8-13"
+---
+name: "nothing to rename on a schema key"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        met$0hod: GET
+        url: http://example.com
+operation: prepareRename
+expect:
+  prepareIsNull: true
+---
+name: "plugins are not renamed"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    p: p.so
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{plugins.p$0.URL}}'
+operation: prepareRename
+expect:
+  prepareIsNull: true
+---
+name: "prepare reports why a rename would be incomplete"
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    vars:
+      user: alice
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: bob
+operation: prepareRename
+expect:
+  prepareError: "scenarigo.yaml"
+---
+name: "a flow-style step selects its id only on the id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - {id: login, proto$0col: http}
+operation: prepareRename
+expect:
+  prepareIsNull: true
+---
+name: "a flow-style step id is selected on the id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - {id: lo$0gin, protocol: http}
+operation: prepareRename
+expect:
+  prepareRange: "2:9-14"

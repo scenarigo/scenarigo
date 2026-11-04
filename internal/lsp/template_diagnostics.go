@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -87,14 +88,33 @@ func (d templateDefinitions) merge(o templateDefinitions) {
 }
 
 func (s *Server) templateDiagnostics(doc *document) []Diagnostic {
+	var diags []Diagnostic
+	s.walkTemplates(doc, &diags, templateHooks{})
+	// A step that is anchored and aliased is checked twice.
+	slices.SortStableFunc(diags, compareDiagnostics)
+	return slices.Compact(diags)
+}
+
+// templateHooks are called with the names the template walk finds.
+type templateHooks struct {
+	// onPath is called with every name path, such as [vars user] for
+	// vars.user.name.
+	onPath func(path []*tmplast.Ident, m valueMap)
+	// onIndex is called for a name used as a string index of a root, such
+	// as user in vars["user"].
+	onIndex func(root, key string, m valueMap)
+}
+
+// walkTemplates checks the template expressions of doc in evaluation order,
+// appending the diagnostics to diags and calling the hooks.
+func (s *Server) walkTemplates(doc *document, diags *[]Diagnostic, hooks templateHooks) {
 	if doc.Parsed == nil || doc.Parsed.File == nil || doc.Parsed.Text != doc.Text {
 		// The positions of a cached AST do not match the edited text.
-		return nil
+		return
 	}
-	var diags []Diagnostic
 	v := newYAMLView(doc.Parsed.File)
 	docPath := uriToPath(doc.URI)
-	c := &templateChecker{text: doc.Text, lines: newLineIndex(doc.Text), view: v, diags: &diags}
+	c := &templateChecker{text: doc.Text, lines: newLineIndex(doc.Text), view: v, diags: diags, hooks: hooks}
 	var includers *templateDefinitions
 	c.includers = func() templateDefinitions {
 		if includers == nil {
@@ -125,9 +145,6 @@ func (s *Server) templateDiagnostics(doc *document) []Diagnostic {
 			s.checkScenario(c, body, config, docPath)
 		}
 	}
-	// A step that is anchored and aliased is checked twice.
-	slices.SortStableFunc(diags, compareDiagnostics)
-	return slices.Compact(diags)
 }
 
 func compareDiagnostics(a, b Diagnostic) int {
@@ -251,6 +268,7 @@ type templateChecker struct {
 	bound templateDefinitions
 	// included holds the names of the scenarios included so far, by path.
 	included map[string]includedScenario
+	hooks    templateHooks
 }
 
 // walkYAML checks the strings of a YAML subtree. Aliases are not followed:
@@ -442,6 +460,14 @@ func (c *templateChecker) checkPath(expr tmplast.Expr, m valueMap, optional bool
 	if len(path) == 0 {
 		return
 	}
+	if c.hooks.onPath != nil {
+		c.hooks.onPath(path, m)
+	}
+	if c.hooks.onIndex != nil && len(path) == 1 && len(p.indexes) > 0 {
+		if lit, ok := p.indexes[0].Index.(*tmplast.BasicLit); ok && lit.Kind == tmpltoken.STRING {
+			c.hooks.onIndex(path[0].Name, lit.Value, m)
+		}
+	}
 	root := path[0]
 	if root.Name != templateActualValue && !slices.Contains(templateContextRoots, root.Name) && !slices.Contains(templateBuiltins, root.Name) {
 		if !optional {
@@ -449,11 +475,14 @@ func (c *templateChecker) checkPath(expr tmplast.Expr, m valueMap, optional bool
 		}
 		return
 	}
-	if len(path) < 2 {
-		return
+	if len(path) >= 2 {
+		c.checkName(root.Name, path[1], m, optional)
 	}
-	name := path[1]
-	switch root.Name {
+}
+
+// checkName checks the name that follows a root, such as user in vars.user.
+func (c *templateChecker) checkName(root string, name *tmplast.Ident, m valueMap, optional bool) {
+	switch root {
 	case "assert":
 		if !slices.ContainsFunc(assertCandidates(), func(a templateCandidate) bool { return a.name == name.Name }) {
 			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("unknown assertion %q", "assert."+name.Name))
@@ -467,8 +496,8 @@ func (c *templateChecker) checkPath(expr tmplast.Expr, m valueMap, optional bool
 			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("plugin %q is not declared in this file, scenarigo.yaml or a scenario that includes this file", name.Name))
 		}
 	case nsVars, nsSecrets:
-		if !optional && !c.unresolved && !c.defined(root.Name, name.Name) {
-			c.report(m, name, DiagnosticSeverityInformation, fmt.Sprintf("%s.%s is not defined before this point (a plugin setup may define it)", root.Name, name.Name))
+		if !optional && !c.unresolved && !c.defined(root, name.Name) {
+			c.report(m, name, DiagnosticSeverityInformation, fmt.Sprintf("%s.%s is not defined before this point (a plugin setup may define it)", root, name.Name))
 		}
 	}
 }
@@ -537,6 +566,13 @@ func newValueMap(text string, lines lineIndex, start int, value string) valueMap
 				i += size
 				break
 			}
+			if r == '\\' {
+				if e, n, ok := decodeYAMLEscape(text[i:]); ok && e == v {
+					offsets = append(offsets, i)
+					i += n
+					break
+				}
+			}
 			switch r {
 			case ' ', '\t', '\n', '\r', '\'', '"', '\\':
 				i += size
@@ -548,6 +584,31 @@ func newValueMap(text string, lines lineIndex, start int, value string) valueMap
 	offsets = append(offsets, i)
 	m.offsets = offsets
 	return m
+}
+
+// decodeYAMLEscape decodes the escape sequence of a double-quoted YAML
+// scalar at the start of s, returning the rune and the length of the
+// sequence.
+func decodeYAMLEscape(s string) (rune, int, bool) {
+	if len(s) < 2 || s[0] != '\\' {
+		return 0, 0, false
+	}
+	simple := map[byte]rune{
+		'0': 0, 'a': '\a', 'b': '\b', 't': '\t', '\t': '\t', 'n': '\n', 'v': '\v', 'f': '\f', 'r': '\r',
+		'e': 0x1b, ' ': ' ', '"': '"', '/': '/', '\\': '\\', 'N': 0x85, '_': 0xa0, 'L': 0x2028, 'P': 0x2029,
+	}
+	if r, ok := simple[s[1]]; ok {
+		return r, 2, true
+	}
+	digits := map[byte]int{'x': 2, 'u': 4, 'U': 8}[s[1]]
+	if digits == 0 || len(s) < 2+digits {
+		return 0, 0, false
+	}
+	n, err := strconv.ParseUint(s[2:2+digits], 16, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+	return rune(n), 2 + digits, true
 }
 
 // runeRange returns the range of the runes [from, to) of the value.

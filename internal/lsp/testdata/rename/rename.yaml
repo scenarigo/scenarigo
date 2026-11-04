@@ -1,0 +1,435 @@
+---
+name: "rename a variable declared at the top, in a step and in bind"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    user: alice
+  steps:
+    - protocol: http
+      vars:
+        user: bob
+      request:
+        method: GET
+        url: 'http://example.com/{{vars.us$0er}}'
+      bind:
+        vars:
+          user: '{{response.body.name}}'
+    - protocol: http
+      request:
+        method: GET
+        url: '{{size(vars.user)}}/{{vars.user ?? "x"}}'
+operation: rename
+newName: account
+expect:
+  renameEdits: ["2:2-6", "6:6-10", "9:38-42", "12:8-12", "16:24-28", "16:39-43"]
+---
+name: "rename a variable from its declaration"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    $0user: alice
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.user}}'
+operation: rename
+newName: account
+expect:
+  renameEdits: ["2:2-6", "7:19-23"]
+---
+name: "rename a secret"
+document: |
+  schemaVersion: scenario/v1
+  secrets:
+    token: x
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: http://example.com
+        header:
+          Authorization: 'Bearer {{secrets.tok$0en}}'
+operation: rename
+newName: accessToken
+expect:
+  renameEdits: ["2:2-7", "9:41-46"]
+---
+name: "rename a step id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: lo$0gin
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com
+    - if: '{{steps.login.result == "passed"}}'
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: rename
+newName: signin
+expect:
+  renameEdits: ["2:8-13", "7:17-22"]
+---
+name: "a variable that scenarigo.yaml also defines is not renamed"
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    vars:
+      user: alice
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.us$0er}}'
+operation: rename
+newName: account
+expect:
+  renameError: "scenarigo.yaml"
+---
+name: "a variable is not renamed when the scenario includes another one"
+files:
+  login.yaml: |
+    schemaVersion: scenario/v1
+    steps:
+      - protocol: http
+        request:
+          method: GET
+          url: '{{vars.user}}'
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+  steps:
+    - include: login.yaml
+operation: rename
+newName: account
+expect:
+  renameError: "includes another scenario"
+---
+name: "a step is not renamed when the scenario is included by another one"
+files:
+  parent.yaml: |
+    schemaVersion: scenario/v1
+    steps:
+      - include: test.yaml
+        bind:
+          vars:
+            result: '{{steps.login.result}}'
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: lo$0gin
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: rename
+newName: signin
+expect:
+  renameError: "parent.yaml"
+---
+name: "a reference the text scan cannot locate stops the rename"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+  steps:
+    - protocol: http
+      request:
+        method: POST
+        url: http://example.com
+        body: |
+          {{size(
+            vars.user)}}
+operation: rename
+newName: account
+expect:
+  renameError: "line 11"
+---
+name: "an invalid new name is rejected"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+operation: rename
+newName: "a.b"
+expect:
+  renameError: "not a valid name"
+---
+name: "a new name that is already declared is rejected"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+    account: bob
+operation: rename
+newName: account
+expect:
+  renameError: "already"
+---
+name: "a step is not renamed when the bind of an include step names the same id"
+files:
+  login.yaml: |
+    schemaVersion: scenario/v1
+    steps:
+      - id: login
+        protocol: http
+        request:
+          method: GET
+          url: http://example.com
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: lo$0gin
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+    - include: login.yaml
+      bind:
+        vars:
+          result: '{{steps.login.result}}'
+operation: rename
+newName: signin
+expect:
+  renameError: "include step"
+---
+name: "a name declared through a merge key is not renamed"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    defaults: &d
+      user: alice
+  vars:
+    <<: *d
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.us$0er}}'
+operation: rename
+newName: account
+expect:
+  renameError: "alias or merge key"
+---
+name: "a name used with an index is not renamed"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    user: alice
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars["user"]}}/{{vars.us$0er}}'
+operation: rename
+newName: account
+expect:
+  renameError: 'vars["user"]'
+---
+name: "names of a configuration file are not renamed"
+document: |
+  schemaVersion: config/v1
+  vars:
+    us$0er: alice
+operation: rename
+newName: account
+expect:
+  renameError: "configuration file"
+---
+name: "a flow-style include blocks the rename"
+files:
+  parent.yaml: |
+    schemaVersion: scenario/v1
+    steps:
+      - {include: test.yaml, bind: {vars: {r: '{{steps.login.result}}'}}}
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: lo$0gin
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: rename
+newName: signin
+expect:
+  renameError: "parent.yaml"
+---
+name: "names with other letters are kept apart"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    user: a
+    名前: b
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.us$0er}}/{{vars.user名}}/{{vars.名前}}'
+operation: rename
+newName: アカウント
+expect:
+  renameEdits: ["2:2-6", "8:19-23"]
+---
+name: "a keyword is not a valid new name"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+operation: rename
+newName: "true"
+expect:
+  renameError: "not a valid name"
+---
+name: "a new name must start with a letter"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+operation: rename
+newName: "_user"
+expect:
+  renameError: "not a valid name"
+---
+name: "a new name that scenarigo.yaml defines is rejected"
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    vars:
+      host: localhost
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+operation: rename
+newName: host
+expect:
+  renameError: "scenarigo.yaml"
+---
+name: "rename a quoted step id with a comment from the id key"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - $0id: "login" # the login step
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com
+    - if: '{{steps.login.result == "passed"}}'
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: rename
+newName: signin
+expect:
+  renameEdits: ["2:9-14", "7:17-22"]
+---
+name: "rename in a double-quoted string with escapes"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+  steps:
+    - protocol: http
+      request:
+        method: POST
+        url: http://example.com
+        body: "a\nb {{vars.user}}"
+operation: rename
+newName: account
+expect:
+  renameEdits: ["2:2-6", "8:25-29"]
+---
+name: "a rename stays in its YAML document"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    user: a
+    account: b
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.user}}'
+  ---
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: c
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.user}}'
+operation: rename
+newName: account
+expect:
+  renameEdits: ["12:2-6", "17:19-23"]
+---
+name: "a name also declared through a merge key is not renamed"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    d: &d
+      user: bob
+  vars:
+    us$0er: alice
+  steps:
+    - vars:
+        <<: *d
+      protocol: http
+      request:
+        method: GET
+        url: '{{vars.user}}'
+operation: rename
+newName: account
+expect:
+  renameError: "alias or merge key"
+---
+name: "a new name that a template already uses is rejected"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.host ?? "http://localhost"}}/{{vars.user}}'
+operation: rename
+newName: host
+expect:
+  renameError: "already used"
+---
+name: "a YAML spelling of true or null is not a valid new name"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+operation: rename
+newName: "NULL"
+expect:
+  renameError: "not a valid name"
+---
+name: "an empty document after the scenario does not hide it"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    us$0er: alice
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.user}}'
+  ---
+operation: rename
+newName: account
+expect:
+  renameEdits: ["2:2-6", "7:19-23"]

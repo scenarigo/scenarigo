@@ -89,6 +89,10 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleSignatureHelp(req)
 	case "textDocument/references":
 		s.handleReferences(req)
+	case "textDocument/rename":
+		s.handleRename(req)
+	case "textDocument/prepareRename":
+		s.handlePrepareRename(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -113,6 +117,10 @@ func (s *Server) handleInitialize(req *Request) {
 		offered = initParams.Capabilities.General.PositionEncodings
 	}
 	s.encoding = negotiateEncoding(offered)
+	var renameProvider any = true
+	if tc := initParams.Capabilities.TextDocument; tc != nil && tc.Rename != nil && tc.Rename.PrepareSupport {
+		renameProvider = RenameOptions{PrepareProvider: true}
+	}
 
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
@@ -129,6 +137,7 @@ func (s *Server) handleInitialize(req *Request) {
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
 			},
+			RenameProvider: renameProvider,
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
@@ -728,14 +737,20 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 	}
 
 	parts := strings.Split(resolveExpr, ".")
+	if chain, ok := chainAt(doc.Text, params.Position); ok {
+		parts = chain.path // the chain under the cursor, among several
+	}
 	if len(parts) < 2 {
 		return nil
 	}
 	root := parts[0]
-	if root != nsVars && root != nsSecrets && root != nsPlugins {
+	if root != nsVars && root != nsSecrets && root != nsPlugins && root != nsSteps {
 		return nil
 	}
 	name := parts[1]
+	if root == nsSteps {
+		return s.stepDefinition(doc, params.Position, name)
+	}
 
 	// Try to find the definition in the current document.
 	if root == nsPlugins {
@@ -2087,8 +2102,10 @@ type templateRef struct {
 	endCol   int      // 0-based, column past the last char of the matched prefix
 }
 
-// scanTemplateRefs scans the document text for all template expressions and extracts
-// dotted path references from them.
+// scanTemplateRefs scans the document text for all template expressions and
+// extracts the dotted name chains in them (vars.user, steps.login.result, the
+// vars.x argument of size(vars.x)), one reference per chain. String literals
+// are skipped.
 func scanTemplateRefs(text string) []templateRef {
 	var refs []templateRef
 	lines := strings.Split(text, "\n")
@@ -2107,44 +2124,14 @@ func scanTemplateRefs(text string) []templateRef {
 			}
 			closeIdx += openIdx + 2
 
-			expr := line[openIdx+2 : closeIdx]
-
-			// Handle "<-" operator: only process the left-hand side.
-			if arrowIdx := strings.Index(expr, "<-"); arrowIdx >= 0 {
-				expr = expr[:arrowIdx]
+			for _, c := range nameChains(line[openIdx+2 : closeIdx]) {
+				refs = append(refs, templateRef{
+					path:     c.path,
+					line:     lineIdx,
+					startCol: openIdx + 2 + c.start,
+					endCol:   openIdx + 2 + c.end,
+				})
 			}
-
-			expr = strings.TrimSpace(expr)
-			if expr == "" {
-				pos = closeIdx + 2
-				continue
-			}
-
-			// Parse dotted path.
-			parts := strings.Split(expr, ".")
-			if len(parts) == 0 {
-				pos = closeIdx + 2
-				continue
-			}
-
-			// Find the column where this path starts within the line.
-			// The path starts after "{{" + any leading whitespace.
-			exprStart := openIdx + 2
-			for exprStart < closeIdx && line[exprStart] == ' ' {
-				exprStart++
-			}
-
-			// Calculate end column: covers parts[0].parts[1] (the first 2 segments).
-			pathStr := expr
-			endColOffset := exprStart + len(pathStr)
-
-			refs = append(refs, templateRef{
-				path:     parts,
-				line:     lineIdx,
-				startCol: exprStart,
-				endCol:   endColOffset,
-			})
-
 			pos = closeIdx + 2
 		}
 	}
@@ -2153,24 +2140,22 @@ func scanTemplateRefs(text string) []templateRef {
 
 // identifySymbol determines what symbol the cursor is on.
 // Returns a 2-element path like ["vars", "myVar"] or ["steps", "login"], and the declaration range.
-// identifyTemplateSymbol resolves the vars/secrets/steps symbol named by a
-// template expression, or nil when the expression names something else.
-func identifyTemplateSymbol(doc *document, tmplExpr string) ([]string, *Range) {
-	tmplExpr = strings.TrimSpace(tmplExpr)
-	// Handle "<-" operator: only consider the left-hand side.
-	if before, _, ok := strings.Cut(tmplExpr, "<-"); ok {
-		tmplExpr = strings.TrimSpace(before)
+// identifyTemplateSymbol resolves the vars/secrets/steps symbol named by the
+// name chain under the cursor in a template expression, or nil when the
+// cursor is on something else.
+func identifyTemplateSymbol(doc *document, pos Position) ([]string, *Range) {
+	for _, ref := range scanTemplateRefs(lineAt(doc.Text, pos.Line)) {
+		if pos.Character < ref.startCol || pos.Character > ref.endCol {
+			continue
+		}
+		root := ref.path[0]
+		if root != nsVars && root != nsSecrets && root != nsSteps {
+			return nil, nil
+		}
+		sp := []string{root, ref.path[1]}
+		return sp, findDeclRange(doc, sp)
 	}
-	parts := strings.Split(tmplExpr, ".")
-	if len(parts) < 2 {
-		return nil, nil
-	}
-	root := parts[0]
-	if root != nsVars && root != nsSecrets && root != nsSteps {
-		return nil, nil
-	}
-	sp := []string{root, parts[1]}
-	return sp, findDeclRange(doc, sp)
+	return nil, nil
 }
 
 func identifySymbol(doc *document, pos Position) ([]string, *Range) {
@@ -2180,8 +2165,8 @@ func identifySymbol(doc *document, pos Position) ([]string, *Range) {
 
 	// First check if cursor is inside a template expression.
 	// Use getFullTemplateExpr to get the complete expression (not just up to cursor).
-	if tmplExpr, ok := getFullTemplateExpr(doc.Text, pos); ok {
-		return identifyTemplateSymbol(doc, tmplExpr)
+	if _, ok := getFullTemplateExpr(doc.Text, pos); ok {
+		return identifyTemplateSymbol(doc, pos)
 	}
 
 	// Check YAML structure: is cursor on a vars/secrets key or step id value?
@@ -2224,7 +2209,7 @@ func identifySymbol(doc *document, pos Position) ([]string, *Range) {
 		if lastKey == "id" && ctx.PartialValue != "" {
 			// Verify it's under steps.
 			if slices.Contains(ctx.Path, nsSteps) {
-				idValue := ctx.PartialValue
+				idValue := plainScalar(ctx.PartialValue)
 				r := valueRange(pos.Line, currentLine, idValue)
 				return []string{nsSteps, idValue}, &r
 			}
@@ -2238,7 +2223,7 @@ func identifySymbol(doc *document, pos Position) ([]string, *Range) {
 			// Get the value from the same line.
 			_, after, ok := strings.Cut(currentLine, ":")
 			if ok {
-				val := strings.TrimSpace(after)
+				val := plainScalar(after)
 				if val != "" {
 					if slices.Contains(ctx.Path, nsSteps) {
 						r := valueRange(pos.Line, currentLine, val)
@@ -2455,8 +2440,6 @@ func (s *Server) references(doc *document, params ReferenceParams) []Location {
 		return nil
 	}
 
-	refs := scanTemplateRefs(doc.Text)
-
 	var locs []Location
 
 	// If includeDeclaration, add the declaration location.
@@ -2467,24 +2450,9 @@ func (s *Server) references(doc *document, params ReferenceParams) []Location {
 		})
 	}
 
-	// Match template refs whose first 2 path elements match symbolPath.
-	for _, ref := range refs {
-		if len(ref.path) < 2 {
-			continue
-		}
-		if ref.path[0] == symbolPath[0] && ref.path[1] == symbolPath[1] {
-			// Highlight just the matched prefix (e.g., "vars.myVar" portion).
-			matchEnd := min(ref.startCol+len(ref.path[0])+1+len(ref.path[1]), ref.endCol)
-			locs = append(locs, Location{
-				URI: params.TextDocument.URI,
-				Range: Range{
-					Start: Position{Line: ref.line, Character: ref.startCol},
-					End:   Position{Line: ref.line, Character: matchEnd},
-				},
-			})
-		}
+	for _, r := range templateRefRanges(doc.Text, symbolPath[0], symbolPath[1]) {
+		locs = append(locs, Location{URI: params.TextDocument.URI, Range: r})
 	}
-
 	return locs
 }
 
@@ -2528,7 +2496,8 @@ func findDeclRange(doc *document, symbolPath []string) *Range {
 				s = after
 			}
 			if after, ok := strings.CutPrefix(s, "id:"); ok {
-				val := strings.TrimSpace(after)
+				val, _, _ := strings.Cut(after, " #")
+				val = strings.Trim(strings.TrimSpace(val), `"'`)
 				if val == name {
 					r := valueRange(i, line, name)
 					return &r

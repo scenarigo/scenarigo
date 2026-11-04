@@ -2691,7 +2691,7 @@ Each example directory contains:
 ## Editor Support (experimental)
 
 `scenarigo lsp` starts a [Language Server Protocol](https://microsoft.github.io/language-server-protocol/) server over stdio for `scenarigo.yaml` and scenario files.
-It provides completion, hover, diagnostics (including syntax errors and unknown names in `{{ }}` templates), definition jumps, references, and signature help for template functions.
+It provides completion, hover, diagnostics (including syntax errors and unknown names in `{{ }}` templates), definition jumps (including `{{steps.<id>}}` to the step), references, renames of variables, secrets and step ids, and signature help for template functions.
 The server stays silent on YAML files without a `schemaVersion` key, so it can be registered for all YAML files next to another YAML language server.
 
 See [internal/lsp/README.md](internal/lsp/README.md) for the editor setup (Neovim, Vim) and the feature matrix.

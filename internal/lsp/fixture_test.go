@@ -22,6 +22,7 @@ type lspTestCase struct {
 	Document  string            `yaml:"document"`
 	Operation string            `yaml:"operation"` // see runSingleFixture for the supported operations
 	Files     map[string]string `yaml:"files"`
+	NewName   string            `yaml:"newName"` // rename
 	Expect    lspExpect         `yaml:"expect"`
 }
 
@@ -31,12 +32,20 @@ type lspExpect struct {
 	Diagnostics        []diagMatcher   `yaml:"diagnostics"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
 	DefinitionURI      *uriMatcher     `yaml:"definitionUri"`
+	DefinitionIsNull   *bool           `yaml:"definitionIsNull"`
 	HoverContains      []string        `yaml:"hoverContains"`
 	HoverIsNull        *bool           `yaml:"hoverIsNull"`
 	SymbolNames        *labelMatcher   `yaml:"symbolNames"`
 	SignatureLabel     *string         `yaml:"signatureLabel"`
 	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
 	ReferenceCount     *int            `yaml:"referenceCount"`
+	// RenameEdits lists the ranges a rename replaces in the document, as
+	// "line:start-end" (0-based, UTF-16), in document order.
+	RenameEdits  []string `yaml:"renameEdits"`
+	RenameError  string   `yaml:"renameError"`  // substring of the error message
+	PrepareRange string   `yaml:"prepareRange"` // "line:start-end"
+	PrepareNull  bool     `yaml:"prepareIsNull"`
+	PrepareError string   `yaml:"prepareError"` // substring of the error message
 }
 
 type labelMatcher struct {
@@ -160,6 +169,11 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 			t.Fatal("references test requires $0 cursor marker in document")
 		}
 		runReferencesFixture(t, tc, docText, cursorLine, cursorChar)
+	case "rename", "prepareRename":
+		if !hasCursor {
+			t.Fatalf("%s test requires $0 cursor marker in document", tc.Operation)
+		}
+		runRenameFixture(t, tc, docText, cursorLine, cursorChar)
 	default:
 		t.Fatalf("unknown operation: %s", tc.Operation)
 	}
@@ -403,6 +417,13 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 
 	resp := client.definition(2, docURI, line, char)
 
+	if tc.Expect.DefinitionIsNull != nil && *tc.Expect.DefinitionIsNull {
+		if string(resp) != "null" {
+			t.Errorf("expected no definition, got: %s", resp)
+		}
+		return
+	}
+
 	if tc.Expect.DefinitionURI != nil {
 		var loc Location
 		if err := json.Unmarshal(resp, &loc); err != nil {
@@ -494,4 +515,92 @@ func runReferencesFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 			t.Errorf("expected %d references, got %d: %v", *tc.Expect.ReferenceCount, len(locs), locs)
 		}
 	}
+}
+
+func runRenameFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	writeFixtureFiles(t, uriToPath(root), tc.Files)
+	client.initialize(1, root)
+	uri := file("test.yaml")
+	client.openDocument(uri, docText)
+
+	if tc.Operation == "prepareRename" {
+		resp, respErr := client.prepareRename(2, uri, line, char)
+		switch {
+		case tc.Expect.PrepareError != "":
+			if respErr == nil || !strings.Contains(respErr.Message, tc.Expect.PrepareError) {
+				t.Errorf("expected an error containing %q, got %v (result %s)", tc.Expect.PrepareError, respErr, resp)
+			}
+		case respErr != nil:
+			t.Fatalf("prepareRename error: %s", respErr.Message)
+		case tc.Expect.PrepareNull:
+			if string(resp) != "null" {
+				t.Errorf("expected null, got %s", resp)
+			}
+		default:
+			var got struct {
+				Range       Range  `json:"range"`
+				Placeholder string `json:"placeholder"`
+			}
+			if err := json.Unmarshal(resp, &got); err != nil {
+				t.Fatalf("unmarshal prepareRename: %v (%s)", err, resp)
+			}
+			if r := formatLineRange(got.Range); r != tc.Expect.PrepareRange {
+				t.Errorf("prepareRename range = %s, want %s", r, tc.Expect.PrepareRange)
+			}
+		}
+		return
+	}
+
+	resp, respErr := client.rename(2, uri, line, char, tc.NewName)
+	if tc.Expect.RenameError != "" {
+		if respErr == nil || !strings.Contains(respErr.Message, tc.Expect.RenameError) {
+			t.Errorf("expected an error containing %q, got %v (result %s)", tc.Expect.RenameError, respErr, resp)
+		}
+		return
+	}
+	if respErr != nil {
+		t.Fatalf("rename error: %s", respErr.Message)
+	}
+	var edit WorkspaceEdit
+	if err := json.Unmarshal(resp, &edit); err != nil {
+		t.Fatalf("unmarshal workspace edit: %v (%s)", err, resp)
+	}
+	for u := range edit.Changes {
+		if u != uri {
+			t.Errorf("rename edits another file: %s", u)
+		}
+	}
+	var got []string
+	for _, e := range edit.Changes[uri] {
+		if e.NewText != tc.NewName {
+			t.Errorf("edit %s inserts %q, want %q", formatLineRange(e.Range), e.NewText, tc.NewName)
+		}
+		got = append(got, formatLineRange(e.Range))
+	}
+	slices.SortFunc(got, compareLineRanges)
+	if !slices.Equal(got, tc.Expect.RenameEdits) {
+		t.Errorf("rename edits = %v, want %v", got, tc.Expect.RenameEdits)
+	}
+}
+
+// formatLineRange formats a single-line range as "line:start-end".
+func formatLineRange(r Range) string {
+	if r.Start.Line != r.End.Line {
+		return fmt.Sprintf("%d:%d-%d:%d", r.Start.Line, r.Start.Character, r.End.Line, r.End.Character)
+	}
+	return fmt.Sprintf("%d:%d-%d", r.Start.Line, r.Start.Character, r.End.Character)
+}
+
+func compareLineRanges(a, b string) int {
+	var al, ac, bl, bc int
+	_, _ = fmt.Sscanf(a, "%d:%d", &al, &ac)
+	_, _ = fmt.Sscanf(b, "%d:%d", &bl, &bc)
+	if al != bl {
+		return al - bl
+	}
+	return ac - bc
 }

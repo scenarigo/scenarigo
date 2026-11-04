@@ -172,17 +172,39 @@ func (s *Server) findIncluders(path string) []string {
 	return found
 }
 
-// includeValues returns the values of the include keys of a YAML text.
+// includeValues returns the values of the include keys of a YAML text, in
+// block (include: a.yaml) or flow ({include: a.yaml, bind: ...}) style.
 func includeValues(text string) []string {
+	const key = "include:"
 	var out []string
 	for line := range strings.SplitSeq(text, "\n") {
-		value, ok := strings.CutPrefix(strings.TrimPrefix(strings.TrimSpace(line), "- "), "include:")
-		if !ok {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}
-		value, _, _ = strings.Cut(value, " #")
-		if value = strings.Trim(strings.TrimSpace(value), `"'`); value != "" {
-			out = append(out, value)
+		for off := 0; ; {
+			i := strings.Index(line[off:], key)
+			if i < 0 {
+				break
+			}
+			i += off
+			off = i + len(key)
+			if i > 0 && !strings.ContainsRune(" \t{,-", rune(line[i-1])) {
+				continue // another key ending in "include"
+			}
+			value := strings.TrimSpace(line[off:])
+			if value != "" && (value[0] == '"' || value[0] == '\'') {
+				if end := strings.IndexByte(value[1:], value[0]); end >= 0 {
+					value = value[1 : end+1]
+				}
+			} else {
+				if j := strings.IndexAny(value, ",}"); j >= 0 {
+					value = value[:j]
+				}
+				value, _, _ = strings.Cut(value, " #")
+			}
+			if value = strings.TrimSpace(value); value != "" {
+				out = append(out, value)
+			}
 		}
 	}
 	return out

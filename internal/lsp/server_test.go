@@ -91,6 +91,16 @@ func (c *testClient) readMessage() json.RawMessage {
 
 func (c *testClient) readResponse() json.RawMessage {
 	c.t.Helper()
+	b, respErr := c.readResponseOrError()
+	if respErr != nil {
+		c.t.Fatalf("response error: %s", respErr.Message)
+	}
+	return b
+}
+
+// readResponseOrError reads a response that may be an error.
+func (c *testClient) readResponseOrError() (json.RawMessage, *ResponseError) {
+	c.t.Helper()
 	raw := c.readMessage()
 	for isNotification(raw) {
 		raw = c.readMessage() // e.g. diagnostics republished for other documents
@@ -100,13 +110,32 @@ func (c *testClient) readResponse() json.RawMessage {
 		c.t.Fatalf("unmarshal response: %v", err)
 	}
 	if resp.Error != nil {
-		c.t.Fatalf("response error: %s", resp.Error.Message)
+		return nil, resp.Error
 	}
 	b, err := json.Marshal(resp.Result)
 	if err != nil {
 		c.t.Fatalf("marshal result: %v", err)
 	}
-	return b
+	return b, nil
+}
+
+func (c *testClient) rename(id int, uri string, line, char int, newName string) (json.RawMessage, *ResponseError) {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/rename", RenameParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+		NewName:      newName,
+	})
+	return c.readResponseOrError()
+}
+
+func (c *testClient) prepareRename(id int, uri string, line, char int) (json.RawMessage, *ResponseError) {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/prepareRename", PrepareRenameParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+	return c.readResponseOrError()
 }
 
 // isNotification reports whether a message is a notification, which has a

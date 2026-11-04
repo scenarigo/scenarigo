@@ -82,12 +82,13 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/didClose` | Supported | Document close |
 | `textDocument/completion` | Supported | Key, value, and template completion |
 | `textDocument/hover` | Supported | Field description, type, and enum values |
-| `textDocument/definition` | Supported | Jump to included files |
+| `textDocument/definition` | Supported | Jump to included files, variables, steps, plugins |
 | `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors, template expression errors |
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
-| `textDocument/references` | Supported | Find references to variables |
-| `textDocument/rename` | Not yet | Rename symbols |
+| `textDocument/references` | Supported | Find references to vars, secrets and steps, including names inside calls and operators (`size(vars.x)`, `vars.x ?? 0`) |
+| `textDocument/rename` | Supported | Rename a variable, secret or step id in one YAML document of a scenario: its declarations (top level, steps, `bind`) and the references `textDocument/references` finds. A rename that the server cannot complete is refused with the reason: the name is declared through an alias or merge key, used as an index (`vars["x"]`), or in a template the text scan cannot locate; it belongs to a configuration file or is also defined in `scenarigo.yaml`; the scenario includes another one (vars and secrets) or another scenario of the workspace includes it; there is no workspace root. The new name must be a template name (a letter first, then letters, digits, `-`, `_`) other than `nil`, `defined` and any spelling of `true`, `false` and `null`, and neither defined nor already used in the scenario or `scenarigo.yaml` |
+| `textDocument/prepareRename` | Supported | Selects the name under the cursor, or reports why it cannot be renamed |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
 
@@ -123,7 +124,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Feature | Status | Description |
 |---|---|---|
 | Hover | Supported | Shows field name, type, description, and allowed values in Markdown |
-| Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
+| Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{steps.id}}` to the step's `id`, `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
 | Document Symbol | Supported | Hierarchical symbol tree from YAML structure; steps use their `title` as the symbol name |
 | Code Action | Supported | Suggests quick fixes for unknown fields using Levenshtein distance (<= 3) |
 | Schema auto-detection | Supported | Detects config, scenario, or ytt input from the `schemaVersion` value |
@@ -168,6 +169,8 @@ internal/lsp/
   yamlview.go           # Alias and merge key resolution
   include.go            # Included and including scenarios
   ytt.go                # ytt annotation handling
+  rename.go             # textDocument/rename and prepareRename
+  navigation.go         # Name chains, step definitions and document spans for navigation
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
 
@@ -184,7 +187,7 @@ The LSP server has three tiers of tests, each with a different purpose and cost.
 
 | Tier | Files | Run with | Purpose |
 |---|---|---|---|
-| **Unit / Fuzz** | `position_test.go`, `transport_test.go`, `uri_test.go`, `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
+| **Unit / Fuzz** | `position_test.go`, `transport_test.go`, `uri_test.go`, `navigation_test.go`, `template_diagnostics_test.go`, `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
 | **Fixture + Session** | `fixture_test.go` + `testdata/`, `integration_test.go` | `go test ./internal/lsp/...` | Protocol-level behavior via in-process `io.Pipe` |
 | **E2E (binary + Neovim)** | `e2e_test.go` + `testdata/e2e_nvim/` | `make test/lsp-e2e` | Real binary over OS pipes; real editor integration |
 
@@ -196,7 +199,7 @@ Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateCon
 
 Single-operation tests declared in YAML under `testdata/{operation}/`. Each fixture specifies a document (with `$0` cursor marker), an operation, and expected results. **New tests should be added here whenever possible** — no Go code changes needed.
 
-Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `documentSymbol`, `signatureHelp`, `references`.
+Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `documentSymbol`, `signatureHelp`, `references`, `rename`, `prepareRename`.
 
 #### Session Tests (multi-step Go tests)
 
@@ -221,6 +224,7 @@ internal/lsp/
   position_test.go        # Column conversions between bytes, runes and UTF-16
   transport_test.go       # Message framing and protocol error responses
   uri_test.go             # file URI <-> path conversions
+  navigation_test.go      # Name chains, YAML escapes, value alignment fallback
   e2e_test.go             # [e2e_lsp] Binary subprocess + Neovim headless tests
   testdata/
     completion/           # Completion fixtures
@@ -230,6 +234,8 @@ internal/lsp/
     documentSymbol/       # Document symbol fixtures
     signatureHelp/        # Signature help fixtures
     references/           # References fixtures
+    rename/               # Rename fixtures
+    prepareRename/        # Prepare rename fixtures
     e2e_nvim/
       lsp_test.lua        # Neovim Lua test script
   yamlutil/
