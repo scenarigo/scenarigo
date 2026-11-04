@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { expandHome, findExecutable } = require('../out/server.js');
+const { checkLspCommand, expandHome, findExecutable } = require('../out/server.js');
 
 assert.equal(expandHome('~', '/home/u'), '/home/u');
 assert.equal(expandHome('~/go/bin/scenarigo', '/home/u'), path.join('/home/u', 'go/bin/scenarigo'));
@@ -42,8 +42,31 @@ try {
   assert.equal(findExecutable('tool', env, 'win32'), path.join(bin, 'tool.exe'));
   assert.equal(findExecutable('tool.exe', env, 'win32'), path.join(bin, 'tool.exe'));
   assert.equal(findExecutable('script', { ...env, PATHEXT: '.CMD' }, 'win32'), undefined);
+  // A name with a dot is still a name.
+  fs.writeFileSync(path.join(bin, 'scenarigo-0.29.0.exe'), '');
+  assert.equal(findExecutable('scenarigo-0.29.0', env, 'win32'), path.join(bin, 'scenarigo-0.29.0.exe'));
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
 
 console.log('server ok');
+
+// A binary that ignores SIGTERM and hangs: the check times out and says so.
+(async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scenarigo-check-'));
+  try {
+    const hang = path.join(dir, 'hang');
+    fs.writeFileSync(hang, "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n", { mode: 0o755 });
+    const started = Date.now();
+    const problem = await checkLspCommand(hang, 500);
+    assert.ok(Date.now() - started < 5000, 'the check did not end');
+    assert.match(problem, /timed out/);
+    // A binary that reads its input gets none.
+    const reader = path.join(dir, 'reader');
+    fs.writeFileSync(reader, '#!/bin/sh\ncat >/dev/null\nexit 0\n', { mode: 0o755 });
+    assert.equal(await checkLspCommand(reader, 5000), undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  console.log('check ok');
+})();

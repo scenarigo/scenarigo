@@ -30,7 +30,13 @@
         {
           "name": "string.quoted.double.scenarigo",
           "begin": "\\\\\"",
-          "end": "\\\\\"|(?=\")|$"
+          "end": "\\\\\"|(?=\")|$",
+          "patterns": [
+            {
+              "comment": "an escaped backslash, which cannot close the string with the next quote",
+              "match": "\\\\\\\\"
+            }
+          ]
         },
         {
           "match": "\\\\."

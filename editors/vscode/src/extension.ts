@@ -26,6 +26,35 @@ function enqueue(task: () => Promise<void>): Promise<void> {
   return queue;
 }
 
+// closableChannel wraps an output channel so that writes after dispose are
+// dropped: the client logs the exit of its server process once it has
+// stopped, and VS Code's channels throw when written to after dispose.
+function closableChannel(channel: vscode.OutputChannel): vscode.OutputChannel {
+  let closed = false;
+  const unlessClosed =
+    <A extends unknown[]>(write: (...args: A) => void) =>
+    (...args: A): void => {
+      if (!closed) {
+        write(...args);
+      }
+    };
+  return {
+    name: channel.name,
+    append: unlessClosed((value: string) => channel.append(value)),
+    appendLine: unlessClosed((value: string) => channel.appendLine(value)),
+    replace: unlessClosed((value: string) => channel.replace(value)),
+    clear: unlessClosed(() => channel.clear()),
+    show: unlessClosed((column?: vscode.ViewColumn | boolean, preserveFocus?: boolean) =>
+      typeof column === 'boolean' || column === undefined ? channel.show(column) : channel.show(column, preserveFocus),
+    ),
+    hide: unlessClosed(() => channel.hide()),
+    dispose: () => {
+      closed = true;
+      channel.dispose();
+    },
+  };
+}
+
 async function startClient(): Promise<void> {
   const configured = vscode.workspace.getConfiguration('scenarigo').get<string>('path') || 'scenarigo';
   const command = findExecutable(expandHome(configured));
@@ -42,15 +71,19 @@ async function startClient(): Promise<void> {
     );
     return;
   }
-  // A server that fails before it has answered initialize is not restarted,
-  // and the client reports that failure once; later failures get the
-  // client's default handling, which restarts a crashed server a few times.
-  let initialized = false;
+  // A server process that fails before it has answered initialize, the
+  // first one or a restarted one, is shut down and not restarted, and the
+  // client reports that failure once; a client that a setting change
+  // replaced is not restarted either. Other failures get the client's
+  // default handling, which restarts a crashed server a few times.
+  let started: LanguageClient | undefined;
   let fallback: ErrorHandler | undefined;
+  const current = (): ErrorHandler | undefined =>
+    started !== undefined && client === started && started.isRunning() ? fallback : undefined;
   const errorHandler: ErrorHandler = {
     error: (error, message, count) =>
-      initialized && fallback ? fallback.error(error, message, count) : { action: ErrorAction.Continue, handled: true },
-    closed: () => (initialized && fallback ? fallback.closed() : { action: CloseAction.DoNotRestart, handled: true }),
+      current()?.error(error, message, count) ?? { action: ErrorAction.Shutdown, handled: true },
+    closed: () => current()?.closed() ?? { action: CloseAction.DoNotRestart, handled: true },
   };
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: 'yaml' }],
@@ -60,12 +93,11 @@ async function startClient(): Promise<void> {
   };
   // No transport: with one, the client adds --stdio to the arguments, which
   // `scenarigo lsp` rejects. The server uses stdio anyway.
-  const started = new LanguageClient('scenarigo', 'Scenarigo', { command, args: ['lsp'] }, clientOptions);
+  started = new LanguageClient('scenarigo', 'Scenarigo', { command, args: ['lsp'] }, clientOptions);
   fallback = started.createDefaultErrorHandler();
   client = started;
   try {
     await started.start();
-    initialized = true;
   } catch {
     // The client has shown "couldn't create connection to server", with a
     // link to the output channel that holds the server's stderr.
@@ -87,9 +119,11 @@ async function stopClient(): Promise<void> {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  output = vscode.window.createOutputChannel('Scenarigo');
+  // The output channel is closed after the server has stopped, by
+  // deactivate: VS Code disposes the subscriptions without waiting for
+  // deactivate, and the client writes to the channel while it stops.
+  output = closableChannel(vscode.window.createOutputChannel('Scenarigo'));
   context.subscriptions.push(
-    output,
     { dispose: () => void enqueue(stopClient) },
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('scenarigo.path')) {
@@ -105,5 +139,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): Promise<void> {
-  return enqueue(stopClient);
+  return enqueue(async () => {
+    await stopClient();
+    output?.dispose();
+    output = undefined;
+  });
 }

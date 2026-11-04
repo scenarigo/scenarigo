@@ -34,6 +34,24 @@ const rejecting = binary(
   'reject',
   `FAKE_SERVER_LOG="${brokenLog}" FAKE_INITIALIZE_ERROR=broken exec "${process.execPath}" "${path.join(__dirname, 'fake-server.js')}" "$@"\n`,
 );
+// A server that prints something before its first message.
+const garbageLog = path.join(tmp, 'garbage.log');
+const garbage = binary(
+  'garbage',
+  `FAKE_SERVER_LOG="${garbageLog}" FAKE_GARBAGE=starting exec "${process.execPath}" "${path.join(__dirname, 'fake-server.js')}" "$@"\n`,
+);
+// A server that crashes once after initialize, then runs.
+const crashOnceLog = path.join(tmp, 'crash-once.log');
+const crashOnce = binary(
+  'crash-once',
+  `FAKE_SERVER_LOG="${crashOnceLog}" FAKE_CRASH_ONCE="${path.join(tmp, 'crashed')}" exec "${process.execPath}" "${path.join(__dirname, 'fake-server.js')}" "$@"\n`,
+);
+// A server that crashes after initialize, then exits at once when restarted.
+const brokenRestartLog = path.join(tmp, 'broken-restart.log');
+const brokenRestart = binary(
+  'broken-restart',
+  `FAKE_SERVER_LOG="${brokenRestartLog}" FAKE_CRASH_ONCE="${path.join(tmp, 'crashed2')}" FAKE_EXIT_IF="${path.join(tmp, 'crashed2')}" exec "${process.execPath}" "${path.join(__dirname, 'fake-server.js')}" "$@"\n`,
+);
 // A server that has the command but exits as soon as it starts.
 const crashing = binary('crash', `[ "$2" = "--help" ] && exit 0\necho crash >> "${crashLog}"\nexit 1\n`);
 fs.writeFileSync(log, '');
@@ -94,7 +112,7 @@ const vscode = withFallback(
         },
         createOutputChannel: () => {
           outputChannels++;
-          return withFallback({}, 'outputChannel');
+          return withFallback(outputChannel(), 'outputChannel');
         },
       },
       'window',
@@ -107,15 +125,30 @@ Module._load = function (request, ...rest) {
   return request === 'vscode' ? vscode : load.call(this, request, ...rest);
 };
 
-// The extension host logs unhandled rejections; the test records them and
-// fails on those of the extension. Two come from vscode-languageclient
-// 9.0.1 itself when a server exits during initialize, and the extension
-// cannot catch them: its writes to the gone process fail with EPIPE, and it
-// stops the starting client without handling the rejection (doInitialize).
+// VS Code's output channel throws once it is closed.
+const closedChannelWrites = [];
+const outputChannel = () => {
+  let closed = false;
+  const write = () => {
+    if (closed) {
+      closedChannelWrites.push(new Error('Channel has been closed').stack);
+      throw new Error('Channel has been closed');
+    }
+  };
+  return { append: write, appendLine: write, replace: write, clear: write, show() {}, hide() {}, dispose: () => (closed = true) };
+};
+// The extension host logs unhandled rejections and uncaught exceptions; the
+// test records them and fails on those of the extension: the ones whose
+// stack goes through its code. vscode-languageclient 9.0.1 leaves some of
+// its own unhandled when a server fails: writes to a gone process (EPIPE),
+// requests pending when the connection closes, and the stop of a client
+// whose initialize failed (doInitialize), which goes back to the start the
+// extension awaits.
 const rejections = [];
 process.on('unhandledRejection', (err) => rejections.push(err));
+process.on('uncaughtException', (err) => rejections.push(err));
 const ownRejections = () =>
-  rejections.filter((err) => !['EPIPE', 'ERR_STREAM_DESTROYED'].includes(err?.code) && !String(err?.stack).includes('doInitialize'));
+  rejections.filter((err) => /out[\\/](extension|server)\.js/.test(String(err?.stack)) && !String(err?.stack).includes('doInitialize'));
 
 const servers = () =>
   fs
@@ -178,6 +211,35 @@ async function main() {
   const broken = () => fs.readFileSync(brokenLog, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line).pid);
   assert.equal(broken().length, 1);
 
+  // A server that prints something before its first message: one error, the
+  // start settles, and the process ends.
+  errors.length = 0;
+  fs.writeFileSync(garbageLog, '');
+  const settled = await Promise.race([
+    changePath(garbage).then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 10_000)),
+  ]);
+  assert.ok(settled, 'the start never settled');
+  assert.equal(errors.length, 1, JSON.stringify(errors));
+  const garbageServers = () => fs.readFileSync(garbageLog, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line).pid);
+  await waitFor('the server that printed something is still running', () => !garbageServers().some(alive));
+
+  // A server that crashes after initialize is restarted.
+  errors.length = 0;
+  fs.writeFileSync(crashOnceLog, '');
+  await changePath(crashOnce);
+  const crashOnceServers = () => fs.readFileSync(crashOnceLog, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line).pid);
+  await waitFor('the server was not restarted', () => crashOnceServers().length === 2 && alive(crashOnceServers()[1]));
+
+  // A restarted server that exits before initialize is not restarted again.
+  errors.length = 0;
+  fs.writeFileSync(brokenRestartLog, '');
+  await changePath(brokenRestart);
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  assert.ok(errors.length <= 1, JSON.stringify(errors));
+  // Started, crashed, restarted once, and not again.
+  assert.equal(fs.readFileSync(brokenRestartLog, 'utf8').split('\n').filter(Boolean).length, 2, 'the server was restarted again');
+
   // Fixing the setting starts the server, as `scenarigo lsp`.
   errors.length = 0;
   await changePath(fakeServer);
@@ -195,10 +257,15 @@ async function main() {
 
   assert.deepEqual(ownRejections().map(String), []);
 
-  // Deactivating stops it.
-  await extension.deactivate();
+  // Deactivating stops it. VS Code disposes the subscriptions right after
+  // calling deactivate, without waiting for it.
+  const deactivated = extension.deactivate();
   context.subscriptions.forEach((d) => d.dispose());
+  await deactivated;
   await waitFor('the server is still running', () => running().length === 0);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.deepEqual(closedChannelWrites, []);
+  assert.deepEqual(ownRejections().map(String), []);
 
   console.log('client ok');
 }

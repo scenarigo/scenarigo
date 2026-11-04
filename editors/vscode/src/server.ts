@@ -19,7 +19,7 @@ export function expandHome(p: string, home: string = os.homedir()): string {
 
 // findExecutable returns the absolute path of the program that a command
 // names: an absolute path, or a name looked up in PATH. On Windows a name
-// without an extension gets .exe: a file without one cannot be started, and
+// gets .exe unless it ends with it (scenarigo-0.29.0 is a name too): a file without one cannot be started, and
 // Node starts .cmd and .bat files only through a shell. A relative path is
 // not resolved, since the working directory of the extension host means
 // nothing to the user.
@@ -29,7 +29,7 @@ export function findExecutable(
   platform: NodeJS.Platform = process.platform,
 ): string | undefined {
   const windows = platform === 'win32';
-  const extensions = windows && path.extname(command) === '' ? ['.exe'] : [''];
+  const extensions = windows && !command.toLowerCase().endsWith('.exe') ? ['.exe'] : [''];
   const executable = (p: string): boolean => {
     try {
       if (!fs.statSync(p).isFile()) {
@@ -60,15 +60,27 @@ export function findExecutable(
 // cannot run the language server, or undefined when it can. A scenarigo
 // without the lsp command, such as a release before it, exits with
 // "unknown command"; starting it as a server would fail over and over.
+// The binary gets no input, and one that does not answer in time is
+// killed, also when it ignores SIGTERM.
 export function checkLspCommand(command: string, timeoutMs = 10_000): Promise<string | undefined> {
   return new Promise((resolve) => {
-    execFile(command, ['lsp', '--help'], { timeout: timeoutMs, windowsHide: true }, (err, _stdout, stderr) => {
-      if (err === null) {
-        resolve(undefined);
-        return;
-      }
-      const output = String(stderr).trim().replace(/^Error: /, '').split('\n')[0];
-      resolve(output || err.message);
-    });
+    const child = execFile(
+      command,
+      ['lsp', '--help'],
+      { timeout: timeoutMs, killSignal: 'SIGKILL', windowsHide: true },
+      (err, _stdout, stderr) => {
+        if (err === null) {
+          resolve(undefined);
+          return;
+        }
+        if (err.killed) {
+          resolve(`"lsp --help" timed out after ${timeoutMs / 1000} seconds`);
+          return;
+        }
+        const output = String(stderr).trim().replace(/^Error: /, '').split('\n')[0];
+        resolve(output || err.message.trim());
+      },
+    );
+    child.stdin?.end();
   });
 }

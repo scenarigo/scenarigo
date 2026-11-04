@@ -130,6 +130,7 @@ async function main() {
     ['a: |', '  {{ vars.x', '  more', 'b: c'],
     ['a: {{vars.x', 'b: c'],
   ];
+  unclosed.push(['k: "{{ \\"C:\\\\"', 'b: c']);
   for (const lines of unclosed) {
     const d = lines.join('\n');
     assert.equal(keyOf(d, 'b'), 'entity.name.tag.yaml', JSON.stringify(tokens(d)));
