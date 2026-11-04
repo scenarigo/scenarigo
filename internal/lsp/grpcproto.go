@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -62,7 +62,6 @@ type protoLookup struct {
 	s        *Server
 	config   func() *grpc.Option
 	compiled map[string]grpcproto.FileDescriptors
-	decoded  map[ast.Node]any // documents as scenarigo decodes them, by body
 }
 
 func (s *Server) newProtoLookup() *protoLookup {
@@ -70,7 +69,6 @@ func (s *Server) newProtoLookup() *protoLookup {
 		s:        s,
 		config:   sync.OnceValue(s.grpcConfigOptions),
 		compiled: map[string]grpcproto.FileDescriptors{},
-		decoded:  map[ast.Node]any{},
 	}
 }
 
@@ -87,12 +85,12 @@ func (l *protoLookup) step(doc *document, v *yamlView, step ast.Node) grpcproto.
 		return nil
 	}
 	opts := &grpc.RequestOptions{}
-	if doc.Parsed != nil {
-		stepOpts, ok := l.stepOptions(doc.Parsed.File, v, step)
-		if !ok {
+	if node := v.entryValue(request, "options"); node != nil {
+		var stepOpts grpc.RequestOptions
+		if err := decodeResolved(v, node, &stepOpts); err != nil {
 			return nil
 		}
-		if err := mergo.Merge(opts, stepOpts); err != nil {
+		if err := mergo.Merge(opts, &stepOpts); err != nil {
 			return nil
 		}
 	}
@@ -155,144 +153,132 @@ func rootRelative(root string, files []string) ([]string, []string) {
 	return []string{root}, rel
 }
 
-// stepOptions returns the request options of a step, from its document
-// decoded as a whole the way scenarigo decodes it: aliases resolve to the
-// anchors of their own document, and merge keys, tags and block scalars
-// read as at run time. It reports false when the options do not decode.
-func (l *protoLookup) stepOptions(file *ast.File, v *yamlView, step ast.Node) (*grpc.RequestOptions, bool) {
-	opts := &grpc.RequestOptions{}
-	if file == nil {
-		return opts, true
+// maxResolvedValues bounds the values that resolving the aliases of the
+// options may produce: a few lines of nested aliases would otherwise expand
+// to millions of values on every keystroke.
+const maxResolvedValues = 100_000
+
+var errTooManyValues = errors.New("the aliases expand to too many values")
+
+// decodeResolved decodes a YAML node into out as the loader reads it:
+// aliases resolve to the anchor before them, and merge keys, tags and block
+// scalars read as at run time. yaml.NodeToValue alone does not resolve
+// aliases whose anchor is outside the node.
+func decodeResolved(v *yamlView, node ast.Node, out any) error {
+	r := &resolver{view: v, budget: maxResolvedValues}
+	value, err := r.value(node)
+	if err != nil {
+		return err
 	}
-	for _, d := range file.Docs {
-		i := slices.Index(v.sequence(v.entryValue(v.entries(d.Body), nsSteps)), step)
-		if i < 0 {
-			continue
-		}
-		value, ok := l.decode(v, d.Body)
-		if !ok {
-			return nil, false
-		}
-		if options := valueAt(value, nsSteps, i, "request", "options"); options != nil {
-			if err := remarshal(options, opts); err != nil {
-				return nil, false
-			}
-		}
-		return opts, true
-	}
-	return opts, true
+	return remarshal(value, out)
 }
 
-// maxDecodedNodes bounds the size of a document with its aliases expanded:
-// a few lines of nested aliases would otherwise make the server decode
-// millions of values on every keystroke.
-const maxDecodedNodes = 100_000
-
-// decode decodes a document as scenarigo does, once per lookup.
-func (l *protoLookup) decode(v *yamlView, body ast.Node) (any, bool) {
-	if value, ok := l.decoded[body]; ok {
-		return value, value != nil
-	}
-	value := decodeDocument(v, body)
-	l.decoded[body] = value
-	return value, value != nil
+type resolver struct {
+	view   *yamlView
+	budget int
 }
 
-// decodeDocument decodes a document body, or returns nil when it does not
-// decode or its aliases expand too far.
-func decodeDocument(v *yamlView, body ast.Node) any {
-	if body == nil || expandedSize(v, body, map[ast.Node]int{}, map[ast.Node]bool{}) > maxDecodedNodes {
-		return nil
+// value returns the plain value of a node; an explicit key wins over a
+// merged one.
+func (r *resolver) value(node ast.Node) (any, error) {
+	if r.budget--; r.budget < 0 {
+		return nil, errTooManyValues
 	}
-	var value any
-	if err := yaml.NodeToValue(body, &value); err != nil {
-		return nil
-	}
-	return value
-}
-
-// expandedSize counts the nodes of a YAML tree with its aliases expanded, in
-// time linear in the size of the tree. A cycle counts as too large.
-func expandedSize(v *yamlView, node ast.Node, memo map[ast.Node]int, visiting map[ast.Node]bool) int {
-	node = v.unwrap(node)
-	if node == nil {
-		return 0
-	}
-	if n, ok := memo[node]; ok {
-		return n
-	}
-	if visiting[node] {
-		return maxDecodedNodes + 1
-	}
-	visiting[node] = true
-	size := 1
+	node, tag := r.peel(node)
 	switch n := node.(type) {
-	case *ast.MappingNode:
-		for _, mv := range n.Values {
-			size += expandedSize(v, mv, memo, visiting)
+	case *ast.MappingNode, *ast.MappingValueNode:
+		m := map[string]any{}
+		for _, mv := range r.view.entries(n) {
+			k := keyString(r.view, mv.Key)
+			if _, ok := m[k]; ok {
+				continue
+			}
+			value, err := r.value(mv.Value)
+			if err != nil {
+				return nil, err
+			}
+			m[k] = value
 		}
-	case *ast.MappingValueNode:
-		size += expandedSize(v, n.Key, memo, visiting) + expandedSize(v, n.Value, memo, visiting)
+		return m, nil
 	case *ast.SequenceNode:
+		items := make([]any, 0, len(n.Values))
 		for _, item := range n.Values {
-			size += expandedSize(v, item, memo, visiting)
+			value, err := r.value(item)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, value)
 		}
+		return items, nil
+	case *ast.LiteralNode:
+		if n.Value == nil {
+			return tagged(tag, ""), nil
+		}
+		return tagged(tag, n.Value.Value), nil
+	case ast.ScalarNode:
+		return tagged(tag, n.GetValue()), nil
+	default:
+		return nil, nil //nolint:nilnil // null, or nothing to decode
 	}
-	visiting[node] = false
-	size = min(size, maxDecodedNodes+1)
-	memo[node] = size
-	return size
 }
 
-// valueAt follows a path of mapping keys and sequence indexes in a decoded
-// value. A key matches exactly, or else regardless of case when the path
-// element is a caseless key.
-func valueAt(value any, path ...any) any {
-	for _, p := range path {
-		switch k := p.(type) {
-		case int:
-			items, ok := value.([]any)
-			if !ok || k < 0 || k >= len(items) {
-				return nil
+// peel returns the node behind anchors, aliases and tags, and the tag.
+func (r *resolver) peel(node ast.Node) (ast.Node, string) {
+	tag := ""
+	for range maxAliasDepth {
+		switch n := node.(type) {
+		case *ast.AnchorNode:
+			node = n.Value
+		case *ast.AliasNode:
+			node = r.view.anchor(n)
+		case *ast.TagNode:
+			if n.Start != nil {
+				tag = n.Start.Value
 			}
-			value = items[k]
-		case string:
-			value = mapValue(value, k, false)
-		case caseless:
-			value = mapValue(value, string(k), true)
+			node = n.Value
+		default:
+			return node, tag
 		}
-		if value == nil {
-			return nil
+	}
+	return nil, ""
+}
+
+// tagged applies a standard tag to a scalar, as a YAML decoder does.
+func tagged(tag string, value any) any {
+	s := ""
+	if value != nil {
+		s = fmt.Sprint(value)
+	}
+	switch tag {
+	case "!!str":
+		return s
+	case "!!bool":
+		if b, err := strconv.ParseBool(s); err == nil {
+			return b
 		}
+	case "!!int":
+		if i, err := strconv.ParseInt(s, 0, 64); err == nil {
+			return i
+		}
+	case "!!float":
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f
+		}
+	case "!!null":
+		return nil
 	}
 	return value
 }
 
-// caseless is a mapping key that matches regardless of case.
-type caseless string
-
-func mapValue(value any, key string, fold bool) any {
-	entries := map[string]any{}
-	switch m := value.(type) {
-	case map[string]any:
-		entries = m
-	case map[any]any:
-		for k, v := range m {
-			entries[fmt.Sprint(k)] = v
-		}
-	default:
-		return nil
+// keyString returns a mapping key as the loader reads it, without quotes.
+func keyString(v *yamlView, key ast.MapKeyNode) string {
+	if s, ok := v.unwrap(key).(ast.ScalarNode); ok {
+		return fmt.Sprint(s.GetValue())
 	}
-	if v, ok := entries[key]; ok || !fold {
-		return v
+	if key == nil {
+		return ""
 	}
-	keys := slices.Sorted(maps.Keys(entries))
-	for _, k := range keys {
-		if strings.EqualFold(k, key) {
-			return entries[k]
-		}
-	}
-	return nil
+	return key.String()
 }
 
 // remarshal converts a decoded value into a struct through YAML.
@@ -329,12 +315,18 @@ func (s *Server) grpcConfigOptions() *grpc.Option {
 	}
 	// scenarigo looks the protocols of scenarigo.yaml up by their lower-case
 	// name too.
-	options := valueAt(decodeDocument(newYAMLView(parsed.File), parsed.File.Docs[0].Body), "protocols", caseless("grpc"))
-	if options == nil {
+	v := newYAMLView(parsed.File)
+	var node ast.Node
+	for _, mv := range v.entries(v.entryValue(v.entries(parsed.File.Docs[0].Body), "protocols")) {
+		if k := keyString(v, mv.Key); k == "grpc" || node == nil && strings.EqualFold(k, "grpc") {
+			node = mv.Value
+		}
+	}
+	if node == nil {
 		return nil
 	}
 	var opt grpc.Option
-	if err := remarshal(options, &opt); err != nil {
+	if err := decodeResolved(v, node, &opt); err != nil {
 		return nil
 	}
 	return &opt
