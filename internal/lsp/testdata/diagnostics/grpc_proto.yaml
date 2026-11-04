@@ -56,6 +56,7 @@ document: |
               city: w
               street: unknown
           email: a@example.com
+          phone: "123"
           tag:
             label: t
       expect:
@@ -80,8 +81,13 @@ document: |
         method: Helo
 operation: diagnostics
 expect:
-  diagnosticCount: 7
+  diagnosticCount: 9
   diagnostics:
+    - message: 'field test.v1.HelloRequest.user_name is set twice: "userName" and "user_name"'
+      severity: 2
+      startLine: 13
+      startChar: 8
+      endChar: 17
     - message: 'unknown field "nmae" in test.v1.HelloRequest'
       severity: 2
       startLine: 14
@@ -93,6 +99,11 @@ expect:
       severity: 2
     - message: 'unknown field "street" in test.v1.Address'
       severity: 2
+    - message: 'oneof test.v1.HelloRequest.contact is set twice: "email" and "phone"'
+      severity: 2
+      startLine: 26
+      startChar: 8
+      endChar: 13
     - message: 'unknown field "reply" in test.v1.HelloReply'
       severity: 2
     - message: 'unknown gRPC service "test.v1.Greter" in the proto files'
@@ -221,3 +232,168 @@ document: |
 operation: diagnostics
 expect:
   diagnosticCount: 0
+
+---
+name: "expected messages may name a field twice and several oneof members"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+      rpc Echo(HelloRequest) returns (HelloRequest);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Echo
+        message:
+          email: null
+          phone: "123"
+      expect:
+        message:
+          userName: x
+          user_name: x
+          email: ""
+          phone: "123"
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+
+---
+name: "well-known messages are checked unless they have a JSON form of their own"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "google/protobuf/empty.proto";
+    import "google/protobuf/struct.proto";
+    import "google/protobuf/timestamp.proto";
+    service Greeter {
+      rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty);
+      rpc Put(Item) returns (google.protobuf.Empty);
+    }
+    message Item {
+      google.protobuf.Timestamp at = 1;
+      google.protobuf.Struct attrs = 2;
+      google.protobuf.Empty nothing = 3;
+    }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Ping
+        message:
+          foo: 1
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Put
+        message:
+          at: "2020-01-01T00:00:00Z"
+          attrs:
+            any: thing
+          nothing:
+            bar: 1
+operation: diagnostics
+expect:
+  diagnosticCount: 2
+  diagnostics:
+    - message: 'unknown field "foo" in google.protobuf.Empty'
+      severity: 2
+      startLine: 11
+    - message: 'unknown field "bar" in google.protobuf.Empty'
+      severity: 2
+      startLine: 25
+
+---
+name: "a step with a client does not use the proto files"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    p: p.so
+  steps:
+    - protocol: grpc
+      request:
+        client: '{{plugins.p.Client}}'
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: x.Y
+        method: Anything
+        message:
+          whatever: 1
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'unknown gRPC service "x.Y" in the proto files'

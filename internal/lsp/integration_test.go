@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf16"
 )
 
@@ -1294,5 +1295,64 @@ func TestEditorSession_GRPCProtoChanged(t *testing.T) {
 	client.sync(3)
 	if labels := labelList(client.complete(4, uri, line, char).Items); !slices.Contains(labels, "after") {
 		t.Errorf("expected the field of the changed import, got %v", labels)
+	}
+}
+
+func TestEditorSession_GRPCProtoOutsideWorkspace(t *testing.T) {
+	client := newRunningTestClient(t)
+	base := t.TempDir()
+	ws := filepath.Join(base, "ws")
+	common := filepath.Join(base, "shared", "common.proto")
+	writeFile(t, filepath.Join(base, "shared", "svc.proto"), "syntax = \"proto3\";\npackage p;\nimport \"common.proto\";\nservice S { rpc M(common.Req) returns (common.Req); }\n")
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string before = 1; }\n")
+	if err := os.MkdirAll(ws, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client.initialize(1, pathToURI(ws))
+
+	uri := pathToURI(filepath.Join(ws, "test.yaml"))
+	text, line, char, _ := parseCursorMarker("schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [../shared]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        $0\n")
+	client.openDocument(uri, text)
+	if labels := labelList(client.complete(2, uri, line, char).Items); !slices.Contains(labels, "before") {
+		t.Fatalf("expected before, got %v", labels)
+	}
+
+	// No watcher covers the import outside the workspace folder.
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string after = 1; }\n")
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(common, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if labels := labelList(client.complete(3, uri, line, char).Items); !slices.Contains(labels, "after") {
+		t.Errorf("expected the field of the changed import, got %v", labels)
+	}
+}
+
+func TestEditorSession_GRPCProtoDirectoryMoved(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	dir := uriToPath(root)
+	writeFile(t, filepath.Join(dir, "proto", "svc.proto"), "syntax = \"proto3\";\npackage p;\nimport \"common/common.proto\";\nservice S { rpc M(common.Req) returns (common.Req); }\n")
+	writeFile(t, filepath.Join(dir, "proto", "common", "common.proto"), "syntax = \"proto3\";\npackage common;\nmessage Req { string before = 1; }\n")
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	text, line, char, _ := parseCursorMarker("schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [proto]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        $0\n")
+	client.openDocument(uri, text)
+	if labels := labelList(client.complete(2, uri, line, char).Items); !slices.Contains(labels, "before") {
+		t.Fatalf("expected before, got %v", labels)
+	}
+
+	from, to := filepath.Join(dir, "proto", "common"), filepath.Join(dir, "proto", "old")
+	if err := os.Rename(from, to); err != nil {
+		t.Fatal(err)
+	}
+	client.watchedFilesChanged(
+		FileEvent{URI: pathToURI(from), Type: FileChangeTypeDeleted},
+		FileEvent{URI: pathToURI(to), Type: FileChangeTypeCreated},
+	)
+	client.sync(3)
+	if labels := labelList(client.complete(4, uri, line, char).Items); slices.Contains(labels, "before") {
+		t.Errorf("the import is gone, but its field is still offered: %v", labels)
 	}
 }

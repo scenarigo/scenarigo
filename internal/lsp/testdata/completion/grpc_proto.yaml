@@ -586,3 +586,318 @@ operation: completion
 expect:
   completionLabels:
     excludes: [test.v1.Greeter]
+
+---
+name: "a dotted service name replaces the whole value"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Gr$0
+operation: completion
+expect:
+  completionEdits:
+    - label: test.v1.Greeter
+      range: "9:15-25"
+      newText: test.v1.Greeter
+
+---
+name: "a quoted service name keeps its quotes"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: "test.v1.Gr$0"
+operation: completion
+expect:
+  completionEdits:
+    - label: test.v1.Greeter
+      range: "9:16-26"
+      newText: test.v1.Greeter
+
+---
+name: "a method name replaces the value after the cursor too"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: He$0llo
+operation: completion
+expect:
+  completionEdits:
+    - label: Hello
+      range: "10:14-19"
+      newText: Hello
+
+---
+name: "message fields insert the key and leave out the fields already set"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          user_name: x
+          email: a@example.com
+          $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [address, tag]
+    excludes: [userName, user_name, email, phone]
+  completionEdits:
+    - label: address
+      range: "14:8-8"
+      newText: "address:"
+    - label: tag
+      range: "14:8-8"
+      newText: "tag:"
+
+---
+name: "message fields are filtered by the typed prefix"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          ad$0
+operation: completion
+expect:
+  completionLabels:
+    contains: [address, addresses]
+    excludes: [userName, tag]
+  completionEdits:
+    - label: address
+      range: "12:8-10"
+      newText: "address:"
+
+---
+name: "scalar fields insert a space after the colon"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          us$0
+operation: completion
+expect:
+  completionEdits:
+    - label: userName
+      range: "12:8-10"
+      newText: "userName: "

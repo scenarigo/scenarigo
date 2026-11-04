@@ -27,18 +27,21 @@ type lspTestCase struct {
 }
 
 type lspExpect struct {
-	CompletionLabels   *labelMatcher   `yaml:"completionLabels"`
-	DiagnosticMessages *messageMatcher `yaml:"diagnosticMessages"`
-	Diagnostics        []diagMatcher   `yaml:"diagnostics"`
-	DiagnosticCount    *int            `yaml:"diagnosticCount"`
-	DefinitionURI      *uriMatcher     `yaml:"definitionUri"`
-	DefinitionIsNull   *bool           `yaml:"definitionIsNull"`
-	HoverContains      []string        `yaml:"hoverContains"`
-	HoverIsNull        *bool           `yaml:"hoverIsNull"`
-	SymbolNames        *labelMatcher   `yaml:"symbolNames"`
-	SignatureLabel     *string         `yaml:"signatureLabel"`
-	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
-	ReferenceCount     *int            `yaml:"referenceCount"`
+	CompletionLabels *labelMatcher `yaml:"completionLabels"`
+	// CompletionEdits lists the text edits of completion items by label;
+	// the range is "line:start-end" (0-based, UTF-16).
+	CompletionEdits    []completionEdit `yaml:"completionEdits"`
+	DiagnosticMessages *messageMatcher  `yaml:"diagnosticMessages"`
+	Diagnostics        []diagMatcher    `yaml:"diagnostics"`
+	DiagnosticCount    *int             `yaml:"diagnosticCount"`
+	DefinitionURI      *uriMatcher      `yaml:"definitionUri"`
+	DefinitionIsNull   *bool            `yaml:"definitionIsNull"`
+	HoverContains      []string         `yaml:"hoverContains"`
+	HoverIsNull        *bool            `yaml:"hoverIsNull"`
+	SymbolNames        *labelMatcher    `yaml:"symbolNames"`
+	SignatureLabel     *string          `yaml:"signatureLabel"`
+	SignatureIsNull    *bool            `yaml:"signatureIsNull"`
+	ReferenceCount     *int             `yaml:"referenceCount"`
 	// RenameEdits lists the ranges a rename replaces in the document, as
 	// "line:start-end" (0-based, UTF-16), in document order.
 	RenameEdits  []string `yaml:"renameEdits"`
@@ -46,6 +49,12 @@ type lspExpect struct {
 	PrepareRange string   `yaml:"prepareRange"` // "line:start-end"
 	PrepareNull  bool     `yaml:"prepareIsNull"`
 	PrepareError string   `yaml:"prepareError"` // substring of the error message
+}
+
+type completionEdit struct {
+	Label   string `yaml:"label"`
+	Range   string `yaml:"range"`
+	NewText string `yaml:"newText"`
 }
 
 type labelMatcher struct {
@@ -217,6 +226,21 @@ func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 			if labels[exclude] {
 				t.Errorf("should not have %q in completions", exclude)
 			}
+		}
+	}
+	for _, want := range tc.Expect.CompletionEdits {
+		i := slices.IndexFunc(list.Items, func(item CompletionItem) bool { return item.Label == want.Label })
+		if i < 0 {
+			t.Errorf("expected %q in completions, got: %v", want.Label, labelList(list.Items))
+			continue
+		}
+		edit := list.Items[i].TextEdit
+		if edit == nil {
+			t.Errorf("completion %q has no text edit", want.Label)
+			continue
+		}
+		if r := formatLineRange(edit.Range); r != want.Range || edit.NewText != want.NewText {
+			t.Errorf("completion %q edits %s with %q, want %s with %q", want.Label, r, edit.NewText, want.Range, want.NewText)
 		}
 	}
 }
