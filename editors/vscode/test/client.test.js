@@ -4,13 +4,16 @@
 // command and a server that exits at once must each give one error and no
 // restarts; a setting change must start the server after a failed start;
 // quick setting changes must leave one server running; and restarts must
-// share one output channel. The fake binaries are shell scripts, so the
-// test does not run on Windows.
+// share one output channel. The Run command must save the file and run
+// `scenarigo run <file>` as a process, from the directory of the
+// configuration. The fake binaries are shell scripts, so the test does not
+// run on Windows.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const Module = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
+const { fileURLToPath, pathToFileURL } = require('node:url');
 
 if (process.platform === 'win32') {
   console.log('client test skipped on Windows');
@@ -65,6 +68,10 @@ const config = { path: path.join(tmp, 'missing', 'scenarigo') };
 const configListeners = [];
 const errors = [];
 let outputChannels = 0;
+const commands = {};
+const documents = [];
+const executed = [];
+let workspaceFolder;
 const any = (name) =>
   new Proxy(function () {}, {
     get: (_, prop) => (prop === 'then' ? undefined : prop === 'dispose' ? () => {} : any(`${name}.${String(prop)}`)),
@@ -87,12 +94,49 @@ class EventEmitter {
   fire() {}
   dispose() {}
 }
+class ProcessExecution {
+  constructor(process, args, options) {
+    Object.assign(this, { process, args, options });
+  }
+}
+class Task {
+  constructor(definition, scope, name, source, execution) {
+    Object.assign(this, { definition, scope, name, source, execution });
+  }
+}
+const Uri = {
+  parse: (s) => ({ scheme: new URL(s).protocol.slice(0, -1), fsPath: s.startsWith('file:') ? fileURLToPath(s) : '', toString: () => s }),
+};
 const withFallback = (target, name) => new Proxy(target, { get: (t, p) => (p in t ? t[p] : any(`${name}.${String(p)}`)) });
 const vscode = withFallback(
   {
     Disposable,
     EventEmitter,
+    ProcessExecution,
+    Task,
+    Uri,
+    TaskScope: { Global: 1, Workspace: 2 },
+    TaskRevealKind: { Always: 1, Silent: 2, Never: 3 },
+    TaskPanelKind: { Shared: 1, Dedicated: 2, New: 3 },
     version: '1.95.0',
+    commands: withFallback(
+      {
+        registerCommand: (name, handler) => {
+          commands[name] = handler;
+          return new Disposable();
+        },
+      },
+      'commands',
+    ),
+    tasks: withFallback(
+      {
+        executeTask: async (task) => {
+          executed.push(task);
+          return {};
+        },
+      },
+      'tasks',
+    ),
     workspace: withFallback(
       {
         getConfiguration: () => ({ get: (key) => config[key] }),
@@ -100,8 +144,12 @@ const vscode = withFallback(
           configListeners.push(listener);
           return new Disposable();
         },
-        workspaceFolders: undefined,
-        textDocuments: [],
+        get workspaceFolders() {
+          return workspaceFolder ? [workspaceFolder] : undefined;
+        },
+        getWorkspaceFolder: (uri) =>
+          workspaceFolder && uri.fsPath.startsWith(workspaceFolder.uri.fsPath + path.sep) ? workspaceFolder : undefined,
+        textDocuments: documents,
       },
       'workspace',
     ),
@@ -114,6 +162,7 @@ const vscode = withFallback(
           outputChannels++;
           return withFallback(outputChannel(), 'outputChannel');
         },
+        activeTextEditor: undefined,
       },
       'window',
     ),
@@ -256,6 +305,29 @@ async function main() {
   assert.equal(outputChannels, 1, 'each start made an output channel');
 
   assert.deepEqual(ownRejections().map(String), []);
+
+  // The Run command saves the file, then runs `scenarigo run <file>` as a
+  // process, without a shell to quote for, from the nearest directory with a
+  // scenarigo.yaml.
+  const project = path.join(tmp, 'ws', `it's "$HOME" 100% #1`);
+  const scenario = path.join(project, 'scenarios', 'a b.yaml');
+  fs.mkdirSync(path.dirname(scenario), { recursive: true });
+  fs.writeFileSync(path.join(project, 'scenarigo.yaml'), 'schemaVersion: config/v1\n');
+  fs.writeFileSync(scenario, 'schemaVersion: scenario/v1\n');
+  workspaceFolder = { uri: { fsPath: path.join(tmp, 'ws') }, name: 'ws', index: 0 };
+  const uri = pathToFileURL(scenario).href;
+  let saved = false;
+  documents.push({ uri: { toString: () => uri }, isDirty: true, save: async () => (saved = true) });
+  await commands['scenarigo.runScenario'](uri);
+  assert.ok(saved, 'the file was not saved');
+  assert.equal(executed.length, 1, 'no task was run');
+  const { execution, scope } = executed[0];
+  assert.ok(execution instanceof ProcessExecution, 'not run as a process');
+  assert.equal(execution.process, fakeServer);
+  assert.deepEqual(execution.args, ['run', scenario]);
+  assert.equal(execution.options.cwd, project);
+  assert.equal(scope, workspaceFolder);
+  assert.deepEqual(errors, []);
 
   // Deactivating stops it. VS Code disposes the subscriptions right after
   // calling deactivate, without waiting for it.

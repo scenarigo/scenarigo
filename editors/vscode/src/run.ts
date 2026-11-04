@@ -26,17 +26,3 @@ function isWithin(dir: string, root: string): boolean {
   const rel = path.relative(root, dir);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
-
-// quote quotes an argument for the shell of the platform.
-export function quote(arg: string, platform: string): string {
-  if (platform === 'win32') {
-    return `"${arg.replace(/"/g, '""')}"`;
-  }
-  return `'${arg.replace(/'/g, `'\\''`)}'`;
-}
-
-// runCommandLine returns the command line that runs a scenario file from a
-// directory.
-export function runCommandLine(binary: string, file: string, cwd: string, platform: string): string {
-  return `${quote(binary, platform)} run ${quote(path.relative(cwd, file) || file, platform)}`;
-}

@@ -139,7 +139,7 @@ func (s *Server) walkTemplates(doc *document, diags *[]Diagnostic, hooks templat
 			c.unresolved = true
 			c.walkYAML(v.entryValue(body, "protocols"))
 			c.unresolved = false
-		case "ytt/v1":
+		case yttSchemaVersion:
 			// File names only.
 		default:
 			s.checkScenario(c, body, config, docPath)

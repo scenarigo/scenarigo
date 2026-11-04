@@ -52,20 +52,33 @@ If you only want the LSP active for scenarigo-related YAML files, use `root_dir`
 
 #### Run lens
 
-The server shows a "Run" lens on scenario files. It names the client command `scenarigo.runScenario` with the file's URI, which Neovim does not know. To run the scenario in a terminal:
+The server shows a "Run" lens on scenario files. It names the client command `scenarigo.runScenario` with the file's URI, which Neovim does not know. To run the scenario in a terminal (Neovim 0.10 or later):
 
 ```lua
 vim.lsp.commands["scenarigo.runScenario"] = function(command)
-  local file = vim.uri_to_fname(command.arguments[1])
-  vim.cmd("botright split | terminal scenarigo run " .. vim.fn.shellescape(file))
+  local uri = command.arguments[1]
+  local file = vim.uri_to_fname(uri)
+  local bufnr = vim.uri_to_bufnr(uri)
+  if vim.api.nvim_buf_is_loaded(bufnr) then
+    vim.api.nvim_buf_call(bufnr, function() vim.cmd("silent update") end)
+  end
+  -- scenarigo run reads scenarigo.yaml from the current directory.
+  local cwd = vim.fs.root(file, "scenarigo.yaml") or vim.fs.dirname(file)
+  vim.cmd("botright new")
+  -- A list of arguments, not a command line: no shell, and no expansion of % or #.
+  if vim.fn.has("nvim-0.11") == 1 then
+    vim.fn.jobstart({ "scenarigo", "run", file }, { term = true, cwd = cwd })
+  else
+    vim.fn.termopen({ "scenarigo", "run", file }, { cwd = cwd })
+  end
 end
 vim.api.nvim_create_autocmd({ "BufEnter", "InsertLeave" }, {
-  pattern = "*.yaml",
+  pattern = { "*.yaml", "*.yml" },
   callback = function() vim.lsp.codelens.refresh({ bufnr = 0 }) end,
 })
 ```
 
-Run `:lua vim.lsp.codelens.run()` on the lens line. `scenarigo run` reads `scenarigo.yaml` from the current directory.
+Run `:lua vim.lsp.codelens.run()` on the lens line. The file is saved first, and `scenarigo run` runs from the nearest directory with a `scenarigo.yaml` above the file, whose configuration it reads, or else from the file's directory. The nvim e2e test runs this code.
 
 ### Vim (vim-lsp)
 
@@ -120,7 +133,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/references` | Supported | Find references to vars, secrets and steps, including names inside calls and operators (`size(vars.x)`, `vars.x ?? 0`) |
 | `textDocument/rename` | Supported | Rename a variable, secret or step id in one YAML document of a scenario: its declarations (top level, steps, `bind`) and the references `textDocument/references` finds. A rename that the server cannot complete is refused with the reason: the name is declared through an alias or merge key, used as an index (`vars["x"]`), or in a template the text scan cannot locate; it belongs to a configuration file or is also defined in `scenarigo.yaml`; the scenario includes another one (vars and secrets) or another scenario of the workspace includes it; there is no workspace root. The new name must be a template name (a letter first, then letters, digits, `-`, `_`) other than `nil`, `defined` and any spelling of `true`, `false` and `null`, and neither defined nor already used in the scenario or `scenarigo.yaml` |
 | `textDocument/prepareRename` | Supported | Selects the name under the cursor, or reports why it cannot be renamed |
-| `textDocument/codeLens` | Supported | A "Run" lens on the first `schemaVersion` line of a scenario file (not `scenarigo.yaml`), with the client command `scenarigo.runScenario` and the file's URI. The server never runs anything: the VS Code extension runs `scenarigo run <file>` in a terminal when the lens is clicked; other clients map the command themselves |
+| `textDocument/codeLens` | Supported | A "Run" lens on the top-level `schemaVersion` line of a file that `scenarigo run` accepts (`scenario/v1` or `ytt/v1`; not `scenarigo.yaml`, nor another tool's YAML with a `schemaVersion`), also when the file does not parse, with the client command `scenarigo.runScenario` and the file's URI. The server never runs anything: the VS Code extension runs `scenarigo run <file>` as a task when the lens is clicked; other clients map the command themselves (Neovim: see above) |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
 | `workspace/didChangeWatchedFiles` | Supported | A change on disk drops what the server derived from the file: the symbols of a plugin source directory, the include index entry of a scenario, and for a directory event everything under the directory; a proto file change drops the compiled proto files, which are also checked against the files they were compiled from before each use, so that changes nothing reports (an import outside the workspace folders, a moved directory) are seen too. Every change, `scenarigo.yaml` and proto files included, publishes the diagnostics of the open documents again. The watchers (`**/*.{yaml,yml}`, `**/*.go`, `**/*.proto`, and `**/*` for creations and deletions, which catches directories) are registered with `client/registerCapability` when the client supports dynamic registration, and the registration is replaced when folders change; plugin sources outside the workspace folders are not watched |

@@ -51,3 +51,39 @@ document: |
 operation: codeLens
 expect:
   codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a schemaVersion that scenarigo does not know gets no lens"
+document: |
+  schemaVersion: 2.2.0
+  metadata:
+    name: devfile
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "only a top-level schemaVersion counts"
+document: |
+  description: |
+    schemaVersion: config/v1
+  schemaVersion: scenario/v1
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["2:Run:scenarigo.runScenario"]
+---
+name: "a quoted schemaVersion with a comment"
+document: |
+  schemaVersion: "scenario/v1" # the version
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a file whose first document is a configuration gets no lens"
+document: |
+  schemaVersion: config/v1
+  ---
+  schemaVersion: scenario/v1
+operation: codeLens
+expect:
+  codeLenses: []

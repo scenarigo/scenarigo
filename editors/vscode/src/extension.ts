@@ -8,7 +8,7 @@ import {
   LanguageClient,
   LanguageClientOptions,
 } from 'vscode-languageclient/node';
-import { findRunDirectory, runCommandLine } from './run';
+import { findRunDirectory } from './run';
 import { checkLspCommand, expandHome, findExecutable } from './server';
 
 // The extension starts `scenarigo lsp` for YAML files. The server stays
@@ -125,26 +125,44 @@ async function stopClient(): Promise<void> {
   }
 }
 
-// runScenario runs `scenarigo run <file>` in a terminal. The language server
+// runScenario runs `scenarigo run <file>` as a task. The language server
 // shows it as the Run lens of a scenario file; it runs only when the user
-// clicks the lens or calls the command.
+// clicks the lens or calls the command. The task runs the binary as a
+// process, with the file as an argument: there is no shell to quote for,
+// whatever the user's shell is, and each run gets its own directory.
 async function runScenario(uri?: string): Promise<void> {
   const target = uri ? vscode.Uri.parse(uri) : vscode.window.activeTextEditor?.document.uri;
   if (!target || target.scheme !== 'file') {
     return;
   }
   const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === target.toString());
-  if (doc?.isDirty) {
-    await doc.save();
+  if (doc?.isDirty && !(await doc.save())) {
+    return;
   }
-  const folder = vscode.workspace.getWorkspaceFolder(target)?.uri.fsPath;
-  const cwd = findRunDirectory(target.fsPath, folder, fs.existsSync);
-  const name = `scenarigo: ${path.basename(cwd)}`;
-  const terminal =
-    vscode.window.terminals.find((t) => t.name === name && (t.creationOptions as vscode.TerminalOptions).cwd === cwd) ??
-    vscode.window.createTerminal({ name, cwd });
-  terminal.show(true);
-  terminal.sendText(runCommandLine(configuredPath(), target.fsPath, cwd, process.platform));
+  const configured = configuredPath();
+  const command = findExecutable(expandHome(configured));
+  if (command === undefined) {
+    void vscode.window.showErrorMessage(
+      `Scenarigo: cannot find "${configured}". Set scenarigo.path to the absolute path of the scenarigo binary, or put scenarigo on the PATH.`,
+    );
+    return;
+  }
+  const folder = vscode.workspace.getWorkspaceFolder(target);
+  if (folder === undefined && vscode.workspace.workspaceFolders === undefined) {
+    void vscode.window.showErrorMessage('Scenarigo: open a folder to run scenarios; VS Code runs tasks in a workspace.');
+    return;
+  }
+  // scenarigo run reads scenarigo.yaml from the current directory.
+  const cwd = findRunDirectory(target.fsPath, folder?.uri.fsPath, fs.existsSync);
+  const task = new vscode.Task(
+    { type: 'scenarigo', file: target.fsPath },
+    folder ?? vscode.TaskScope.Workspace,
+    `run ${path.basename(target.fsPath)}`,
+    'scenarigo',
+    new vscode.ProcessExecution(command, ['run', target.fsPath], { cwd }),
+  );
+  task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, clear: true };
+  await vscode.tasks.executeTask(task);
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {

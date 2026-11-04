@@ -165,29 +165,6 @@ end, bufnr)
 vim.wait(5000, function() return hover_done end, 100)
 record("hover", hover_ok, hover_detail)
 
--- Test: Code lens, and the client command it names, as the README shows it.
-local lens_uri = nil
-vim.lsp.commands["scenarigo.runScenario"] = function(command)
-  lens_uri = command.arguments[1]
-end
-local lens_done = false
-local lens_ok = false
-local lens_detail = ""
-client:request("textDocument/codeLens", { textDocument = vim.lsp.util.make_text_document_params(0) }, function(err, result)
-  if err then
-    lens_detail = "error: " .. vim.inspect(err)
-  elseif not result or #result ~= 1 or not result[1].command then
-    lens_detail = "lenses: " .. vim.inspect(result)
-  else
-    client:exec_cmd(result[1].command, { bufnr = 0 })
-    lens_ok = result[1].command.title == "Run" and lens_uri == vim.uri_from_bufnr(0)
-    lens_detail = "title: " .. result[1].command.title .. ", uri: " .. tostring(lens_uri)
-  end
-  lens_done = true
-end, 0)
-vim.wait(5000, function() return lens_done end, 100)
-record("codelens", lens_ok, lens_detail)
-
 -- Test: Diagnostics for valid document (should be 0).
 -- Wait a moment for initial diagnostics to settle.
 vim.wait(1000, function()
@@ -218,6 +195,57 @@ for _, d in ipairs(diags_after) do
 end
 record("diagnostics_after_edit", found_bad_key,
   "count: " .. #diags_after .. ", messages: " .. table.concat(messages, "; "))
+
+-- Test: The Run lens, with the client command of the README
+-- ($SCENARIGO_RUN_LENS) and a fake scenarigo first on the PATH that writes
+-- its directory and arguments to $SCENARIGO_RAN. The scenario has unsaved
+-- changes, and its path has characters that Vim expands in commands.
+do
+  local uv = vim.uv or vim.loop
+  local ok, err = pcall(dofile, vim.env.SCENARIGO_RUN_LENS)
+  if not ok then
+    record("codelens", false, "README command: " .. tostring(err))
+  else
+    local run_dir = workspace_dir .. "/c#d"
+    local run_file = run_dir .. "/100%/run.yaml"
+    vim.fn.mkdir(run_dir .. "/100%", "p")
+    vim.fn.writefile({ "schemaVersion: config/v1" }, run_dir .. "/scenarigo.yaml")
+    vim.fn.writefile({ "schemaVersion: scenario/v1", "title: saved", "steps: []" }, run_file)
+    vim.cmd("edit " .. vim.fn.fnameescape(run_file))
+    local run_buf = vim.api.nvim_get_current_buf()
+    vim.lsp.buf_attach_client(run_buf, client_id)
+    vim.api.nvim_buf_set_lines(run_buf, 1, 2, false, { "title: edited" })
+
+    local lens_done, lens_detail = false, ""
+    client:request("textDocument/codeLens", { textDocument = { uri = vim.uri_from_bufnr(run_buf) } }, function(lens_err, result)
+      if lens_err then
+        lens_detail = "error: " .. vim.inspect(lens_err)
+      elseif not result or #result ~= 1 or not result[1].command or result[1].command.title ~= "Run" then
+        lens_detail = "lenses: " .. vim.inspect(result)
+      else
+        client:exec_cmd(result[1].command, { bufnr = run_buf })
+      end
+      lens_done = true
+    end, run_buf)
+    vim.wait(5000, function() return lens_done end, 100)
+    local ran = vim.wait(5000, function() return uv.fs_stat(vim.env.SCENARIGO_RAN) ~= nil end, 100)
+    if lens_detail == "" and not ran then
+      lens_detail = "scenarigo did not run"
+    end
+    if lens_detail == "" then
+      vim.wait(1000, function() return #vim.fn.readfile(vim.env.SCENARIGO_RAN) >= 3 end, 50)
+      local got = vim.fn.readfile(vim.env.SCENARIGO_RAN)
+      local saved = vim.fn.readfile(run_file)
+      local want = { run_dir, "run", run_file }
+      if not vim.deep_equal(got, want) then
+        lens_detail = "ran " .. vim.inspect(got) .. ", want " .. vim.inspect(want)
+      elseif saved[2] ~= "title: edited" then
+        lens_detail = "the buffer was not saved: " .. vim.inspect(saved)
+      end
+    end
+    record("codelens", lens_detail == "", lens_detail)
+  end
+end
 
 -- Done.
 vim.lsp.stop_client(client_id)

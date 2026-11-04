@@ -75,7 +75,21 @@
           "when": "editorLangId == yaml"
         }
       ]
-    }
+    },
+    "taskDefinitions": [
+      {
+        "type": "scenarigo",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "The scenario file to run."
+          }
+        }
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && node -e \"require('fs').copyFileSync('../../LICENSE', 'LICENSE')\"",

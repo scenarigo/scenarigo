@@ -151,7 +151,7 @@ func (s *Server) planRename(doc *document, pos Position) (*renamePlan, error) {
 	v := newYAMLView(doc.Parsed.File)
 	lines := newLineIndex(doc.Text)
 	d := renameDocAt(doc, v, pos.Line)
-	if d.body == nil || d.version == "ytt/v1" {
+	if d.body == nil || d.version == yttSchemaVersion {
 		return nil, nil //nolint:nilnil // nothing to rename
 	}
 	sym, ok := renameTarget(doc, v, lines, d, pos)
