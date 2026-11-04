@@ -114,9 +114,9 @@ vim.api.nvim_create_autocmd("FileType", {
 | YAML syntax errors | Supported | Reports parse failures |
 | Type checking | Supported | Type mismatches (string/int/bool/object/array); template expressions are accepted |
 | Required field validation | Supported | Warns when required fields are missing (e.g., `method`/`url` in HTTP request) |
-| Template syntax errors | Supported | Parses `{{ }}` with scenarigo's own template parser and reports an error where `scenarigo run` would fail; only fields scenarigo evaluates are checked (`vars`, `secrets`, `anchors`, and the steps' `vars`, `secrets`, `if`, `request`, `expect`, `bind`, `ref`) |
-| Template names | Supported | Warns on unknown root names (other than `ctx`, `vars`, `secrets`, `plugins`, `steps`, `request`, `response`, `env`, `assert`, `$` and the built-in functions), unknown `assert.x`, `steps.<id>` without a step of that id in the scenario, and `plugins.<name>` not declared in the file or `scenarigo.yaml`; an undefined `vars.x`/`secrets.x` is only information because a plugin setup can add variables. Names inside `defined()` and on the left of `??` are not reported |
-| ytt templates | Supported | `ytt/v1` documents have their own schema; a null value followed by a `#@` annotation (`title: #@ params.title`) is filled in by ytt and not type-checked |
+| Template syntax errors | Supported | Parses `{{ }}` with scenarigo's own template parser and reports an error where `scenarigo run` would fail, including an operand the parser leaves empty (`{{a ==}}`); only fields scenarigo evaluates are checked (`vars` and `secrets` of a scenario, the steps' `if`, `vars`, `secrets`, `request`, `expect`, `bind`, `ref`, and `vars`, `secrets`, `protocols` of `scenarigo.yaml`) |
+| Template names | Supported | Warns on unknown root names (other than `ctx`, `vars`, `secrets`, `plugins`, `steps`, `request`, `response`, `env`, `assert`, `$` and the built-in functions), unknown `assert.x`, `steps.<id>` without a step of that id that has run before, and `plugins.<name>` not declared in the file, `scenarigo.yaml` or a scenario that includes the file; an undefined `vars.x`/`secrets.x` is only information because a plugin setup can add variables. Names are checked in scenarigo's evaluation order (a step's `if` and `vars` cannot use its own `vars`; `bind` and ids are visible to later steps), aliases and merge keys are resolved, and the `bind` of an `include` step sees the included scenario's steps and vars. The scenarios that include a file (found by one walk of the workspace, then updated from the open buffers) lend it their plugins and vars, including the vars of the include step. The `protocols` options of `scenarigo.yaml` are evaluated in each step's context, so only their syntax and root names are checked. A path directly on the left of `??` or inside `defined()` may be missing; `defined()` of anything else is an error |
+| ytt templates | Supported | `ytt/v1` documents have their own schema, also next to scenario documents in one file; a null value followed by a `#@` annotation (`title: #@ params.title`) is filled in by ytt and not type-checked |
 
 ### Other Features
 
@@ -165,6 +165,8 @@ internal/lsp/
   position.go           # Column unit conversions (bytes, runes, UTF-16)
   uri.go                # file URI <-> path conversions
   template_diagnostics.go # Template expression diagnostics ({{ }})
+  yamlview.go           # Alias and merge key resolution
+  include.go            # Included and including scenarios
   ytt.go                # ytt annotation handling
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)

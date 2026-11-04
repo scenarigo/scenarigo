@@ -532,7 +532,10 @@ func TestEditorSession_TemplateTriggerCharacters(t *testing.T) {
 // TestEditorSession_ExamplesHaveNoErrorsOrWarnings opens every YAML file under
 // examples/ with its example directory as the workspace root, so that
 // scenarigo.yaml is found as in a real session, and requires that none of
-// these working scenarios gets an error or a warning.
+// these working scenarios gets an error or a warning. scenarigo reads a file
+// without schemaVersion as scenario/v1 while the server stays silent on it,
+// so such a scenario is checked with the version added; ytt data files
+// (*.ytt.yaml without schemaVersion) are not scenarios and are skipped.
 func TestEditorSession_ExamplesHaveNoErrorsOrWarnings(t *testing.T) {
 	examplesDir := filepath.Join("..", "..", "examples")
 	configs, err := filepath.Glob(filepath.Join(examplesDir, "*", "scenarigo.yaml"))
@@ -559,12 +562,21 @@ func TestEditorSession_ExamplesHaveNoErrorsOrWarnings(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				diags := client.openDocumentAndGetDiagnostics(pathToURI(path), string(data))
-				opened++
 				rel, _ := filepath.Rel(dir, path)
+				text, added := string(data), 0
+				if !strings.Contains(text, "schemaVersion:") {
+					if strings.HasSuffix(path, ".ytt.yaml") {
+						t.Logf("%s: ytt data file, skipped", rel)
+						return nil
+					}
+					text, added = "schemaVersion: scenario/v1\n"+text, 1
+					t.Logf("%s: checked with schemaVersion: scenario/v1 added", rel)
+				}
+				diags := client.openDocumentAndGetDiagnostics(pathToURI(path), text)
+				opened++
 				for _, d := range diags.Diagnostics {
 					if d.Severity == DiagnosticSeverityError || d.Severity == DiagnosticSeverityWarning {
-						t.Errorf("%s:%d:%d: severity %d: %s", rel, d.Range.Start.Line+1, d.Range.Start.Character+1, d.Severity, d.Message)
+						t.Errorf("%s:%d:%d: severity %d: %s", rel, d.Range.Start.Line+1-added, d.Range.Start.Character+1, d.Severity, d.Message)
 					}
 				}
 				return nil
@@ -576,5 +588,100 @@ func TestEditorSession_ExamplesHaveNoErrorsOrWarnings(t *testing.T) {
 	}
 	if opened == 0 {
 		t.Fatal("no example files were opened")
+	}
+}
+
+// TestEditorSession_ConfigChangeRepublishes checks that editing scenarigo.yaml
+// updates the diagnostics of the open scenarios that use its names.
+func TestEditorSession_ConfigChangeRepublishes(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	scenario := file("test.yaml")
+	diags := client.openDocumentAndGetDiagnostics(scenario, "schemaVersion: scenario/v1\nsteps:\n  - protocol: http\n    request:\n      method: GET\n      url: '{{vars.host}}'\n")
+	if len(diags.Diagnostics) != 1 {
+		t.Fatalf("expected the undefined vars.host, got %v", diagMessages(diags.Diagnostics))
+	}
+
+	config := file("scenarigo.yaml")
+	client.sendNotification("textDocument/didOpen", DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{URI: config, LanguageID: "yaml", Version: 1, Text: "schemaVersion: config/v1\nvars:\n  host: localhost\n"},
+	})
+	// Collect the notifications that arrive before the response to a request.
+	client.sendRequest(2, "textDocument/hover", HoverParams{TextDocument: TextDocumentIdentifier{URI: config}})
+	got := map[string]PublishDiagnosticsParams{}
+	for {
+		raw := client.readMessage()
+		if !isNotification(raw) {
+			break
+		}
+		var n struct {
+			Params PublishDiagnosticsParams `json:"params"`
+		}
+		if err := json.Unmarshal(raw, &n); err != nil {
+			t.Fatal(err)
+		}
+		got[n.Params.URI] = n.Params
+	}
+	if p, ok := got[scenario]; !ok {
+		t.Fatalf("diagnostics of %s were not published again; got %v", scenario, got)
+	} else if len(p.Diagnostics) != 0 {
+		t.Errorf("expected no diagnostics once scenarigo.yaml defines vars.host, got %v", diagMessages(p.Diagnostics))
+	}
+}
+
+// TestEditorSession_IncludeIndex checks that the scenarios including a file
+// come from one walk of the workspace, updated from the open buffers.
+func TestEditorSession_IncludeIndex(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	child := file("child.yaml")
+	childText := "schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      client: '{{plugins.p.Client}}'\n"
+	diags := client.openDocumentAndGetDiagnostics(child, childText)
+	if len(diags.Diagnostics) != 1 {
+		t.Fatalf("expected the undeclared plugin, got %v", diagMessages(diags.Diagnostics))
+	}
+
+	// A file written on disk after the walk is not seen until it is opened.
+	parentText := "schemaVersion: scenario/v1\nplugins:\n  p: p.so\nsteps:\n  - include: child.yaml\n"
+	if err := os.WriteFile(uriToPath(file("parent.yaml")), []byte(parentText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	change := func(version int) PublishDiagnosticsParams {
+		t.Helper()
+		client.sendNotification("textDocument/didChange", DidChangeTextDocumentParams{
+			TextDocument:   VersionedTextDocumentIdentifier{TextDocumentIdentifier: TextDocumentIdentifier{URI: child}, Version: version},
+			ContentChanges: []TextDocumentContentChangeEvent{{Text: childText}},
+		})
+		var n struct {
+			Params PublishDiagnosticsParams `json:"params"`
+		}
+		if err := json.Unmarshal(client.readMessage(), &n); err != nil {
+			t.Fatal(err)
+		}
+		if n.Params.URI != child {
+			t.Fatalf("expected diagnostics for %s, got %s", child, n.Params.URI)
+		}
+		return n.Params
+	}
+	if p := change(2); len(p.Diagnostics) != 1 {
+		t.Errorf("the workspace was walked again on a change: got %v", diagMessages(p.Diagnostics))
+	}
+	client.openDocument(file("parent.yaml"), parentText)
+	if p := change(3); len(p.Diagnostics) != 0 {
+		t.Errorf("expected no diagnostics once the including buffer is open, got %v", diagMessages(p.Diagnostics))
+	}
+
+	// Unsaved edits of a closed buffer are dropped: the file on disk counts again.
+	client.changeDocument(file("parent.yaml"), 2, "schemaVersion: scenario/v1\nsteps: []\n")
+	if p := change(4); len(p.Diagnostics) != 1 {
+		t.Errorf("expected the undeclared plugin while the buffer drops the include, got %v", diagMessages(p.Diagnostics))
+	}
+	client.closeDocument(file("parent.yaml"))
+	if p := change(5); len(p.Diagnostics) != 0 {
+		t.Errorf("expected the file on disk to count after the buffer is closed, got %v", diagMessages(p.Diagnostics))
 	}
 }

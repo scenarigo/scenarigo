@@ -92,6 +92,9 @@ func (c *testClient) readMessage() json.RawMessage {
 func (c *testClient) readResponse() json.RawMessage {
 	c.t.Helper()
 	raw := c.readMessage()
+	for isNotification(raw) {
+		raw = c.readMessage() // e.g. diagnostics republished for other documents
+	}
 	var resp Response
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		c.t.Fatalf("unmarshal response: %v", err)
@@ -104,6 +107,16 @@ func (c *testClient) readResponse() json.RawMessage {
 		c.t.Fatalf("marshal result: %v", err)
 	}
 	return b
+}
+
+// isNotification reports whether a message is a notification, which has a
+// method and no id.
+func isNotification(raw json.RawMessage) bool {
+	var msg struct {
+		ID     *json.RawMessage `json:"id"`
+		Method string           `json:"method"`
+	}
+	return json.Unmarshal(raw, &msg) == nil && msg.ID == nil && msg.Method != ""
 }
 
 func (c *testClient) openDocument(uri, text string) {

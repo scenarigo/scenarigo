@@ -82,7 +82,7 @@ operation: diagnostics
 expect:
   diagnosticCount: 1
   diagnostics:
-    - message: 'no step has the id "lgoin" in this scenario'
+    - message: 'no step with the id "lgoin" has run before this point of the scenario'
       severity: 2
       startLine: 7
       startChar: 17
@@ -107,7 +107,7 @@ document: |
 operation: diagnostics
 expect:
   diagnostics:
-    - message: 'no step has the id "first" in this scenario'
+    - message: 'no step with the id "first" has run before this point of the scenario'
       severity: 2
       startLine: 9
       startChar: 17
@@ -126,7 +126,7 @@ operation: diagnostics
 expect:
   diagnosticCount: 1
   diagnostics:
-    - message: 'plugin "nope" is not declared in this file or scenarigo.yaml'
+    - message: 'plugin "nope" is not declared in this file, scenarigo.yaml or a scenario that includes this file'
       severity: 2
       startLine: 7
       startChar: 25
@@ -144,13 +144,13 @@ document: |
 operation: diagnostics
 expect:
   diagnostics:
-    - message: 'vars.host is not defined in this file or scenarigo.yaml (a plugin setup may define it)'
+    - message: 'vars.host is not defined before this point (a plugin setup may define it)'
       severity: 3
       startLine: 5
       startChar: 26
       endLine: 5
       endChar: 30
-    - message: 'secrets.token is not defined in this file or scenarigo.yaml (a plugin setup may define it)'
+    - message: 'secrets.token is not defined before this point (a plugin setup may define it)'
       severity: 3
       startLine: 5
       startChar: 43
@@ -255,7 +255,7 @@ document: |
 operation: diagnostics
 expect:
   diagnostics:
-    - message: 'vars.name is not defined in this file or scenarigo.yaml (a plugin setup may define it)'
+    - message: 'vars.name is not defined before this point (a plugin setup may define it)'
       startLine: 7
       startChar: 26
       endChar: 30

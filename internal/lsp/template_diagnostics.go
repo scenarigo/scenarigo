@@ -20,10 +20,13 @@ import (
 //
 // Template expressions ({{ }}) are parsed with scenarigo's own template
 // parser, so a syntax error is reported exactly where "scenarigo run" would
-// fail. Names are then checked against what the file and scenarigo.yaml
-// define. Values that only exist at run time get a lower severity: a plugin's
-// setup function can add variables with ctx.WithVars, so an undefined
-// vars.x or secrets.x is only information.
+// fail. Names are then checked against what is defined at the point where
+// scenarigo evaluates the expression: the vars of a scenario are evaluated
+// before they are added, a step's if and vars before the step's vars, and a
+// step's bind and id are visible to the following steps only. Values that
+// only exist at run time get a lower severity: a plugin's setup function can
+// add variables with ctx.WithVars, so an undefined vars.x or secrets.x is
+// only information.
 
 // templateContextRoots are the names the template context resolves
 // (context/extract.go).
@@ -37,15 +40,32 @@ var templateBuiltins = []string{"size", "type", "any", "int", "uint", "float", "
 const templateActualValue = "$"
 
 // Fields whose string values scenarigo evaluates as templates.
-var (
-	scenarioTemplateFields = []string{nsVars, nsSecrets, "anchors"}
-	stepTemplateFields     = []string{nsVars, nsSecrets, "if", "request", "expect", "bind", "ref"}
-	configTemplateFields   = []string{nsVars, nsSecrets}
-)
+var stepEvaluatedFields = []string{"request", "expect", "ref"}
 
-// templateDefinitions holds the names a YAML document can refer to.
+// templateDefinitions holds the names an expression can refer to.
 type templateDefinitions struct {
 	vars, secrets, steps, plugins map[string]bool
+}
+
+func newTemplateDefinitions() templateDefinitions {
+	return templateDefinitions{vars: map[string]bool{}, secrets: map[string]bool{}, steps: map[string]bool{}, plugins: map[string]bool{}}
+}
+
+func (d templateDefinitions) clone() templateDefinitions {
+	return templateDefinitions{vars: maps.Clone(d.vars), secrets: maps.Clone(d.secrets), steps: maps.Clone(d.steps), plugins: maps.Clone(d.plugins)}
+}
+
+func (d templateDefinitions) add(set map[string]bool, names []string) {
+	for _, n := range names {
+		set[n] = true
+	}
+}
+
+func (d templateDefinitions) merge(o templateDefinitions) {
+	maps.Copy(d.vars, o.vars)
+	maps.Copy(d.secrets, o.secrets)
+	maps.Copy(d.steps, o.steps)
+	maps.Copy(d.plugins, o.plugins)
 }
 
 func (s *Server) templateDiagnostics(doc *document) []Diagnostic {
@@ -53,148 +73,118 @@ func (s *Server) templateDiagnostics(doc *document) []Diagnostic {
 		// The positions of a cached AST do not match the edited text.
 		return nil
 	}
-	lines := newLineIndex(doc.Text)
-	config := s.configDefinitions()
 	var diags []Diagnostic
+	v := newYAMLView(doc.Parsed.File)
+	docPath := uriToPath(doc.URI)
+	c := &templateChecker{text: doc.Text, lines: newLineIndex(doc.Text), view: v, diags: &diags}
+	var includers *templateDefinitions
+	c.includers = func() templateDefinitions {
+		if includers == nil {
+			names := s.includerNames(docPath)
+			includers = &names
+		}
+		return *includers
+	}
+	config := s.configDefinitions()
 	for _, d := range doc.Parsed.File.Docs {
-		body := mappingEntries(d.Body)
+		body := v.entries(d.Body)
 		if body == nil {
 			continue
 		}
-		var roots []ast.Node
-		defs := config.clone()
-		// ytt/v1 documents hold file names only and fall through to the
-		// scenario fields, none of which they have.
-		switch stringValue(entryValue(body, "schemaVersion")) {
+		switch v.stringValue(v.entryValue(body, "schemaVersion")) {
 		case "config/v1":
-			defs.addKeys(defs.vars, entryValue(body, nsVars))
-			defs.addKeys(defs.secrets, entryValue(body, nsSecrets))
-			roots = entryValues(body, configTemplateFields)
+			c.defs = config
+			c.walkYAML(v.entryValue(body, nsVars))
+			c.walkYAML(v.entryValue(body, nsSecrets))
+			// The protocol options are evaluated for each request, in the
+			// context of the step: names are not known here.
+			c.unresolved = true
+			c.walkYAML(v.entryValue(body, "protocols"))
+			c.unresolved = false
+		case "ytt/v1":
+			// File names only.
 		default:
-			defs.addScenario(body)
-			roots = entryValues(body, scenarioTemplateFields)
-			if steps, ok := unwrap(entryValue(body, nsSteps)).(*ast.SequenceNode); ok {
-				for _, step := range steps.Values {
-					roots = append(roots, entryValues(mappingEntries(step), stepTemplateFields)...)
-				}
-			}
-		}
-		c := &templateChecker{text: doc.Text, lines: lines, defs: defs, diags: &diags}
-		for _, root := range roots {
-			c.walkYAML(root)
+			s.checkScenario(c, body, config, docPath)
 		}
 	}
-	return diags
+	// A step that is anchored and aliased is checked twice.
+	slices.SortStableFunc(diags, compareDiagnostics)
+	return slices.Compact(diags)
+}
+
+func compareDiagnostics(a, b Diagnostic) int {
+	if a.Range.Start.Line != b.Range.Start.Line {
+		return a.Range.Start.Line - b.Range.Start.Line
+	}
+	if a.Range.Start.Character != b.Range.Start.Character {
+		return a.Range.Start.Character - b.Range.Start.Character
+	}
+	return strings.Compare(a.Message, b.Message)
+}
+
+// checkScenario checks a scenario document in the order scenarigo evaluates
+// it (scenario.go and step.go).
+func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode, config templateDefinitions, docPath string) {
+	v := c.view
+	defs := config.clone()
+	defs.add(defs.plugins, v.keys(v.entryValue(body, nsPlugins))) // opened first
+	c.defs = defs
+	c.walkYAML(v.entryValue(body, nsVars))
+	defs.add(defs.vars, v.keys(v.entryValue(body, nsVars)))
+	c.walkYAML(v.entryValue(body, nsSecrets))
+	defs.add(defs.secrets, v.keys(v.entryValue(body, nsSecrets)))
+
+	for _, step := range v.sequence(v.entryValue(body, nsSteps)) {
+		entries := v.entries(step)
+		stepDefs := defs.clone()
+		c.defs = stepDefs
+		c.walkYAML(v.entryValue(entries, "if"))
+		c.walkYAML(v.entryValue(entries, nsVars))
+		stepDefs.add(stepDefs.vars, v.keys(v.entryValue(entries, nsVars)))
+		c.walkYAML(v.entryValue(entries, nsSecrets))
+		stepDefs.add(stepDefs.secrets, v.keys(v.entryValue(entries, nsSecrets)))
+		for _, n := range v.entryValues(entries, stepEvaluatedFields) {
+			c.walkYAML(n)
+		}
+
+		// The bind of an include step reads the final context of the
+		// included scenario: its steps instead of these ones, and its vars
+		// on top of these.
+		bind := v.entryValue(entries, "bind")
+		if include := v.stringValue(v.entryValue(entries, "include")); include != "" {
+			bindDefs := stepDefs.clone()
+			included, ok := templateDefinitions{}, false
+			if docPath != "" {
+				included, ok = s.scenarioNames(includedPath(docPath, include))
+			}
+			bindDefs.steps = included.steps
+			bindDefs.merge(templateDefinitions{vars: included.vars, secrets: included.secrets, steps: map[string]bool{}, plugins: map[string]bool{}})
+			c.defs = bindDefs
+			c.unresolved = !ok
+		}
+		c.walkYAML(bind)
+		c.unresolved = false
+
+		bindEntries := v.entries(bind)
+		defs.add(defs.vars, v.keys(v.entryValue(bindEntries, nsVars)))
+		defs.add(defs.secrets, v.keys(v.entryValue(bindEntries, nsSecrets)))
+		if id := v.stringValue(v.entryValue(entries, "id")); id != "" {
+			defs.steps[id] = true
+		}
+	}
 }
 
 // configDefinitions returns the names scenarigo.yaml defines.
 func (s *Server) configDefinitions() templateDefinitions {
-	defs := templateDefinitions{vars: map[string]bool{}, secrets: map[string]bool{}, steps: map[string]bool{}, plugins: map[string]bool{}}
+	defs := newTemplateDefinitions()
 	configText, _, ok := s.readConfigText()
 	if !ok {
 		return defs
 	}
-	for _, block := range []struct {
-		name string
-		set  map[string]bool
-	}{{nsVars, defs.vars}, {nsSecrets, defs.secrets}, {nsPlugins, defs.plugins}} {
-		for _, key := range extractBlockKeys(configText, block.name) {
-			block.set[key] = true
-		}
-	}
+	defs.add(defs.vars, extractBlockKeys(configText, nsVars))
+	defs.add(defs.secrets, extractBlockKeys(configText, nsSecrets))
+	defs.add(defs.plugins, extractBlockKeys(configText, nsPlugins))
 	return defs
-}
-
-func (d templateDefinitions) clone() templateDefinitions {
-	return templateDefinitions{vars: cloneSet(d.vars), secrets: cloneSet(d.secrets), steps: cloneSet(d.steps), plugins: cloneSet(d.plugins)}
-}
-
-func cloneSet(m map[string]bool) map[string]bool {
-	out := make(map[string]bool, len(m))
-	maps.Copy(out, m)
-	return out
-}
-
-// addScenario adds the names a scenario document defines: its vars, secrets
-// and plugins, and the ids, vars, secrets and bound values of its steps.
-func (d templateDefinitions) addScenario(body []*ast.MappingValueNode) {
-	d.addKeys(d.vars, entryValue(body, nsVars))
-	d.addKeys(d.secrets, entryValue(body, nsSecrets))
-	d.addKeys(d.plugins, entryValue(body, nsPlugins))
-	steps, ok := unwrap(entryValue(body, nsSteps)).(*ast.SequenceNode)
-	if !ok {
-		return
-	}
-	for _, item := range steps.Values {
-		step := mappingEntries(item)
-		if id := stringValue(entryValue(step, "id")); id != "" {
-			d.steps[id] = true
-		}
-		d.addKeys(d.vars, entryValue(step, nsVars))
-		d.addKeys(d.secrets, entryValue(step, nsSecrets))
-		bind := mappingEntries(entryValue(step, "bind"))
-		d.addKeys(d.vars, entryValue(bind, nsVars))
-		d.addKeys(d.secrets, entryValue(bind, nsSecrets))
-	}
-}
-
-func (d templateDefinitions) addKeys(set map[string]bool, node ast.Node) {
-	for _, mv := range mappingEntries(node) {
-		if mv.Key != nil {
-			set[mv.Key.String()] = true
-		}
-	}
-}
-
-// unwrap returns the node behind anchors and tags.
-func unwrap(node ast.Node) ast.Node {
-	for {
-		switch n := node.(type) {
-		case *ast.AnchorNode:
-			node = n.Value
-		case *ast.TagNode:
-			node = n.Value
-		default:
-			return node
-		}
-	}
-}
-
-// mappingEntries returns the entries of a mapping node, or nil.
-func mappingEntries(node ast.Node) []*ast.MappingValueNode {
-	switch n := unwrap(node).(type) {
-	case *ast.MappingNode:
-		return n.Values
-	case *ast.MappingValueNode:
-		return []*ast.MappingValueNode{n}
-	}
-	return nil
-}
-
-func entryValue(entries []*ast.MappingValueNode, key string) ast.Node {
-	for _, mv := range entries {
-		if mv.Key != nil && mv.Key.String() == key {
-			return mv.Value
-		}
-	}
-	return nil
-}
-
-func entryValues(entries []*ast.MappingValueNode, keys []string) []ast.Node {
-	var out []ast.Node
-	for _, mv := range entries {
-		if mv.Key != nil && slices.Contains(keys, mv.Key.String()) && mv.Value != nil {
-			out = append(out, mv.Value)
-		}
-	}
-	return out
-}
-
-func stringValue(node ast.Node) string {
-	if s, ok := unwrap(node).(*ast.StringNode); ok {
-		return s.Value
-	}
-	return ""
 }
 
 // templateChecker reports the diagnostics of the template strings in a YAML
@@ -202,12 +192,26 @@ func stringValue(node ast.Node) string {
 type templateChecker struct {
 	text  string
 	lines lineIndex
+	view  *yamlView
 	defs  templateDefinitions
 	diags *[]Diagnostic
+	// includers returns the names the scenarios that include this file
+	// define; it is called only for a name that is not defined otherwise.
+	includers func() templateDefinitions
+	// unresolved is set where the names come from a file that cannot be
+	// read, so that undefined names are not reported.
+	unresolved bool
 }
 
+// walkYAML checks the strings of a YAML subtree. Aliases are not followed:
+// the anchored strings are checked where the anchor is, if at all, so that
+// an anchor used twice is not reported twice.
 func (c *templateChecker) walkYAML(node ast.Node) {
-	switch n := unwrap(node).(type) {
+	switch n := node.(type) {
+	case *ast.AnchorNode:
+		c.walkYAML(n.Value)
+	case *ast.TagNode:
+		c.walkYAML(n.Value)
 	case *ast.MappingNode:
 		for _, mv := range n.Values {
 			c.walkYAML(mv)
@@ -274,38 +278,74 @@ func parseErrorPosition(err error) (int, string) {
 	return 0, text
 }
 
-// walkExpr checks the names used in expr. optional is set inside defined()
-// and on the left of ??, where a missing value is expected.
+// walkExpr checks the names used in expr. optional is set for a path that
+// ?? or defined() absorbs when it is missing: at run time they do so only
+// for an identifier, a selector or an index directly on their left or in
+// their argument (template.go).
 func (c *templateChecker) walkExpr(expr tmplast.Expr, m valueMap, optional bool) {
 	switch e := expr.(type) {
-	case *tmplast.Ident, *tmplast.SelectorExpr:
+	case *tmplast.Ident, *tmplast.SelectorExpr, *tmplast.IndexExpr:
 		c.checkPath(expr, m, optional)
-	case *tmplast.IndexExpr:
-		c.checkPath(e, m, optional)
 	case *tmplast.CallExpr:
-		c.walkExpr(e.Fun, m, optional)
+		c.walkExpr(e.Fun, m, false)
 		for _, arg := range e.Args {
-			c.walkExpr(arg, m, false)
+			c.requireOperand(arg, e.Lparen, m)
 		}
 	case *tmplast.LeftArrowExpr:
-		c.walkExpr(e.Fun, m, optional)
-		c.walkExpr(e.Arg, m, false)
+		c.walkExpr(e.Fun, m, false)
+		c.walkExpr(e.Arg, m, false) // no argument in a map key
 	case *tmplast.ParameterExpr:
-		c.walkExpr(e.X, m, optional)
+		c.walkExpr(e.X, m, false) // {{}} is an empty string
 	case *tmplast.ParenExpr:
-		c.walkExpr(e.X, m, optional)
+		c.requireOperand(e.X, e.Lparen, m)
 	case *tmplast.UnaryExpr:
-		c.walkExpr(e.X, m, optional)
+		c.requireOperandAt(e.X, e.OpPos, len(e.Op.String()), m)
 	case *tmplast.BinaryExpr:
-		c.walkExpr(e.X, m, optional || e.Op == tmpltoken.COALESCING)
-		c.walkExpr(e.Y, m, optional)
+		if e.Op == tmpltoken.COALESCING && e.X != nil {
+			c.walkExpr(e.X, m, isPathExpr(e.X))
+		} else {
+			c.requireOperandAt(e.X, e.OpPos, len(e.Op.String()), m)
+		}
+		c.requireOperandAt(e.Y, e.OpPos, len(e.Op.String()), m)
 	case *tmplast.ConditionalExpr:
-		c.walkExpr(e.Condition, m, optional)
-		c.walkExpr(e.X, m, optional)
-		c.walkExpr(e.Y, m, optional)
+		c.requireOperand(e.Condition, e.Question, m)
+		c.requireOperand(e.X, e.Question, m)
+		c.requireOperand(e.Y, e.Colon, m)
 	case *tmplast.DefinedExpr:
-		c.walkExpr(e.Arg, m, true)
+		if e.Arg == nil {
+			c.reportAt(m, e.DefinedPos, len("defined"), DiagnosticSeverityError, "invalid template: defined() needs an argument")
+			return
+		}
+		if !isPathExpr(e.Arg) {
+			// scenarigo fails with "invalid argument to defined()".
+			c.reportAt(m, e.DefinedPos, len("defined"), DiagnosticSeverityError, "invalid template: defined() takes a name such as vars.x")
+		}
+		c.walkExpr(e.Arg, m, isPathExpr(e.Arg))
 	}
+}
+
+// requireOperand checks an operand that the parser leaves nil when it is
+// missing ({{a ==}}); scenarigo fails on it at run time.
+// The diagnostic marks the one-character token at pos.
+func (c *templateChecker) requireOperand(expr tmplast.Expr, pos int, m valueMap) {
+	c.requireOperandAt(expr, pos, 1, m)
+}
+
+// requireOperandAt is requireOperand for a token of width runes at pos.
+func (c *templateChecker) requireOperandAt(expr tmplast.Expr, pos, width int, m valueMap) {
+	if expr == nil {
+		c.reportAt(m, pos, width, DiagnosticSeverityError, "invalid template: missing operand")
+		return
+	}
+	c.walkExpr(expr, m, false)
+}
+
+func isPathExpr(expr tmplast.Expr) bool {
+	switch expr.(type) {
+	case *tmplast.Ident, *tmplast.SelectorExpr, *tmplast.IndexExpr:
+		return true
+	}
+	return false
 }
 
 // templatePath is a path expression such as vars.user.name split into its
@@ -315,7 +355,7 @@ func (c *templateChecker) walkExpr(expr tmplast.Expr, m valueMap, optional bool)
 type templatePath struct {
 	idents  []*tmplast.Ident
 	closed  bool
-	indexes []tmplast.Expr
+	indexes []*tmplast.IndexExpr
 	base    tmplast.Expr
 }
 
@@ -332,7 +372,7 @@ func pathOf(expr tmplast.Expr) templatePath {
 	case *tmplast.IndexExpr:
 		p := pathOf(e.X)
 		p.closed = true
-		p.indexes = append(p.indexes, e.Index)
+		p.indexes = append(p.indexes, e)
 		return p
 	}
 	return templatePath{closed: true, base: expr}
@@ -341,10 +381,10 @@ func pathOf(expr tmplast.Expr) templatePath {
 func (c *templateChecker) checkPath(expr tmplast.Expr, m valueMap, optional bool) {
 	p := pathOf(expr)
 	for _, index := range p.indexes {
-		c.walkExpr(index, m, false)
+		c.requireOperand(index.Index, index.Lbrack, m)
 	}
 	if p.base != nil {
-		c.walkExpr(p.base, m, optional)
+		c.walkExpr(p.base, m, false)
 	}
 	path := p.idents
 	if len(path) == 0 {
@@ -367,31 +407,45 @@ func (c *templateChecker) checkPath(expr tmplast.Expr, m valueMap, optional bool
 			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("unknown assertion %q", "assert."+name.Name))
 		}
 	case nsSteps:
-		if !optional && !c.defs.steps[name.Name] {
-			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("no step has the id %q in this scenario", name.Name))
+		if !optional && !c.unresolved && !c.defs.steps[name.Name] {
+			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("no step with the id %q has run before this point of the scenario", name.Name))
 		}
 	case nsPlugins:
-		if !optional && !c.defs.plugins[name.Name] {
-			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("plugin %q is not declared in this file or scenarigo.yaml", name.Name))
+		if !optional && !c.unresolved && !c.defs.plugins[name.Name] && !c.includers().plugins[name.Name] {
+			c.report(m, name, DiagnosticSeverityWarning, fmt.Sprintf("plugin %q is not declared in this file, scenarigo.yaml or a scenario that includes this file", name.Name))
 		}
 	case nsVars, nsSecrets:
-		set := c.defs.vars
-		if root.Name == nsSecrets {
-			set = c.defs.secrets
-		}
-		if !optional && !set[name.Name] {
-			c.report(m, name, DiagnosticSeverityInformation, fmt.Sprintf("%s.%s is not defined in this file or scenarigo.yaml (a plugin setup may define it)", root.Name, name.Name))
+		if !optional && !c.unresolved && !c.defs.set(root.Name)[name.Name] && !c.includers().set(root.Name)[name.Name] {
+			c.report(m, name, DiagnosticSeverityInformation, fmt.Sprintf("%s.%s is not defined before this point (a plugin setup may define it)", root.Name, name.Name))
 		}
 	}
 }
 
 func (c *templateChecker) report(m valueMap, ident *tmplast.Ident, severity int, msg string) {
-	start := ident.NamePos - 1
+	c.reportAt(m, ident.NamePos, utf8.RuneCountInString(ident.Name), severity, msg)
+}
+
+// reportAt reports a diagnostic on the runes [pos, pos+length) of the value,
+// where pos is a 1-based parser position.
+func (c *templateChecker) reportAt(m valueMap, pos, length, severity int, msg string) {
 	*c.diags = append(*c.diags, Diagnostic{
-		Range:    m.runeRange(start, start+utf8.RuneCountInString(ident.Name)),
+		Range:    m.runeRange(pos-1, pos-1+length),
 		Severity: severity,
 		Message:  msg,
 	})
+}
+
+// set returns the names of a namespace.
+func (d templateDefinitions) set(root string) map[string]bool {
+	switch root {
+	case nsVars:
+		return d.vars
+	case nsSecrets:
+		return d.secrets
+	case nsSteps:
+		return d.steps
+	}
+	return d.plugins
 }
 
 // lineIndex holds the byte offset at which each line of a text starts.
