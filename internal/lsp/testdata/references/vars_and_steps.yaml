@@ -91,3 +91,36 @@ document: |
 operation: references
 expect:
   referenceCount: 3
+---
+name: "references inside calls, operators and left arrow functions"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    $0user: alice
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.user ?? "x"}}/{{size(vars.user)}}/{{plugins.p.F(vars.user, vars.other)}}'
+      expect:
+        body:
+          name: '{{vars.users}}'
+          '{{assert.contains <-}}': '{{vars.user}}'
+          note: '{{"vars.user"}}'
+operation: references
+expect:
+  referenceCount: 5
+---
+name: "references from a name inside a call"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    user: alice
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{size(vars.us$0er)}}/{{vars.user}}'
+operation: references
+expect:
+  referenceCount: 3

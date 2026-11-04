@@ -2090,8 +2090,10 @@ type templateRef struct {
 	endCol   int      // 0-based, column past the last char of the matched prefix
 }
 
-// scanTemplateRefs scans the document text for all template expressions and extracts
-// dotted path references from them.
+// scanTemplateRefs scans the document text for all template expressions and
+// extracts the dotted name chains in them (vars.user, steps.login.result, the
+// vars.x argument of size(vars.x)), one reference per chain. String literals
+// are skipped.
 func scanTemplateRefs(text string) []templateRef {
 	var refs []templateRef
 	lines := strings.Split(text, "\n")
@@ -2110,70 +2112,87 @@ func scanTemplateRefs(text string) []templateRef {
 			}
 			closeIdx += openIdx + 2
 
-			expr := line[openIdx+2 : closeIdx]
-
-			// Handle "<-" operator: only process the left-hand side.
-			if arrowIdx := strings.Index(expr, "<-"); arrowIdx >= 0 {
-				expr = expr[:arrowIdx]
+			for _, c := range nameChains(line[openIdx+2 : closeIdx]) {
+				refs = append(refs, templateRef{
+					path:     c.path,
+					line:     lineIdx,
+					startCol: openIdx + 2 + c.start,
+					endCol:   openIdx + 2 + c.end,
+				})
 			}
-
-			expr = strings.TrimSpace(expr)
-			if expr == "" {
-				pos = closeIdx + 2
-				continue
-			}
-
-			// Parse dotted path.
-			parts := strings.Split(expr, ".")
-			if len(parts) == 0 {
-				pos = closeIdx + 2
-				continue
-			}
-
-			// Find the column where this path starts within the line.
-			// The path starts after "{{" + any leading whitespace.
-			exprStart := openIdx + 2
-			for exprStart < closeIdx && line[exprStart] == ' ' {
-				exprStart++
-			}
-
-			// Calculate end column: covers parts[0].parts[1] (the first 2 segments).
-			pathStr := expr
-			endColOffset := exprStart + len(pathStr)
-
-			refs = append(refs, templateRef{
-				path:     parts,
-				line:     lineIdx,
-				startCol: exprStart,
-				endCol:   endColOffset,
-			})
-
 			pos = closeIdx + 2
 		}
 	}
 	return refs
 }
 
+// nameChain is a dotted name chain found in a template expression, with its
+// byte offsets in the expression.
+type nameChain struct {
+	path       []string
+	start, end int
+}
+
+// nameChains returns the dotted name chains of a template expression, such
+// as vars.user in size(vars.user) ?? 0. Characters inside double-quoted
+// strings are not names.
+func nameChains(expr string) []nameChain {
+	var chains []nameChain
+	isName := func(b byte) bool {
+		return b == '_' || b == '-' || b == '$' || ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')
+	}
+	for i := 0; i < len(expr); {
+		switch b := expr[i]; {
+		case b == '"':
+			end := strings.IndexByte(expr[i+1:], '"')
+			if end < 0 {
+				return chains
+			}
+			i += end + 2
+		case isName(b) && (b < '0' || b > '9') && b != '-':
+			start := i
+			var path []string
+			for {
+				j := i
+				for j < len(expr) && isName(expr[j]) {
+					j++
+				}
+				path = append(path, expr[i:j])
+				i = j
+				if i+1 < len(expr) && expr[i] == '.' && isName(expr[i+1]) {
+					i++
+					continue
+				}
+				break
+			}
+			if len(path) > 1 {
+				chains = append(chains, nameChain{path: path, start: start, end: i})
+			}
+		default:
+			i++
+		}
+	}
+	return chains
+}
+
 // identifySymbol determines what symbol the cursor is on.
 // Returns a 2-element path like ["vars", "myVar"] or ["steps", "login"], and the declaration range.
-// identifyTemplateSymbol resolves the vars/secrets/steps symbol named by a
-// template expression, or nil when the expression names something else.
-func identifyTemplateSymbol(doc *document, tmplExpr string) ([]string, *Range) {
-	tmplExpr = strings.TrimSpace(tmplExpr)
-	// Handle "<-" operator: only consider the left-hand side.
-	if before, _, ok := strings.Cut(tmplExpr, "<-"); ok {
-		tmplExpr = strings.TrimSpace(before)
+// identifyTemplateSymbol resolves the vars/secrets/steps symbol named by the
+// name chain under the cursor in a template expression, or nil when the
+// cursor is on something else.
+func identifyTemplateSymbol(doc *document, pos Position) ([]string, *Range) {
+	for _, ref := range scanTemplateRefs(lineAt(doc.Text, pos.Line)) {
+		if pos.Character < ref.startCol || pos.Character > ref.endCol {
+			continue
+		}
+		root := ref.path[0]
+		if root != nsVars && root != nsSecrets && root != nsSteps {
+			return nil, nil
+		}
+		sp := []string{root, ref.path[1]}
+		return sp, findDeclRange(doc, sp)
 	}
-	parts := strings.Split(tmplExpr, ".")
-	if len(parts) < 2 {
-		return nil, nil
-	}
-	root := parts[0]
-	if root != nsVars && root != nsSecrets && root != nsSteps {
-		return nil, nil
-	}
-	sp := []string{root, parts[1]}
-	return sp, findDeclRange(doc, sp)
+	return nil, nil
 }
 
 func identifySymbol(doc *document, pos Position) ([]string, *Range) {
@@ -2183,8 +2202,8 @@ func identifySymbol(doc *document, pos Position) ([]string, *Range) {
 
 	// First check if cursor is inside a template expression.
 	// Use getFullTemplateExpr to get the complete expression (not just up to cursor).
-	if tmplExpr, ok := getFullTemplateExpr(doc.Text, pos); ok {
-		return identifyTemplateSymbol(doc, tmplExpr)
+	if _, ok := getFullTemplateExpr(doc.Text, pos); ok {
+		return identifyTemplateSymbol(doc, pos)
 	}
 
 	// Check YAML structure: is cursor on a vars/secrets key or step id value?
