@@ -14,3 +14,20 @@ expect:
     contains:
       - 'unknown field "unknownField"'
       - 'unknown field "badKey"'
+---
+name: "a merge key is not an unknown field and may bring required fields"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    request: &request
+      method: GET
+      url: http://example.com
+  steps:
+    - protocol: http
+      request:
+        <<: *request
+        header:
+          Accept: application/json
+operation: diagnostics
+expect:
+  diagnosticCount: 0

@@ -56,3 +56,20 @@ expect:
   diagnosticMessages:
     contains:
       - 'field "title" expects string, got null'
+---
+name: "a file with a ytt/v1 document and a scenario document"
+document: |
+  schemaVersion: ytt/v1
+  files:
+  - template.ytt.yaml
+  ---
+  schemaVersion: scenario/v1
+  title: plain scenario
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0

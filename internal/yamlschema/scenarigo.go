@@ -267,21 +267,30 @@ func DetectSchemaType(text string) *Schema {
 		if strings.HasPrefix(trimmed, "schemaVersion:") {
 			value := strings.TrimSpace(trimmed[len("schemaVersion:"):])
 			value = trimQuotes(value)
-			switch value {
-			case "config/v1":
-				return ConfigSchema()
-			case "scenario/v1":
-				return ScenarioSchema()
-			case "ytt/v1":
-				return YTTSchema()
-			default:
-				// Key exists but value is empty or unrecognized.
-				// Default to scenario schema so features stay active.
-				return ScenarioSchema()
+			if sch := SchemaForVersion(value); sch != nil {
+				return sch
 			}
+			// Key exists but value is empty or unrecognized.
+			// Default to scenario schema so features stay active.
+			return ScenarioSchema()
 		}
 	}
 	return nil
+}
+
+// SchemaForVersion returns the schema of a schemaVersion value, or nil when
+// the value is not a known version.
+func SchemaForVersion(version string) *Schema {
+	switch version {
+	case "config/v1":
+		return ConfigSchema()
+	case "scenario/v1":
+		return ScenarioSchema()
+	case "ytt/v1":
+		return YTTSchema()
+	default:
+		return nil
+	}
 }
 
 // mergeFields combines two field slices, deduplicating by name.

@@ -1791,11 +1791,17 @@ func (s *Server) validateDocument(doc *document, sch *yamlschema.Schema) []Diagn
 		return nil
 	}
 	var diags []Diagnostic
+	v := newYAMLView(doc.Parsed.File)
 	for _, d := range doc.Parsed.File.Docs {
 		if d.Body == nil {
 			continue
 		}
-		s.validateNode(text, d.Body, sch.Fields, nil, &diags)
+		// A file may mix documents, for example ytt/v1 and scenario/v1.
+		docSch := sch
+		if own := documentSchema(v, v.entries(d.Body)); own != nil {
+			docSch = own
+		}
+		s.validateNode(text, d.Body, docSch.Fields, nil, &diags)
 	}
 	return diags
 }
@@ -1821,11 +1827,18 @@ func (s *Server) validateNode(text string, node ast.Node, fields []*yamlschema.F
 			}
 		}
 		// Second pass: validate each key.
+		merges := false
 		for _, mv := range n.Values {
+			if _, ok := mv.Key.(*ast.MergeKeyNode); ok {
+				merges = true // <<: *base brings keys checked where the anchor is
+				continue
+			}
 			s.validateMappingValue(text, mv, fields, siblings, diags)
 		}
-		// Third pass: check required fields.
-		s.validateRequiredFields(text, n, fields, presentKeys, diags)
+		// Third pass: check required fields, unless a merge key may bring them.
+		if !merges {
+			s.validateRequiredFields(text, n, fields, presentKeys, diags)
+		}
 	case *ast.MappingValueNode:
 		s.validateMappingValue(text, n, fields, siblingValues, diags)
 	}
