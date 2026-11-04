@@ -732,7 +732,7 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 		return nil
 	}
 	root := parts[0]
-	if root != nsVars && root != nsSecrets && root != nsPlugins {
+	if root != nsVars && root != nsSecrets && root != nsPlugins && root != nsSteps {
 		return nil
 	}
 	name := parts[1]
@@ -758,6 +758,9 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 		}
 	}
 
+	if root == nsSteps {
+		return nil // steps belong to the scenario, not to scenarigo.yaml
+	}
 	// Fall back to scenarigo.yaml config file.
 	return s.findConfigDefinition(root, name)
 }
@@ -2528,7 +2531,8 @@ func findDeclRange(doc *document, symbolPath []string) *Range {
 				s = after
 			}
 			if after, ok := strings.CutPrefix(s, "id:"); ok {
-				val := strings.TrimSpace(after)
+				val, _, _ := strings.Cut(after, " #")
+				val = strings.Trim(strings.TrimSpace(val), `"'`)
 				if val == name {
 					r := valueRange(i, line, name)
 					return &r

@@ -1,0 +1,60 @@
+---
+name: "jump from steps.<id> to the step id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: login
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com/login
+    - protocol: http
+      request:
+        method: GET
+        url: http://example.com/me
+        header:
+          Authorization: 'Bearer {{steps.lo$0gin.response.body.token}}'
+operation: definition
+expect:
+  definitionUri:
+    suffix: "test.yaml"
+    startLine: 2
+    startChar: 8
+    endLine: 2
+    endChar: 13
+---
+name: "jump from steps.<id> in if to a quoted step id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: "find"
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+    - if: '{{steps.$0find.result == "failed"}}'
+      protocol: http
+      request:
+        method: POST
+        url: http://example.com
+operation: definition
+expect:
+  definitionUri:
+    suffix: "test.yaml"
+    startLine: 2
+    startChar: 9
+    endLine: 2
+    endChar: 13
+---
+name: "no jump for an undefined step"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: login
+      protocol: http
+      request:
+        method: GET
+        url: '{{steps.nope$0.result}}'
+operation: definition
+expect:
+  definitionIsNull: true

@@ -31,6 +31,7 @@ type lspExpect struct {
 	Diagnostics        []diagMatcher   `yaml:"diagnostics"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
 	DefinitionURI      *uriMatcher     `yaml:"definitionUri"`
+	DefinitionIsNull   *bool           `yaml:"definitionIsNull"`
 	HoverContains      []string        `yaml:"hoverContains"`
 	HoverIsNull        *bool           `yaml:"hoverIsNull"`
 	SymbolNames        *labelMatcher   `yaml:"symbolNames"`
@@ -402,6 +403,13 @@ func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, ch
 	client.openDocument(docURI, docText)
 
 	resp := client.definition(2, docURI, line, char)
+
+	if tc.Expect.DefinitionIsNull != nil && *tc.Expect.DefinitionIsNull {
+		if string(resp) != "null" {
+			t.Errorf("expected no definition, got: %s", resp)
+		}
+		return
+	}
 
 	if tc.Expect.DefinitionURI != nil {
 		var loc Location

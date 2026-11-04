@@ -82,7 +82,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/didClose` | Supported | Document close |
 | `textDocument/completion` | Supported | Key, value, and template completion |
 | `textDocument/hover` | Supported | Field description, type, and enum values |
-| `textDocument/definition` | Supported | Jump to included files |
+| `textDocument/definition` | Supported | Jump to included files, variables, steps, plugins |
 | `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors, template expression errors |
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
@@ -123,7 +123,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Feature | Status | Description |
 |---|---|---|
 | Hover | Supported | Shows field name, type, description, and allowed values in Markdown |
-| Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
+| Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{steps.id}}` to the step's `id`, `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
 | Document Symbol | Supported | Hierarchical symbol tree from YAML structure; steps use their `title` as the symbol name |
 | Code Action | Supported | Suggests quick fixes for unknown fields using Levenshtein distance (<= 3) |
 | Schema auto-detection | Supported | Detects config, scenario, or ytt input from the `schemaVersion` value |
