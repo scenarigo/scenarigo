@@ -329,6 +329,16 @@ async function main() {
   assert.equal(scope, workspaceFolder);
   assert.deepEqual(errors, []);
 
+  // VS Code substitutes ${...} in the command, arguments and directory of a
+  // task: a path with ${ is refused rather than changed.
+  errors.length = 0;
+  const odd = path.join(tmp, 'ws', 'a-${env:NOPE}.yaml');
+  fs.writeFileSync(odd, 'schemaVersion: scenario/v1\n');
+  await commands['scenarigo.runScenario'](pathToFileURL(odd).href);
+  assert.equal(executed.length, 1, 'a path with ${ was run');
+  assert.equal(errors.length, 1, JSON.stringify(errors));
+  assert.match(errors[0], /\$\{/);
+
   // Deactivating stops it. VS Code disposes the subscriptions right after
   // calling deactivate, without waiting for it.
   const deactivated = extension.deactivate();

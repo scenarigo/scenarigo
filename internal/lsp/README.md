@@ -72,13 +72,18 @@ vim.lsp.commands["scenarigo.runScenario"] = function(command)
     vim.fn.termopen({ "scenarigo", "run", file }, { cwd = cwd })
   end
 end
+-- Lenses come from the server: ask for them once it is attached, and again
+-- after changes.
+vim.api.nvim_create_autocmd("LspAttach", {
+  callback = function(args) vim.lsp.codelens.refresh({ bufnr = args.buf }) end,
+})
 vim.api.nvim_create_autocmd({ "BufEnter", "InsertLeave" }, {
   pattern = { "*.yaml", "*.yml" },
   callback = function() vim.lsp.codelens.refresh({ bufnr = 0 }) end,
 })
 ```
 
-Run `:lua vim.lsp.codelens.run()` on the lens line. The file is saved first, and `scenarigo run` runs from the nearest directory with a `scenarigo.yaml` above the file, whose configuration it reads, or else from the file's directory. The nvim e2e test runs this code.
+Run `:lua vim.lsp.codelens.run()` on the lens line. The file is saved first, and `scenarigo run` runs from the nearest directory with a `scenarigo.yaml` above the file, whose configuration it reads, or else from the file's directory. The nvim e2e test runs this code, from the attach to `vim.lsp.codelens.run()`.
 
 ### Vim (vim-lsp)
 

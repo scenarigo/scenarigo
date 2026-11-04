@@ -24,5 +24,5 @@ export function findRunDirectory(file: string, workspaceFolder: string | undefin
 
 function isWithin(dir: string, root: string): boolean {
   const rel = path.relative(root, dir);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }

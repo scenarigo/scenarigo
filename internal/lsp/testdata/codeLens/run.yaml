@@ -87,3 +87,33 @@ document: |
 operation: codeLens
 expect:
   codeLenses: []
+---
+name: "a comment after a tab, an anchor and a tag"
+document: "schemaVersion: scenario/v1\t# c\nsteps: []\n"
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "an anchored schemaVersion"
+document: |
+  schemaVersion: &v scenario/v1
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a tagged schemaVersion"
+document: |
+  schemaVersion: !!str scenario/v1
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a version followed by more than a comment is not scenarigo's"
+document: |
+  schemaVersion: scenario/v1 extra
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: []

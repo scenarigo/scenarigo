@@ -216,18 +216,16 @@ do
     vim.lsp.buf_attach_client(run_buf, client_id)
     vim.api.nvim_buf_set_lines(run_buf, 1, 2, false, { "title: edited" })
 
-    local lens_done, lens_detail = false, ""
-    client:request("textDocument/codeLens", { textDocument = { uri = vim.uri_from_bufnr(run_buf) } }, function(lens_err, result)
-      if lens_err then
-        lens_detail = "error: " .. vim.inspect(lens_err)
-      elseif not result or #result ~= 1 or not result[1].command or result[1].command.title ~= "Run" then
-        lens_detail = "lenses: " .. vim.inspect(result)
-      else
-        client:exec_cmd(result[1].command, { bufnr = run_buf })
-      end
-      lens_done = true
-    end, run_buf)
-    vim.wait(5000, function() return lens_done end, 100)
+    -- The README's commands refresh the lenses when the client attaches;
+    -- run the lens of the first line as a user would.
+    local lens_detail = ""
+    local has_lens = vim.wait(5000, function() return #vim.lsp.codelens.get(run_buf) > 0 end, 100)
+    if not has_lens then
+      lens_detail = "no lens after the client attached"
+    else
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      vim.lsp.codelens.run()
+    end
     local ran = vim.wait(5000, function() return uv.fs_stat(vim.env.SCENARIGO_RAN) ~= nil end, 100)
     if lens_detail == "" and not ran then
       lens_detail = "scenarigo did not run"
@@ -236,7 +234,9 @@ do
       vim.wait(1000, function() return #vim.fn.readfile(vim.env.SCENARIGO_RAN) >= 3 end, 50)
       local got = vim.fn.readfile(vim.env.SCENARIGO_RAN)
       local saved = vim.fn.readfile(run_file)
-      local want = { run_dir, "run", run_file }
+      -- The shell and Neovim report real paths; the temporary directory may
+      -- be behind a symbolic link (macOS).
+      local want = { uv.fs_realpath(run_dir), "run", uv.fs_realpath(run_file) }
       if not vim.deep_equal(got, want) then
         lens_detail = "ran " .. vim.inspect(got) .. ", want " .. vim.inspect(want)
       elseif saved[2] ~= "title: edited" then

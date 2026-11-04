@@ -154,6 +154,14 @@ async function runScenario(uri?: string): Promise<void> {
   }
   // scenarigo run reads scenarigo.yaml from the current directory.
   const cwd = findRunDirectory(target.fsPath, folder?.uri.fsPath, fs.existsSync);
+  // VS Code substitutes variables such as ${env:HOME} in the command,
+  // arguments and directory of a task, with no way to escape them.
+  if ([command, target.fsPath, cwd].some((p) => p.includes('${'))) {
+    void vscode.window.showErrorMessage(
+      `Scenarigo: cannot run "${target.fsPath}": VS Code would replace the \${...} in its path. Run scenarigo run in a terminal.`,
+    );
+    return;
+  }
   const task = new vscode.Task(
     { type: 'scenarigo', file: target.fsPath },
     folder ?? vscode.TaskScope.Workspace,

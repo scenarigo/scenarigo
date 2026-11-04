@@ -13,4 +13,7 @@ assert.equal(findRunDirectory('/ws/scenarios/a.yaml', '/ws', exists(['/scenarigo
 assert.equal(findRunDirectory('/tmp/x/a.yaml', undefined, exists(['/tmp/scenarigo.yaml'])), '/tmp');
 assert.equal(findRunDirectory('/tmp/x/a.yaml', undefined, exists([])), '/tmp/x');
 
+// A directory whose name starts with .. is inside the folder.
+assert.equal(findRunDirectory('/ws/..data/sub/a.yaml', '/ws', exists(['/ws/..data/scenarigo.yaml'])), '/ws/..data');
+
 console.log('run ok');

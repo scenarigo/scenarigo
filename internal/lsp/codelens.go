@@ -54,7 +54,7 @@ func runnableLine(text string) (int, bool) {
 		if !ok {
 			continue
 		}
-		switch plainScalar(value) {
+		switch schemaVersionValue(value) {
 		case scenarioSchemaVersion, yttSchemaVersion:
 			return i, true
 		default:
@@ -62,4 +62,25 @@ func runnableLine(text string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// schemaVersionValue returns the value of a schemaVersion line: without a
+// comment (after a space or a tab), an anchor or a tag, and quotes.
+func schemaVersionValue(value string) string {
+	value = strings.TrimSpace(value)
+	for _, prefix := range []string{"&", "!"} {
+		if strings.HasPrefix(value, prefix) {
+			_, value, _ = strings.Cut(value, " ")
+			value = strings.TrimSpace(value)
+		}
+	}
+	if !strings.HasPrefix(value, `"`) && !strings.HasPrefix(value, "'") {
+		for i := 1; i < len(value); i++ {
+			if value[i] == '#' && (value[i-1] == ' ' || value[i-1] == '\t') {
+				value = value[:i]
+				break
+			}
+		}
+	}
+	return plainScalar(value)
 }
