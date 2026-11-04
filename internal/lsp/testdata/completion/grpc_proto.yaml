@@ -1635,3 +1635,353 @@ operation: completion
 expect:
   completionLabels:
     contains: [fromCommon]
+
+---
+name: "a service name before a comment keeps a blank before it"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: $0# todo
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-15"
+      newText: 't.S '
+
+---
+name: "a service name after the colon, before a comment"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service:$0 # todo
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:14-15"
+      newText: ' t.S '
+
+---
+name: "a hash inside a plain value is not a comment"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: a#b$0 # c
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-18"
+      newText: 't.S'
+
+---
+name: "a single-quoted value with a doubled quote"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: 't.''S$0'
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-22"
+      newText: "'t.S'"
+
+---
+name: "a double-quoted value with an escaped quote"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: "te\"st$0"
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-23"
+      newText: '"t.S"'
+
+---
+name: "an anchored value keeps its anchor"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: &svc t.$0
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:20-22"
+      newText: 't.S'
+
+---
+name: "keys set around blank lines of a CRLF file are left out"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: "schemaVersion: scenario/v1\r\nsteps:\r\n  - protocol: grpc\r\n    request:\r\n      options:\r\n        proto:\r\n          imports: [proto]\r\n          files: [svc.proto]\r\n      service: t.S\r\n      method: Hello\r\n      message:\r\n        userName: x\r\n\r\n        $0\r\n\r\n        id: y\r\n"
+operation: completion
+expect:
+  completionLabels:
+    contains: [title]
+    excludes: [userName, id]
+
+---
+name: "a quoted key is not completed"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          userName: x
+          "ti$0": x
+operation: completion
+expect:
+  completionLabels:
+    excludes: [title]

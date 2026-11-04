@@ -650,3 +650,109 @@ operation: diagnostics
 expect:
   diagnosticMessages:
     contains: ['unknown field "bogus" in t.Req']
+
+---
+name: "an anchor name reused in another document is that document's"
+files:
+  proto/a.proto: |
+    syntax = "proto3";
+    package a;
+    service A { rpc M(R) returns (R); }
+    message R { string x = 1; }
+  proto/b.proto: |
+    syntax = "proto3";
+    package b;
+    service B { rpc M(R) returns (R); }
+    message R { string y = 1; }
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    o: &o {proto: {imports: [proto], files: [a.proto]}}
+  steps:
+    - protocol: grpc
+      request:
+        options: *o
+        service: a.A
+        method: M
+        message: {bogusA: 1}
+  ---
+  schemaVersion: scenario/v1
+  vars:
+    o: &o {proto: {imports: [proto], files: [b.proto]}}
+  steps:
+    - protocol: grpc
+      request:
+        options: *o
+        service: b.B
+        method: M
+        message: {bogusB: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogusA" in a.R', 'unknown field "bogusB" in b.R']
+    excludes: ['unknown gRPC service "a.A" in the proto files', 'unknown gRPC service "b.B" in the proto files']
+
+---
+name: "block scalars and tags in the options read as scenarigo reads them"
+files:
+  proto/a.proto: |
+    syntax = "proto3";
+    package a;
+    service A { rpc M(R) returns (R); }
+    message R { string x = 1; }
+  proto/b.proto: |
+    syntax = "proto3";
+    package b;
+    service B { rpc M(R) returns (R); }
+    message R { string y = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          reflection: {enabled: !!bool "false"}
+          proto:
+            imports: [proto]
+            files:
+              - >-
+                a.proto
+        service: a.A
+        method: M
+        message: {bogus: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus" in a.R']
+
+---
+name: "protocols.gRPC of scenarigo.yaml is the gRPC options"
+files:
+  proto/a.proto: |
+    syntax = "proto3";
+    package a;
+    service A { rpc M(R) returns (R); }
+    message R { string x = 1; }
+  proto/b.proto: |
+    syntax = "proto3";
+    package b;
+    service B { rpc M(R) returns (R); }
+    message R { string y = 1; }
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    protocols:
+      gRPC:
+        request:
+          proto: {imports: [proto], files: [a.proto]}
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        service: a.A
+        method: M
+        message: {bogus: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus" in a.R']

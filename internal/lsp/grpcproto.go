@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -61,6 +62,7 @@ type protoLookup struct {
 	s        *Server
 	config   func() *grpc.Option
 	compiled map[string]grpcproto.FileDescriptors
+	decoded  map[ast.Node]any // documents as scenarigo decodes them, by body
 }
 
 func (s *Server) newProtoLookup() *protoLookup {
@@ -68,6 +70,7 @@ func (s *Server) newProtoLookup() *protoLookup {
 		s:        s,
 		config:   sync.OnceValue(s.grpcConfigOptions),
 		compiled: map[string]grpcproto.FileDescriptors{},
+		decoded:  map[ast.Node]any{},
 	}
 }
 
@@ -84,12 +87,12 @@ func (l *protoLookup) step(doc *document, v *yamlView, step ast.Node) grpcproto.
 		return nil
 	}
 	opts := &grpc.RequestOptions{}
-	if node := v.entryValue(request, "options"); node != nil {
-		var stepOpts grpc.RequestOptions
-		if err := decodeResolved(v, node, &stepOpts); err != nil {
+	if doc.Parsed != nil {
+		stepOpts, ok := l.stepOptions(doc.Parsed.File, v, step)
+		if !ok {
 			return nil
 		}
-		if err := mergo.Merge(opts, &stepOpts); err != nil {
+		if err := mergo.Merge(opts, stepOpts); err != nil {
 			return nil
 		}
 	}
@@ -152,55 +155,153 @@ func rootRelative(root string, files []string) ([]string, []string) {
 	return []string{root}, rel
 }
 
-// decodeResolved decodes a YAML node into out with its aliases and merge
-// keys resolved, as the loader reads it; yaml.NodeToValue alone does not
-// resolve them.
-func decodeResolved(v *yamlView, node ast.Node, out any) error {
-	b, err := yaml.Marshal(resolvedValue(v, node, 0))
+// stepOptions returns the request options of a step, from its document
+// decoded as a whole the way scenarigo decodes it: aliases resolve to the
+// anchors of their own document, and merge keys, tags and block scalars
+// read as at run time. It reports false when the options do not decode.
+func (l *protoLookup) stepOptions(file *ast.File, v *yamlView, step ast.Node) (*grpc.RequestOptions, bool) {
+	opts := &grpc.RequestOptions{}
+	if file == nil {
+		return opts, true
+	}
+	for _, d := range file.Docs {
+		i := slices.Index(v.sequence(v.entryValue(v.entries(d.Body), nsSteps)), step)
+		if i < 0 {
+			continue
+		}
+		value, ok := l.decode(v, d.Body)
+		if !ok {
+			return nil, false
+		}
+		if options := valueAt(value, nsSteps, i, "request", "options"); options != nil {
+			if err := remarshal(options, opts); err != nil {
+				return nil, false
+			}
+		}
+		return opts, true
+	}
+	return opts, true
+}
+
+// maxDecodedNodes bounds the size of a document with its aliases expanded:
+// a few lines of nested aliases would otherwise make the server decode
+// millions of values on every keystroke.
+const maxDecodedNodes = 100_000
+
+// decode decodes a document as scenarigo does, once per lookup.
+func (l *protoLookup) decode(v *yamlView, body ast.Node) (any, bool) {
+	if value, ok := l.decoded[body]; ok {
+		return value, value != nil
+	}
+	value := decodeDocument(v, body)
+	l.decoded[body] = value
+	return value, value != nil
+}
+
+// decodeDocument decodes a document body, or returns nil when it does not
+// decode or its aliases expand too far.
+func decodeDocument(v *yamlView, body ast.Node) any {
+	if body == nil || expandedSize(v, body, map[ast.Node]int{}, map[ast.Node]bool{}) > maxDecodedNodes {
+		return nil
+	}
+	var value any
+	if err := yaml.NodeToValue(body, &value); err != nil {
+		return nil
+	}
+	return value
+}
+
+// expandedSize counts the nodes of a YAML tree with its aliases expanded, in
+// time linear in the size of the tree. A cycle counts as too large.
+func expandedSize(v *yamlView, node ast.Node, memo map[ast.Node]int, visiting map[ast.Node]bool) int {
+	node = v.unwrap(node)
+	if node == nil {
+		return 0
+	}
+	if n, ok := memo[node]; ok {
+		return n
+	}
+	if visiting[node] {
+		return maxDecodedNodes + 1
+	}
+	visiting[node] = true
+	size := 1
+	switch n := node.(type) {
+	case *ast.MappingNode:
+		for _, mv := range n.Values {
+			size += expandedSize(v, mv, memo, visiting)
+		}
+	case *ast.MappingValueNode:
+		size += expandedSize(v, n.Key, memo, visiting) + expandedSize(v, n.Value, memo, visiting)
+	case *ast.SequenceNode:
+		for _, item := range n.Values {
+			size += expandedSize(v, item, memo, visiting)
+		}
+	}
+	visiting[node] = false
+	size = min(size, maxDecodedNodes+1)
+	memo[node] = size
+	return size
+}
+
+// valueAt follows a path of mapping keys and sequence indexes in a decoded
+// value. A key matches exactly, or else regardless of case when the path
+// element is a caseless key.
+func valueAt(value any, path ...any) any {
+	for _, p := range path {
+		switch k := p.(type) {
+		case int:
+			items, ok := value.([]any)
+			if !ok || k < 0 || k >= len(items) {
+				return nil
+			}
+			value = items[k]
+		case string:
+			value = mapValue(value, k, false)
+		case caseless:
+			value = mapValue(value, string(k), true)
+		}
+		if value == nil {
+			return nil
+		}
+	}
+	return value
+}
+
+// caseless is a mapping key that matches regardless of case.
+type caseless string
+
+func mapValue(value any, key string, fold bool) any {
+	entries := map[string]any{}
+	switch m := value.(type) {
+	case map[string]any:
+		entries = m
+	case map[any]any:
+		for k, v := range m {
+			entries[fmt.Sprint(k)] = v
+		}
+	default:
+		return nil
+	}
+	if v, ok := entries[key]; ok || !fold {
+		return v
+	}
+	keys := slices.Sorted(maps.Keys(entries))
+	for _, k := range keys {
+		if strings.EqualFold(k, key) {
+			return entries[k]
+		}
+	}
+	return nil
+}
+
+// remarshal converts a decoded value into a struct through YAML.
+func remarshal(value, out any) error {
+	b, err := yaml.Marshal(value)
 	if err != nil {
 		return err
 	}
 	return yaml.Unmarshal(b, out)
-}
-
-// resolvedValue returns the plain value of a YAML node, aliases and merge
-// keys resolved; an explicit key wins over a merged one.
-func resolvedValue(v *yamlView, node ast.Node, depth int) any {
-	if depth > maxAliasDepth {
-		return nil
-	}
-	switch n := v.unwrap(node).(type) {
-	case *ast.MappingNode, *ast.MappingValueNode:
-		m := map[string]any{}
-		for _, mv := range v.entries(n) {
-			k := keyString(v, mv.Key)
-			if _, ok := m[k]; !ok {
-				m[k] = resolvedValue(v, mv.Value, depth+1)
-			}
-		}
-		return m
-	case *ast.SequenceNode:
-		items := make([]any, 0, len(n.Values))
-		for _, item := range n.Values {
-			items = append(items, resolvedValue(v, item, depth+1))
-		}
-		return items
-	case ast.ScalarNode:
-		return n.GetValue()
-	default:
-		return nil
-	}
-}
-
-// keyString returns a mapping key as the loader reads it, without quotes.
-func keyString(v *yamlView, key ast.MapKeyNode) string {
-	if s, ok := v.unwrap(key).(ast.ScalarNode); ok {
-		return fmt.Sprint(s.GetValue())
-	}
-	if key == nil {
-		return ""
-	}
-	return key.String()
 }
 
 // hasClient reports whether a step sets request.client, which it then calls
@@ -226,13 +327,14 @@ func (s *Server) grpcConfigOptions() *grpc.Option {
 	if parsed == nil || parsed.File == nil || len(parsed.File.Docs) == 0 {
 		return nil
 	}
-	v := newYAMLView(parsed.File)
-	node := v.entryValue(v.entries(v.entryValue(v.entries(parsed.File.Docs[0].Body), "protocols")), "grpc")
-	if node == nil {
+	// scenarigo looks the protocols of scenarigo.yaml up by their lower-case
+	// name too.
+	options := valueAt(decodeDocument(newYAMLView(parsed.File), parsed.File.Docs[0].Body), "protocols", caseless("grpc"))
+	if options == nil {
 		return nil
 	}
 	var opt grpc.Option
-	if err := decodeResolved(v, node, &opt); err != nil {
+	if err := remarshal(options, &opt); err != nil {
 		return nil
 	}
 	return &opt
@@ -591,6 +693,9 @@ func (s *Server) completeProto(doc *document, ctx *yamlutil.CursorContext, pos P
 // matches.
 func completeFields(md protoreflect.MessageDescriptor, text string, pos Position, request bool) []CompletionItem {
 	key := keyAt(text, pos)
+	if key.quoted {
+		return nil
+	}
 	set := map[protoreflect.FieldNumber]bool{}
 	oneofs := map[protoreflect.FullName]bool{}
 	for _, k := range siblingKeys(strings.Split(text, "\n"), pos.Line, key) {
@@ -648,6 +753,7 @@ type keySlot struct {
 	prefix string
 	colon  bool
 	dash   bool
+	quoted bool
 }
 
 func isKeyByte(c byte) bool {
@@ -669,6 +775,7 @@ func keyAt(text string, pos Position) keySlot {
 		prefix: line[start:cursor],
 		colon:  strings.HasPrefix(strings.TrimLeft(line[end:], " \t"), ":"),
 		dash:   strings.HasSuffix(strings.TrimRight(line[:start], " "), "-"),
+		quoted: start > 0 && (line[start-1] == '"' || line[start-1] == '\''),
 	}
 }
 
@@ -677,14 +784,18 @@ func keyAt(text string, pos Position) keySlot {
 // indented less. A sequence item ends the mapping, and the first key of an
 // item sits after its dash.
 func siblingKeys(lines []string, line int, key keySlot) []string {
+	if line < 0 || line >= len(lines) {
+		return nil
+	}
 	column := key.rng.Start.Character
 	var keys []string
 	// visit reports whether the scan goes on past the line.
 	visit := func(l string) bool {
+		l = strings.TrimRight(l, "\r")
 		content := strings.TrimLeft(l, " ")
 		indent := len(l) - len(content)
 		switch {
-		case content == "" || strings.HasPrefix(content, "#"):
+		case strings.TrimSpace(content) == "" || strings.HasPrefix(content, "#"):
 			return true
 		case indent > column:
 			return true
@@ -713,8 +824,9 @@ func siblingKeys(lines []string, line int, key keySlot) []string {
 		}
 	}
 	for i := line + 1; i < len(lines); i++ {
-		content := strings.TrimLeft(lines[i], " ")
-		if indent := len(lines[i]) - len(content); indent < column && content != "" && !strings.HasPrefix(content, "#") {
+		l := strings.TrimRight(lines[i], "\r")
+		content := strings.TrimLeft(l, " ")
+		if indent := len(l) - len(content); indent < column && strings.TrimSpace(content) != "" && !strings.HasPrefix(content, "#") {
 			break // the next item or the parent's next key
 		}
 		if !visit(lines[i]) {
@@ -735,54 +847,105 @@ func mappingKey(content string) string {
 
 // valueSlot is where a completed value goes: a range over the value of the
 // key on the cursor's line and the cursor, the blanks to keep before the
-// value, and the quote of a quoted value.
+// value, the quote of a quoted value, and a blank to add before a comment
+// that follows the range.
 type valueSlot struct {
 	rng   Range
 	lead  string
 	quote string
+	trail string
+}
+
+func skipBlanks(line string, i int) int {
+	for i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+		i++
+	}
+	return i
 }
 
 // valueSlotAt finds the value of the key on the cursor's line. Items replace
 // all of it, quotes kept, so that a dotted name is not doubled: clients take
-// only the word before the cursor otherwise. It reports false when the
-// cursor is in a comment.
+// only the word before the cursor otherwise. An anchor or a tag before the
+// value stays. It reports false when the cursor is in a comment or before
+// an anchor or a tag.
 func valueSlotAt(text string, pos Position) (valueSlot, bool) {
-	line := lineAt(text, pos.Line)
+	line := strings.TrimRight(lineAt(text, pos.Line), "\r")
 	cursor := min(pos.Character, len(line))
 	colon := strings.Index(line[:cursor], ":")
 	if colon < 0 {
 		return valueSlot{}, false
 	}
-	vs := colon + 1
-	for vs < len(line) && (line[vs] == ' ' || line[vs] == '\t') {
-		vs++
+	vs := skipBlanks(line, colon+1)
+	for vs < len(line) && (line[vs] == '&' || line[vs] == '!') {
+		end := strings.IndexAny(line[vs:], " \t")
+		if end < 0 || cursor < vs+end {
+			return valueSlot{}, false // the anchor or tag itself
+		}
+		vs = skipBlanks(line, vs+end)
+	}
+	if cursor < vs && strings.TrimSpace(line[cursor:vs]) != "" {
+		return valueSlot{}, false
 	}
 	slot := valueSlot{lead: line[min(vs, cursor):vs]}
 	if vs == colon+1 {
 		slot.lead = " " // "key:value" is not a mapping
 	}
-	var ve int
+	ve, comment := scalarEnd(line, vs)
 	if vs < len(line) && (line[vs] == '"' || line[vs] == '\'') {
 		slot.quote = line[vs : vs+1]
-		ve = len(strings.TrimRight(line, " \t\r"))
-		if end := strings.IndexByte(line[vs+1:], line[vs]); end >= 0 {
-			ve = vs + 1 + end + 1
-		}
-	} else {
-		rest := line[vs:]
-		if i := strings.IndexAny(rest, "#"); i >= 0 && (i == 0 || rest[i-1] == ' ' || rest[i-1] == '\t') {
-			rest = rest[:i]
-		}
-		ve = vs + len(strings.TrimRight(rest, " \t\r"))
 	}
-	if comment := strings.IndexByte(line[ve:], '#'); comment >= 0 && cursor > ve+comment {
+	if comment >= 0 && cursor > comment {
 		return valueSlot{}, false
 	}
 	slot.rng = Range{
 		Start: Position{Line: pos.Line, Character: min(vs, cursor)},
 		End:   Position{Line: pos.Line, Character: max(ve, cursor)},
 	}
+	if end := slot.rng.End.Character; end < len(line) && line[end] == '#' {
+		slot.trail = " " // a # right after the value would join it
+	}
 	return slot, true
+}
+
+// scalarEnd returns where the scalar that starts at vs on a line ends, after
+// the closing quote of a quoted scalar (with its escapes: ” in single
+// quotes, a backslash in double quotes), and where a comment after it
+// starts, or -1. A # starts a comment after a blank, or where the value
+// would start.
+func scalarEnd(line string, vs int) (int, int) {
+	commentFrom := func(i int) int {
+		for ; i < len(line); i++ {
+			if line[i] == '#' && (line[i-1] == ' ' || line[i-1] == '\t') {
+				return i
+			}
+		}
+		return -1
+	}
+	if vs >= len(line) {
+		return vs, -1
+	}
+	switch q := line[vs]; q {
+	case '\'', '"':
+		for i := vs + 1; i < len(line); i++ {
+			switch {
+			case q == '"' && line[i] == '\\':
+				i++
+			case line[i] == q && q == '\'' && i+1 < len(line) && line[i+1] == '\'':
+				i++
+			case line[i] == q:
+				return i + 1, commentFrom(i + 1)
+			}
+		}
+		return len(strings.TrimRight(line, " \t")), -1 // not closed yet
+	case '#':
+		return vs, vs
+	}
+	comment := commentFrom(vs + 1)
+	end := len(line)
+	if comment >= 0 {
+		end = comment
+	}
+	return vs + len(strings.TrimRight(line[vs:end], " \t")), comment
 }
 
 // item returns a completion item that puts a name in the slot.
@@ -790,7 +953,7 @@ func (s valueSlot) item(name string) CompletionItem {
 	return CompletionItem{
 		Label:      name,
 		FilterText: s.quote + name,
-		TextEdit:   &TextEdit{Range: s.rng, NewText: s.lead + s.quote + name + s.quote},
+		TextEdit:   &TextEdit{Range: s.rng, NewText: s.lead + s.quote + name + s.quote + s.trail},
 	}
 }
 
