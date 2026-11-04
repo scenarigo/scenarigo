@@ -1,0 +1,1987 @@
+---
+name: "service names from the proto files"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [test.v1.Greeter]
+
+---
+name: "method names of the service"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [Hello, Chat]
+
+---
+name: "fields of the request message"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [userName, address, addresses, byKey, email, phone, tag]
+    excludes: [message, target]
+
+---
+name: "fields of a nested message"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          address:
+            $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [city]
+
+---
+name: "fields of a repeated message"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          addresses:
+            - $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [city]
+
+---
+name: "fields of a map value"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          byKey:
+            home:
+              $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [city]
+
+---
+name: "fields of an imported message"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          tag:
+            $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [label]
+
+---
+name: "fields of the streamed request messages"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        messages:
+          - $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [userName]
+
+---
+name: "fields of the expected response message"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Chat
+      expect:
+        messages:
+          - $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [message]
+    excludes: [userName]
+
+---
+name: "the proto options of scenarigo.yaml apply to steps without proto options"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    protocols:
+      grpc:
+        request:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        service: test.v1.Greeter
+        method: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [Hello]
+
+---
+name: "nothing from the proto files with reflection"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          reflection:
+            enabled: true
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: $0
+operation: completion
+expect:
+  completionLabels:
+    excludes: [test.v1.Greeter]
+
+---
+name: "nothing from the proto files without files"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+        service: $0
+operation: completion
+expect:
+  completionLabels:
+    excludes: [test.v1.Greeter]
+
+---
+name: "a dotted service name replaces the whole value"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Gr$0
+operation: completion
+expect:
+  completionEdits:
+    - label: test.v1.Greeter
+      range: "9:15-25"
+      newText: test.v1.Greeter
+
+---
+name: "a quoted service name keeps its quotes"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: "test.v1.Gr$0"
+operation: completion
+expect:
+  completionEdits:
+    - label: test.v1.Greeter
+      range: "9:15-27"
+      newText: '"test.v1.Greeter"'
+
+---
+name: "a method name replaces the value after the cursor too"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: He$0llo
+operation: completion
+expect:
+  completionEdits:
+    - label: Hello
+      range: "10:14-19"
+      newText: Hello
+
+---
+name: "message fields insert the key and leave out the fields already set"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          user_name: x
+          email: a@example.com
+          $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [address, tag]
+    excludes: [userName, user_name, email, phone]
+  completionEdits:
+    - label: address
+      range: "14:8-8"
+      newText: "address:"
+    - label: tag
+      range: "14:8-8"
+      newText: "tag:"
+
+---
+name: "message fields are filtered by the typed prefix"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          ad$0
+operation: completion
+expect:
+  completionLabels:
+    contains: [address, addresses]
+    excludes: [userName, tag]
+  completionEdits:
+    - label: address
+      range: "12:8-10"
+      newText: "address:"
+
+---
+name: "scalar fields insert a space after the colon"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          us$0
+operation: completion
+expect:
+  completionEdits:
+    - label: userName
+      range: "12:8-10"
+      newText: "userName: "
+
+---
+name: "fields named like step and request keys are offered"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [userName, id, title, method, items, email, phone, message]
+
+---
+name: "fields named like expect keys are offered"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+      expect:
+        code: OK
+        message:
+          $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [message, code]
+
+---
+name: "the keys of the previous sequence item are not set in this one"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          items:
+            - name: a
+              age: 1
+            - name: b
+              $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [age]
+    excludes: [name]
+
+---
+name: "a oneof set in a previous streamed message is free in this one"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Chat
+        messages:
+          - userName: a
+            email: x
+          - userName: b
+            $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [email, phone]
+    excludes: [userName]
+
+---
+name: "keys below the cursor are set too"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          $0
+          userName: x
+          email: y
+operation: completion
+expect:
+  completionLabels:
+    contains: [id]
+    excludes: [userName, email, phone]
+
+---
+name: "a key completed in the middle of a word replaces the word"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          us$0er
+operation: completion
+expect:
+  completionEdits:
+    - label: userName
+      range: "13:8-12"
+      newText: "userName: "
+
+---
+name: "a key completed before its colon does not add another"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          us$0: x
+operation: completion
+expect:
+  completionEdits:
+    - label: userName
+      range: "13:8-10"
+      newText: userName
+
+---
+name: "a key of a sequence item with a colon"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          items:
+            - na$0: x
+operation: completion
+expect:
+  completionEdits:
+    - label: name
+      range: "14:12-14"
+      newText: name
+
+---
+name: "a proto name prefix completes the proto name"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          user_$0
+operation: completion
+expect:
+  completionEdits:
+    - label: user_name
+      range: "13:8-13"
+      newText: "user_name: "
+
+---
+name: "a quoted service name, the cursor after the closing quote"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: "t.$0"
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-19"
+      newText: '"t.S"'
+
+---
+name: "a quoted service name, the cursor before the opening quote"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: $0"t."
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-19"
+      newText: '"t.S"'
+
+---
+name: "a service name, the cursor right after the colon"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service:$0 t.
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:14-17"
+      newText: ' t.S'
+
+---
+name: "a service name, nothing after the colon"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service:$0
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:14-14"
+      newText: ' t.S'
+
+---
+name: "a service name before a comment after a tab"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.$0	# c
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-17"
+      newText: 't.S'
+
+---
+name: "no service names inside a comment"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t # com$0ment
+operation: completion
+expect:
+  completionLabels:
+    excludes: [t.S]
+
+---
+name: "imports without import paths resolve from the workspace root"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package p;
+    import "proto/common.proto";
+    service S { rpc M(common.Req) returns (common.Req); }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Req { string from_common = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            files: [proto/svc.proto]
+        service: p.S
+        method: M
+        message:
+          $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [fromCommon]
+
+---
+name: "a service name before a comment keeps a blank before it"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: $0# todo
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-15"
+      newText: 't.S '
+
+---
+name: "a service name after the colon, before a comment"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service:$0 # todo
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:14-15"
+      newText: ' t.S '
+
+---
+name: "a hash inside a plain value is not a comment"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: a#b$0 # c
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-18"
+      newText: 't.S'
+
+---
+name: "a single-quoted value with a doubled quote"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: 't.''S$0'
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-22"
+      newText: "'t.S'"
+
+---
+name: "a double-quoted value with an escaped quote"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: "te\"st$0"
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:15-23"
+      newText: '"t.S"'
+
+---
+name: "an anchored value keeps its anchor"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: &svc t.$0
+operation: completion
+expect:
+  completionEdits:
+    - label: t.S
+      range: "10:20-22"
+      newText: 't.S'
+
+---
+name: "keys set around blank lines of a CRLF file are left out"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: "schemaVersion: scenario/v1\r\nsteps:\r\n  - protocol: grpc\r\n    request:\r\n      options:\r\n        proto:\r\n          imports: [proto]\r\n          files: [svc.proto]\r\n      service: t.S\r\n      method: Hello\r\n      message:\r\n        userName: x\r\n\r\n        $0\r\n\r\n        id: y\r\n"
+operation: completion
+expect:
+  completionLabels:
+    contains: [title]
+    excludes: [userName, id]
+
+---
+name: "a quoted key is not completed"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      title: s
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          userName: x
+          "ti$0": x
+operation: completion
+expect:
+  completionLabels:
+    excludes: [title]

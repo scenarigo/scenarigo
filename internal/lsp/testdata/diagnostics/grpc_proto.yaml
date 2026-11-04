@@ -1,0 +1,758 @@
+---
+name: "unknown services, methods and fields are warnings"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          userName: x
+          user_name: proto names are accepted
+          nmae: typo
+          address:
+            city: y
+            zip: unknown
+          addresses:
+            - city: z
+            - town: unknown
+          byKey:
+            home:
+              city: w
+              street: unknown
+          email: a@example.com
+          phone: "123"
+          tag:
+            label: t
+      expect:
+        message:
+          message: hi
+          reply: unknown
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greter
+        method: Hello
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Helo
+operation: diagnostics
+expect:
+  diagnosticCount: 9
+  diagnostics:
+    - message: 'field test.v1.HelloRequest.user_name is set twice: "userName" and "user_name"'
+      severity: 2
+      startLine: 13
+      startChar: 8
+      endChar: 17
+    - message: 'unknown field "nmae" in test.v1.HelloRequest'
+      severity: 2
+      startLine: 14
+      startChar: 8
+      endChar: 12
+    - message: 'unknown field "zip" in test.v1.Address'
+      severity: 2
+    - message: 'unknown field "town" in test.v1.Address'
+      severity: 2
+    - message: 'unknown field "street" in test.v1.Address'
+      severity: 2
+    - message: 'oneof test.v1.HelloRequest.contact is set twice: "email" and "phone"'
+      severity: 2
+      startLine: 26
+      startChar: 8
+      endChar: 13
+    - message: 'unknown field "reply" in test.v1.HelloReply'
+      severity: 2
+    - message: 'unknown gRPC service "test.v1.Greter" in the proto files'
+      severity: 2
+    - message: 'unknown method "Helo" of test.v1.Greeter'
+      severity: 2
+
+---
+name: "templates are not validated"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    msg: {}
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message: '{{vars.msg}}'
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          address: '{{vars.msg}}'
+      expect:
+        message:
+          '{{assert.and <-}}':
+            - '{{assert.notZero}}'
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: '{{vars.service}}'
+        method: Hello
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'unknown gRPC service "{{vars.service}}" in the proto files'
+      - 'unknown field "{{assert.and <-}}" in test.v1.HelloReply'
+
+---
+name: "proto files that do not compile give no proto diagnostics"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [missing.proto]
+        service: anything
+        method: Anything
+        message:
+          whatever: 1
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+
+---
+name: "expected messages may name a field twice and several oneof members"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+      rpc Echo(HelloRequest) returns (HelloRequest);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Echo
+        message:
+          email: null
+          phone: "123"
+      expect:
+        message:
+          userName: x
+          user_name: x
+          email: ""
+          phone: "123"
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+
+---
+name: "well-known messages are checked unless they have a JSON form of their own"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "google/protobuf/empty.proto";
+    import "google/protobuf/struct.proto";
+    import "google/protobuf/timestamp.proto";
+    service Greeter {
+      rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty);
+      rpc Put(Item) returns (google.protobuf.Empty);
+    }
+    message Item {
+      google.protobuf.Timestamp at = 1;
+      google.protobuf.Struct attrs = 2;
+      google.protobuf.Empty nothing = 3;
+    }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Ping
+        message:
+          foo: 1
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Put
+        message:
+          at: "2020-01-01T00:00:00Z"
+          attrs:
+            any: thing
+          nothing:
+            bar: 1
+operation: diagnostics
+expect:
+  diagnosticCount: 2
+  diagnostics:
+    - message: 'unknown field "foo" in google.protobuf.Empty'
+      severity: 2
+      startLine: 11
+    - message: 'unknown field "bar" in google.protobuf.Empty'
+      severity: 2
+      startLine: 25
+
+---
+name: "a step with a client does not use the proto files"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    p: p.so
+  steps:
+    - protocol: grpc
+      request:
+        client: '{{plugins.p.Client}}'
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: x.Y
+        method: Anything
+        message:
+          whatever: 1
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'unknown gRPC service "x.Y" in the proto files'
+
+---
+name: "merged keys overridden by explicit ones are not set twice"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: &base {userName: a, email: x}
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {<<: *base, userName: b, email: y}
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+
+---
+name: "a merged key that names a field again is set twice"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: &base {userName: a}
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {<<: *base, user_name: b}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['field t.Req.user_name is set twice: "user_name" and "userName"']
+
+---
+name: "options through aliases are used"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    files: &files [svc.proto]
+  steps:
+    - protocol: grpc
+      request:
+        options: &opts
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {bogus1: 1}
+    - protocol: grpc
+      request:
+        options: *opts
+        service: t.S
+        method: Hello
+        message: {bogus2: 1}
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: *files
+        service: t.S
+        method: Hello
+        message: {bogus3: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus1" in t.Req', 'unknown field "bogus2" in t.Req', 'unknown field "bogus3" in t.Req']
+
+---
+name: "a null google.protobuf.Value member of a oneof is set"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          any: null
+          phone: "b"
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['oneof t.Req.contact is set twice: "any" and "phone"']
+
+---
+name: "the protocol name is not case-sensitive"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      protocol: gRPC
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {bogus: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus" in t.Req']
+
+---
+name: "an anchor name reused in another document is that document's"
+files:
+  proto/a.proto: |
+    syntax = "proto3";
+    package a;
+    service A { rpc M(R) returns (R); }
+    message R { string x = 1; }
+  proto/b.proto: |
+    syntax = "proto3";
+    package b;
+    service B { rpc M(R) returns (R); }
+    message R { string y = 1; }
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    o: &o {proto: {imports: [proto], files: [a.proto]}}
+  steps:
+    - protocol: grpc
+      request:
+        options: *o
+        service: a.A
+        method: M
+        message: {bogusA: 1}
+  ---
+  schemaVersion: scenario/v1
+  vars:
+    o: &o {proto: {imports: [proto], files: [b.proto]}}
+  steps:
+    - protocol: grpc
+      request:
+        options: *o
+        service: b.B
+        method: M
+        message: {bogusB: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogusA" in a.R', 'unknown field "bogusB" in b.R']
+    excludes: ['unknown gRPC service "a.A" in the proto files', 'unknown gRPC service "b.B" in the proto files']
+
+---
+name: "block scalars and tags in the options read as scenarigo reads them"
+files:
+  proto/a.proto: |
+    syntax = "proto3";
+    package a;
+    service A { rpc M(R) returns (R); }
+    message R { string x = 1; }
+  proto/b.proto: |
+    syntax = "proto3";
+    package b;
+    service B { rpc M(R) returns (R); }
+    message R { string y = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          reflection: {enabled: !!bool "false"}
+          proto:
+            imports: [proto]
+            files:
+              - >-
+                a.proto
+        service: a.A
+        method: M
+        message: {bogus: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus" in a.R']
+
+---
+name: "protocols.gRPC of scenarigo.yaml is the gRPC options"
+files:
+  proto/a.proto: |
+    syntax = "proto3";
+    package a;
+    service A { rpc M(R) returns (R); }
+    message R { string x = 1; }
+  proto/b.proto: |
+    syntax = "proto3";
+    package b;
+    service B { rpc M(R) returns (R); }
+    message R { string y = 1; }
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    protocols:
+      gRPC:
+        request:
+          proto: {imports: [proto], files: [a.proto]}
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        service: a.A
+        method: M
+        message: {bogus: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus" in a.R']

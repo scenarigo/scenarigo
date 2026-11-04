@@ -216,7 +216,7 @@ func (s *Server) handleDidChangeWatchedFiles(req *Request) {
 		case extYAML, extYML:
 			s.updateIncludeIndexes(path, change.Type == FileChangeTypeDeleted)
 		case ".proto":
-			// Republishing below is all a proto file change needs here.
+			s.forgetProtos()
 		default:
 			// A directory, created, moved or deleted with what it holds; other
 			// files that still exist do not matter.

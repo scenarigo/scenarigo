@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf16"
 )
 
@@ -1208,4 +1209,174 @@ func TestEditorSession_WatchedPaths(t *testing.T) {
 			t.Errorf("expected the scenario of the new directory to include the file, got %v", p)
 		}
 	})
+}
+
+// TestEditorSession_GRPCProtoExample checks examples/grpc/scenarios/proto.yaml:
+// the steps whose options list proto files complete services, methods and
+// message fields, and the first step, which uses reflection, gets nothing
+// from the proto files.
+func TestEditorSession_GRPCProtoExample(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "grpc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "scenarios", "proto.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	lines := strings.Split(text, "\n")
+	// at returns the position after "key: " on the n-th (0-based) line with the key.
+	at := func(key string, n int) (int, int) {
+		t.Helper()
+		for i, l := range lines {
+			if strings.HasPrefix(strings.TrimSpace(l), key+":") {
+				if n == 0 {
+					return i, strings.Index(l, key+":") + len(key) + 2
+				}
+				n--
+			}
+		}
+		t.Fatalf("no %s line", key)
+		return 0, 0
+	}
+
+	client := newRunningTestClient(t)
+	client.initialize(1, pathToURI(dir))
+	uri := pathToURI(path)
+	diags := client.openDocumentAndGetDiagnostics(uri, text)
+	for _, d := range diags.Diagnostics {
+		if d.Severity == DiagnosticSeverityError || d.Severity == DiagnosticSeverityWarning {
+			t.Errorf("line %d: %s", d.Range.Start.Line+1, d.Message)
+		}
+	}
+
+	const ping = "scenarigo.examples.grpc.service.Ping"
+	line, char := at("service", 0)
+	if labels := labelList(client.complete(2, uri, line, char).Items); slices.Contains(labels, ping) {
+		t.Errorf("step 1 uses reflection, but got services %v", labels)
+	}
+	line, char = at("service", 1)
+	if labels := labelList(client.complete(3, uri, line, char).Items); !slices.Contains(labels, ping) {
+		t.Errorf("step 2: expected %s, got %v", ping, labels)
+	}
+	line, char = at("method", 1)
+	if labels := labelList(client.complete(4, uri, line, char).Items); !slices.Contains(labels, "Ping") {
+		t.Errorf("step 2: expected the Ping method, got %v", labels)
+	}
+	line, _ = at("messageId", 0)
+	char = strings.Index(lines[line], "messageId")
+	// messageBody is set on the next line.
+	if labels := labelList(client.complete(5, uri, line, char).Items); !slices.Contains(labels, "messageId") || slices.Contains(labels, "messageBody") {
+		t.Errorf("step 3: expected the EchoRequest fields that are not set, got %v", labels)
+	}
+}
+
+// TestEditorSession_GRPCProtoChanged checks that the compiled proto files are
+// forgotten when an imported proto file changes on disk.
+func TestEditorSession_GRPCProtoChanged(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	dir := uriToPath(root)
+	writeFile(t, filepath.Join(dir, "proto", "svc.proto"), "syntax = \"proto3\";\npackage p;\nimport \"common.proto\";\nservice S { rpc M(common.Req) returns (common.Req); }\n")
+	common := filepath.Join(dir, "proto", "common.proto")
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string before = 1; }\n")
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	text, line, char, _ := parseCursorMarker("schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [proto]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        $0\n")
+	client.openDocument(uri, text)
+	if labels := labelList(client.complete(2, uri, line, char).Items); !slices.Contains(labels, "before") {
+		t.Fatalf("expected before, got %v", labels)
+	}
+
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string after = 1; }\n")
+	client.watchedFilesChanged(FileEvent{URI: pathToURI(common), Type: FileChangeTypeChanged})
+	client.sync(3)
+	if labels := labelList(client.complete(4, uri, line, char).Items); !slices.Contains(labels, "after") {
+		t.Errorf("expected the field of the changed import, got %v", labels)
+	}
+}
+
+func TestEditorSession_GRPCProtoOutsideWorkspace(t *testing.T) {
+	client := newRunningTestClient(t)
+	base := t.TempDir()
+	ws := filepath.Join(base, "ws")
+	common := filepath.Join(base, "shared", "common.proto")
+	writeFile(t, filepath.Join(base, "shared", "svc.proto"), "syntax = \"proto3\";\npackage p;\nimport \"common.proto\";\nservice S { rpc M(common.Req) returns (common.Req); }\n")
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string before = 1; }\n")
+	if err := os.MkdirAll(ws, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	client.initialize(1, pathToURI(ws))
+
+	uri := pathToURI(filepath.Join(ws, "test.yaml"))
+	text, line, char, _ := parseCursorMarker("schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [../shared]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        $0\n")
+	client.openDocument(uri, text)
+	if labels := labelList(client.complete(2, uri, line, char).Items); !slices.Contains(labels, "before") {
+		t.Fatalf("expected before, got %v", labels)
+	}
+
+	// No watcher covers the import outside the workspace folder.
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string after = 1; }\n")
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(common, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if labels := labelList(client.complete(3, uri, line, char).Items); !slices.Contains(labels, "after") {
+		t.Errorf("expected the field of the changed import, got %v", labels)
+	}
+}
+
+func TestEditorSession_GRPCProtoDirectoryMoved(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	dir := uriToPath(root)
+	writeFile(t, filepath.Join(dir, "proto", "svc.proto"), "syntax = \"proto3\";\npackage p;\nimport \"common/common.proto\";\nservice S { rpc M(common.Req) returns (common.Req); }\n")
+	writeFile(t, filepath.Join(dir, "proto", "common", "common.proto"), "syntax = \"proto3\";\npackage common;\nmessage Req { string before = 1; }\n")
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	text, line, char, _ := parseCursorMarker("schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [proto]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        $0\n")
+	client.openDocument(uri, text)
+	if labels := labelList(client.complete(2, uri, line, char).Items); !slices.Contains(labels, "before") {
+		t.Fatalf("expected before, got %v", labels)
+	}
+
+	from, to := filepath.Join(dir, "proto", "common"), filepath.Join(dir, "proto", "old")
+	if err := os.Rename(from, to); err != nil {
+		t.Fatal(err)
+	}
+	client.watchedFilesChanged(
+		FileEvent{URI: pathToURI(from), Type: FileChangeTypeDeleted},
+		FileEvent{URI: pathToURI(to), Type: FileChangeTypeCreated},
+	)
+	client.sync(3)
+	if labels := labelList(client.complete(4, uri, line, char).Items); slices.Contains(labels, "before") {
+		t.Errorf("the import is gone, but its field is still offered: %v", labels)
+	}
+}
+
+// TestEditorSession_GRPCProtoKeyBeingTyped completes a key typed on a line of
+// its own: until its colon the document does not parse as YAML, and the
+// edit must still replace what was typed.
+func TestEditorSession_GRPCProtoKeyBeingTyped(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	writeFile(t, filepath.Join(uriToPath(root), "proto", "svc.proto"), "syntax = \"proto3\";\npackage p;\nservice S { rpc M(Req) returns (Req); }\nmessage Req { string user_name = 1; string email = 2; }\n")
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	head := "schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [proto]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        userName: x\n"
+	client.openDocument(uri, head+"        \n")
+	client.changeDocument(uri, 2, head+"        em\n")
+	list := client.complete(2, uri, 12, 10)
+	i := slices.IndexFunc(list.Items, func(item CompletionItem) bool { return item.Label == "email" })
+	if i < 0 || slices.ContainsFunc(list.Items, func(item CompletionItem) bool { return item.Label == "userName" }) {
+		t.Fatalf("expected email and not userName, got %v", labelList(list.Items))
+	}
+	if edit := list.Items[i].TextEdit; edit == nil || edit.Range.Start.Character != 8 || edit.Range.End.Character != 10 || edit.NewText != "email: " {
+		t.Errorf("email edits %+v, want 12:8-10 with \"email: \"", edit)
+	}
 }

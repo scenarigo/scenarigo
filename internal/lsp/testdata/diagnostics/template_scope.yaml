@@ -261,3 +261,19 @@ document: |
 operation: diagnostics
 expect:
   diagnosticCount: 0
+---
+name: "an alias takes the last anchor of its name in its document"
+document: |
+  schemaVersion: scenario/v1
+  vars: {user: &user {name: alice}}
+  steps:
+    - vars: *user
+      protocol: http
+      request: {method: GET, url: "http://x/{{vars.name}}/{{vars.id}}"}
+    - vars: &user {name: bob, id: 2}
+      protocol: http
+      request: {method: GET, url: "http://x"}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes: ['vars.id is not defined before this point (a plugin setup may define it)']

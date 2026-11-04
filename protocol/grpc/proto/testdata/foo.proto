@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package scenarigo.testdata.foo;
 
+// Foo is a test service.
 service Foo {
     rpc Ping(Empty) returns (Empty) {};
 }
