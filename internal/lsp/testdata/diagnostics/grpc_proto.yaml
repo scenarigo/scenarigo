@@ -1,0 +1,223 @@
+---
+name: "unknown services, methods and fields are warnings"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        target: localhost:50051
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          userName: x
+          user_name: proto names are accepted
+          nmae: typo
+          address:
+            city: y
+            zip: unknown
+          addresses:
+            - city: z
+            - town: unknown
+          byKey:
+            home:
+              city: w
+              street: unknown
+          email: a@example.com
+          tag:
+            label: t
+      expect:
+        message:
+          message: hi
+          reply: unknown
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greter
+        method: Hello
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Helo
+operation: diagnostics
+expect:
+  diagnosticCount: 7
+  diagnostics:
+    - message: 'unknown field "nmae" in test.v1.HelloRequest'
+      severity: 2
+      startLine: 14
+      startChar: 8
+      endChar: 12
+    - message: 'unknown field "zip" in test.v1.Address'
+      severity: 2
+    - message: 'unknown field "town" in test.v1.Address'
+      severity: 2
+    - message: 'unknown field "street" in test.v1.Address'
+      severity: 2
+    - message: 'unknown field "reply" in test.v1.HelloReply'
+      severity: 2
+    - message: 'unknown gRPC service "test.v1.Greter" in the proto files'
+      severity: 2
+    - message: 'unknown method "Helo" of test.v1.Greeter'
+      severity: 2
+
+---
+name: "templates are not validated"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    msg: {}
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message: '{{vars.msg}}'
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          address: '{{vars.msg}}'
+      expect:
+        message:
+          '{{assert.and <-}}':
+            - '{{assert.notZero}}'
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: '{{vars.service}}'
+        method: Hello
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'unknown gRPC service "{{vars.service}}" in the proto files'
+      - 'unknown field "{{assert.and <-}}" in test.v1.HelloReply'
+
+---
+name: "proto files that do not compile give no proto diagnostics"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [missing.proto]
+        service: anything
+        method: Anything
+        message:
+          whatever: 1
+operation: diagnostics
+expect:
+  diagnosticCount: 0

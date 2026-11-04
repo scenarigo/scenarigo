@@ -47,6 +47,8 @@ type Server struct {
 	watchRegistration  string                   // id of the current watcher registration
 	rootOnly           bool                     // the folders come from rootUri alone
 	requestSeq         int                      // ids of the requests sent to the client
+	protoMu            sync.Mutex
+	protoCache         map[string]*protoCacheEntry // compiled proto files, see grpcproto.go
 }
 
 // NewServer creates a new LSP server that communicates over stdio.
@@ -1323,6 +1325,9 @@ func (s *Server) complete(doc *document, pos Position) []CompletionItem {
 	if ctx == nil {
 		return nil
 	}
+	if items, ok := s.completeProto(doc, ctx, pos); ok {
+		return items
+	}
 
 	switch ctx.Type {
 	case yamlutil.CursorContextKey:
@@ -1762,6 +1767,9 @@ func (s *Server) hover(doc *document, pos Position) *Hover {
 	if nodePath == nil || len(nodePath.Keys) == 0 {
 		return nil
 	}
+	if h := s.hoverProto(doc, nodePath, pos); h != nil {
+		return h
+	}
 
 	field := sch.FindField(nodePath.Keys)
 	if field == nil {
@@ -1809,6 +1817,7 @@ func (s *Server) publishDiagnostics(uri string) {
 	default:
 		diagnostics = append(diagnostics, s.validateDocument(doc, sch)...)
 		diagnostics = append(diagnostics, s.templateDiagnostics(doc)...)
+		diagnostics = append(diagnostics, s.protoDiagnostics(doc)...)
 	}
 
 	for i := range diagnostics {

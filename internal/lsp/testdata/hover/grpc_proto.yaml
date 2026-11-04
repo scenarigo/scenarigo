@@ -1,0 +1,188 @@
+---
+name: "hover on a field shows its type and comment"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          user$0Name: x
+operation: hover
+expect:
+  hoverContains: ["user_name", "string", "user_name is the name to greet."]
+
+---
+name: "hover on a nested field"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hello
+        message:
+          addresses:
+            - ci$0ty: x
+operation: hover
+expect:
+  hoverContains: ["city", "string", "test.v1.Address"]
+
+---
+name: "hover on the service and the method shows their comments"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Gre$0eter
+        method: Hello
+operation: hover
+expect:
+  hoverContains: ["test.v1.Greeter", "Greeter greets."]
+
+---
+name: "hover on the method"
+files:
+  proto/greeter.proto: |
+    syntax = "proto3";
+    package test.v1;
+    import "common.proto";
+    // Greeter greets.
+    service Greeter {
+      // Hello says hello.
+      rpc Hello(HelloRequest) returns (HelloReply);
+      rpc Chat(stream HelloRequest) returns (stream HelloReply);
+    }
+    message HelloRequest {
+      // user_name is the name to greet.
+      string user_name = 1;
+      Address address = 2;
+      repeated Address addresses = 3;
+      map<string, Address> by_key = 4;
+      oneof contact {
+        string email = 5;
+        string phone = 6;
+      }
+      common.Tag tag = 7;
+    }
+    message Address { string city = 1; }
+    message HelloReply { string message = 1; }
+  proto/common.proto: |
+    syntax = "proto3";
+    package common;
+    message Tag { string label = 1; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [greeter.proto]
+        service: test.v1.Greeter
+        method: Hel$0lo
+operation: hover
+expect:
+  hoverContains: ["Hello", "test.v1.HelloRequest", "test.v1.HelloReply", "Hello says hello."]

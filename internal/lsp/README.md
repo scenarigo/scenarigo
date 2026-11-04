@@ -101,7 +101,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/prepareRename` | Supported | Selects the name under the cursor, or reports why it cannot be renamed |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
-| `workspace/didChangeWatchedFiles` | Supported | A change on disk drops what the server derived from the file: the symbols of a plugin source directory, the include index entry of a scenario, and for a directory event everything under the directory. Every change, `scenarigo.yaml` and proto files included, publishes the diagnostics of the open documents again. The watchers (`**/*.{yaml,yml}`, `**/*.go`, `**/*.proto`, and `**/*` for creations and deletions, which catches directories) are registered with `client/registerCapability` when the client supports dynamic registration, and the registration is replaced when folders change; plugin sources outside the workspace folders are not watched |
+| `workspace/didChangeWatchedFiles` | Supported | A change on disk drops what the server derived from the file: the symbols of a plugin source directory, the include index entry of a scenario, the compiled proto files, and for a directory event everything under the directory. Every change, `scenarigo.yaml` and proto files included, publishes the diagnostics of the open documents again. The watchers (`**/*.{yaml,yml}`, `**/*.go`, `**/*.proto`, and `**/*` for creations and deletions, which catches directories) are registered with `client/registerCapability` when the client supports dynamic registration, and the registration is replaced when folders change; plugin sources outside the workspace folders are not watched |
 | `workspace/didChangeWorkspaceFolders` | Supported | Folders can be added and removed while the server runs |
 
 ### Completion
@@ -116,6 +116,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Partial match filtering | Supported | Filters candidates by prefix as you type |
 | File path completion | Supported | Filesystem-based candidates for `include`, `plugins`, `scenarios`, `pluginDirectory` |
 | Plugin name completion | Supported | `{{plugins.` suggests plugin names from document and config |
+| gRPC from proto files | Supported | For a gRPC step that reads proto files as scenarigo does (reflection disabled and `files` listed in the step's options or, when the step has none, in those of `scenarigo.yaml`; paths relative to the scenario): service and method names, and the fields of request and expected messages, also nested, repeated, map values, oneofs and streamed `messages`. Reflection is never used |
 | Plugin export completion | Supported | `{{plugins.grpc.` suggests exported functions/variables by parsing Go source (resolved via `PluginConfig.Src` in `scenarigo.yaml`) |
 
 ### Diagnostics
@@ -126,6 +127,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Enum value validation | Supported | Warns on values not in the allowed set (lists allowed values); an empty value is accepted where scenarigo reads it as the default (`schemaVersion`, HTTP `method`, `telemetry.tracing.exporter`); `protocol` only gets an information diagnostic because plugins can register more protocols |
 | YAML syntax errors | Supported | Reports parse failures |
 | Type checking | Supported | Type mismatches (string/int/bool/object/array); template expressions are accepted |
+| gRPC from proto files | Supported | Warns on unknown services, methods and message fields (proto, text and JSON names are accepted, as scenarigo does); a template value and a mapping with a template key (an assertion) are not checked; proto files that do not compile give no diagnostics |
 | Required field validation | Supported | Warns when required fields are missing (e.g., `method`/`url` in HTTP request) |
 | Template syntax errors | Supported | Parses `{{ }}` with scenarigo's own template parser and reports an error where `scenarigo run` would fail, including an operand the parser leaves empty (`{{a ==}}`); only fields scenarigo evaluates are checked (`vars` and `secrets` of a scenario, the steps' `if`, `vars`, `secrets`, `request`, `expect`, `bind`, `ref`, and `vars`, `secrets`, `protocols` of `scenarigo.yaml`) |
 | Template names | Supported | Warns on unknown root names (other than `ctx`, `vars`, `secrets`, `plugins`, `steps`, `request`, `response`, `env`, `assert`, `$` and the built-in functions), unknown `assert.x`, `steps.<id>` without a step of that id that has run before, and `plugins.<name>` not declared in the file, `scenarigo.yaml` or a scenario that includes the file; an undefined `vars.x`/`secrets.x` is only information because a plugin setup can add variables. Names are checked in scenarigo's evaluation order (a step's `if` and `vars` cannot use its own `vars`; `bind` and ids are visible to later steps), aliases and merge keys are resolved, and the `bind` of an `include` step sees the included scenario's steps and vars. The scenarios that include a file (found by one walk of the workspace, then updated from the open buffers) lend it their plugins and vars, including the vars of the include step. The `protocols` options of `scenarigo.yaml` are evaluated in each step's context, so only their syntax and root names are checked. A path directly on the left of `??` or inside `defined()` may be missing; `defined()` of anything else is an error |
@@ -137,6 +139,7 @@ vim.api.nvim_create_autocmd("FileType", {
 |---|---|---|
 | Hover | Supported | Shows field name, type, description, and allowed values in Markdown |
 | Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{steps.id}}` to the step's `id`, `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
+| gRPC hover | Supported | The type and comments of a message field, and the comments of a service or a method, from proto files |
 | Document Symbol | Supported | Hierarchical symbol tree from YAML structure; steps use their `title` as the symbol name |
 | Code Action | Supported | Suggests quick fixes for unknown fields using Levenshtein distance (<= 3) |
 | Schema auto-detection | Supported | Detects config, scenario, or ytt input from the `schemaVersion` value |
@@ -184,6 +187,7 @@ internal/lsp/
   ytt.go                # ytt annotation handling
   rename.go             # textDocument/rename and prepareRename
   workspace.go          # Workspace folders and watched files
+  grpcproto.go          # gRPC services, methods and messages from proto files
   navigation.go         # Name chains, step definitions and document spans for navigation
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)

@@ -364,6 +364,7 @@ func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char in
 	client := newRunningTestClient(t)
 
 	root, file := newWorkspace(t)
+	writeFixtureFiles(t, uriToPath(root), tc.Files)
 	client.initialize(1, root)
 
 	uri := file("test.yaml")

@@ -1209,3 +1209,90 @@ func TestEditorSession_WatchedPaths(t *testing.T) {
 		}
 	})
 }
+
+// TestEditorSession_GRPCProtoExample checks examples/grpc/scenarios/proto.yaml:
+// the steps whose options list proto files complete services, methods and
+// message fields, and the first step, which uses reflection, gets nothing
+// from the proto files.
+func TestEditorSession_GRPCProtoExample(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "examples", "grpc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "scenarios", "proto.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	lines := strings.Split(text, "\n")
+	// at returns the position after "key: " on the n-th (0-based) line with the key.
+	at := func(key string, n int) (int, int) {
+		t.Helper()
+		for i, l := range lines {
+			if strings.HasPrefix(strings.TrimSpace(l), key+":") {
+				if n == 0 {
+					return i, strings.Index(l, key+":") + len(key) + 2
+				}
+				n--
+			}
+		}
+		t.Fatalf("no %s line", key)
+		return 0, 0
+	}
+
+	client := newRunningTestClient(t)
+	client.initialize(1, pathToURI(dir))
+	uri := pathToURI(path)
+	diags := client.openDocumentAndGetDiagnostics(uri, text)
+	for _, d := range diags.Diagnostics {
+		if d.Severity == DiagnosticSeverityError || d.Severity == DiagnosticSeverityWarning {
+			t.Errorf("line %d: %s", d.Range.Start.Line+1, d.Message)
+		}
+	}
+
+	const ping = "scenarigo.examples.grpc.service.Ping"
+	line, char := at("service", 0)
+	if labels := labelList(client.complete(2, uri, line, char).Items); slices.Contains(labels, ping) {
+		t.Errorf("step 1 uses reflection, but got services %v", labels)
+	}
+	line, char = at("service", 1)
+	if labels := labelList(client.complete(3, uri, line, char).Items); !slices.Contains(labels, ping) {
+		t.Errorf("step 2: expected %s, got %v", ping, labels)
+	}
+	line, char = at("method", 1)
+	if labels := labelList(client.complete(4, uri, line, char).Items); !slices.Contains(labels, "Ping") {
+		t.Errorf("step 2: expected the Ping method, got %v", labels)
+	}
+	line, _ = at("messageId", 0)
+	char = strings.Index(lines[line], "messageId")
+	if labels := labelList(client.complete(5, uri, line, char).Items); !slices.Contains(labels, "messageId") || !slices.Contains(labels, "messageBody") {
+		t.Errorf("step 3: expected the EchoRequest fields, got %v", labels)
+	}
+}
+
+// TestEditorSession_GRPCProtoChanged checks that the compiled proto files are
+// forgotten when an imported proto file changes on disk.
+func TestEditorSession_GRPCProtoChanged(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	dir := uriToPath(root)
+	writeFile(t, filepath.Join(dir, "proto", "svc.proto"), "syntax = \"proto3\";\npackage p;\nimport \"common.proto\";\nservice S { rpc M(common.Req) returns (common.Req); }\n")
+	common := filepath.Join(dir, "proto", "common.proto")
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string before = 1; }\n")
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	text, line, char, _ := parseCursorMarker("schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [proto]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        $0\n")
+	client.openDocument(uri, text)
+	if labels := labelList(client.complete(2, uri, line, char).Items); !slices.Contains(labels, "before") {
+		t.Fatalf("expected before, got %v", labels)
+	}
+
+	writeFile(t, common, "syntax = \"proto3\";\npackage common;\nmessage Req { string after = 1; }\n")
+	client.watchedFilesChanged(FileEvent{URI: pathToURI(common), Type: FileChangeTypeChanged})
+	client.sync(3)
+	if labels := labelList(client.complete(4, uri, line, char).Items); !slices.Contains(labels, "after") {
+		t.Errorf("expected the field of the changed import, got %v", labels)
+	}
+}
