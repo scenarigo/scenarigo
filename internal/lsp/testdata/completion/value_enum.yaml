@@ -10,3 +10,14 @@ operation: completion
 expect:
   completionLabels:
     contains: [http, grpc]
+---
+name: "telemetry tracing exporter value completion"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    tracing:
+      exporter: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [none, otlp]

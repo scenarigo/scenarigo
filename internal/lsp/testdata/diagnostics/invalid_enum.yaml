@@ -34,3 +34,29 @@ expect:
   diagnosticMessages:
     contains:
       - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1, config/v1)'
+---
+name: "unknown telemetry exporter is an error"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    tracing:
+      exporter: jaeger
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'invalid value "jaeger" for field "exporter" (allowed: none, otlp)'
+---
+name: "valid telemetry config has no diagnostics"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    tracing:
+      exporter: otlp
+    propagation:
+      traceparent: true
+      baggage: false
+      legacyHeaders: false
+operation: diagnostics
+expect:
+  diagnosticCount: 0

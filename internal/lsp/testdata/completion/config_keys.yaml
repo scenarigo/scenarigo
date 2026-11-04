@@ -19,3 +19,24 @@ expect:
   completionLabels:
     contains: [src]
     excludes: [scenarios, plugins]
+---
+name: "config top-level key completion includes telemetry"
+document: |
+  schemaVersion: config/v1
+  $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [telemetry]
+---
+name: "telemetry propagation key completion"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    propagation:
+      $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [traceparent, baggage, legacyHeaders]
+    excludes: [exporter, tracing]

@@ -42,6 +42,7 @@ func ConfigSchema() *Schema {
 			{Name: "execution", Type: FieldTypeObject, Description: "Execution settings", Children: []*FieldInfo{
 				{Name: "parallel", Type: FieldTypeInt, Description: "Number of parallel test executions"},
 			}},
+			{Name: "telemetry", Type: FieldTypeObject, Description: "Telemetry settings", Children: telemetryFields()},
 		},
 	}
 }
@@ -116,6 +117,19 @@ func stepFields() []*FieldInfo {
 func pluginConfigFields() []*FieldInfo {
 	return []*FieldInfo{
 		{Name: "src", Type: FieldTypeString, Description: "Go module path or local directory of the plugin source", IsFilePath: true},
+	}
+}
+
+func telemetryFields() []*FieldInfo {
+	return []*FieldInfo{
+		{Name: "tracing", Type: FieldTypeObject, Description: "Tracing settings", Children: []*FieldInfo{
+			{Name: "exporter", Type: FieldTypeString, Description: "Span exporter: none (default) or otlp (OTEL_TRACES_EXPORTER overrides it)", EnumValues: []string{"none", "otlp"}},
+		}},
+		{Name: "propagation", Type: FieldTypeObject, Description: "Headers added to outgoing requests", Children: []*FieldInfo{
+			{Name: "traceparent", Type: FieldTypeBool, Description: "Send the W3C traceparent header (default: true)"},
+			{Name: "baggage", Type: FieldTypeBool, Description: "Send the W3C baggage header (default: true)"},
+			{Name: "legacyHeaders", Type: FieldTypeBool, Description: "Send the Scenarigo-* headers and scenarigo-*-bin metadata (default: true)"},
+		}},
 	}
 }
 
