@@ -51,3 +51,28 @@ func TestCompiler(t *testing.T) {
 		})
 	}
 }
+
+func TestCompilerWithSourceInfo(t *testing.T) {
+	for name, test := range map[string]struct {
+		opts     []CompilerOption
+		comments bool
+	}{
+		"default":          {},
+		"with source info": {opts: []CompilerOption{WithSourceInfo()}, comments: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fds, err := NewCompiler(nil, test.opts...).Compile(t.Context(), []string{"./testdata/foo.proto"})
+			if err != nil {
+				t.Fatalf("failed to compile: %s", err)
+			}
+			sd, err := fds.ResolveService("scenarigo.testdata.foo.Foo")
+			if err != nil {
+				t.Fatal(err)
+			}
+			loc := sd.ParentFile().SourceLocations().ByDescriptor(sd)
+			if got := loc.LeadingComments != ""; got != test.comments {
+				t.Errorf("leading comments %q: present = %v, want %v", loc.LeadingComments, got, test.comments)
+			}
+		})
+	}
+}

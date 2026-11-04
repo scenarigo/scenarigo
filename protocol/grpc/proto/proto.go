@@ -17,15 +17,31 @@ type ServiceDescriptorResolver interface {
 }
 
 // NewCompiler creates a new compiler with the given import paths.
-func NewCompiler(imports []string) *Compiler {
-	return &Compiler{
+func NewCompiler(imports []string, opts ...CompilerOption) *Compiler {
+	c := &Compiler{
 		imports: imports,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+// CompilerOption configures a Compiler.
+type CompilerOption func(*Compiler)
+
+// WithSourceInfo keeps the source code information, such as comments, in the
+// compiled descriptors. It costs memory, so it is off by default.
+func WithSourceInfo() CompilerOption {
+	return func(c *Compiler) {
+		c.sourceInfo = true
 	}
 }
 
 // Compiler is a compiler for proto files.
 type Compiler struct {
-	imports []string
+	imports    []string
+	sourceInfo bool
 }
 
 // Compile compiles the given file names into fully-linked descriptors.
@@ -34,6 +50,9 @@ func (c *Compiler) Compile(ctx context.Context, files []string) (FileDescriptors
 		Resolver: protocompile.WithStandardImports(&protocompile.SourceResolver{
 			ImportPaths: c.imports,
 		}),
+	}
+	if c.sourceInfo {
+		compiler.SourceInfoMode = protocompile.SourceInfoStandard
 	}
 	fds, err := compiler.Compile(ctx, files...)
 	if err != nil {
