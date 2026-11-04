@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+// goosWindows is the runtime.GOOS value of Windows, where file URIs carry a
+// drive letter.
+const goosWindows = "windows"
+
 // uriToPath converts a file URI sent by the client into a local file path.
 // Clients percent-encode URIs (spaces, non-ASCII characters), so the path is
 // unescaped here. It returns "" for URIs that are not file URIs.
@@ -16,7 +20,7 @@ func uriToPath(uri string) string {
 		return ""
 	}
 	path := u.Path
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		// file:///C:/dir/file.yaml parses as "/C:/dir/file.yaml".
 		if len(path) >= 3 && path[0] == '/' && path[2] == ':' {
 			path = path[1:]

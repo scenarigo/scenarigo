@@ -80,8 +80,7 @@ func compareFields(t *testing.T, path string, fields []*FieldInfo, typ reflect.T
 // yamlFields returns the YAML-tagged fields of a struct type keyed by YAML name.
 func yamlFields(typ reflect.Type) map[string]reflect.StructField {
 	out := map[string]reflect.StructField{}
-	for i := range typ.NumField() {
-		sf := typ.Field(i)
+	for sf := range typ.Fields() {
 		if !sf.IsExported() {
 			continue
 		}

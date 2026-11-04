@@ -7,7 +7,7 @@ import (
 )
 
 func TestURIToPath(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip("POSIX paths")
 	}
 	tests := map[string]struct {
@@ -32,7 +32,7 @@ func TestURIToPath(t *testing.T) {
 }
 
 func TestPathToURI(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == goosWindows {
 		t.Skip("POSIX paths")
 	}
 	tests := map[string]struct {
