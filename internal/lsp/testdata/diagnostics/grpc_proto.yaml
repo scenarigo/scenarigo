@@ -397,3 +397,256 @@ expect:
   diagnosticMessages:
     excludes:
       - 'unknown gRPC service "x.Y" in the proto files'
+
+---
+name: "merged keys overridden by explicit ones are not set twice"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: &base {userName: a, email: x}
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {<<: *base, userName: b, email: y}
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+
+---
+name: "a merged key that names a field again is set twice"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: &base {userName: a}
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {<<: *base, user_name: b}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['field t.Req.user_name is set twice: "user_name" and "userName"']
+
+---
+name: "options through aliases are used"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    files: &files [svc.proto]
+  steps:
+    - protocol: grpc
+      request:
+        options: &opts
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {bogus1: 1}
+    - protocol: grpc
+      request:
+        options: *opts
+        service: t.S
+        method: Hello
+        message: {bogus2: 1}
+    - protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: *files
+        service: t.S
+        method: Hello
+        message: {bogus3: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus1" in t.Req', 'unknown field "bogus2" in t.Req', 'unknown field "bogus3" in t.Req']
+
+---
+name: "a null google.protobuf.Value member of a oneof is set"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      protocol: grpc
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message:
+          any: null
+          phone: "b"
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['oneof t.Req.contact is set twice: "any" and "phone"']
+
+---
+name: "the protocol name is not case-sensitive"
+files:
+  proto/svc.proto: |
+    syntax = "proto3";
+    package t;
+    import "google/protobuf/struct.proto";
+    service S {
+      rpc Hello(Req) returns (Reply);
+      rpc Chat(stream Req) returns (stream Reply);
+    }
+    message Req {
+      string user_name = 1;
+      string id = 2;
+      string title = 3;
+      string method = 4;
+      repeated Item items = 5;
+      oneof contact {
+        string email = 6;
+        string phone = 7;
+        google.protobuf.Value any = 9;
+      }
+      string message = 8;
+    }
+    message Item { string name = 1; int32 age = 2; }
+    message Reply { string message = 1; string code = 2; }
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: first
+      protocol: gRPC
+      request:
+        options:
+          proto:
+            imports: [proto]
+            files: [svc.proto]
+        service: t.S
+        method: Hello
+        message: {bogus: 1}
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains: ['unknown field "bogus" in t.Req']

@@ -175,6 +175,7 @@ type CompletionItem struct {
 	InsertText    string    `json:"insertText,omitempty"`
 	TextEdit      *TextEdit `json:"textEdit,omitempty"`
 	SortText      string    `json:"sortText,omitempty"`
+	FilterText    string    `json:"filterText,omitempty"`
 }
 
 // CompletionItemKind values.

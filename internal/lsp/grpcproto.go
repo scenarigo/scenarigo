@@ -75,7 +75,8 @@ func (s *Server) newProtoLookup() *protoLookup {
 // step does not use proto files or they cannot be compiled.
 func (l *protoLookup) step(doc *document, v *yamlView, step ast.Node) grpcproto.FileDescriptors {
 	entries := v.entries(step)
-	if v.stringValue(v.entryValue(entries, "protocol")) != "grpc" {
+	// scenarigo looks protocols up by their lower-case name.
+	if !strings.EqualFold(v.stringValue(v.entryValue(entries, "protocol")), "grpc") {
 		return nil
 	}
 	request := v.entries(v.entryValue(entries, "request"))
@@ -85,7 +86,7 @@ func (l *protoLookup) step(doc *document, v *yamlView, step ast.Node) grpcproto.
 	opts := &grpc.RequestOptions{}
 	if node := v.entryValue(request, "options"); node != nil {
 		var stepOpts grpc.RequestOptions
-		if err := yaml.NodeToValue(node, &stepOpts); err != nil {
+		if err := decodeResolved(v, node, &stepOpts); err != nil {
 			return nil
 		}
 		if err := mergo.Merge(opts, &stepOpts); err != nil {
@@ -118,6 +119,9 @@ func (l *protoLookup) step(doc *document, v *yamlView, step ast.Node) grpcproto.
 			return nil // evaluated at run time
 		}
 	}
+	if len(imports) == 0 {
+		imports, files = rootRelative(folderPath(l.s.rootURI), files)
+	}
 	key := protoCacheKey(imports, files)
 	fds, ok := l.compiled[key]
 	if !ok {
@@ -125,6 +129,78 @@ func (l *protoLookup) step(doc *document, v *yamlView, step ast.Node) grpcproto.
 		l.compiled[key] = fds
 	}
 	return fds
+}
+
+// rootRelative makes the files of a compilation without import paths
+// relative to the workspace root, which becomes the import path. scenarigo
+// reads such files by their absolute paths, and the files they import from
+// the current directory, which is where scenarigo.yaml is when it runs; the
+// server's own directory means nothing. Without a root, or for a file that
+// cannot be made relative to it, the files are left as they are.
+func rootRelative(root string, files []string) ([]string, []string) {
+	if root == "" {
+		return nil, files
+	}
+	rel := make([]string, 0, len(files))
+	for _, f := range files {
+		r, err := filepath.Rel(root, f)
+		if err != nil {
+			return nil, files
+		}
+		rel = append(rel, r)
+	}
+	return []string{root}, rel
+}
+
+// decodeResolved decodes a YAML node into out with its aliases and merge
+// keys resolved, as the loader reads it; yaml.NodeToValue alone does not
+// resolve them.
+func decodeResolved(v *yamlView, node ast.Node, out any) error {
+	b, err := yaml.Marshal(resolvedValue(v, node, 0))
+	if err != nil {
+		return err
+	}
+	return yaml.Unmarshal(b, out)
+}
+
+// resolvedValue returns the plain value of a YAML node, aliases and merge
+// keys resolved; an explicit key wins over a merged one.
+func resolvedValue(v *yamlView, node ast.Node, depth int) any {
+	if depth > maxAliasDepth {
+		return nil
+	}
+	switch n := v.unwrap(node).(type) {
+	case *ast.MappingNode, *ast.MappingValueNode:
+		m := map[string]any{}
+		for _, mv := range v.entries(n) {
+			k := keyString(v, mv.Key)
+			if _, ok := m[k]; !ok {
+				m[k] = resolvedValue(v, mv.Value, depth+1)
+			}
+		}
+		return m
+	case *ast.SequenceNode:
+		items := make([]any, 0, len(n.Values))
+		for _, item := range n.Values {
+			items = append(items, resolvedValue(v, item, depth+1))
+		}
+		return items
+	case ast.ScalarNode:
+		return n.GetValue()
+	default:
+		return nil
+	}
+}
+
+// keyString returns a mapping key as the loader reads it, without quotes.
+func keyString(v *yamlView, key ast.MapKeyNode) string {
+	if s, ok := v.unwrap(key).(ast.ScalarNode); ok {
+		return fmt.Sprint(s.GetValue())
+	}
+	if key == nil {
+		return ""
+	}
+	return key.String()
 }
 
 // hasClient reports whether a step sets request.client, which it then calls
@@ -156,7 +232,7 @@ func (s *Server) grpcConfigOptions() *grpc.Option {
 		return nil
 	}
 	var opt grpc.Option
-	if err := yaml.NodeToValue(node, &opt); err != nil {
+	if err := decodeResolved(v, node, &opt); err != nil {
 		return nil
 	}
 	return &opt
@@ -181,7 +257,8 @@ func (s *Server) compileProtos(imports, files []string) grpcproto.FileDescriptor
 		for _, f := range files {
 			entry.deps[f] = protoFileStamp(imports, f)
 		}
-		entry.retryAt = now.Add(protoRetryDelay(err))
+		// From the end of the compilation, which can take seconds.
+		entry.retryAt = time.Now().Add(protoRetryDelay(err))
 	} else {
 		entry.fds = fds
 		entry.deps = protoDeps(imports, fds)
@@ -460,15 +537,14 @@ func (s *Server) completeProto(doc *document, ctx *yamlutil.CursorContext, pos P
 	var items []CompletionItem
 	switch {
 	case ctx.Type == yamlutil.CursorContextValue && slices.Equal(path, []string{"request", "service"}):
-		edit := valueEditRange(doc.Text, pos)
+		slot, ok := valueSlotAt(doc.Text, pos)
+		if !ok {
+			return nil, false
+		}
 		names, _ := fds.ListServices()
 		for _, n := range names {
-			item := CompletionItem{
-				Label:    string(n),
-				Kind:     CompletionItemKindModule,
-				Detail:   "gRPC service",
-				TextEdit: &TextEdit{Range: edit, NewText: string(n)},
-			}
+			item := slot.item(string(n))
+			item.Kind, item.Detail = CompletionItemKindModule, "gRPC service"
 			if sd, err := fds.ResolveService(n); err == nil {
 				item.Documentation = comments(sd)
 			}
@@ -480,17 +556,18 @@ func (s *Server) completeProto(doc *document, ctx *yamlutil.CursorContext, pos P
 		if err != nil {
 			return nil, false
 		}
-		edit := valueEditRange(doc.Text, pos)
+		slot, ok := valueSlotAt(doc.Text, pos)
+		if !ok {
+			return nil, false
+		}
 		methods := sd.Methods()
 		for i := range methods.Len() {
 			m := methods.Get(i)
-			items = append(items, CompletionItem{
-				Label:         string(m.Name()),
-				Kind:          CompletionItemKindFunction,
-				Detail:        fmt.Sprintf("(%s) returns (%s)", m.Input().FullName(), m.Output().FullName()),
-				Documentation: comments(m),
-				TextEdit:      &TextEdit{Range: edit, NewText: string(m.Name())},
-			})
+			item := slot.item(string(m.Name()))
+			item.Kind = CompletionItemKindFunction
+			item.Detail = fmt.Sprintf("(%s) returns (%s)", m.Input().FullName(), m.Output().FullName())
+			item.Documentation = comments(m)
+			items = append(items, item)
 		}
 	case ctx.Type == yamlutil.CursorContextKey:
 		msg, rest := messageOf(protoMethod(fds, v, step), path)
@@ -498,7 +575,7 @@ func (s *Server) completeProto(doc *document, ctx *yamlutil.CursorContext, pos P
 		if md == nil {
 			return nil, false
 		}
-		items = completeFields(md, ctx, pos, path[0] == "request")
+		items = completeFields(md, doc.Text, pos, path[0] == "request")
 	default:
 		return nil, false
 	}
@@ -507,22 +584,22 @@ func (s *Server) completeProto(doc *document, ctx *yamlutil.CursorContext, pos P
 
 // completeFields completes the keys of a message: the fields not set yet,
 // by any of their names, and for a request message not in a oneof that is
-// set already, since protojson rejects both. Keys are completed with their
-// JSON name, filtered by the typed prefix.
-func completeFields(md protoreflect.MessageDescriptor, ctx *yamlutil.CursorContext, pos Position, request bool) []CompletionItem {
+// set already, since protojson rejects both. The keys already set are read
+// from the text around the cursor, which is current while the parsed
+// document may lag behind a line being typed. A key is completed with its
+// JSON name, or with its proto name when that is what the typed prefix
+// matches.
+func completeFields(md protoreflect.MessageDescriptor, text string, pos Position, request bool) []CompletionItem {
+	key := keyAt(text, pos)
 	set := map[protoreflect.FieldNumber]bool{}
 	oneofs := map[protoreflect.FullName]bool{}
-	for _, k := range ctx.ParentKeys {
+	for _, k := range siblingKeys(strings.Split(text, "\n"), pos.Line, key) {
 		if f := findField(md, k); f != nil {
 			set[f.Number()] = true
 			if o := f.ContainingOneof(); o != nil && !o.IsSynthetic() {
 				oneofs[o.FullName()] = true
 			}
 		}
-	}
-	edit := Range{
-		Start: Position{Line: pos.Line, Character: pos.Character - len(ctx.PartialKey)},
-		End:   pos,
 	}
 	var items []CompletionItem
 	fields := md.Fields()
@@ -535,12 +612,20 @@ func completeFields(md protoreflect.MessageDescriptor, ctx *yamlutil.CursorConte
 			continue
 		}
 		name := f.JSONName()
-		if !strings.HasPrefix(name, ctx.PartialKey) && !strings.HasPrefix(string(f.Name()), ctx.PartialKey) {
+		switch {
+		case strings.HasPrefix(name, key.prefix):
+		case strings.HasPrefix(string(f.Name()), key.prefix):
+			name = string(f.Name())
+		default:
 			continue
 		}
-		insert := name + ": "
-		if f.Message() != nil || f.IsList() || f.IsMap() {
-			insert = name + ":"
+		insert := name
+		switch {
+		case key.colon:
+		case f.Message() != nil || f.IsList() || f.IsMap():
+			insert += ":"
+		default:
+			insert += ": "
 		}
 		items = append(items, CompletionItem{
 			Label:         name,
@@ -548,41 +633,165 @@ func completeFields(md protoreflect.MessageDescriptor, ctx *yamlutil.CursorConte
 			Detail:        fieldType(f),
 			Documentation: comments(f),
 			InsertText:    insert,
-			TextEdit:      &TextEdit{Range: edit, NewText: insert},
+			TextEdit:      &TextEdit{Range: key.rng, NewText: insert},
 			SortText:      fmt.Sprintf("%03d_%s", i, name),
 		})
 	}
 	return items
 }
 
-// valueEditRange returns the range a completed value replaces: the value of
-// the key on the cursor's line, without quotes and a trailing comment,
-// extended to the cursor. Clients take only the word before the cursor
-// otherwise, which would double the dotted part of test.v1.Greeter.
-func valueEditRange(text string, pos Position) Range {
+// keySlot is the key under the cursor: the range of the word, the part of
+// it before the cursor, whether a colon follows it, and whether a sequence
+// dash comes before it on its line.
+type keySlot struct {
+	rng    Range
+	prefix string
+	colon  bool
+	dash   bool
+}
+
+func isKeyByte(c byte) bool {
+	return c == '_' || c == '-' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+func keyAt(text string, pos Position) keySlot {
 	line := lineAt(text, pos.Line)
 	cursor := min(pos.Character, len(line))
-	start := cursor
-	if colon := strings.Index(line[:cursor], ":"); colon >= 0 {
-		start = colon + 1
-		for start < len(line) && line[start] == ' ' {
-			start++
+	start, end := cursor, cursor
+	for start > 0 && isKeyByte(line[start-1]) {
+		start--
+	}
+	for end < len(line) && isKeyByte(line[end]) {
+		end++
+	}
+	return keySlot{
+		rng:    Range{Start: Position{Line: pos.Line, Character: start}, End: Position{Line: pos.Line, Character: end}},
+		prefix: line[start:cursor],
+		colon:  strings.HasPrefix(strings.TrimLeft(line[end:], " \t"), ":"),
+		dash:   strings.HasSuffix(strings.TrimRight(line[:start], " "), "-"),
+	}
+}
+
+// siblingKeys returns the keys of the block mapping that the key at a line
+// belongs to, above and below it: the keys at the same column, up to a line
+// indented less. A sequence item ends the mapping, and the first key of an
+// item sits after its dash.
+func siblingKeys(lines []string, line int, key keySlot) []string {
+	column := key.rng.Start.Character
+	var keys []string
+	// visit reports whether the scan goes on past the line.
+	visit := func(l string) bool {
+		content := strings.TrimLeft(l, " ")
+		indent := len(l) - len(content)
+		switch {
+		case content == "" || strings.HasPrefix(content, "#"):
+			return true
+		case indent > column:
+			return true
+		case indent == column:
+			if !strings.HasPrefix(content, "- ") && content != "-" {
+				keys = append(keys, mappingKey(content))
+			}
+			return true
 		}
-		if start < len(line) && (line[start] == '"' || line[start] == '\'') {
-			start++
+		// A line indented less ends the mapping; when it is the dash of the
+		// item the mapping belongs to, its first key counts.
+		col := indent
+		for strings.HasPrefix(l[col:], "- ") {
+			col += 2
+			for col < len(l) && l[col] == ' ' {
+				col++
+			}
+		}
+		if col == column && col > indent {
+			keys = append(keys, mappingKey(l[col:]))
+		}
+		return false
+	}
+	if !key.dash {
+		for i := line - 1; i >= 0 && visit(lines[i]); i-- {
 		}
 	}
-	start = min(start, cursor)
-	rest := line[start:]
-	if i := strings.Index(rest, " #"); i >= 0 {
-		rest = rest[:i]
+	for i := line + 1; i < len(lines); i++ {
+		content := strings.TrimLeft(lines[i], " ")
+		if indent := len(lines[i]) - len(content); indent < column && content != "" && !strings.HasPrefix(content, "#") {
+			break // the next item or the parent's next key
+		}
+		if !visit(lines[i]) {
+			break
+		}
 	}
-	rest = strings.TrimRight(rest, " \t\r")
-	if n := len(rest); n > 0 && (rest[n-1] == '"' || rest[n-1] == '\'') {
-		rest = rest[:n-1]
+	return keys
+}
+
+// mappingKey returns the key of a "key: value" line, without quotes, or "".
+func mappingKey(content string) string {
+	k, _, ok := strings.Cut(content, ":")
+	if !ok {
+		return ""
 	}
-	end := max(start+len(rest), cursor)
-	return Range{Start: Position{Line: pos.Line, Character: start}, End: Position{Line: pos.Line, Character: end}}
+	return strings.Trim(strings.TrimSpace(k), `"'`)
+}
+
+// valueSlot is where a completed value goes: a range over the value of the
+// key on the cursor's line and the cursor, the blanks to keep before the
+// value, and the quote of a quoted value.
+type valueSlot struct {
+	rng   Range
+	lead  string
+	quote string
+}
+
+// valueSlotAt finds the value of the key on the cursor's line. Items replace
+// all of it, quotes kept, so that a dotted name is not doubled: clients take
+// only the word before the cursor otherwise. It reports false when the
+// cursor is in a comment.
+func valueSlotAt(text string, pos Position) (valueSlot, bool) {
+	line := lineAt(text, pos.Line)
+	cursor := min(pos.Character, len(line))
+	colon := strings.Index(line[:cursor], ":")
+	if colon < 0 {
+		return valueSlot{}, false
+	}
+	vs := colon + 1
+	for vs < len(line) && (line[vs] == ' ' || line[vs] == '\t') {
+		vs++
+	}
+	slot := valueSlot{lead: line[min(vs, cursor):vs]}
+	if vs == colon+1 {
+		slot.lead = " " // "key:value" is not a mapping
+	}
+	var ve int
+	if vs < len(line) && (line[vs] == '"' || line[vs] == '\'') {
+		slot.quote = line[vs : vs+1]
+		ve = len(strings.TrimRight(line, " \t\r"))
+		if end := strings.IndexByte(line[vs+1:], line[vs]); end >= 0 {
+			ve = vs + 1 + end + 1
+		}
+	} else {
+		rest := line[vs:]
+		if i := strings.IndexAny(rest, "#"); i >= 0 && (i == 0 || rest[i-1] == ' ' || rest[i-1] == '\t') {
+			rest = rest[:i]
+		}
+		ve = vs + len(strings.TrimRight(rest, " \t\r"))
+	}
+	if comment := strings.IndexByte(line[ve:], '#'); comment >= 0 && cursor > ve+comment {
+		return valueSlot{}, false
+	}
+	slot.rng = Range{
+		Start: Position{Line: pos.Line, Character: min(vs, cursor)},
+		End:   Position{Line: pos.Line, Character: max(ve, cursor)},
+	}
+	return slot, true
+}
+
+// item returns a completion item that puts a name in the slot.
+func (s valueSlot) item(name string) CompletionItem {
+	return CompletionItem{
+		Label:      name,
+		FilterText: s.quote + name,
+		TextEdit:   &TextEdit{Range: s.rng, NewText: s.lead + s.quote + name + s.quote},
+	}
 }
 
 // hoverProto describes the service, the method or the message field under
@@ -713,11 +922,13 @@ func (c *protoChecker) checkMessage(md protoreflect.MessageDescriptor, node ast.
 	}
 	setBy := map[protoreflect.FieldNumber]string{}
 	oneofs := map[protoreflect.FullName]string{}
+	seen := map[string]bool{}
 	for _, mv := range entries {
 		key, ok := mv.Key.(*ast.StringNode)
-		if !ok {
-			continue
+		if !ok || seen[key.Value] {
+			continue // a merged key that an explicit one overrides
 		}
+		seen[key.Value] = true
 		f := findField(md, key.Value)
 		if f == nil {
 			c.warn(key, fmt.Sprintf("unknown field %q in %s", key.Value, md.FullName()))
@@ -732,7 +943,8 @@ func (c *protoChecker) checkMessage(md protoreflect.MessageDescriptor, node ast.
 
 // checkSetOnce reports a field of a request message set a second time, and
 // a second member of a oneof set to a value. protojson ignores a null
-// member of a oneof, and a template may give null.
+// member of a oneof, unless null is a value of the field, and a template may
+// give null.
 func (c *protoChecker) checkSetOnce(f protoreflect.FieldDescriptor, key *ast.StringNode, value ast.Node, setBy map[protoreflect.FieldNumber]string, oneofs map[protoreflect.FullName]string) {
 	if prev, ok := setBy[f.Number()]; ok {
 		c.warn(key, fmt.Sprintf("field %s is set twice: %q and %q", f.FullName(), prev, key.Value))
@@ -745,7 +957,9 @@ func (c *protoChecker) checkSetOnce(f protoreflect.FieldDescriptor, key *ast.Str
 	}
 	switch n := c.view.unwrap(value).(type) {
 	case nil, *ast.NullNode:
-		return
+		if !nullIsValue(f) {
+			return
+		}
 	case *ast.StringNode:
 		if strings.Contains(n.Value, "{{") {
 			return
@@ -756,6 +970,18 @@ func (c *protoChecker) checkSetOnce(f protoreflect.FieldDescriptor, key *ast.Str
 		return
 	}
 	oneofs[o.FullName()] = key.Value
+}
+
+// nullIsValue reports whether protojson reads null as a value of a field
+// rather than as no value: google.protobuf.Value and NullValue fields.
+func nullIsValue(f protoreflect.FieldDescriptor) bool {
+	if m := f.Message(); m != nil {
+		return m.FullName() == "google.protobuf.Value"
+	}
+	if e := f.Enum(); e != nil {
+		return e.FullName() == "google.protobuf.NullValue"
+	}
+	return false
 }
 
 func (c *protoChecker) checkFieldValue(f protoreflect.FieldDescriptor, node ast.Node, request bool) {

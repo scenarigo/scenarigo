@@ -1267,8 +1267,9 @@ func TestEditorSession_GRPCProtoExample(t *testing.T) {
 	}
 	line, _ = at("messageId", 0)
 	char = strings.Index(lines[line], "messageId")
-	if labels := labelList(client.complete(5, uri, line, char).Items); !slices.Contains(labels, "messageId") || !slices.Contains(labels, "messageBody") {
-		t.Errorf("step 3: expected the EchoRequest fields, got %v", labels)
+	// messageBody is set on the next line.
+	if labels := labelList(client.complete(5, uri, line, char).Items); !slices.Contains(labels, "messageId") || slices.Contains(labels, "messageBody") {
+		t.Errorf("step 3: expected the EchoRequest fields that are not set, got %v", labels)
 	}
 }
 
@@ -1354,5 +1355,28 @@ func TestEditorSession_GRPCProtoDirectoryMoved(t *testing.T) {
 	client.sync(3)
 	if labels := labelList(client.complete(4, uri, line, char).Items); slices.Contains(labels, "before") {
 		t.Errorf("the import is gone, but its field is still offered: %v", labels)
+	}
+}
+
+// TestEditorSession_GRPCProtoKeyBeingTyped completes a key typed on a line of
+// its own: until its colon the document does not parse as YAML, and the
+// edit must still replace what was typed.
+func TestEditorSession_GRPCProtoKeyBeingTyped(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	writeFile(t, filepath.Join(uriToPath(root), "proto", "svc.proto"), "syntax = \"proto3\";\npackage p;\nservice S { rpc M(Req) returns (Req); }\nmessage Req { string user_name = 1; string email = 2; }\n")
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	head := "schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        proto:\n          imports: [proto]\n          files: [svc.proto]\n      service: p.S\n      method: M\n      message:\n        userName: x\n"
+	client.openDocument(uri, head+"        \n")
+	client.changeDocument(uri, 2, head+"        em\n")
+	list := client.complete(2, uri, 12, 10)
+	i := slices.IndexFunc(list.Items, func(item CompletionItem) bool { return item.Label == "email" })
+	if i < 0 || slices.ContainsFunc(list.Items, func(item CompletionItem) bool { return item.Label == "userName" }) {
+		t.Fatalf("expected email and not userName, got %v", labelList(list.Items))
+	}
+	if edit := list.Items[i].TextEdit; edit == nil || edit.Range.Start.Character != 8 || edit.Range.End.Character != 10 || edit.NewText != "email: " {
+		t.Errorf("email edits %+v, want 12:8-10 with \"email: \"", edit)
 	}
 }
