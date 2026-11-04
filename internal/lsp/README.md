@@ -73,9 +73,15 @@ vim.lsp.commands["scenarigo.runScenario"] = function(command)
   end
 end
 -- Lenses come from the server: ask for them once it is attached, and again
--- after changes.
+-- after changes. Only for this server: a refresh started for another one
+-- (yaml-language-server also has lenses) would make Neovim skip this one.
 vim.api.nvim_create_autocmd("LspAttach", {
-  callback = function(args) vim.lsp.codelens.refresh({ bufnr = args.buf }) end,
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if client and client.name == "scenarigo" then
+      vim.lsp.codelens.refresh({ bufnr = args.buf })
+    end
+  end,
 })
 vim.api.nvim_create_autocmd({ "BufEnter", "InsertLeave" }, {
   pattern = { "*.yaml", "*.yml" },

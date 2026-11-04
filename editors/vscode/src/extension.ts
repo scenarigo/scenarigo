@@ -156,9 +156,10 @@ async function runScenario(uri?: string): Promise<void> {
   const cwd = findRunDirectory(target.fsPath, folder?.uri.fsPath, fs.existsSync);
   // VS Code substitutes variables such as ${env:HOME} in the command,
   // arguments and directory of a task, with no way to escape them.
-  if ([command, target.fsPath, cwd].some((p) => p.includes('${'))) {
+  const substituted = [command, target.fsPath, cwd].find((p) => p.includes('${'));
+  if (substituted !== undefined) {
     void vscode.window.showErrorMessage(
-      `Scenarigo: cannot run "${target.fsPath}": VS Code would replace the \${...} in its path. Run scenarigo run in a terminal.`,
+      `Scenarigo: cannot run "${target.fsPath}": VS Code would replace the \${...} in the path "${substituted}". Run scenarigo run in a terminal.`,
     );
     return;
   }

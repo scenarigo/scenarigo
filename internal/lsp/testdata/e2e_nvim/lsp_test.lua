@@ -81,7 +81,7 @@ local bufnr = vim.api.nvim_get_current_buf()
 
 -- Start the LSP client.
 local client_id = vim.lsp.start({
-  name = "scenarigo-lsp-e2e",
+  name = "scenarigo",
   cmd = { binary_path, "lsp" },
   root_dir = workspace_dir,
 })
@@ -96,7 +96,7 @@ record("lsp_start", true)
 
 -- Wait for the client to initialize (poll with vim.wait).
 local initialized = vim.wait(5000, function()
-  local clients = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo-lsp-e2e" })
+  local clients = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo" })
   return #clients > 0
 end, 100)
 
@@ -108,7 +108,7 @@ if not initialized then
   return
 end
 
-local client = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo-lsp-e2e" })[1]
+local client = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo" })[1]
 
 -- Test: Completion at line 8, col 6 (inside request block).
 local completion_done = false

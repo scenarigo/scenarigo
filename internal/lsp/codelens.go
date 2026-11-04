@@ -68,8 +68,9 @@ func runnableLine(text string) (int, bool) {
 // comment (after a space or a tab), an anchor or a tag, and quotes.
 func schemaVersionValue(value string) string {
 	value = strings.TrimSpace(value)
-	for _, prefix := range []string{"&", "!"} {
-		if strings.HasPrefix(value, prefix) {
+	// Properties: an anchor and a tag, in either order.
+	for range 2 {
+		if strings.HasPrefix(value, "&") || strings.HasPrefix(value, "!") {
 			_, value, _ = strings.Cut(value, " ")
 			value = strings.TrimSpace(value)
 		}

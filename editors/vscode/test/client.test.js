@@ -338,6 +338,19 @@ async function main() {
   assert.equal(executed.length, 1, 'a path with ${ was run');
   assert.equal(errors.length, 1, JSON.stringify(errors));
   assert.match(errors[0], /\$\{/);
+  assert.ok(errors[0].includes(odd), errors[0]);
+
+  // The message names the path that has ${, here the binary's.
+  errors.length = 0;
+  const oddBinary = path.join(tmp, 'bin${x}', 'scenarigo');
+  fs.mkdirSync(path.dirname(oddBinary));
+  fs.copyFileSync(fakeServer, oddBinary);
+  fs.chmodSync(oddBinary, 0o755);
+  config.path = oddBinary;
+  await commands['scenarigo.runScenario'](uri);
+  assert.equal(errors.length, 1, JSON.stringify(errors));
+  assert.ok(errors[0].includes(oddBinary), errors[0]);
+  config.path = fakeServer;
 
   // Deactivating stops it. VS Code disposes the subscriptions right after
   // calling deactivate, without waiting for it.
