@@ -103,7 +103,7 @@ func (s *Server) buildIncludeIndex(rootPath string) *includeIndex {
 			}
 			return nil
 		}
-		if ext := filepath.Ext(p); ext != ".yaml" && ext != ".yml" {
+		if ext := filepath.Ext(p); ext != extYAML && ext != extYML {
 			return nil
 		}
 		if data, err := os.ReadFile(p); err == nil {
@@ -130,18 +130,22 @@ func (idx *includeIndex) set(path, text string) {
 // findIncluders returns the YAML files under the workspace root that
 // include the file at path.
 func (s *Server) findIncluders(path string) []string {
-	rootPath := uriToPath(s.rootURI)
+	rootPath := s.includeRootOf(path)
 	if rootPath == "" || path == "" {
 		return nil
 	}
 	s.includeIndexMu.Lock()
 	defer s.includeIndexMu.Unlock()
-	if s.includeIndex == nil || s.includeIndex.root != rootPath {
-		s.includeIndex = s.buildIncludeIndex(rootPath)
+	idx := s.includeIndexes[rootPath]
+	if idx == nil {
+		idx = s.buildIncludeIndex(rootPath)
+		if s.includeIndexes == nil {
+			s.includeIndexes = map[string]*includeIndex{}
+		}
+		s.includeIndexes[rootPath] = idx
 	}
 	// Open buffers win over the files on disk; a buffer closed since the
 	// last lookup gives the file on disk back its say, unsaved edits dropped.
-	idx := s.includeIndex
 	open := map[string]bool{}
 	for _, uri := range s.docs.URIs() {
 		if p := uriToPath(uri); strings.HasPrefix(p, rootPath+string(filepath.Separator)) {
@@ -163,7 +167,7 @@ func (s *Server) findIncluders(path string) []string {
 	}
 	idx.open = open
 	var found []string
-	for includer, included := range s.includeIndex.includes {
+	for includer, included := range idx.includes {
 		if includer != path && slices.Contains(included, path) {
 			found = append(found, includer)
 		}
@@ -239,14 +243,16 @@ func (s *Server) includerNames(path string) templateDefinitions {
 }
 
 // publishDependentDiagnostics publishes the diagnostics of the other open
-// documents again when uri is scenarigo.yaml, whose names they can use.
+// documents of a workspace folder again when uri is its scenarigo.yaml,
+// whose names they can use.
 func (s *Server) publishDependentDiagnostics(uri string) {
-	rootPath := uriToPath(s.rootURI)
-	if rootPath == "" || uriToPath(uri) != filepath.Join(rootPath, "scenarigo.yaml") {
+	folder := s.folderOf(uri)
+	if folder == "" || uriToPath(uri) != filepath.Join(uriToPath(folder), "scenarigo.yaml") {
 		return
 	}
 	for _, other := range s.docs.URIs() {
-		if other != uri {
+		if other != uri && s.folderOf(other) == folder {
+			s.useFolderOf(other)
 			s.publishDiagnostics(other)
 		}
 	}

@@ -41,7 +41,12 @@ type Server struct {
 	pluginSymbolsMu    sync.Mutex
 	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
 	includeIndexMu     sync.Mutex
-	includeIndex       *includeIndex // see include.go
+	includeIndexes     map[string]*includeIndex // workspace folder path → includes, see include.go
+	folders            []string                 // workspace folder URIs, see workspace.go
+	registerWatchers   bool                     // the client registers file watchers dynamically
+	watchRegistration  string                   // id of the current watcher registration
+	rootOnly           bool                     // the folders come from rootUri alone
+	requestSeq         int                      // ids of the requests sent to the client
 }
 
 // NewServer creates a new LSP server that communicates over stdio.
@@ -55,11 +60,19 @@ func NewServer() *Server {
 }
 
 func (s *Server) handleMessage(req *Request) {
+	if req.isResponse() {
+		return // an answer to a request the server sent (client/registerCapability)
+	}
+	s.useFolderOfRequest(req)
 	switch req.Method {
 	case "initialize":
 		s.handleInitialize(req)
 	case "initialized":
-		// No action needed.
+		s.handleInitialized()
+	case "workspace/didChangeWatchedFiles":
+		s.handleDidChangeWatchedFiles(req)
+	case "workspace/didChangeWorkspaceFolders":
+		s.handleDidChangeWorkspaceFolders(req)
 	case "shutdown":
 		s.shutdownRequested = true
 		s.sendResponse(req.ID, nil, nil)
@@ -108,10 +121,11 @@ func (s *Server) handleInitialize(req *Request) {
 	// Read rootUri if present.
 	var initParams InitializeParams
 	if req.Params != nil {
-		if err := json.Unmarshal(req.Params, &initParams); err == nil {
-			s.rootURI = initParams.RootURI
+		if err := json.Unmarshal(req.Params, &initParams); err != nil {
+			initParams = InitializeParams{}
 		}
 	}
+	s.initWorkspace(initParams)
 	var offered []string
 	if initParams.Capabilities.General != nil {
 		offered = initParams.Capabilities.General.PositionEncodings
@@ -138,6 +152,7 @@ func (s *Server) handleInitialize(req *Request) {
 				TriggerCharacters: []string{"<"},
 			},
 			RenameProvider: renameProvider,
+			Workspace:      workspaceCapabilities(),
 		},
 	}
 	s.sendResponse(req.ID, result, nil)

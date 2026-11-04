@@ -34,6 +34,16 @@ end
 lspconfig.scenarigo.setup({})
 ```
 
+Neovim announces the dynamic registration of file watchers on macOS and Windows only. To let the server follow files changed outside the editor (`scenarigo.yaml`, included scenarios, plugin sources) on Linux too, add the capability (Neovim then watches with `inotifywait` when it is installed, and with one watcher per directory otherwise):
+
+```lua
+lspconfig.scenarigo.setup({
+  capabilities = vim.tbl_deep_extend("force", vim.lsp.protocol.make_client_capabilities(), {
+    workspace = { didChangeWatchedFiles = { dynamicRegistration = true } },
+  }),
+})
+```
+
 If you only want the LSP active for scenarigo-related YAML files, use `root_dir` to scope it — the server will only start when `scenarigo.yaml` or `.git` is found in a parent directory.
 
 ### Vim (vim-lsp)
@@ -91,6 +101,8 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/prepareRename` | Supported | Selects the name under the cursor, or reports why it cannot be renamed |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
+| `workspace/didChangeWatchedFiles` | Supported | A change on disk drops what the server derived from the file: the symbols of a plugin source directory, the include index entry of a scenario, and for a directory event everything under the directory. Every change, `scenarigo.yaml` and proto files included, publishes the diagnostics of the open documents again. The watchers (`**/*.{yaml,yml}`, `**/*.go`, `**/*.proto`, and `**/*` for creations and deletions, which catches directories) are registered with `client/registerCapability` when the client supports dynamic registration, and the registration is replaced when folders change; plugin sources outside the workspace folders are not watched |
+| `workspace/didChangeWorkspaceFolders` | Supported | Folders can be added and removed while the server runs |
 
 ### Completion
 
@@ -130,6 +142,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | Schema auto-detection | Supported | Detects config, scenario, or ytt input from the `schemaVersion` value |
 | Non-scenarigo YAML coexistence | Supported | Silent when `schemaVersion` key is absent; skips files with `# yaml-language-server:` modeline |
 | Broken YAML handling | Supported | Caches last successful AST + text-based analysis hybrid |
+| Workspace folders | Supported | Several folders (`workspaceFolders` in `initialize`, `workspace/didChangeWorkspaceFolders`). A document uses the `scenarigo.yaml` of the innermost folder that contains it and has one; scenarios that include it are searched in the outermost folder that contains it. A document outside every folder uses no `scenarigo.yaml`, except when the client gave `rootUri` alone, as before |
 | Position encoding | Supported | Columns are exchanged in UTF-16 code units (the LSP default), or in bytes when the client offers `utf-8` in `general.positionEncodings` |
 
 ## Schema Detection
@@ -170,6 +183,7 @@ internal/lsp/
   include.go            # Included and including scenarios
   ytt.go                # ytt annotation handling
   rename.go             # textDocument/rename and prepareRename
+  workspace.go          # Workspace folders and watched files
   navigation.go         # Name chains, step definitions and document spans for navigation
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
