@@ -81,7 +81,7 @@ local bufnr = vim.api.nvim_get_current_buf()
 
 -- Start the LSP client.
 local client_id = vim.lsp.start({
-  name = "scenarigo-lsp-e2e",
+  name = "scenarigo",
   cmd = { binary_path, "lsp" },
   root_dir = workspace_dir,
 })
@@ -96,7 +96,7 @@ record("lsp_start", true)
 
 -- Wait for the client to initialize (poll with vim.wait).
 local initialized = vim.wait(5000, function()
-  local clients = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo-lsp-e2e" })
+  local clients = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo" })
   return #clients > 0
 end, 100)
 
@@ -108,7 +108,7 @@ if not initialized then
   return
 end
 
-local client = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo-lsp-e2e" })[1]
+local client = vim.lsp.get_clients({ bufnr = bufnr, name = "scenarigo" })[1]
 
 -- Test: Completion at line 8, col 6 (inside request block).
 local completion_done = false
@@ -195,6 +195,57 @@ for _, d in ipairs(diags_after) do
 end
 record("diagnostics_after_edit", found_bad_key,
   "count: " .. #diags_after .. ", messages: " .. table.concat(messages, "; "))
+
+-- Test: The Run lens, with the client command of the README
+-- ($SCENARIGO_RUN_LENS) and a fake scenarigo first on the PATH that writes
+-- its directory and arguments to $SCENARIGO_RAN. The scenario has unsaved
+-- changes, and its path has characters that Vim expands in commands.
+do
+  local uv = vim.uv or vim.loop
+  local ok, err = pcall(dofile, vim.env.SCENARIGO_RUN_LENS)
+  if not ok then
+    record("codelens", false, "README command: " .. tostring(err))
+  else
+    local run_dir = workspace_dir .. "/c#d"
+    local run_file = run_dir .. "/100%/run.yaml"
+    vim.fn.mkdir(run_dir .. "/100%", "p")
+    vim.fn.writefile({ "schemaVersion: config/v1" }, run_dir .. "/scenarigo.yaml")
+    vim.fn.writefile({ "schemaVersion: scenario/v1", "title: saved", "steps: []" }, run_file)
+    vim.cmd("edit " .. vim.fn.fnameescape(run_file))
+    local run_buf = vim.api.nvim_get_current_buf()
+    vim.lsp.buf_attach_client(run_buf, client_id)
+    vim.api.nvim_buf_set_lines(run_buf, 1, 2, false, { "title: edited" })
+
+    -- The README's commands refresh the lenses when the client attaches;
+    -- run the lens of the first line as a user would.
+    local lens_detail = ""
+    local has_lens = vim.wait(5000, function() return #vim.lsp.codelens.get(run_buf) > 0 end, 100)
+    if not has_lens then
+      lens_detail = "no lens after the client attached"
+    else
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      vim.lsp.codelens.run()
+    end
+    local ran = vim.wait(5000, function() return uv.fs_stat(vim.env.SCENARIGO_RAN) ~= nil end, 100)
+    if lens_detail == "" and not ran then
+      lens_detail = "scenarigo did not run"
+    end
+    if lens_detail == "" then
+      vim.wait(1000, function() return #vim.fn.readfile(vim.env.SCENARIGO_RAN) >= 3 end, 50)
+      local got = vim.fn.readfile(vim.env.SCENARIGO_RAN)
+      local saved = vim.fn.readfile(run_file)
+      -- The shell and Neovim report real paths; the temporary directory may
+      -- be behind a symbolic link (macOS).
+      local want = { uv.fs_realpath(run_dir), "run", uv.fs_realpath(run_file) }
+      if not vim.deep_equal(got, want) then
+        lens_detail = "ran " .. vim.inspect(got) .. ", want " .. vim.inspect(want)
+      elseif saved[2] ~= "title: edited" then
+        lens_detail = "the buffer was not saved: " .. vim.inspect(saved)
+      end
+    end
+    record("codelens", lens_detail == "", lens_detail)
+  end
+end
 
 -- Done.
 vim.lsp.stop_client(client_id)

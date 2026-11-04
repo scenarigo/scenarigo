@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   CloseAction,
@@ -6,6 +8,7 @@ import {
   LanguageClient,
   LanguageClientOptions,
 } from 'vscode-languageclient/node';
+import { findRunDirectory } from './run';
 import { checkLspCommand, expandHome, findExecutable } from './server';
 
 // The extension starts `scenarigo lsp` for YAML files. The server stays
@@ -55,8 +58,12 @@ function closableChannel(channel: vscode.OutputChannel): vscode.OutputChannel {
   };
 }
 
+function configuredPath(): string {
+  return vscode.workspace.getConfiguration('scenarigo').get<string>('path') || 'scenarigo';
+}
+
 async function startClient(): Promise<void> {
-  const configured = vscode.workspace.getConfiguration('scenarigo').get<string>('path') || 'scenarigo';
+  const configured = configuredPath();
   const command = findExecutable(expandHome(configured));
   if (command === undefined) {
     void vscode.window.showErrorMessage(
@@ -118,12 +125,62 @@ async function stopClient(): Promise<void> {
   }
 }
 
+// runScenario runs `scenarigo run <file>` as a task. The language server
+// shows it as the Run lens of a scenario file; it runs only when the user
+// clicks the lens or calls the command. The task runs the binary as a
+// process, with the file as an argument: there is no shell to quote for,
+// whatever the user's shell is, and each run gets its own directory.
+async function runScenario(uri?: string): Promise<void> {
+  const target = uri ? vscode.Uri.parse(uri) : vscode.window.activeTextEditor?.document.uri;
+  if (!target || target.scheme !== 'file') {
+    return;
+  }
+  const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === target.toString());
+  if (doc?.isDirty && !(await doc.save())) {
+    return;
+  }
+  const configured = configuredPath();
+  const command = findExecutable(expandHome(configured));
+  if (command === undefined) {
+    void vscode.window.showErrorMessage(
+      `Scenarigo: cannot find "${configured}". Set scenarigo.path to the absolute path of the scenarigo binary, or put scenarigo on the PATH.`,
+    );
+    return;
+  }
+  const folder = vscode.workspace.getWorkspaceFolder(target);
+  if (folder === undefined && vscode.workspace.workspaceFolders === undefined) {
+    void vscode.window.showErrorMessage('Scenarigo: open a folder to run scenarios; VS Code runs tasks in a workspace.');
+    return;
+  }
+  // scenarigo run reads scenarigo.yaml from the current directory.
+  const cwd = findRunDirectory(target.fsPath, folder?.uri.fsPath, fs.existsSync);
+  // VS Code substitutes variables such as ${env:HOME} in the command,
+  // arguments and directory of a task, with no way to escape them.
+  const substituted = [command, target.fsPath, cwd].find((p) => p.includes('${'));
+  if (substituted !== undefined) {
+    void vscode.window.showErrorMessage(
+      `Scenarigo: cannot run "${target.fsPath}": VS Code would replace the \${...} in the path "${substituted}". Run scenarigo run in a terminal.`,
+    );
+    return;
+  }
+  const task = new vscode.Task(
+    { type: 'scenarigo', file: target.fsPath },
+    folder ?? vscode.TaskScope.Workspace,
+    `run ${path.basename(target.fsPath)}`,
+    'scenarigo',
+    new vscode.ProcessExecution(command, ['run', target.fsPath], { cwd }),
+  );
+  task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, clear: true };
+  await vscode.tasks.executeTask(task);
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // The output channel is closed after the server has stopped, by
   // deactivate: VS Code disposes the subscriptions without waiting for
   // deactivate, and the client writes to the channel while it stops.
   output = closableChannel(vscode.window.createOutputChannel('Scenarigo'));
   context.subscriptions.push(
+    vscode.commands.registerCommand('scenarigo.runScenario', runScenario),
     { dispose: () => void enqueue(stopClient) },
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('scenarigo.path')) {

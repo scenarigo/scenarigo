@@ -60,13 +60,42 @@
           "source.yaml"
         ]
       }
+    ],
+    "commands": [
+      {
+        "command": "scenarigo.runScenario",
+        "title": "Run Scenario",
+        "category": "Scenarigo"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "scenarigo.runScenario",
+          "when": "editorLangId == yaml"
+        }
+      ]
+    },
+    "taskDefinitions": [
+      {
+        "type": "scenarigo",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "The scenario file to run."
+          }
+        }
+      }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile && node -e \"require('fs').copyFileSync('../../LICENSE', 'LICENSE')\"",
     "compile": "tsc -p .",
     "check": "tsc -p . --noEmit",
-    "test": "npm run compile && node test/grammar.test.js && node test/server.test.js && node test/client.test.js"
+    "test": "npm run compile && node test/grammar.test.js && node test/server.test.js && node test/client.test.js && node test/run.test.js"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

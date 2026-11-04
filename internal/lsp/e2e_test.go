@@ -330,6 +330,19 @@ func TestE2E_Neovim(t *testing.T) {
 		"-u", "NONE",
 		"-S", luaScript,
 	)
+	// The Run lens command of the README, and a fake scenarigo for it that
+	// writes its directory and arguments.
+	runLens := filepath.Join(t.TempDir(), "run_lens.lua")
+	if err := os.WriteFile(runLens, []byte(readmeRunLensSnippet(t)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fakeBin := t.TempDir()
+	ran := filepath.Join(t.TempDir(), "ran.txt")
+	fake := "#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"$@\" > \"$SCENARIGO_RAN\"\n"
+	if err := os.WriteFile(filepath.Join(fakeBin, "scenarigo"), []byte(fake), 0o755); err != nil { //nolint:gosec // an executable script
+		t.Fatal(err)
+	}
+
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(),
 		"HOME="+workDir,               // isolate from user config
@@ -338,6 +351,9 @@ func TestE2E_Neovim(t *testing.T) {
 		"XDG_STATE_HOME="+workDir,     // no state files
 		"SCENARIGO_BINARY="+e2eBinary, // path to LSP server binary
 		"SCENARIGO_WORKDIR="+workDir,  // workspace directory
+		"SCENARIGO_RUN_LENS="+runLens,
+		"SCENARIGO_RAN="+ran,
+		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 
 	output, err := cmd.CombinedOutput()
@@ -386,4 +402,25 @@ func TestE2E_Neovim(t *testing.T) {
 		t.Logf("nvim output:\n%s", output)
 		t.Error("no test results from Neovim")
 	}
+}
+
+// readmeRunLensSnippet returns the Lua code of the README that handles the
+// Run lens in Neovim.
+func readmeRunLensSnippet(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(findModuleRoot(), "internal", "lsp", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(data), "#### Run lens")
+	if ok {
+		_, section, ok = strings.Cut(section, "```lua\n")
+	}
+	if ok {
+		section, _, ok = strings.Cut(section, "```")
+	}
+	if !ok {
+		t.Fatal("no Lua code in the Run lens section of the README")
+	}
+	return section
 }

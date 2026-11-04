@@ -1,0 +1,127 @@
+---
+name: "a scenario file gets a Run lens at its top"
+document: |
+  # comment
+  schemaVersion: scenario/v1
+  title: test
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["1:Run:scenarigo.runScenario"]
+---
+name: "a file with several scenarios gets one lens, on the first"
+document: |
+  schemaVersion: scenario/v1
+  title: first
+  ---
+  schemaVersion: scenario/v1
+  title: second
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a ytt/v1 file runs scenarios too"
+document: |
+  schemaVersion: ytt/v1
+  files: [template.ytt.yaml]
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a configuration file gets no lens"
+document: |
+  schemaVersion: config/v1
+  scenarios: [scenarios]
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "a YAML file that is not scenarigo's gets no lens"
+document: |
+  name: CI
+  on: push
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "a file that does not parse still gets a lens, to see the error when it runs"
+document: |
+  schemaVersion: scenario/v1
+  steps: [
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a schemaVersion that scenarigo does not know gets no lens"
+document: |
+  schemaVersion: 2.2.0
+  metadata:
+    name: devfile
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "only a top-level schemaVersion counts"
+document: |
+  description: |
+    schemaVersion: config/v1
+  schemaVersion: scenario/v1
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["2:Run:scenarigo.runScenario"]
+---
+name: "a quoted schemaVersion with a comment"
+document: |
+  schemaVersion: "scenario/v1" # the version
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a file whose first document is a configuration gets no lens"
+document: |
+  schemaVersion: config/v1
+  ---
+  schemaVersion: scenario/v1
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "a comment after a tab, an anchor and a tag"
+document: "schemaVersion: scenario/v1\t# c\nsteps: []\n"
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "an anchored schemaVersion"
+document: |
+  schemaVersion: &v scenario/v1
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a tagged schemaVersion"
+document: |
+  schemaVersion: !!str scenario/v1
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]
+---
+name: "a version followed by more than a comment is not scenarigo's"
+document: |
+  schemaVersion: scenario/v1 extra
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: []
+---
+name: "a tag before an anchor"
+document: |
+  schemaVersion: !!str &v scenario/v1
+  steps: []
+operation: codeLens
+expect:
+  codeLenses: ["0:Run:scenarigo.runScenario"]

@@ -49,6 +49,8 @@ type lspExpect struct {
 	PrepareRange string   `yaml:"prepareRange"` // "line:start-end"
 	PrepareNull  bool     `yaml:"prepareIsNull"`
 	PrepareError string   `yaml:"prepareError"` // substring of the error message
+	// CodeLenses lists the lenses as "line:title:command".
+	CodeLenses *[]string `yaml:"codeLenses"`
 }
 
 type completionEdit struct {
@@ -178,6 +180,8 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 			t.Fatal("references test requires $0 cursor marker in document")
 		}
 		runReferencesFixture(t, tc, docText, cursorLine, cursorChar)
+	case "codeLens":
+		runCodeLensFixture(t, tc, docText)
 	case "rename", "prepareRename":
 		if !hasCursor {
 			t.Fatalf("%s test requires $0 cursor marker in document", tc.Operation)
@@ -628,4 +632,37 @@ func compareLineRanges(a, b string) int {
 		return al - bl
 	}
 	return ac - bc
+}
+
+func runCodeLensFixture(t *testing.T, tc lspTestCase, docText string) {
+	t.Helper()
+
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	writeFixtureFiles(t, uriToPath(root), tc.Files)
+	client.initialize(1, root)
+	uri := file("test.yaml")
+	client.openDocument(uri, docText)
+
+	client.sendRequest(2, "textDocument/codeLens", CodeLensParams{TextDocument: TextDocumentIdentifier{URI: uri}})
+	var lenses []CodeLens
+	if err := json.Unmarshal(client.readResponse(), &lenses); err != nil {
+		t.Fatalf("unmarshal code lenses: %v", err)
+	}
+	if tc.Expect.CodeLenses == nil {
+		return
+	}
+	got := []string{}
+	for _, l := range lenses {
+		if l.Command == nil {
+			t.Fatalf("lens without a command: %+v", l)
+		}
+		if len(l.Command.Arguments) != 1 || l.Command.Arguments[0] != uri {
+			t.Errorf("lens arguments = %v, want [%s]", l.Command.Arguments, uri)
+		}
+		got = append(got, fmt.Sprintf("%d:%s:%s", l.Range.Start.Line, l.Command.Title, l.Command.Command))
+	}
+	if !slices.Equal(got, *tc.Expect.CodeLenses) {
+		t.Errorf("code lenses = %v, want %v", got, *tc.Expect.CodeLenses)
+	}
 }
