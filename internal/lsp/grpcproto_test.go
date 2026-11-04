@@ -178,3 +178,68 @@ steps:
 		}
 	}
 }
+
+// TestProtoNullOptions: null options are no options, and those of
+// scenarigo.yaml apply.
+func TestProtoNullOptions(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	dir := uriToPath(root)
+	writeFile(t, filepath.Join(dir, "proto", "a.proto"), "syntax = \"proto3\";\npackage a;\nservice A { rpc M(R) returns (R); }\nmessage R { string x = 1; }\n")
+	writeFile(t, filepath.Join(dir, "scenarigo.yaml"), "schemaVersion: config/v1\nprotocols:\n  grpc:\n    request:\n      proto: {imports: [proto], files: [a.proto]}\n")
+	client.initialize(1, root)
+	diags := client.openDocumentAndGetDiagnostics(file("test.yaml"), "schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options:\n        # proto: {files: [b.proto]}\n      service: a.A\n      method: M\n      message: {bogus: 1}\n")
+	if messages := diagMessages(diags.Diagnostics); !slices.Contains(messages, `unknown field "bogus" in a.R`) {
+		t.Errorf("no warning in %v", messages)
+	}
+}
+
+// TestProtoMergeBombs times merge keys that multiply: nested merges, and a
+// large merged mapping referenced many times.
+func TestProtoMergeBombs(t *testing.T) {
+	nested := func() string {
+		var b strings.Builder
+		b.WriteString("schemaVersion: scenario/v1\nvars:\n  m0: &m0 {k: v}\n")
+		for i := 1; i <= 8; i++ {
+			fmt.Fprintf(&b, "  m%d: &m%d {<<: [%s]}\n", i, i, strings.TrimSuffix(strings.Repeat(fmt.Sprintf("*m%d, ", i-1), 10), ", "))
+		}
+		b.WriteString("  all: {<<: *m8}\nsteps:\n  - protocol: grpc\n    request:\n      options: {<<: *m8, proto: {imports: [proto], files: [a.proto]}}\n      service: a.A\n")
+		return b.String()
+	}()
+	repeated := func() string {
+		var b strings.Builder
+		b.WriteString("schemaVersion: scenario/v1\nvars:\n  m0: &m0 {k: v}\n")
+		for i := 1; i <= 4; i++ {
+			fmt.Fprintf(&b, "  m%d: &m%d {<<: [%s]}\n", i, i, strings.TrimSuffix(strings.Repeat(fmt.Sprintf("*m%d, ", i-1), 10), ", "))
+		}
+		b.WriteString("  s0: &s0 [*m4]\n")
+		for i := 1; i <= 4; i++ {
+			fmt.Fprintf(&b, "  s%d: &s%d [%s]\n", i, i, strings.TrimSuffix(strings.Repeat(fmt.Sprintf("*s%d, ", i-1), 10), ", "))
+		}
+		b.WriteString("steps:\n  - protocol: grpc\n    request:\n      options: {auth: {tls: *s4}, proto: {imports: [proto], files: [a.proto]}}\n      service: a.A\n")
+		return b.String()
+	}()
+	for name, text := range map[string]string{"nested": nested, "repeated": repeated} {
+		if _, d := protoSession(t, text); d > 2*time.Second*raceSlowdown {
+			t.Errorf("%s: diagnostics took %v", name, d)
+		}
+	}
+}
+
+// TestProtoAnchorsInTheirDocument: an alias takes the last anchor of its
+// name in its own document, even one after it, as scenarigo's loader does.
+func TestProtoAnchorsInTheirDocument(t *testing.T) {
+	text := `schemaVersion: scenario/v1
+steps:
+  - protocol: grpc
+    request: &req {options: {proto: {imports: [proto], files: [a.proto]}}, service: a.A, method: M, message: {x: a}}
+  - protocol: grpc
+    request: {<<: *req, message: {x: again}}
+  - protocol: grpc
+    request: &req {options: {proto: {imports: [proto], files: [b.proto]}}, service: b.B, method: M, message: {y: b}}
+`
+	messages, _ := protoSession(t, text)
+	if !slices.Contains(messages, `unknown field "x" in b.R`) {
+		t.Errorf("the merged request of step 2 is not the last one of the document: %v", messages)
+	}
+}

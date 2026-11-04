@@ -170,6 +170,9 @@ func decodeResolved(v *yamlView, node ast.Node, out any) error {
 	if err != nil {
 		return err
 	}
+	if value == nil {
+		return nil // null options are no options, as at run time
+	}
 	return remarshal(value, out)
 }
 
@@ -188,7 +191,12 @@ func (r *resolver) value(node ast.Node) (any, error) {
 	switch n := node.(type) {
 	case *ast.MappingNode, *ast.MappingValueNode:
 		m := map[string]any{}
-		for _, mv := range r.view.entries(n) {
+		entries := r.view.entries(n)
+		// Merged entries cost too, even when their keys repeat.
+		if r.budget -= len(entries); r.budget < 0 {
+			return nil, errTooManyValues
+		}
+		for _, mv := range entries {
 			k := keyString(r.view, mv.Key)
 			if _, ok := m[k]; ok {
 				continue
