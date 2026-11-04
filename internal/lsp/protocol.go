@@ -123,7 +123,20 @@ type DidCloseTextDocumentParams struct {
 type CompletionParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 	Position     Position               `json:"position"`
+	Context      *CompletionContext     `json:"context,omitempty"`
 }
+
+// CompletionContext tells how completion was triggered.
+type CompletionContext struct {
+	TriggerKind      int    `json:"triggerKind"`
+	TriggerCharacter string `json:"triggerCharacter,omitempty"`
+}
+
+// CompletionTriggerKind values.
+const (
+	CompletionTriggerKindInvoked          = 1
+	CompletionTriggerKindTriggerCharacter = 2
+)
 
 type Position struct {
 	Line      int `json:"line"`      // 0-based

@@ -117,7 +117,7 @@ func (s *Server) handleInitialize(req *Request) {
 			PositionEncoding: string(s.encoding),
 			TextDocumentSync: 1, // Full sync.
 			CompletionProvider: &CompletionOptions{
-				TriggerCharacters: []string{":", " ", "\n"},
+				TriggerCharacters: append([]string{":", " ", "\n"}, templateTriggerCharacters...),
 			},
 			HoverProvider:          true,
 			DefinitionProvider:     true,
@@ -191,7 +191,16 @@ func (s *Server) handleCompletion(req *Request) {
 		return
 	}
 
-	items := s.complete(doc, s.decodePosition(doc.Text, params.Position))
+	pos := s.decodePosition(doc.Text, params.Position)
+	if isTemplateTrigger(params.Context) {
+		if _, ok := getTemplateContext(doc.Text, pos); !ok {
+			// Clients replace only the text after "." or "{", so a file path or
+			// value accepted here would be garbled ("steps." + "steps.yaml").
+			s.sendResponse(req.ID, CompletionList{Items: []CompletionItem{}}, nil)
+			return
+		}
+	}
+	items := s.complete(doc, pos)
 	for i := range items {
 		if items[i].TextEdit != nil {
 			items[i].TextEdit.Range = s.encodeRange(doc.Text, items[i].TextEdit.Range)
@@ -204,6 +213,17 @@ func (s *Server) handleCompletion(req *Request) {
 		IsIncomplete: false,
 		Items:        items,
 	}, nil)
+}
+
+// templateTriggerCharacters start and continue template expressions such as
+// {{vars.token}}. They trigger completion inside "{{" only.
+var templateTriggerCharacters = []string{"{", "."}
+
+// isTemplateTrigger reports whether completion was triggered by typing one of
+// templateTriggerCharacters.
+func isTemplateTrigger(c *CompletionContext) bool {
+	return c != nil && c.TriggerKind == CompletionTriggerKindTriggerCharacter &&
+		slices.Contains(templateTriggerCharacters, c.TriggerCharacter)
 }
 
 func (s *Server) handleHover(req *Request) {

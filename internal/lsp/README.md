@@ -98,7 +98,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | YAML key completion | Supported | Schema-based key suggestions; already-present keys are excluded |
 | Enum value completion | Supported | e.g., `protocol: ` suggests `http`, `grpc` |
 | Protocol-aware completion | Supported | `request`/`expect` fields change based on `protocol` value |
-| Template variable completion | Supported | Inside `{{`, suggests `vars`, `secrets`, `assert`, etc. |
+| Template variable completion | Supported | Inside `{{`, suggests `vars`, `secrets`, `assert`, etc.; `{` and `.` are trigger characters inside `{{` only, so candidates appear without a manual request while typing `{{vars.` |
 | Template dot completion | Supported | `{{assert.` suggests `contains`, `notZero`, etc.; `{{vars.`/`{{secrets.`/`{{steps.` suggests keys from document and config; `{{plugins.` suggests plugin names |
 | Partial match filtering | Supported | Filters candidates by prefix as you type |
 | File path completion | Supported | Filesystem-based candidates for `include`, `plugins`, `scenarios`, `pluginDirectory` |

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -142,10 +143,15 @@ func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiag
 
 func (c *testClient) complete(id int, uri string, line, char int) CompletionList {
 	c.t.Helper()
-	c.sendRequest(id, "textDocument/completion", CompletionParams{
+	return c.completeWith(id, CompletionParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Position:     Position{Line: line, Character: char},
 	})
+}
+
+func (c *testClient) completeWith(id int, params CompletionParams) CompletionList {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/completion", params)
 	resp := c.readResponse()
 	var list CompletionList
 	if err := json.Unmarshal(resp, &list); err != nil {
@@ -259,6 +265,13 @@ func TestServer_Initialize(t *testing.T) {
 	initResult := client.initialize(1, "file:///tmp")
 	if initResult.Capabilities.CompletionProvider == nil {
 		t.Fatal("expected completion provider")
+	}
+	// "{" and "." let clients that only complete on trigger characters offer
+	// candidates while {{vars. is typed.
+	for _, c := range []string{".", "{"} {
+		if !slices.Contains(initResult.Capabilities.CompletionProvider.TriggerCharacters, c) {
+			t.Errorf("trigger characters %q do not include %q", initResult.Capabilities.CompletionProvider.TriggerCharacters, c)
+		}
 	}
 }
 

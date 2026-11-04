@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -456,5 +457,74 @@ func TestEditorSession_EncodedWorkspaceURI(t *testing.T) {
 	list = client.complete(4, uri, 5, 17)
 	if labels := labelList(list.Items); !slices.Contains(labels, "bufferOnlyVar") {
 		t.Errorf("expected bufferOnlyVar from the open buffer in completions, got %v", labels)
+	}
+}
+
+// TestEditorSession_TemplateTriggerCharacters checks completion requests
+// triggered by "{" and ".": inside a template expression they offer
+// candidates, and elsewhere they offer nothing, because a client replaces the
+// text after the trigger character only and would garble a file path or a
+// value accepted from the list.
+func TestEditorSession_TemplateTriggerCharacters(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	if err := os.WriteFile(filepath.Join(uriToPath(root), "steps.yaml"), []byte("title: included\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client.initialize(1, root)
+
+	tests := []struct {
+		name    string
+		doc     string // $0 marks the cursor, right after the trigger character
+		trigger string
+		want    string // a label that must be offered; empty means no candidates
+	}{
+		{name: "first brace", doc: "schemaVersion: scenario/v1\nsteps:\n  - request:\n      url: '{$0'\n", trigger: "{"},
+		{name: "template start", doc: "schemaVersion: scenario/v1\nsteps:\n  - request:\n      url: '{{$0'\n", trigger: "{", want: "vars"},
+		{name: "template dot", doc: "schemaVersion: scenario/v1\nvars:\n  token: abc\nsteps:\n  - request:\n      url: '{{vars.$0'\n", trigger: ".", want: "token"},
+		{name: "url", doc: "schemaVersion: scenario/v1\nsteps:\n  - request:\n      url: http://example.$0\n", trigger: "."},
+		{name: "include file name", doc: "schemaVersion: scenario/v1\nsteps:\n  - include: steps.$0\n", trigger: "."},
+		{name: "include relative path", doc: "schemaVersion: scenario/v1\nsteps:\n  - include: .$0\n", trigger: "."},
+		{name: "scenarios item", doc: "schemaVersion: config/v1\nscenarios:\n  - steps.$0\n", trigger: "."},
+		{name: "bool value", doc: "schemaVersion: config/v1\noutput:\n  verbose: .$0\n", trigger: "."},
+		{name: "flow mapping", doc: "schemaVersion: scenario/v1\nsteps:\n  - request: {$0\n", trigger: "{"},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			text, line, char, ok := parseCursorMarker(tt.doc)
+			if !ok {
+				t.Fatal("no cursor marker")
+			}
+			uri := file(fmt.Sprintf("test%d.yaml", i))
+			client.openDocument(uri, text)
+			list := client.completeWith(i+2, CompletionParams{
+				TextDocument: TextDocumentIdentifier{URI: uri},
+				Position:     Position{Line: line, Character: char},
+				Context:      &CompletionContext{TriggerKind: CompletionTriggerKindTriggerCharacter, TriggerCharacter: tt.trigger},
+			})
+			labels := labelList(list.Items)
+			if tt.want == "" {
+				if len(labels) != 0 {
+					t.Errorf("expected no completions, got %v", labels)
+				}
+				return
+			}
+			if !slices.Contains(labels, tt.want) {
+				t.Errorf("expected %q in completions, got %v", tt.want, labels)
+			}
+		})
+	}
+
+	// Invoking completion explicitly still offers file names.
+	uri := file("invoked.yaml")
+	text, line, char, _ := parseCursorMarker("schemaVersion: scenario/v1\nsteps:\n  - include: st$0\n")
+	client.openDocument(uri, text)
+	list := client.completeWith(100, CompletionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+		Context:      &CompletionContext{TriggerKind: CompletionTriggerKindInvoked},
+	})
+	if labels := labelList(list.Items); !slices.Contains(labels, "steps.yaml") {
+		t.Errorf("expected steps.yaml for an invoked completion, got %v", labels)
 	}
 }
