@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -27,6 +28,7 @@ type lspTestCase struct {
 type lspExpect struct {
 	CompletionLabels   *labelMatcher   `yaml:"completionLabels"`
 	DiagnosticMessages *messageMatcher `yaml:"diagnosticMessages"`
+	Diagnostics        []diagMatcher   `yaml:"diagnostics"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
 	DefinitionURI      *uriMatcher     `yaml:"definitionUri"`
 	HoverContains      []string        `yaml:"hoverContains"`
@@ -45,6 +47,18 @@ type labelMatcher struct {
 type messageMatcher struct {
 	Contains []string `yaml:"contains"`
 	Excludes []string `yaml:"excludes"`
+}
+
+// diagMatcher matches the diagnostic with the given message. The other
+// fields are checked when set; lines and characters are 0-based, and
+// characters count UTF-16 code units like the test client.
+type diagMatcher struct {
+	Message   string `yaml:"message"`
+	Severity  *int   `yaml:"severity"`
+	StartLine *int   `yaml:"startLine"`
+	StartChar *int   `yaml:"startChar"`
+	EndLine   *int   `yaml:"endLine"`
+	EndChar   *int   `yaml:"endChar"`
 }
 
 type uriMatcher struct {
@@ -199,6 +213,7 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 	client := newRunningTestClient(t)
 
 	root, file := newWorkspace(t)
+	writeFixtureFiles(t, uriToPath(root), tc.Files)
 	client.initialize(1, root)
 
 	uri := file("test.yaml")
@@ -208,6 +223,10 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 		if len(diags.Diagnostics) != *tc.Expect.DiagnosticCount {
 			t.Errorf("expected %d diagnostics, got %d: %v", *tc.Expect.DiagnosticCount, len(diags.Diagnostics), diagMessages(diags.Diagnostics))
 		}
+	}
+
+	for _, want := range tc.Expect.Diagnostics {
+		matchDiagnostic(t, want, diags.Diagnostics)
 	}
 
 	if tc.Expect.DiagnosticMessages != nil {
@@ -224,6 +243,45 @@ func runDiagnosticsFixture(t *testing.T, tc lspTestCase, docText string) {
 			if msgs[exclude] {
 				t.Errorf("should not have diagnostic %q", exclude)
 			}
+		}
+	}
+}
+
+// writeFixtureFiles creates the auxiliary files of a fixture under dir.
+func writeFixtureFiles(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
+	for name, content := range files {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+			t.Fatalf("write file %s: %v", name, err)
+		}
+	}
+}
+
+func matchDiagnostic(t *testing.T, want diagMatcher, diags []Diagnostic) {
+	t.Helper()
+	idx := slices.IndexFunc(diags, func(d Diagnostic) bool { return d.Message == want.Message })
+	if idx < 0 {
+		t.Errorf("expected diagnostic %q, got: %v", want.Message, diagMessages(diags))
+		return
+	}
+	got := diags[idx]
+	for _, f := range []struct {
+		name string
+		want *int
+		got  int
+	}{
+		{"severity", want.Severity, got.Severity},
+		{"start line", want.StartLine, got.Range.Start.Line},
+		{"start character", want.StartChar, got.Range.Start.Character},
+		{"end line", want.EndLine, got.Range.End.Line},
+		{"end character", want.EndChar, got.Range.End.Character},
+	} {
+		if f.want != nil && *f.want != f.got {
+			t.Errorf("diagnostic %q: %s = %d, want %d (range %+v)", want.Message, f.name, f.got, *f.want, got.Range)
 		}
 	}
 }
