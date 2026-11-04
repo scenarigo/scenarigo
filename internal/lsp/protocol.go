@@ -9,6 +9,15 @@ type Request struct {
 	ID      *json.RawMessage `json:"id,omitempty"`
 	Method  string           `json:"method"`
 	Params  json.RawMessage  `json:"params,omitempty"`
+	// Result and Error are set when the message is the client's answer to a
+	// request of the server.
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  *ResponseError  `json:"error,omitempty"`
+}
+
+// isResponse reports whether the message answers a request of the server.
+func (r *Request) isResponse() bool {
+	return r.Method == "" && r.ID != nil && (r.Result != nil || r.Error != nil)
 }
 
 // Response is a successful JSON-RPC response. A successful response must
@@ -49,13 +58,20 @@ type Notification struct {
 // LSP protocol types (subset needed for MVP).
 
 type InitializeParams struct {
-	RootURI      string             `json:"rootUri,omitempty"`
-	Capabilities ClientCapabilities `json:"capabilities"`
+	RootURI          string             `json:"rootUri,omitempty"`
+	WorkspaceFolders []WorkspaceFolder  `json:"workspaceFolders,omitempty"`
+	Capabilities     ClientCapabilities `json:"capabilities"`
+}
+
+type WorkspaceFolder struct {
+	URI  string `json:"uri"`
+	Name string `json:"name"`
 }
 
 type ClientCapabilities struct {
 	General      *GeneralClientCapabilities      `json:"general,omitempty"`
 	TextDocument *TextDocumentClientCapabilities `json:"textDocument,omitempty"`
+	Workspace    *WorkspaceClientCapabilities    `json:"workspace,omitempty"`
 }
 
 type GeneralClientCapabilities struct {
@@ -69,16 +85,17 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	PositionEncoding       string                `json:"positionEncoding,omitempty"`
-	TextDocumentSync       int                   `json:"textDocumentSync"`
-	CompletionProvider     *CompletionOptions    `json:"completionProvider,omitempty"`
-	HoverProvider          bool                  `json:"hoverProvider,omitempty"`
-	DefinitionProvider     bool                  `json:"definitionProvider,omitempty"`
-	DocumentSymbolProvider bool                  `json:"documentSymbolProvider,omitempty"`
-	CodeActionProvider     bool                  `json:"codeActionProvider,omitempty"`
-	ReferencesProvider     bool                  `json:"referencesProvider,omitempty"`
-	SignatureHelpProvider  *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
-	RenameProvider         any                   `json:"renameProvider,omitempty"` // bool or RenameOptions
+	PositionEncoding       string                       `json:"positionEncoding,omitempty"`
+	TextDocumentSync       int                          `json:"textDocumentSync"`
+	CompletionProvider     *CompletionOptions           `json:"completionProvider,omitempty"`
+	HoverProvider          bool                         `json:"hoverProvider,omitempty"`
+	DefinitionProvider     bool                         `json:"definitionProvider,omitempty"`
+	DocumentSymbolProvider bool                         `json:"documentSymbolProvider,omitempty"`
+	CodeActionProvider     bool                         `json:"codeActionProvider,omitempty"`
+	ReferencesProvider     bool                         `json:"referencesProvider,omitempty"`
+	SignatureHelpProvider  *SignatureHelpOptions        `json:"signatureHelpProvider,omitempty"`
+	RenameProvider         any                          `json:"renameProvider,omitempty"` // bool or RenameOptions
+	Workspace              *WorkspaceServerCapabilities `json:"workspace,omitempty"`
 }
 
 type SignatureHelpOptions struct {
@@ -354,4 +371,82 @@ type RenameClientCapabilities struct {
 // to clients that announce prepareSupport; others get true.
 type RenameOptions struct {
 	PrepareProvider bool `json:"prepareProvider"`
+}
+
+type WorkspaceClientCapabilities struct {
+	DidChangeWatchedFiles *DidChangeWatchedFilesClientCapabilities `json:"didChangeWatchedFiles,omitempty"`
+}
+
+type DidChangeWatchedFilesClientCapabilities struct {
+	DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+}
+
+type WorkspaceServerCapabilities struct {
+	WorkspaceFolders *WorkspaceFoldersServerCapabilities `json:"workspaceFolders,omitempty"`
+}
+
+type WorkspaceFoldersServerCapabilities struct {
+	Supported           bool `json:"supported"`
+	ChangeNotifications bool `json:"changeNotifications"`
+}
+
+type DidChangeWorkspaceFoldersParams struct {
+	Event WorkspaceFoldersChangeEvent `json:"event"`
+}
+
+type WorkspaceFoldersChangeEvent struct {
+	Added   []WorkspaceFolder `json:"added"`
+	Removed []WorkspaceFolder `json:"removed"`
+}
+
+type DidChangeWatchedFilesParams struct {
+	Changes []FileEvent `json:"changes"`
+}
+
+type FileEvent struct {
+	URI  string `json:"uri"`
+	Type int    `json:"type"`
+}
+
+// FileChangeType values.
+const (
+	FileChangeTypeCreated = 1
+	FileChangeTypeChanged = 2
+	FileChangeTypeDeleted = 3
+)
+
+type RegistrationParams struct {
+	Registrations []Registration `json:"registrations"`
+}
+
+type Registration struct {
+	ID              string `json:"id"`
+	Method          string `json:"method"`
+	RegisterOptions any    `json:"registerOptions,omitempty"`
+}
+
+type DidChangeWatchedFilesRegistrationOptions struct {
+	Watchers []FileSystemWatcher `json:"watchers"`
+}
+
+type FileSystemWatcher struct {
+	GlobPattern string `json:"globPattern"`
+	Kind        int    `json:"kind,omitempty"` // WatchKind bits; all when omitted
+}
+
+// WatchKind bits.
+const (
+	WatchKindCreate = 1
+	WatchKindChange = 2
+	WatchKindDelete = 4
+)
+
+type UnregistrationParams struct {
+	// The misspelling is the name of the field in the LSP specification.
+	Unregisterations []Unregistration `json:"unregisterations"`
+}
+
+type Unregistration struct {
+	ID     string `json:"id"`
+	Method string `json:"method"`
 }
