@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "scenarigo.template.expression",
+  "patterns": [
+    {
+      "name": "constant.numeric.scenarigo",
+      "match": "\\b\\d+(?:\\.\\d+)?\\b"
+    },
+    {
+      "name": "constant.language.scenarigo",
+      "match": "\\b(?:true|false|nil|null)\\b"
+    },
+    {
+      "name": "support.function.builtin.scenarigo",
+      "match": "\\b(?:defined|size|type|any|int|uint|float|bool|string|bytes|time|duration)(?=\\s*\\()"
+    },
+    {
+      "name": "variable.language.scenarigo",
+      "match": "(?<![\\p{L}\\p{N}_.$-])(?:ctx|vars|secrets|plugins|steps|request|response|env|assert|\\$)(?![\\p{L}\\p{N}_-])"
+    },
+    {
+      "name": "variable.other.property.scenarigo",
+      "match": "(?<=\\.)[\\p{L}][\\p{L}\\p{N}_-]*"
+    },
+    {
+      "name": "keyword.operator.scenarigo",
+      "match": "<-|\\?\\?|==|!=|<=|>=|&&|\\|\\||[-+*/%<>!?:]"
+    }
+  ]
+}

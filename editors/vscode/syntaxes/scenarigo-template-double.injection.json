@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "scenarigo.template.injection.double",
+  "injectionSelector": "L:string.quoted.double.yaml -meta.embedded.template.scenarigo",
+  "patterns": [
+    {
+      "comment": "template escapes, consumed so that \\{{ opens no template",
+      "match": "\\\\\\\\(?:\\\\\\\\|\\{)"
+    },
+    {
+      "include": "#template"
+    }
+  ],
+  "repository": {
+    "template": {
+      "name": "meta.embedded.template.scenarigo",
+      "begin": "\\{\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.scenarigo"
+        }
+      },
+      "end": "\\}\\}|(?=\")|$",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.scenarigo"
+        }
+      },
+      "patterns": [
+        {
+          "name": "string.quoted.double.scenarigo",
+          "begin": "\\\\\"",
+          "end": "\\\\\"|(?=\")|$",
+          "patterns": [
+            {
+              "comment": "an escaped backslash, which cannot close the string with the next quote",
+              "match": "\\\\\\\\"
+            }
+          ]
+        },
+        {
+          "match": "\\\\."
+        },
+        {
+          "include": "scenarigo.template.expression"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "scenarigo.template.injection",
+  "injectionSelector": "L:source.yaml -comment -string.quoted.single.yaml -string.quoted.double.yaml -meta.embedded.template.scenarigo",
+  "patterns": [
+    {
+      "comment": "template escapes, consumed so that \\{{ opens no template",
+      "match": "\\\\[\\\\{]"
+    },
+    {
+      "include": "#template"
+    }
+  ],
+  "repository": {
+    "template": {
+      "name": "meta.embedded.template.scenarigo",
+      "begin": "\\{\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.scenarigo"
+        }
+      },
+      "end": "\\}\\}|$",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.scenarigo"
+        }
+      },
+      "patterns": [
+        {
+          "name": "string.quoted.double.scenarigo",
+          "begin": "\"",
+          "end": "\"|$"
+        },
+        {
+          "include": "scenarigo.template.expression"
+        }
+      ]
+    }
+  }
+}

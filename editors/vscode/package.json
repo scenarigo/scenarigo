@@ -1,0 +1,82 @@
+{
+  "name": "scenarigo",
+  "displayName": "Scenarigo",
+  "description": "Language support for scenarigo scenario and configuration files, through the scenarigo language server.",
+  "version": "0.0.1",
+  "private": true,
+  "publisher": "scenarigo",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/scenarigo/scenarigo",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:yaml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Scenarigo",
+      "properties": {
+        "scenarigo.path": {
+          "type": "string",
+          "default": "scenarigo",
+          "scope": "machine-overridable",
+          "markdownDescription": "The `scenarigo` binary: a name looked up in the `PATH`, or an absolute path (a leading `~` is the home directory). The extension starts `scenarigo lsp` with it. The language server stays silent on YAML files without a `schemaVersion` key."
+        }
+      }
+    },
+    "grammars": [
+      {
+        "scopeName": "scenarigo.template.expression",
+        "path": "./syntaxes/scenarigo-template.expression.json"
+      },
+      {
+        "scopeName": "scenarigo.template.injection",
+        "path": "./syntaxes/scenarigo-template.injection.json",
+        "injectTo": [
+          "source.yaml"
+        ]
+      },
+      {
+        "scopeName": "scenarigo.template.injection.single",
+        "path": "./syntaxes/scenarigo-template-single.injection.json",
+        "injectTo": [
+          "source.yaml"
+        ]
+      },
+      {
+        "scopeName": "scenarigo.template.injection.double",
+        "path": "./syntaxes/scenarigo-template-double.injection.json",
+        "injectTo": [
+          "source.yaml"
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && node -e \"require('fs').copyFileSync('../../LICENSE', 'LICENSE')\"",
+    "compile": "tsc -p .",
+    "check": "tsc -p . --noEmit",
+    "test": "npm run compile && node test/grammar.test.js && node test/server.test.js && node test/client.test.js"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.82.0",
+    "tm-grammars": "1.32.22",
+    "typescript": "~5.6.3",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

@@ -2695,4 +2695,15 @@ It provides completion, hover, diagnostics (including syntax errors and unknown 
 For gRPC steps that read proto files, it completes and checks services, methods and message fields from the proto files, and shows their comments on hover.
 The server stays silent on YAML files without a `schemaVersion` key, so it can be registered for all YAML files next to another YAML language server.
 
-See [internal/lsp/README.md](internal/lsp/README.md) for the editor setup (Neovim, Vim) and the feature matrix.
+See [internal/lsp/README.md](internal/lsp/README.md) for the editor setup (Neovim, Vim, Visual Studio Code) and the feature matrix.
+
+For Visual Studio Code, build and install the extension in [editors/vscode](editors/vscode) (it is not published to the Marketplace; packaging needs Node.js 20 or later):
+
+```shell
+cd editors/vscode
+npm ci
+npx @vscode/vsce@3.9.2 package
+code --install-extension scenarigo-0.0.1.vsix
+```
+
+The extension needs a `scenarigo` that has the `lsp` command; until a release has it, build one from this repository with `go install ./cmd/scenarigo`. Set `scenarigo.path` to the absolute path of `scenarigo` when it is not on the `PATH`.

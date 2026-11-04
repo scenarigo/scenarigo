@@ -12,6 +12,10 @@ The LSP server communicates over stdio using JSON-RPC 2.0. Configure your editor
 
 ## Editor Setup
 
+### Visual Studio Code
+
+A minimal extension lives in [`editors/vscode`](../../editors/vscode). It starts `scenarigo lsp` for YAML files and highlights `{{ }}` templates; see its README for building and installing it locally. The only setting is `scenarigo.path`, a name looked up in the `PATH` or an absolute path.
+
 ### Neovim (nvim-lspconfig)
 
 Add the following to your Neovim configuration (e.g., `~/.config/nvim/init.lua` or a file loaded by it):
