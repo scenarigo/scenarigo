@@ -144,7 +144,7 @@ func TestServer_ProtocolErrors(t *testing.T) {
 	})
 
 	t.Run("method not found", func(t *testing.T) {
-		client.sendRaw(`{"jsonrpc":"2.0","id":2,"method":"textDocument/rename","params":{}}`)
+		client.sendRaw(`{"jsonrpc":"2.0","id":2,"method":"workspace/symbol","params":{}}`)
 		resp := client.readError()
 		if resp.Error.Code != codeMethodNotFound {
 			t.Errorf("code = %d, want %d", resp.Error.Code, codeMethodNotFound)

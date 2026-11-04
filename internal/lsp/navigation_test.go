@@ -3,6 +3,7 @@ package lsp
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -37,9 +38,5 @@ func TestNameChains(t *testing.T) {
 }
 
 func joinPath(path []string) string {
-	out := path[0]
-	for _, p := range path[1:] {
-		out += "." + p
-	}
-	return out
+	return strings.Join(path, ".")
 }

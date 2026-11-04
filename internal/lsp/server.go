@@ -89,6 +89,10 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleSignatureHelp(req)
 	case "textDocument/references":
 		s.handleReferences(req)
+	case "textDocument/rename":
+		s.handleRename(req)
+	case "textDocument/prepareRename":
+		s.handlePrepareRename(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -113,6 +117,10 @@ func (s *Server) handleInitialize(req *Request) {
 		offered = initParams.Capabilities.General.PositionEncodings
 	}
 	s.encoding = negotiateEncoding(offered)
+	var renameProvider any = true
+	if tc := initParams.Capabilities.TextDocument; tc != nil && tc.Rename != nil && tc.Rename.PrepareSupport {
+		renameProvider = RenameOptions{PrepareProvider: true}
+	}
 
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
@@ -129,6 +137,7 @@ func (s *Server) handleInitialize(req *Request) {
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
 			},
+			RenameProvider: renameProvider,
 		},
 	}
 	s.sendResponse(req.ID, result, nil)

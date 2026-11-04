@@ -87,7 +87,8 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
 | `textDocument/references` | Supported | Find references to vars, secrets and steps, including names inside calls and operators (`size(vars.x)`, `vars.x ?? 0`) |
-| `textDocument/rename` | Not yet | Rename symbols |
+| `textDocument/rename` | Supported | Rename a variable, secret or step id in the file: its declarations (top level, steps, `bind`) and the references `textDocument/references` finds. A rename that could miss a reference is refused with the reason: the name is also defined in `scenarigo.yaml`, the scenario includes or is included by another scenario that can use it, or the template parser sees a reference the text scan cannot locate |
+| `textDocument/prepareRename` | Supported | Selects the name under the cursor, or reports why it cannot be renamed |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
 
@@ -168,6 +169,7 @@ internal/lsp/
   yamlview.go           # Alias and merge key resolution
   include.go            # Included and including scenarios
   ytt.go                # ytt annotation handling
+  rename.go             # textDocument/rename and prepareRename
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
 
@@ -196,7 +198,7 @@ Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateCon
 
 Single-operation tests declared in YAML under `testdata/{operation}/`. Each fixture specifies a document (with `$0` cursor marker), an operation, and expected results. **New tests should be added here whenever possible** — no Go code changes needed.
 
-Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `documentSymbol`, `signatureHelp`, `references`.
+Supported operations: `completion`, `diagnostics`, `hover`, `definition`, `documentSymbol`, `signatureHelp`, `references`, `rename`, `prepareRename`.
 
 #### Session Tests (multi-step Go tests)
 
@@ -230,6 +232,8 @@ internal/lsp/
     documentSymbol/       # Document symbol fixtures
     signatureHelp/        # Signature help fixtures
     references/           # References fixtures
+    rename/               # Rename fixtures
+    prepareRename/        # Prepare rename fixtures
     e2e_nvim/
       lsp_test.lua        # Neovim Lua test script
   yamlutil/

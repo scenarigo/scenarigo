@@ -54,7 +54,8 @@ type InitializeParams struct {
 }
 
 type ClientCapabilities struct {
-	General *GeneralClientCapabilities `json:"general,omitempty"`
+	General      *GeneralClientCapabilities      `json:"general,omitempty"`
+	TextDocument *TextDocumentClientCapabilities `json:"textDocument,omitempty"`
 }
 
 type GeneralClientCapabilities struct {
@@ -77,6 +78,7 @@ type ServerCapabilities struct {
 	CodeActionProvider     bool                  `json:"codeActionProvider,omitempty"`
 	ReferencesProvider     bool                  `json:"referencesProvider,omitempty"`
 	SignatureHelpProvider  *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
+	RenameProvider         any                   `json:"renameProvider,omitempty"` // bool or RenameOptions
 }
 
 type SignatureHelpOptions struct {
@@ -321,4 +323,35 @@ type SignatureInformation struct {
 type ParameterInformation struct {
 	Label         string `json:"label"`
 	Documentation string `json:"documentation,omitempty"`
+}
+
+type RenameParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+	NewName      string                 `json:"newName"`
+}
+
+type PrepareRenameParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
+// PrepareRenameResult is the range to rename and the text to start from.
+type PrepareRenameResult struct {
+	Range       Range  `json:"range"`
+	Placeholder string `json:"placeholder"`
+}
+
+type TextDocumentClientCapabilities struct {
+	Rename *RenameClientCapabilities `json:"rename,omitempty"`
+}
+
+type RenameClientCapabilities struct {
+	PrepareSupport bool `json:"prepareSupport,omitempty"`
+}
+
+// RenameOptions announces textDocument/prepareRename. It may only be sent
+// to clients that announce prepareSupport; others get true.
+type RenameOptions struct {
+	PrepareProvider bool `json:"prepareProvider"`
 }

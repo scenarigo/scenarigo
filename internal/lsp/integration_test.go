@@ -685,3 +685,81 @@ func TestEditorSession_IncludeIndex(t *testing.T) {
 		t.Errorf("expected the file on disk to count after the buffer is closed, got %v", diagMessages(p.Diagnostics))
 	}
 }
+
+// TestEditorSession_Rename applies the edits of a rename and checks the
+// resulting text, and that the capability follows the client's prepareSupport.
+func TestEditorSession_Rename(t *testing.T) {
+	t.Run("capability", func(t *testing.T) {
+		for _, prepare := range []bool{false, true} {
+			client := newRunningTestClient(t)
+			root, _ := newWorkspace(t)
+			result := client.initializeWith(1, InitializeParams{
+				RootURI: root,
+				Capabilities: ClientCapabilities{TextDocument: &TextDocumentClientCapabilities{
+					Rename: &RenameClientCapabilities{PrepareSupport: prepare},
+				}},
+			})
+			got, _ := json.Marshal(result.Capabilities.RenameProvider)
+			want := "true"
+			if prepare {
+				want = `{"prepareProvider":true}`
+			}
+			if string(got) != want {
+				t.Errorf("prepareSupport %v: renameProvider = %s, want %s", prepare, got, want)
+			}
+		}
+	})
+
+	t.Run("edits", func(t *testing.T) {
+		client := newRunningTestClient(t)
+		root, file := newWorkspace(t)
+		client.initialize(1, root)
+		uri := file("test.yaml")
+		text := "schemaVersion: scenario/v1\n" +
+			"vars:\n" +
+			"  user: 日本\n" +
+			"steps:\n" +
+			"  - id: login\n" +
+			"    protocol: http\n" +
+			"    request:\n" +
+			"      method: GET\n" +
+			"      url: '日本/{{vars.user}}/{{size(vars.user) ?? vars.username}}'\n" +
+			"    bind:\n" +
+			"      vars:\n" +
+			"        user: '{{response.body.user}}'\n"
+		want := strings.ReplaceAll(strings.ReplaceAll(text, "vars.user}", "vars.account}"), "vars.user)", "vars.account)")
+		want = strings.Replace(want, "  user: 日本", "  account: 日本", 1)
+		want = strings.Replace(want, "        user: '{{response", "        account: '{{response", 1)
+		client.openDocument(uri, text)
+
+		resp, respErr := client.rename(2, uri, 8, len(utf16.Encode([]rune("      url: '日本/{{vars.u"))), "account")
+		if respErr != nil {
+			t.Fatalf("rename: %s", respErr.Message)
+		}
+		var edit WorkspaceEdit
+		if err := json.Unmarshal(resp, &edit); err != nil {
+			t.Fatal(err)
+		}
+		if got := applyEdits(t, text, edit.Changes[uri]); got != want {
+			t.Errorf("after rename:\n%s\nwant:\n%s", got, want)
+		}
+	})
+}
+
+// applyEdits applies non-overlapping single-line edits whose characters
+// count UTF-16 code units.
+func applyEdits(t *testing.T, text string, edits []TextEdit) string {
+	t.Helper()
+	lines := strings.Split(text, "\n")
+	slices.SortFunc(edits, func(a, b TextEdit) int { return -compareRanges(a.Range, b.Range) })
+	for _, e := range edits {
+		if e.Range.Start.Line != e.Range.End.Line {
+			t.Fatalf("multi-line edit %+v", e.Range)
+		}
+		units := utf16.Encode([]rune(lines[e.Range.Start.Line]))
+		before := string(utf16.Decode(units[:e.Range.Start.Character]))
+		after := string(utf16.Decode(units[e.Range.End.Character:]))
+		lines[e.Range.Start.Line] = before + e.NewText + after
+	}
+	return strings.Join(lines, "\n")
+}
