@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -303,12 +304,13 @@ func TestE2E_Neovim(t *testing.T) {
 		t.Skipf("failed to get nvim version: %v", err)
 	}
 	firstLine := strings.SplitN(string(out), "\n", 2)[0] // "NVIM v0.11.0"
-	if ver := strings.TrimPrefix(firstLine, "NVIM v"); ver != firstLine {
+	if ver, ok := strings.CutPrefix(firstLine, "NVIM v"); ok {
 		parts := strings.SplitN(ver, ".", 3)
 		if len(parts) >= 2 {
-			major := parts[0]
-			minor := parts[1]
-			if major == "0" && minor < "10" {
+			// Compare numerically: as strings, "9" sorts after "10".
+			major, majorErr := strconv.Atoi(parts[0])
+			minor, minorErr := strconv.Atoi(parts[1])
+			if majorErr == nil && minorErr == nil && major == 0 && minor < 10 {
 				t.Skipf("nvim %s is too old (need >= 0.10); skipping", ver)
 			}
 		}
