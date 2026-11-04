@@ -34,7 +34,7 @@ require (
 	golang.org/x/mod v0.42.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/text v0.43.0
-	golang.org/x/tools v0.52.0
+	golang.org/x/tools v0.52.1-0.20261030190145-0f433775b36d
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
