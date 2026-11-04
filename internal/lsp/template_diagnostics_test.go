@@ -11,6 +11,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -267,7 +269,7 @@ func TestDiagnosticsScaleLinearly(t *testing.T) {
 			}
 			return b.String()
 		}},
-		{name: "binds", size: 2000, text: func(n int) string {
+		{name: "binds", size: 1000, text: func(n int) string {
 			var b strings.Builder
 			b.WriteString("schemaVersion: scenario/v1\nsteps:\n")
 			for i := range n {
@@ -285,7 +287,7 @@ func TestDiagnosticsScaleLinearly(t *testing.T) {
 		}},
 		// The included file grows with the document: its vars are looked
 		// up in the bind of every include step.
-		{name: "include steps of one file", size: 250, text: func(n int) string {
+		{name: "include steps of one file", size: 125, text: func(n int) string {
 			var b strings.Builder
 			b.WriteString("schemaVersion: scenario/v1\nsteps:\n")
 			for i := range n {
@@ -357,31 +359,43 @@ func longLine(n int, value string) string {
 	return "schemaVersion: scenario/v1\nvars:\n  host: example.com\nsteps:\n  - protocol: http\n    request:\n      method: GET\n      url: http://x\n    expect:\n      body: {" + strings.Join(keys, ", ") + "}\n"
 }
 
-// assertLinear compares eight runs at a size with one run at eight times
-// the size, and fails when the larger run takes three times as long or
-// more: linear code takes about as long, quadratic code about eight times as
-// long. A ratio rather than a time limit keeps the test valid on a slow
+// assertLinear compares sixteen runs at a size with one run at sixteen
+// times the size, and fails when the larger run takes four times as long or
+// more: linear code takes about as long, quadratic code about sixteen times
+// as long. A ratio rather than a time limit keeps the test valid on a slow
 // machine, and both measurements last about as long, so that other work on
-// the machine slows them alike. After a warm-up run, up to three rounds are
-// measured, keeping the fastest of each, until the ratio is under the limit.
-// Timings under the race detector are skipped.
+// the machine slows them alike.
+//
+// The garbage collector is off while measuring: otherwise its cost grows
+// faster than the heap while the heap is small, and the larger run pays
+// more for it. A memory limit runs it all the same before a regression
+// exhausts the memory. After a warm-up run, up to five rounds are measured,
+// keeping the fastest of each, until the ratio is under the limit. Timings
+// under the race detector are skipped.
 func assertLinear(t *testing.T, size int, run func(n int) time.Duration) {
 	t.Helper()
 	if raceSlowdown > 1 {
 		t.Skip("timings under the race detector")
 	}
-	run(size)
-	small, large := time.Duration(math.MaxInt64), time.Duration(math.MaxInt64)
-	for range 3 {
-		var sum time.Duration
-		for range 8 {
-			sum += run(size)
+	const factor, limit = 16, 4
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
+	defer debug.SetMemoryLimit(debug.SetMemoryLimit(1 << 30))
+	measure := func(n, runs int) time.Duration {
+		runtime.GC()
+		var d time.Duration
+		for range runs {
+			d += run(n)
 		}
-		small, large = min(small, sum), min(large, run(8*size))
-		if large < 3*small || large < 100*time.Millisecond {
-			t.Logf("8 × %d: %v, %d: %v", size, small, 8*size, large)
+		return d
+	}
+	measure(size, 1)
+	small, large := time.Duration(math.MaxInt64), time.Duration(math.MaxInt64)
+	for range 5 {
+		small, large = min(small, measure(size, factor)), min(large, measure(factor*size, 1))
+		if large < limit*small || large < 100*time.Millisecond {
+			t.Logf("%d × %d: %v, %d: %v", factor, size, small, factor*size, large)
 			return
 		}
 	}
-	t.Errorf("%v for 8 × %d, %v for %d: slower than linear", small, size, large, 8*size)
+	t.Errorf("%v for %d × %d, %v for %d: slower than linear", small, factor, size, large, factor*size)
 }
