@@ -87,7 +87,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
 | `textDocument/references` | Supported | Find references to vars, secrets and steps, including names inside calls and operators (`size(vars.x)`, `vars.x ?? 0`) |
-| `textDocument/rename` | Supported | Rename a variable, secret or step id in the file: its declarations (top level, steps, `bind`) and the references `textDocument/references` finds. A rename that could miss a reference is refused with the reason: the name is also defined in `scenarigo.yaml`, the scenario includes or is included by another scenario that can use it, or the template parser sees a reference the text scan cannot locate |
+| `textDocument/rename` | Supported | Rename a variable, secret or step id in one YAML document of a scenario: its declarations (top level, steps, `bind`) and the references `textDocument/references` finds. A rename that the server cannot complete is refused with the reason: the name is declared through an alias or merge key, used as an index (`vars["x"]`), or in a template the text scan cannot locate; it belongs to a configuration file or is also defined in `scenarigo.yaml`; the scenario includes another one (vars and secrets) or another scenario of the workspace includes it; there is no workspace root. The new name must be a template name (a letter first, then letters, digits, `-`, `_`) other than `nil`, `defined` and any spelling of `true`, `false` and `null`, and neither defined nor already used in the scenario or `scenarigo.yaml` |
 | `textDocument/prepareRename` | Supported | Selects the name under the cursor, or reports why it cannot be renamed |
 | `textDocument/signatureHelp` | Supported | Template function signatures (e.g., `assert.contains <- expected`) |
 | `workspace/symbol` | Not yet | Workspace-wide symbol search |
@@ -170,6 +170,7 @@ internal/lsp/
   include.go            # Included and including scenarios
   ytt.go                # ytt annotation handling
   rename.go             # textDocument/rename and prepareRename
+  navigation.go         # Name chains, step definitions and document spans for navigation
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
 
@@ -186,7 +187,7 @@ The LSP server has three tiers of tests, each with a different purpose and cost.
 
 | Tier | Files | Run with | Purpose |
 |---|---|---|---|
-| **Unit / Fuzz** | `position_test.go`, `transport_test.go`, `uri_test.go`, `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
+| **Unit / Fuzz** | `position_test.go`, `transport_test.go`, `uri_test.go`, `navigation_test.go`, `template_diagnostics_test.go`, `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
 | **Fixture + Session** | `fixture_test.go` + `testdata/`, `integration_test.go` | `go test ./internal/lsp/...` | Protocol-level behavior via in-process `io.Pipe` |
 | **E2E (binary + Neovim)** | `e2e_test.go` + `testdata/e2e_nvim/` | `make test/lsp-e2e` | Real binary over OS pipes; real editor integration |
 
@@ -223,6 +224,7 @@ internal/lsp/
   position_test.go        # Column conversions between bytes, runes and UTF-16
   transport_test.go       # Message framing and protocol error responses
   uri_test.go             # file URI <-> path conversions
+  navigation_test.go      # Name chains, YAML escapes, value alignment fallback
   e2e_test.go             # [e2e_lsp] Binary subprocess + Neovim headless tests
   testdata/
     completion/           # Completion fixtures

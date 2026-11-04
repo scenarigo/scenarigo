@@ -710,6 +710,17 @@ func TestEditorSession_Rename(t *testing.T) {
 		}
 	})
 
+	t.Run("no workspace root", func(t *testing.T) {
+		client := newRunningTestClient(t)
+		client.initialize(1, "")
+		uri := pathToURI(filepath.Join(t.TempDir(), "test.yaml"))
+		client.openDocument(uri, "schemaVersion: scenario/v1\nvars:\n  user: alice\n")
+		_, respErr := client.rename(2, uri, 2, 3, "account")
+		if respErr == nil || !strings.Contains(respErr.Message, "workspace root") {
+			t.Errorf("expected a refusal without a workspace root, got %v", respErr)
+		}
+	})
+
 	t.Run("edits", func(t *testing.T) {
 		client := newRunningTestClient(t)
 		root, file := newWorkspace(t)

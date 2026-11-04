@@ -124,3 +124,17 @@ document: |
 operation: references
 expect:
   referenceCount: 3
+---
+name: "references to a name with other letters"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    $0名前: b
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.名前}}/{{vars.名前2}}'
+operation: references
+expect:
+  referenceCount: 2

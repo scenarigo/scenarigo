@@ -74,3 +74,21 @@ document: |
 operation: prepareRename
 expect:
   prepareError: "scenarigo.yaml"
+---
+name: "a flow-style step selects its id only on the id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - {id: login, proto$0col: http}
+operation: prepareRename
+expect:
+  prepareIsNull: true
+---
+name: "a flow-style step id is selected on the id"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - {id: lo$0gin, protocol: http}
+operation: prepareRename
+expect:
+  prepareRange: "2:9-14"

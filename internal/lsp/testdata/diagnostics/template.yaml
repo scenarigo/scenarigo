@@ -367,7 +367,7 @@ operation: diagnostics
 expect:
   diagnosticCount: 0
 ---
-name: "a value whose escapes cannot be aligned points at the first line of the scalar"
+name: "positions after an escape in a double-quoted string"
 document: |
   schemaVersion: scenario/v1
   steps:
@@ -380,6 +380,6 @@ expect:
   diagnostics:
     - message: 'unknown template name "hots"'
       startLine: 5
-      startChar: 11
+      startChar: 17
       endLine: 5
-      endChar: 24
+      endChar: 21

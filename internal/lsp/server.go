@@ -737,6 +737,9 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 	}
 
 	parts := strings.Split(resolveExpr, ".")
+	if chain, ok := chainAt(doc.Text, params.Position); ok {
+		parts = chain.path // the chain under the cursor, among several
+	}
 	if len(parts) < 2 {
 		return nil
 	}
@@ -745,6 +748,9 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 		return nil
 	}
 	name := parts[1]
+	if root == nsSteps {
+		return s.stepDefinition(doc, params.Position, name)
+	}
 
 	// Try to find the definition in the current document.
 	if root == nsPlugins {
@@ -767,9 +773,6 @@ func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *
 		}
 	}
 
-	if root == nsSteps {
-		return nil // steps belong to the scenario, not to scenarigo.yaml
-	}
 	// Fall back to scenarigo.yaml config file.
 	return s.findConfigDefinition(root, name)
 }
@@ -2135,55 +2138,6 @@ func scanTemplateRefs(text string) []templateRef {
 	return refs
 }
 
-// nameChain is a dotted name chain found in a template expression, with its
-// byte offsets in the expression.
-type nameChain struct {
-	path       []string
-	start, end int
-}
-
-// nameChains returns the dotted name chains of a template expression, such
-// as vars.user in size(vars.user) ?? 0. Characters inside double-quoted
-// strings are not names.
-func nameChains(expr string) []nameChain {
-	var chains []nameChain
-	isName := func(b byte) bool {
-		return b == '_' || b == '-' || b == '$' || ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z') || ('0' <= b && b <= '9')
-	}
-	for i := 0; i < len(expr); {
-		switch b := expr[i]; {
-		case b == '"':
-			end := strings.IndexByte(expr[i+1:], '"')
-			if end < 0 {
-				return chains
-			}
-			i += end + 2
-		case isName(b) && (b < '0' || b > '9') && b != '-':
-			start := i
-			var path []string
-			for {
-				j := i
-				for j < len(expr) && isName(expr[j]) {
-					j++
-				}
-				path = append(path, expr[i:j])
-				i = j
-				if i+1 < len(expr) && expr[i] == '.' && isName(expr[i+1]) {
-					i++
-					continue
-				}
-				break
-			}
-			if len(path) > 1 {
-				chains = append(chains, nameChain{path: path, start: start, end: i})
-			}
-		default:
-			i++
-		}
-	}
-	return chains
-}
-
 // identifySymbol determines what symbol the cursor is on.
 // Returns a 2-element path like ["vars", "myVar"] or ["steps", "login"], and the declaration range.
 // identifyTemplateSymbol resolves the vars/secrets/steps symbol named by the
@@ -2255,7 +2209,7 @@ func identifySymbol(doc *document, pos Position) ([]string, *Range) {
 		if lastKey == "id" && ctx.PartialValue != "" {
 			// Verify it's under steps.
 			if slices.Contains(ctx.Path, nsSteps) {
-				idValue := ctx.PartialValue
+				idValue := plainScalar(ctx.PartialValue)
 				r := valueRange(pos.Line, currentLine, idValue)
 				return []string{nsSteps, idValue}, &r
 			}
@@ -2269,7 +2223,7 @@ func identifySymbol(doc *document, pos Position) ([]string, *Range) {
 			// Get the value from the same line.
 			_, after, ok := strings.Cut(currentLine, ":")
 			if ok {
-				val := strings.TrimSpace(after)
+				val := plainScalar(after)
 				if val != "" {
 					if slices.Contains(ctx.Path, nsSteps) {
 						r := valueRange(pos.Line, currentLine, val)
@@ -2486,8 +2440,6 @@ func (s *Server) references(doc *document, params ReferenceParams) []Location {
 		return nil
 	}
 
-	refs := scanTemplateRefs(doc.Text)
-
 	var locs []Location
 
 	// If includeDeclaration, add the declaration location.
@@ -2498,24 +2450,9 @@ func (s *Server) references(doc *document, params ReferenceParams) []Location {
 		})
 	}
 
-	// Match template refs whose first 2 path elements match symbolPath.
-	for _, ref := range refs {
-		if len(ref.path) < 2 {
-			continue
-		}
-		if ref.path[0] == symbolPath[0] && ref.path[1] == symbolPath[1] {
-			// Highlight just the matched prefix (e.g., "vars.myVar" portion).
-			matchEnd := min(ref.startCol+len(ref.path[0])+1+len(ref.path[1]), ref.endCol)
-			locs = append(locs, Location{
-				URI: params.TextDocument.URI,
-				Range: Range{
-					Start: Position{Line: ref.line, Character: ref.startCol},
-					End:   Position{Line: ref.line, Character: matchEnd},
-				},
-			})
-		}
+	for _, r := range templateRefRanges(doc.Text, symbolPath[0], symbolPath[1]) {
+		locs = append(locs, Location{URI: params.TextDocument.URI, Range: r})
 	}
-
 	return locs
 }
 

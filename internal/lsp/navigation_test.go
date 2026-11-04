@@ -40,3 +40,39 @@ func TestNameChains(t *testing.T) {
 func joinPath(path []string) string {
 	return strings.Join(path, ".")
 }
+
+// TestValueMapFallback checks the range of a value that cannot be aligned
+// with its source: the rest of the first line of the scalar.
+func TestValueMapFallback(t *testing.T) {
+	text := "key: abc\nnext: 1\n"
+	lines := newLineIndex(text)
+	m := newValueMap(text, lines, 5, "xyz")
+	if len(m.offsets) != 0 {
+		t.Fatalf("expected no alignment, got %v", m.offsets)
+	}
+	want := Range{Start: Position{Line: 0, Character: 5}, End: Position{Line: 0, Character: 8}}
+	if got := m.runeRange(1, 2); got != want {
+		t.Errorf("range = %+v, want %+v", got, want)
+	}
+}
+
+func TestDecodeYAMLEscape(t *testing.T) {
+	tests := []struct {
+		in   string
+		want rune
+		n    int
+	}{
+		{`\n`, '\n', 2}, {`\"`, '"', 2}, {`\\`, '\\', 2}, {`\x41`, 'A', 4}, {`\u00e9`, 'é', 6}, {`\U0001F600`, '😀', 10},
+	}
+	for _, tt := range tests {
+		got, n, ok := decodeYAMLEscape(tt.in + "rest")
+		if !ok || got != tt.want || n != tt.n {
+			t.Errorf("decodeYAMLEscape(%q) = %q, %d, %v; want %q, %d", tt.in, got, n, ok, tt.want, tt.n)
+		}
+	}
+	for _, bad := range []string{`\`, `\q`, `\x4`, `\uZZZZ`, "x"} {
+		if _, _, ok := decodeYAMLEscape(bad); ok {
+			t.Errorf("decodeYAMLEscape(%q) accepted", bad)
+		}
+	}
+}
