@@ -36,8 +36,26 @@
     },
     "grammars": [
       {
+        "scopeName": "scenarigo.template.expression",
+        "path": "./syntaxes/scenarigo-template.expression.json"
+      },
+      {
         "scopeName": "scenarigo.template.injection",
         "path": "./syntaxes/scenarigo-template.injection.json",
+        "injectTo": [
+          "source.yaml"
+        ]
+      },
+      {
+        "scopeName": "scenarigo.template.injection.single",
+        "path": "./syntaxes/scenarigo-template-single.injection.json",
+        "injectTo": [
+          "source.yaml"
+        ]
+      },
+      {
+        "scopeName": "scenarigo.template.injection.double",
+        "path": "./syntaxes/scenarigo-template-double.injection.json",
         "injectTo": [
           "source.yaml"
         ]

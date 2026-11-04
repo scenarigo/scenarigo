@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -17,16 +18,18 @@ export function expandHome(p: string, home: string = os.homedir()): string {
 }
 
 // findExecutable returns the absolute path of the program that a command
-// names: an absolute path, or a name looked up in PATH (with the extensions
-// of PATHEXT on Windows). A relative path is not resolved, since the working
-// directory of the extension host means nothing to the user.
+// names: an absolute path, or a name looked up in PATH. On Windows a name
+// without an extension gets .exe: a file without one cannot be started, and
+// Node starts .cmd and .bat files only through a shell. A relative path is
+// not resolved, since the working directory of the extension host means
+// nothing to the user.
 export function findExecutable(
   command: string,
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
 ): string | undefined {
   const windows = platform === 'win32';
-  const extensions = windows ? ['', ...(env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  const extensions = windows && path.extname(command) === '' ? ['.exe'] : [''];
   const executable = (p: string): boolean => {
     try {
       if (!fs.statSync(p).isFile()) {
@@ -51,4 +54,21 @@ export function findExecutable(
     }
   }
   return undefined;
+}
+
+// checkLspCommand runs `<command> lsp --help` and returns why the binary
+// cannot run the language server, or undefined when it can. A scenarigo
+// without the lsp command, such as a release before it, exits with
+// "unknown command"; starting it as a server would fail over and over.
+export function checkLspCommand(command: string, timeoutMs = 10_000): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile(command, ['lsp', '--help'], { timeout: timeoutMs, windowsHide: true }, (err, _stdout, stderr) => {
+      if (err === null) {
+        resolve(undefined);
+        return;
+      }
+      const output = String(stderr).trim().replace(/^Error: /, '').split('\n')[0];
+      resolve(output || err.message);
+    });
+  });
 }

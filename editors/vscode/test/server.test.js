@@ -11,6 +11,12 @@ assert.equal(expandHome('~other/scenarigo', '/home/u'), '~other/scenarigo');
 assert.equal(expandHome('/usr/bin/scenarigo', '/home/u'), '/usr/bin/scenarigo');
 assert.equal(expandHome('scenarigo', '/home/u'), 'scenarigo');
 
+// The lookup on this platform uses executable bits; Windows has none.
+if (process.platform === 'win32') {
+  console.log('server test skipped on Windows');
+  process.exit(0);
+}
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'scenarigo-find-'));
 try {
   const bin = path.join(tmp, 'bin');
@@ -27,10 +33,15 @@ try {
   assert.equal(findExecutable('bin/scenarigo', env, 'linux'), undefined, 'a relative path');
   assert.equal(findExecutable('scenarigo', {}, 'linux'), undefined, 'no PATH');
 
-  // Windows: the extensions of PATHEXT.
-  // Windows file names are case-insensitive; this test runs where they are not.
-  fs.writeFileSync(path.join(bin, 'tool.EXE'), '');
-  assert.equal(findExecutable('tool', { ...env, PATHEXT: '.EXE;.CMD' }, 'win32'), path.join(bin, 'tool.EXE'));
+  // Windows: a name gets .exe, which wins over a file without an extension
+  // (it cannot be started), and .cmd or .bat files are not taken (Node
+  // starts them only through a shell).
+  fs.writeFileSync(path.join(bin, 'tool'), '');
+  fs.writeFileSync(path.join(bin, 'tool.exe'), '');
+  fs.writeFileSync(path.join(bin, 'script.cmd'), '');
+  assert.equal(findExecutable('tool', env, 'win32'), path.join(bin, 'tool.exe'));
+  assert.equal(findExecutable('tool.exe', env, 'win32'), path.join(bin, 'tool.exe'));
+  assert.equal(findExecutable('script', { ...env, PATHEXT: '.CMD' }, 'win32'), undefined);
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

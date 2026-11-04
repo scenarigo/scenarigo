@@ -2703,7 +2703,7 @@ For Visual Studio Code, build and install the extension in [editors/vscode](edit
 cd editors/vscode
 npm ci
 npx @vscode/vsce@3.9.2 package
-code --install-extension scenarigo-*.vsix
+code --install-extension scenarigo-0.0.1.vsix
 ```
 
-Set `scenarigo.path` to the absolute path of `scenarigo` when it is not on the `PATH`.
+The extension needs a `scenarigo` that has the `lsp` command; until a release has it, build one from this repository with `go install ./cmd/scenarigo`. Set `scenarigo.path` to the absolute path of `scenarigo` when it is not on the `PATH`.

@@ -1,8 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "scenarigo.template.injection",
-  "injectionSelector": "L:source.yaml -comment -meta.embedded.template.scenarigo",
+  "injectionSelector": "L:source.yaml -comment -string.quoted.single.yaml -string.quoted.double.yaml -meta.embedded.template.scenarigo",
   "patterns": [
+    {
+      "comment": "template escapes, consumed so that \\{{ opens no template",
+      "match": "\\\\[\\\\{]"
+    },
     {
       "include": "#template"
     }
@@ -16,7 +20,7 @@
           "name": "punctuation.section.embedded.begin.scenarigo"
         }
       },
-      "end": "\\}\\}",
+      "end": "\\}\\}|$",
       "endCaptures": {
         "0": {
           "name": "punctuation.section.embedded.end.scenarigo"
@@ -26,31 +30,10 @@
         {
           "name": "string.quoted.double.scenarigo",
           "begin": "\"",
-          "end": "\""
+          "end": "\"|$"
         },
         {
-          "name": "constant.numeric.scenarigo",
-          "match": "\\b\\d+(?:\\.\\d+)?\\b"
-        },
-        {
-          "name": "constant.language.scenarigo",
-          "match": "\\b(?:true|false|nil|null)\\b"
-        },
-        {
-          "name": "support.function.builtin.scenarigo",
-          "match": "\\b(?:defined|size|type|any|int|uint|float|bool|string|bytes|time|duration)(?=\\s*\\()"
-        },
-        {
-          "name": "variable.language.scenarigo",
-          "match": "(?<![\\p{L}\\p{N}_.$-])(?:ctx|vars|secrets|plugins|steps|request|response|env|assert|\\$)(?![\\p{L}\\p{N}_-])"
-        },
-        {
-          "name": "variable.other.property.scenarigo",
-          "match": "(?<=\\.)[\\p{L}][\\p{L}\\p{N}_-]*"
-        },
-        {
-          "name": "keyword.operator.scenarigo",
-          "match": "<-|\\?\\?|==|!=|<=|>=|&&|\\|\\||[-+*/%<>!?:]"
+          "include": "scenarigo.template.expression"
         }
       ]
     }

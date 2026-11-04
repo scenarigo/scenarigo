@@ -112,12 +112,55 @@ async function main() {
   // In a double-quoted YAML string, a template string is written \"x\".
   const doubleQuoted = 'd: "{{ \\"x\\" }}" # comment';
   const comment = (d) => tokens(d).filter(([, t]) => t.includes('comment'));
+  assert.equal(innermost(doubleQuoted, 'x'), 'string.quoted.double.scenarigo', JSON.stringify(tokens(doubleQuoted)));
   assert.ok(comment(doubleQuoted).length > 0 && !comment(doubleQuoted).some(([, , s]) => s.includes(TEMPLATE)), JSON.stringify(tokens(doubleQuoted)));
 
   // A template string holding {{ does not open a template in the template.
   const nested = "c: '{{ \"{{\" }}' # comment";
   assert.ok(comment(nested).length > 0 && !comment(nested).some(([, , s]) => s.includes(TEMPLATE)), JSON.stringify(tokens(nested)));
   assert.equal(scopes(nested, '{{').filter((s) => s === TEMPLATE).length, 1);
+
+  // An unclosed template or template string ends with its line, and in a
+  // quoted scalar with the scalar, so that the rest of the document stays
+  // YAML while a template is being typed.
+  const keyOf = (d, key) => scopes(d, key).at(-1);
+  const unclosed = [
+    ["a: '{{ \"abc }}'", 'b: c'],
+    ['a: "{{ \\"abc }}"', 'b: c'],
+    ['a: |', '  {{ vars.x', '  more', 'b: c'],
+    ['a: {{vars.x', 'b: c'],
+  ];
+  for (const lines of unclosed) {
+    const d = lines.join('\n');
+    assert.equal(keyOf(d, 'b'), 'entity.name.tag.yaml', JSON.stringify(tokens(d)));
+    assert.ok(!tokens(d).some(([l, , s]) => l > 0 && s.includes(TEMPLATE) && lines[l] !== '  {{ vars.x'), JSON.stringify(tokens(d)));
+  }
+  assert.ok(!tokens("host: '{{env.HOST\nb: c").some(([l, , s]) => l > 0 && s.includes(TEMPLATE)));
+
+  // Escapes: \{ is a brace, not a template; \\ is a backslash, so
+  // \\{{ is a backslash before a template. A double-quoted scalar escapes
+  // the backslashes once more.
+  const escaped = [
+    ["k: '\\{{vars.x}}'", false],
+    ['k: \\{{vars.x}}', false],
+    ["k: '\\\\{{vars.x}}'", true],
+    ['k: "\\\\{{vars.x}}"', false],
+    ['k: "\\\\\\\\{{vars.x}}"', true],
+    ['k: "\\"{{vars.x}}"', true],
+  ];
+  for (const [d, template] of escaped) {
+    assert.equal(tokens(d).some(([, t, s]) => t === 'vars' && s.includes(TEMPLATE)), template, `${d}: ${JSON.stringify(tokens(d))}`);
+  }
+
+  // A single-quoted scalar with '' in and around a template.
+  const quotes = "q: 'it''s {{ \"a''b\" }} ok'\nb: c";
+  assert.equal(innermost(quotes, 'b', { line: 1 }), 'entity.name.tag.yaml', JSON.stringify(tokens(quotes)));
+  assert.equal(innermost(quotes, 'a', { line: 0 }), 'string.quoted.double.scenarigo', JSON.stringify(tokens(quotes)));
+
+  // The injection takes priority over the YAML grammar (L:), also on the
+  // continuation line of a plain scalar.
+  const continued = 'p: plain\n  {{vars.x}}';
+  assert.equal(innermost(continued, 'vars'), 'variable.language.scenarigo', JSON.stringify(tokens(continued)));
 
   // Comments are not templates.
   assert.ok(!tokens('# {{vars.x}}').some(([, , s]) => s.includes(TEMPLATE)));
