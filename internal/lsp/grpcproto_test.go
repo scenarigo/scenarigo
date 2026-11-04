@@ -117,30 +117,35 @@ func TestProtoLargeDocument(t *testing.T) {
 	}
 }
 
-// TestProtoManyDocuments times the proto diagnostics of a file with 2,000
-// documents of one step each: steps are found without scanning every
-// document for each of them.
+// TestProtoManyDocuments checks that the proto diagnostics of a file of many
+// documents of one step each scale linearly: steps are found without
+// scanning every document for each of them.
 func TestProtoManyDocuments(t *testing.T) {
-	var b strings.Builder
-	for i := range 2000 {
-		fmt.Fprintf(&b, "---\nschemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options: {proto: {imports: [proto], files: [a.proto]}}\n      service: a.A\n      method: M\n      message: {bogus%d: 1}\n", i)
-	}
 	root, file := newWorkspace(t)
 	writeFile(t, filepath.Join(uriToPath(root), "proto", "a.proto"), "syntax = \"proto3\";\npackage a;\nservice A { rpc M(R) returns (R); }\nmessage R { string x = 1; }\n")
+	text := func(n int) string {
+		var b strings.Builder
+		for i := range n {
+			fmt.Fprintf(&b, "---\nschemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      options: {proto: {imports: [proto], files: [a.proto]}}\n      service: a.A\n      method: M\n      message: {bogus%d: 1}\n", i)
+		}
+		return b.String()
+	}
 	s := NewServer()
 	s.logger = log.New(io.Discard, "", 0)
 	s.rootURI = root
-	s.docs.Open(file("test.yaml"), 1, b.String())
-	doc := s.docs.Get(file("test.yaml"))
-	s.protoDiagnostics(doc) // compiles the proto file
-	start := time.Now()
-	messages := diagMessages(s.protoDiagnostics(doc))
-	if d := time.Since(start); d > 500*time.Millisecond*raceSlowdown {
-		t.Errorf("proto diagnostics took %v", d)
+	open := func(n int) *document {
+		s.docs.Open(file("test.yaml"), 1, text(n))
+		return s.docs.Get(file("test.yaml"))
 	}
-	if !slices.Contains(messages, `unknown field "bogus1999" in a.R`) {
+	if messages := diagMessages(s.protoDiagnostics(open(2000))); !slices.Contains(messages, `unknown field "bogus1999" in a.R`) {
 		t.Errorf("no warning on the last document (%d diagnostics)", len(messages))
 	}
+	assertLinear(t, 500, func(n int) time.Duration {
+		doc := open(n)
+		start := time.Now()
+		s.protoDiagnostics(doc)
+		return time.Since(start)
+	})
 }
 
 // TestProtoAliases checks aliases as scenarigo resolves them: to the anchor
