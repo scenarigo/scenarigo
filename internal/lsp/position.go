@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -172,10 +171,7 @@ func (s *Server) textOf(uri string) string {
 	if doc := s.docs.Get(uri); doc != nil {
 		return doc.Text
 	}
-	data, err := os.ReadFile(uriToPath(uri))
-	if err != nil {
-		return ""
-	}
+	data, _ := readScannedFile(uriToPath(uri))
 	return string(data)
 }
 

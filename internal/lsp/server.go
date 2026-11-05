@@ -40,6 +40,8 @@ type Server struct {
 	shutdownRequested  bool
 	pluginSymbolsMu    sync.Mutex
 	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
+	includeIndexMu     sync.Mutex
+	includeIndex       *includeIndex // see include.go
 }
 
 // NewServer creates a new LSP server that communicates over stdio.
@@ -144,6 +146,7 @@ func (s *Server) handleDidOpen(req *Request) {
 	}
 	s.docs.Open(params.TextDocument.URI, params.TextDocument.Version, params.TextDocument.Text)
 	s.publishDiagnostics(params.TextDocument.URI)
+	s.publishDependentDiagnostics(params.TextDocument.URI)
 }
 
 func (s *Server) handleDidChange(req *Request) {
@@ -162,6 +165,7 @@ func (s *Server) handleDidChange(req *Request) {
 		s.docs.Update(params.TextDocument.URI, params.TextDocument.Version, text)
 	}
 	s.publishDiagnostics(params.TextDocument.URI)
+	s.publishDependentDiagnostics(params.TextDocument.URI)
 }
 
 func (s *Server) handleDidClose(req *Request) {
@@ -176,6 +180,7 @@ func (s *Server) handleDidClose(req *Request) {
 		URI:         params.TextDocument.URI,
 		Diagnostics: []Diagnostic{},
 	})
+	s.publishDependentDiagnostics(params.TextDocument.URI)
 }
 
 func (s *Server) handleCompletion(req *Request) {

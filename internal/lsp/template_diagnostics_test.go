@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/scenarigo/scenarigo/template"
@@ -62,18 +63,80 @@ func TestTemplateContextRootsMatchExtract(t *testing.T) {
 	}
 }
 
-// TestTemplateBuiltinsAreDefined checks that the template package resolves
-// every name of templateBuiltins without any data, and nothing else.
-func TestTemplateBuiltinsAreDefined(t *testing.T) {
-	for _, name := range append(slices.Clone(templateBuiltins), "notABuiltin") {
-		v, err := template.Execute(context.Background(), "{{defined("+name+")}}", nil)
-		if err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		if want := name != "notABuiltin"; v != want {
-			t.Errorf("defined(%s) = %v, want %v", name, v, want)
+// TestTemplateBuiltinsMatchTemplatePackage compares templateBuiltins with the
+// names the template package resolves without any data. The candidates are
+// the lower-case string literals of the files that define them (the
+// functions map, the type function and the registered types of
+// template/val): every candidate that {{defined(x)}} accepts must be a
+// built-in, and every built-in must be accepted.
+func TestTemplateBuiltinsMatchTemplatePackage(t *testing.T) {
+	files := []string{filepath.Join("..", "..", "template", "function.go"), filepath.Join("..", "..", "template", "type.go")}
+	valFiles, err := filepath.Glob(filepath.Join("..", "..", "template", "val", "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range valFiles {
+		if !strings.HasSuffix(f, "_test.go") {
+			files = append(files, f)
 		}
 	}
+	keywords := []string{"nil", "null", "true", "false", "defined"}
+	candidates := map[string]bool{}
+	for _, f := range files {
+		for _, lit := range stringLiterals(t, f) {
+			if isLowerIdent(lit) && !slices.Contains(keywords, lit) {
+				candidates[lit] = true
+			}
+		}
+	}
+	defined := func(name string) bool {
+		v, err := template.Execute(context.Background(), "{{defined("+name+")}}", nil)
+		if err != nil {
+			t.Fatalf("defined(%s): %v", name, err)
+		}
+		return v == true
+	}
+	for name := range candidates {
+		if defined(name) && !slices.Contains(templateBuiltins, name) {
+			t.Errorf("the template package resolves %q, which templateBuiltins lacks", name)
+		}
+	}
+	for _, name := range templateBuiltins {
+		if !defined(name) {
+			t.Errorf("templateBuiltins lists %q, which the template package does not resolve", name)
+		}
+	}
+}
+
+func isLowerIdent(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		if (r < 'a' || r > 'z') && (i == 0 || r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// stringLiterals returns the string literals of a Go file.
+func stringLiterals(t *testing.T, path string) []string {
+	t.Helper()
+	f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	goast.Inspect(f, func(n goast.Node) bool {
+		if lit, ok := n.(*goast.BasicLit); ok && lit.Kind == token.STRING {
+			if s, err := strconv.Unquote(lit.Value); err == nil {
+				out = append(out, s)
+			}
+		}
+		return true
+	})
+	return out
 }
 
 // TestTemplateCompletionNamesAreKnown checks that completion never offers a

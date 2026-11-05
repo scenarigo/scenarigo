@@ -114,8 +114,8 @@ vim.api.nvim_create_autocmd("FileType", {
 | YAML syntax errors | Supported | Reports parse failures; a text estimated to cost the parser too much memory or stack counts as one |
 | Type checking | Supported | Type mismatches (string/int/bool/object/array); template expressions are accepted |
 | Required field validation | Supported | Warns when required fields are missing (e.g., `url` in HTTP request) |
-| Template syntax errors | Supported | Parses `{{ }}` with scenarigo's own template parser and reports an error where `scenarigo run` would fail; only fields scenarigo evaluates are checked (`vars`, `secrets`, and the steps' `vars`, `secrets`, `if`, `request`, `expect`, `bind`, `ref`) |
-| Template names | Supported | Warns on unknown root names (other than `ctx`, `vars`, `secrets`, `plugins`, `steps`, `request`, `response`, `env`, `assert`, `$` and the built-in functions), unknown `assert.x`, `steps.<id>` without a step of that id in the scenario, and `plugins.<name>` not declared in the file or `scenarigo.yaml`; an undefined `vars.x`/`secrets.x` is only information because a plugin setup can add variables. Names inside `defined()` and on the left of `??` are not reported |
+| Template syntax errors | Supported | Parses `{{ }}` with scenarigo's own template parser and reports an error where `scenarigo run` would fail, including an operand the parser leaves empty (`{{a ==}}`); an operand missing on a branch that may not run (`{{a ?? }}`, `{{t ? 1 : }}`) is a warning, and everything else in such a branch, other than a syntax error, is one level lower; a template over 1 MiB is not parsed; only fields scenarigo evaluates are checked (`vars` and `secrets` of a scenario, the steps' `if`, `vars`, `secrets`, `bind` and, except on an `include` step, `request`, `expect`, `ref`, and `vars`, `secrets`, `protocols` of `scenarigo.yaml`) |
+| Template names | Supported | Warns on unknown root names (other than `ctx`, `vars`, `secrets`, `plugins`, `steps`, `request`, `response`, `env`, `assert`, `$` and the built-in functions), unknown `assert.x`, and `steps.<id>` without a step of that id that has run before; an undefined `vars.x`/`secrets.x`, and `plugins.<name>` not declared in the scenario or a scenario that includes it, are only information because a plugin setup can add them (the plugins of `scenarigo.yaml` are not template names). Names are checked in scenarigo's evaluation order (a step's `if` and `vars` cannot use its own `vars`; `bind` and ids are visible to later steps), aliases and merge keys are resolved (what they bring is checked once, where it is first used), and the `bind` of an `include` step sees the included scenario's steps, vars, secrets and plugins. The scenarios that include a file (found by one walk of the workspace, then updated from the open buffers) lend it their plugins, vars and secrets, including those of the include step; a workspace that cannot be read whole does not prove a name undefined, a scenario outside the workspace root is not seen, and one behind a symlinked directory or in a hidden directory, `vendor` or `node_modules` is seen only once it has been opened. In a file with `#@` annotations, `vars`, `secrets`, `steps` and `plugins` names are not checked, because ytt can fill them in. The `protocols` options of `scenarigo.yaml` are evaluated in each step's context, so only their syntax, root names and `assert.x` are checked. A path directly on the left of `??` or inside `defined()` may be missing; `defined()` of anything else is an error |
 | ytt templates | Supported | `ytt/v1` documents have their own schema, also next to scenario documents in one file; a null value followed by a `#@` annotation (`title: #@ params.title`) is filled in by ytt and not type-checked; a file with `#@` that does not parse is not reported, because it is YAML only after ytt evaluates it |
 
 ### Other Features
@@ -166,6 +166,7 @@ internal/lsp/
   uri.go                # file URI <-> path conversions
   template_diagnostics.go # Template expression diagnostics ({{ }})
   yamlview.go           # Alias and merge key resolution
+  include.go            # Included and including scenarios
   ytt.go                # ytt annotation handling
   yamlutil/
     position.go         # YAML AST analysis (FindNodeAtPosition, GetCursorContext)
@@ -183,7 +184,7 @@ The LSP server has three tiers of tests, each with a different purpose and cost.
 
 | Tier | Files | Run with | Purpose |
 |---|---|---|---|
-| **Unit / Fuzz** | `position_test.go`, `yamlview_test.go`, `transport_test.go`, `uri_test.go`, `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
+| **Unit / Fuzz** | `position_test.go`, `template_diagnostics_test.go`, `template_bounds_test.go`, `yamlview_test.go`, `transport_test.go`, `uri_test.go`, `server_fuzz_test.go`, `yamlutil/*_test.go` | `go test ./internal/lsp/...` | Individual function correctness, edge-case detection |
 | **Fixture + Session** | `fixture_test.go` + `testdata/`, `integration_test.go`, `transport_test.go` | `go test ./internal/lsp/...` | Protocol-level behavior via in-process `io.Pipe` |
 | **E2E (binary + Neovim)** | `e2e_test.go` + `testdata/e2e_nvim/` | `make test/lsp-e2e` | Real binary over OS pipes; real editor integration |
 
@@ -217,6 +218,7 @@ internal/lsp/
   integration_test.go     # Multi-step session tests (TestEditorSession_*)
   server_fuzz_test.go     # FuzzGetTemplateContext, FuzzCompleteTemplate, FuzzTemplateDiagnostics
   template_diagnostics_test.go # Drift tests: assert helpers, context roots, built-in functions; diagnostics scale linearly
+  template_bounds_test.go # Hostile templates, files and alias fan-out
   yamlview_test.go        # Aliases, merge keys and key names
   position_test.go        # Column conversions between bytes, runes and UTF-16
   transport_test.go       # Message framing and protocol error responses

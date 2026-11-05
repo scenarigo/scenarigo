@@ -1,0 +1,596 @@
+---
+name: "steps reached through an alias or a merge key define their ids"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    login: &login
+      id: login
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+    base: &base
+      id: base
+      protocol: http
+  steps:
+    - *login
+    - <<: *base
+      request:
+        method: GET
+        url: http://example.com
+    - protocol: http
+      request:
+        method: GET
+        url: '{{steps.login.result}}/{{steps.base.result}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "anchors are not evaluated"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    step: &step
+      title: 'GET {{ id }'
+      description: '{{nope}}'
+  steps: []
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an included scenario can use the plugins and vars of the including one"
+files:
+  parent.yaml: |
+    schemaVersion: scenario/v1
+    plugins:
+      grpc: grpc.so
+    vars:
+      host: localhost
+    steps:
+      - include: test.yaml
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: grpc
+      request:
+        client: '{{plugins.grpc.Client}}'
+        target: '{{vars.host}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "?? and defined() absorb only a path"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: login
+      if: '{{steps.lgoin.result == "passed" ?? false}}'
+      protocol: http
+      request:
+        method: GET
+        url: '{{(hots) ?? 1}}/{{defined(hots2 + 1)}}/{{vars.ok ?? 1}}/{{defined(vars.ok2)}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 4
+  diagnostics:
+    - message: 'no step with the id "lgoin" has run before this point of the scenario'
+      severity: 2
+    - message: 'unknown template name "hots"'
+      severity: 2
+    - message: 'unknown template name "hots2"'
+      severity: 2
+    - message: 'invalid template: defined() takes a name such as vars.x'
+      severity: 1
+---
+name: "a missing operand is an error"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{1 ==}}'
+        query:
+          a: '{{!}}'
+          b: '{{}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 2
+  diagnostics:
+    - message: 'invalid template: missing operand'
+      severity: 1
+      startLine: 5
+      startChar: 16
+      endChar: 18
+---
+name: "names are defined in evaluation order"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: 1
+    b: '{{vars.a}}'
+  steps:
+    - id: first
+      if: '{{steps.first.result == "passed" || steps.second.result == "passed"}}'
+      vars:
+        own: 1
+      protocol: http
+      request:
+        method: GET
+        url: '{{vars.own}}/{{vars.bound}}'
+      bind:
+        vars:
+          bound: '{{steps.first.result}}'
+    - id: second
+      if: '{{vars.own}}'
+      protocol: http
+      request:
+        method: GET
+        url: '{{vars.bound}}/{{steps.first.result}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 6
+  diagnostics:
+    - message: 'vars.a is not defined before this point (a plugin setup may define it)'
+      startLine: 3
+    - message: 'no step with the id "first" has run before this point of the scenario'
+      startLine: 6
+    - message: 'no step with the id "second" has run before this point of the scenario'
+      startLine: 6
+    - message: 'vars.bound is not defined before this point (a plugin setup may define it)'
+      startLine: 12
+    - message: 'vars.own is not defined before this point (a plugin setup may define it)'
+      startLine: 17
+---
+name: "the bind of an include step sees the steps and vars of the included scenario"
+files:
+  login.yaml: |
+    schemaVersion: scenario/v1
+    vars:
+      token: x
+    steps:
+      - id: login
+        protocol: http
+        request:
+          method: GET
+          url: http://example.com
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: parent
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+    - include: login.yaml
+      bind:
+        vars:
+          token: '{{vars.token}}'
+          result: '{{steps.login.result}}'
+          parent: '{{steps.parent.result}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'no step with the id "parent" has run before this point of the scenario'
+      startLine: 12
+---
+name: "the gRPC options of scenarigo.yaml are templates"
+document: |
+  schemaVersion: config/v1
+  protocols:
+    grpc:
+      request:
+        auth:
+          tls:
+            certificate: '{{env.CERT'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: "invalid template: expected '}}', found 'EOF'"
+      severity: 1
+      startLine: 6
+---
+name: "an include step passes its vars to the included scenario"
+files:
+  parent.yaml: |
+    schemaVersion: scenario/v1
+    steps:
+      - include: test.yaml
+        vars:
+          user: alice
+        secrets:
+          password: x
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: GET
+        url: '{{vars.user}}/{{secrets.password}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a step anchored and aliased is reported once"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - &s
+      protocol: http
+      request:
+        method: GET
+        url: 'http://{{hots}}'
+    - *s
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+---
+name: "names in the protocols of scenarigo.yaml come from the steps"
+document: |
+  schemaVersion: config/v1
+  protocols:
+    grpc:
+      request:
+        auth:
+          tls:
+            certificate: '{{plugins.certs.Path}}/{{vars.cert}}/{{hots}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'unknown template name "hots"'
+---
+name: "a string index names a step or a plugin"
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{steps["nope"].x}}'
+    b: '{{plugins["nope"].x}}'
+    c: '{{assert["nope"]}}'
+    d: '{{vars["nope"]}}'
+    e: '{{vars[steps]}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 4
+  diagnostics:
+    - message: 'no step with the id "nope" has run before this point of the scenario'
+      severity: 2
+      startLine: 2
+      startChar: 15
+      endLine: 2
+      endChar: 19
+    - message: 'plugin "nope" is not declared in this scenario or a scenario that includes it (a plugin setup may define it)'
+      severity: 3
+      startLine: 3
+    - message: 'unknown assertion "assert.nope"'
+      severity: 2
+      startLine: 4
+    - message: 'vars.nope is not defined before this point (a plugin setup may define it)'
+      severity: 3
+      startLine: 5
+---
+name: "?? and defined() absorb an unknown assertion"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{assert.nope ?? 1}}'
+    b: '{{defined(assert.nope)}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "scenarigo.yaml defines only its top-level keys"
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins: {p: p.so}
+    vars: # shared
+      v: 1
+    secrets: {s: 1}
+    protocols:
+      grpc:
+        src: {}
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{vars.v}}{{secrets.s}}'
+    b: '{{plugins.src.F}}'
+    c: '{{plugins.p.F}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 2
+  diagnostics:
+    - message: 'plugin "src" is not declared in this scenario or a scenario that includes it (a plugin setup may define it)'
+      severity: 3
+      startLine: 3
+    - message: 'plugin "p" is not declared in this scenario or a scenario that includes it (a plugin setup may define it)'
+      severity: 3
+      startLine: 4
+---
+name: "an include in any YAML form brings the names of the including scenario"
+files:
+  flow.yaml: |
+    schemaVersion: scenario/v1
+    vars: {flow: 1}
+    steps: [{include: test.yaml}]
+  quoted.yaml: |
+    schemaVersion: scenario/v1
+    vars: {quoted: 1}
+    "steps":
+      -   "include": 'test.yaml'
+  folded.yaml: |
+    schemaVersion: scenario/v1
+    vars: {folded: 1}
+    steps:
+      - include: >-
+          test.yaml
+  merged.yaml: |
+    schemaVersion: scenario/v1
+    vars: {merged: 1}
+    anchors:
+      i: &i {include: test.yaml}
+    steps:
+      - <<: *i
+  aliased.yaml: |
+    schemaVersion: scenario/v1
+    vars: {aliased: 1}
+    anchors:
+      c: &c test.yaml
+    steps:
+      - include: *c
+  commented.yaml: |
+    schemaVersion: scenario/v1
+    vars: {commented: 1}
+    # steps:
+    #   - include: test.yaml
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{vars.flow}}{{vars.quoted}}{{vars.folded}}{{vars.merged}}{{vars.aliased}}'
+    b: '{{vars.commented}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'vars.commented is not defined before this point (a plugin setup may define it)'
+      severity: 3
+      startLine: 3
+---
+name: "an absolute include is under the directory of the scenario"
+files:
+  parent.yaml: |
+    schemaVersion: scenario/v1
+    vars: {p: 1}
+    steps:
+      - include: /test.yaml
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{vars.p}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "the bind of an include does not see the step vars of the included scenario"
+files:
+  child.yaml: |
+    schemaVersion: scenario/v1
+    plugins:
+      p: p.so
+    vars:
+      top: 1
+    steps:
+      - id: s
+        vars:
+          local: 1
+        include: other.yaml
+        bind:
+          vars:
+            bound: 1
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - include: child.yaml
+      bind:
+        vars:
+          a: '{{vars.top}}{{vars.bound}}{{steps.s.result}}{{plugins.p.F}}'
+          b: '{{vars.local}}'
+    - protocol: http
+      request:
+        method: GET
+        url: '{{plugins.p.F}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 2
+  diagnostics:
+    - message: 'vars.local is not defined before this point (a plugin setup may define it)'
+      severity: 3
+      startLine: 6
+    - message: 'plugin "p" is not declared in this scenario or a scenario that includes it (a plugin setup may define it)'
+      severity: 3
+      startLine: 10
+---
+name: "a string index after another index reads a value, not a name"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    list: [1]
+    a: '{{vars[0]["nope"]}}'
+    b: '{{steps[0]["nope"]}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "?? and defined() absorb what an index leaves undefined"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    m: {}
+    a: '{{vars.m[nope] ?? 1}}'
+    b: '{{vars.m[steps.z] ?? 1}}'
+    c: '{{defined(vars.m[nope])}}'
+    d: '{{vars.m[nope + 1] ?? 2}}'
+    e: '{{vars.m[size(nope)] ?? 2}}'
+    f: '{{vars.m[vars.nope] ?? 1}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an index outside ?? and defined() is checked"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    m: {}
+    a: '{{vars.m[nope]}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 2
+  diagnostics:
+    - message: 'unknown template name "nope"'
+      severity: 2
+---
+name: "what would fail on a branch that may not run is one level lower"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: 1
+    b: '{{defined(nope) ? nope : 1}}'
+    c: '{{defined(steps.z) ? steps.z : 1}}'
+    d: '{{vars.a ?? nope}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 3
+  diagnostics:
+    - message: 'unknown template name "nope"'
+      severity: 3
+      startLine: 3
+    - message: 'no step with the id "z" has run before this point of the scenario'
+      severity: 3
+      startLine: 4
+---
+name: "a left arrow without a function"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{<-}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'invalid template: missing operand'
+      severity: 1
+---
+name: "a step id that is not a string"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - id: 123
+      protocol: http
+      request: {method: GET, url: http://example.com}
+    - id: true
+      protocol: http
+      request: {method: GET, url: http://example.com}
+    - protocol: http
+      request: {method: GET, url: '{{steps["123"].result}}{{steps["true"].result}}'}
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "anchors carry over to the following documents"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    base: &base
+      id: s1
+      protocol: http
+      request: {method: GET, url: http://example.com}
+    v: &v {a: 1}
+  ---
+  schemaVersion: scenario/v1
+  vars: *v
+  steps:
+    - <<: *base
+    - protocol: http
+      request: {method: GET, url: '{{steps.s1.result}}{{vars.a}}'}
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "the value the loader keeps is the one checked"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    b: &b {x: '{{nope2}}'}
+  vars:
+    a:
+      x: '{{nope}}'
+      <<: *b
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'unknown template name "nope2"'
+      severity: 2
+---
+name: "an error in a branch that may not run is a warning"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    a: '{{1 ?? (2 ==)}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'invalid template: missing operand'
+      severity: 2
+---
+name: "undefined vars in a branch that may not run are a hint"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request: {method: GET, url: '{{true ? 1 : vars.nope}}'}
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'vars.nope is not defined before this point (a plugin setup may define it)'
+      severity: 4
+---
+name: "the runner does not evaluate the request of an include step"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - include: i.yaml
+      protocol: noop
+      request: {a: '{{unknownroot}}'}
+      expect: {b: '{{'}
+      ref: '{{unknownroot}}'
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - 'unknown template name "unknownroot"'
+---
+name: "names a ytt annotation can fill in are not reported"
+document: |
+  schemaVersion: scenario/v1
+  plugins: #@ {"p": "p.so"}
+  steps:
+    - id: #@ "login"
+      protocol: http
+      request: {method: GET, url: http://example.com}
+    - protocol: http
+      request: {method: GET, url: '{{steps.login.result}}{{plugins.p.X}}'}
+    - include: #@ "i.yaml"
+      bind:
+        vars:
+          a: '{{steps.inner.result}}'
+operation: diagnostics
+expect:
+  diagnosticCount: 0

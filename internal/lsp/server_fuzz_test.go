@@ -49,6 +49,8 @@ func FuzzTemplateDiagnostics(f *testing.F) {
 	f.Add("schemaVersion: scenario/v1\nvars:\n  a: \"日本\\\"{{hots}}\\n{{\"\n")
 	f.Add("schemaVersion: config/v1\nvars:\n  a: '{{vars.'\n---\nschemaVersion: scenario/v1\nanchors:\n  x: &x '{{1 + }}'\n")
 	f.Add("schemaVersion: scenario/v1\nsteps:\n- vars: {a: '{{a}}', b: [\"{{b}\"]}\n")
+	f.Add("schemaVersion: scenario/v1\nanchors:\n  s: &s {id: a}\nsteps:\n- *s\n- <<: [*s, *t]\n  if: '{{steps.a.result ?? (b) ?? f()[1] ?? defined()}}'\n- include: x.yaml\n  bind: {vars: {a: '{{steps.a == !}}'}}\n")
+	f.Add("schemaVersion: ytt/v1\nfiles: [a]\n---\nschemaVersion: config/v1\nprotocols: {grpc: {request: '{{1 + }}'}}\n")
 
 	f.Fuzz(func(t *testing.T, text string) {
 		doc := &document{Text: text, Parsed: yamlutil.Parse(text)}

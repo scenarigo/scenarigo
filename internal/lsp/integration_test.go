@@ -7,8 +7,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 	"unicode/utf16"
 )
 
@@ -609,5 +612,242 @@ func TestEditorSession_ExamplesHaveNoErrorsOrWarnings(t *testing.T) {
 	}
 	if opened == 0 {
 		t.Fatal("no example files were opened")
+	}
+}
+
+// TestEditorSession_ConfigChangeRepublishes checks that editing scenarigo.yaml
+// updates the diagnostics of the open scenarios that use its names.
+func TestEditorSession_ConfigChangeRepublishes(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	scenario := file("test.yaml")
+	diags := client.openDocumentAndGetDiagnostics(scenario, "schemaVersion: scenario/v1\nsteps:\n  - protocol: http\n    request:\n      method: GET\n      url: '{{vars.host}}'\n")
+	if len(diags.Diagnostics) != 1 {
+		t.Fatalf("expected the undefined vars.host, got %v", diagMessages(diags.Diagnostics))
+	}
+
+	config := file("scenarigo.yaml")
+	client.sendNotification("textDocument/didOpen", DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{URI: config, LanguageID: "yaml", Version: 1, Text: "schemaVersion: config/v1\nvars:\n  host: localhost\n"},
+	})
+	// Collect the notifications that arrive before the response to a request.
+	client.sendRequest(2, "textDocument/hover", HoverParams{TextDocument: TextDocumentIdentifier{URI: config}})
+	got := map[string]PublishDiagnosticsParams{}
+	for {
+		raw := client.readMessage()
+		if !isNotification(raw) {
+			break
+		}
+		var n struct {
+			Params PublishDiagnosticsParams `json:"params"`
+		}
+		if err := json.Unmarshal(raw, &n); err != nil {
+			t.Fatal(err)
+		}
+		got[n.Params.URI] = n.Params
+	}
+	if p, ok := got[scenario]; !ok {
+		t.Fatalf("diagnostics of %s were not published again; got %v", scenario, got)
+	} else if len(p.Diagnostics) != 0 {
+		t.Errorf("expected no diagnostics once scenarigo.yaml defines vars.host, got %v", diagMessages(p.Diagnostics))
+	}
+}
+
+// TestEditorSession_IncludeIndex checks that the scenarios including a file
+// come from one walk of the workspace, updated from the open buffers.
+func TestEditorSession_IncludeIndex(t *testing.T) {
+	client := newRunningTestClient(t)
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	child := file("child.yaml")
+	childText := "schemaVersion: scenario/v1\nsteps:\n  - protocol: grpc\n    request:\n      client: '{{plugins.p.Client}}'\n"
+	diags := client.openDocumentAndGetDiagnostics(child, childText)
+	if len(diags.Diagnostics) != 1 {
+		t.Fatalf("expected the undeclared plugin, got %v", diagMessages(diags.Diagnostics))
+	}
+
+	// A file written on disk after the walk is not seen until it is opened.
+	parentText := "schemaVersion: scenario/v1\nplugins:\n  p: p.so\nsteps:\n  - include: child.yaml\n"
+	if err := os.WriteFile(uriToPath(file("parent.yaml")), []byte(parentText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	change := func(version int) PublishDiagnosticsParams {
+		t.Helper()
+		client.sendNotification("textDocument/didChange", DidChangeTextDocumentParams{
+			TextDocument:   VersionedTextDocumentIdentifier{TextDocumentIdentifier: TextDocumentIdentifier{URI: child}, Version: version},
+			ContentChanges: []TextDocumentContentChangeEvent{{Text: childText}},
+		})
+		return client.readDiagnostics(child)
+	}
+	if p := change(2); len(p.Diagnostics) != 1 {
+		t.Errorf("the workspace was walked again on a change: got %v", diagMessages(p.Diagnostics))
+	}
+	client.openDocument(file("parent.yaml"), parentText)
+	if p := client.readDiagnostics(child); len(p.Diagnostics) != 0 {
+		t.Errorf("expected no diagnostics once the including buffer is open, got %v", diagMessages(p.Diagnostics))
+	}
+
+	// Unsaved edits of a closed buffer are dropped: the file on disk counts again.
+	client.changeDocument(file("parent.yaml"), 2, "schemaVersion: scenario/v1\nsteps: []\n")
+	if p := client.readDiagnostics(child); len(p.Diagnostics) != 1 {
+		t.Errorf("expected the undeclared plugin while the buffer drops the include, got %v", diagMessages(p.Diagnostics))
+	}
+	client.closeDocument(file("parent.yaml"))
+	if p := client.readDiagnostics(child); len(p.Diagnostics) != 0 {
+		t.Errorf("expected the file on disk to count after the buffer is closed, got %v", diagMessages(p.Diagnostics))
+	}
+}
+
+// A scenario whose bind reads the names of the included one follows its edits.
+func TestEditorSession_IncludingScenarioFollowsIncludedOne(t *testing.T) {
+	root := t.TempDir()
+	file := func(name string) string { return pathToURI(filepath.Join(root, name)) }
+	client := newRunningTestClient(t)
+	client.initialize(1, pathToURI(root))
+
+	child := file("child.yaml")
+	client.openDocument(child, "schemaVersion: scenario/v1\nsteps: []\n")
+	parent := file("parent.yaml")
+	parentText := "schemaVersion: scenario/v1\nsteps:\n  - include: child.yaml\n    bind:\n      vars:\n        a: '{{steps.s.result}}'\n"
+	diags := client.openDocumentAndGetDiagnostics(parent, parentText)
+	if len(diags.Diagnostics) != 1 {
+		t.Fatalf("expected the unknown step, got %v", diagMessages(diags.Diagnostics))
+	}
+	client.changeDocument(child, 2, "schemaVersion: scenario/v1\nsteps:\n  - id: s\n    include: x.yaml\n")
+	if p := client.readDiagnostics(parent); len(p.Diagnostics) != 0 {
+		t.Errorf("expected the step of the included scenario, got %v", diagMessages(p.Diagnostics))
+	}
+}
+
+// Includes may form a cycle and chains have no fixed depth.
+func TestEditorSession_IncludeChain(t *testing.T) {
+	root := t.TempDir()
+	file := func(name string) string { return filepath.Join(root, name) }
+	const depth = 8
+	for i := range depth {
+		text := "schemaVersion: scenario/v1\nsteps:\n  - include: f" + strconv.Itoa(i+1) + ".yaml\n"
+		if i == 0 {
+			text = "schemaVersion: scenario/v1\nvars:\n  top: 1\nsteps:\n  - include: f1.yaml\n"
+		}
+		if err := os.WriteFile(file("f"+strconv.Itoa(i)+".yaml"), []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	back := "schemaVersion: scenario/v1\nsteps:\n  - include: f0.yaml\n"
+	if err := os.WriteFile(file("back.yaml"), []byte(back), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client := newRunningTestClient(t)
+	client.initialize(1, pathToURI(root))
+
+	last := pathToURI(file("f" + strconv.Itoa(depth) + ".yaml"))
+	text := "schemaVersion: scenario/v1\nvars:\n  a: '{{vars.top}}{{vars.nope}}'\nsteps:\n  - include: f0.yaml\n"
+	diags := client.openDocumentAndGetDiagnostics(last, text)
+	if len(diags.Diagnostics) != 1 {
+		t.Fatalf("expected only vars.nope, got %v", diagMessages(diags.Diagnostics))
+	}
+}
+
+// A workspace that cannot be read whole does not prove a name undefined, and a
+// FIFO among its files does not stop the walk.
+func TestEditorSession_IncludeIndexBounds(t *testing.T) {
+	fill := strings.Repeat("# padding padding padding padding\n", (maxScannedFileSize-1)/35)
+	padding := func(dir string) {
+		for i := range maxIncludeScanBytes/maxScannedFileSize + 1 {
+			if err := os.WriteFile(filepath.Join(dir, "big"+strconv.Itoa(i)+".yaml"), []byte(fill), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for name, setup := range map[string]func(dir string){
+		"a FIFO": func(dir string) {
+			if err := syscall.Mkfifo(filepath.Join(dir, "a-pipe.yaml"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"an oversized file": func(dir string) {
+			if err := os.WriteFile(filepath.Join(dir, "a.yaml"), []byte(strings.Repeat(" ", maxScannedFileSize+1)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"too many bytes": padding,
+		"too many entries": func(dir string) {
+			for i := range maxIncludeScanEntries {
+				if err := os.WriteFile(filepath.Join(dir, strconv.Itoa(i)), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) { checkBoundedWorkspace(t, setup) })
+	}
+}
+
+func checkBoundedWorkspace(t *testing.T, setup func(dir string)) {
+	t.Helper()
+	root := t.TempDir()
+	setup(root)
+	client := newRunningTestClient(t)
+	client.initialize(1, pathToURI(root))
+
+	uri := pathToURI(filepath.Join(root, "open.yaml"))
+	done := make(chan PublishDiagnosticsParams, 1)
+	go func() {
+		done <- client.openDocumentAndGetDiagnostics(uri, "schemaVersion: scenario/v1\nvars:\n  a: '{{vars.nope}}{{plugins.nope.x}}'\n")
+	}()
+	select {
+	case diags := <-done:
+		if len(diags.Diagnostics) != 0 {
+			t.Errorf("expected no diagnostics, got %v", diagMessages(diags.Diagnostics))
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the workspace walk did not finish")
+	}
+}
+
+// A workspace root with a trailing slash is the same root.
+func TestEditorSession_RootWithTrailingSlash(t *testing.T) {
+	root := t.TempDir()
+	client := newRunningTestClient(t)
+	client.initialize(1, pathToURI(root)+"/")
+	child := pathToURI(filepath.Join(root, "child.yaml"))
+	text := "schemaVersion: scenario/v1\nvars:\n  a: '{{plugins.p.F}}'\n"
+	if diags := client.openDocumentAndGetDiagnostics(child, text); len(diags.Diagnostics) != 1 {
+		t.Fatalf("expected the undeclared plugin, got %v", diagMessages(diags.Diagnostics))
+	}
+	client.openDocument(pathToURI(filepath.Join(root, "parent.yaml")), "schemaVersion: scenario/v1\nplugins:\n  p: p.so\nsteps:\n  - include: child.yaml\n")
+	if p := client.readDiagnostics(child); len(p.Diagnostics) != 0 {
+		t.Errorf("expected the plugin of the including buffer, got %v", diagMessages(p.Diagnostics))
+	}
+}
+
+// Without a workspace the scenarios that include a file are not known.
+func TestEditorSession_NoWorkspace(t *testing.T) {
+	client := newRunningTestClient(t)
+	text := "schemaVersion: scenario/v1\nvars:\n  a: '{{plugins.p.F}}{{vars.v}}{{steps.s.result}}'\n"
+	diags := client.openDocumentAndGetDiagnostics("file:///test.yaml", text)
+	if len(diags.Diagnostics) != 1 {
+		t.Errorf("expected only the unknown step, got %v", diagMessages(diags.Diagnostics))
+	}
+}
+
+// An including scenario that does not parse may define any name.
+func TestEditorSession_IncluderStopsParsing(t *testing.T) {
+	root := t.TempDir()
+	client := newRunningTestClient(t)
+	client.initialize(1, pathToURI(root))
+	child := pathToURI(filepath.Join(root, "child.yaml"))
+	parent := pathToURI(filepath.Join(root, "parent.yaml"))
+	client.openDocument(parent, "schemaVersion: scenario/v1\nplugins:\n  p: p.so\nsteps:\n  - include: child.yaml\n")
+	text := "schemaVersion: scenario/v1\nvars:\n  a: '{{plugins.p.F}}'\n"
+	if diags := client.openDocumentAndGetDiagnostics(child, text); len(diags.Diagnostics) != 0 {
+		t.Fatalf("expected the plugin of the including scenario, got %v", diagMessages(diags.Diagnostics))
+	}
+	client.changeDocument(parent, 2, "schemaVersion: scenario/v1\nsteps: [\n")
+	if p := client.readDiagnostics(child); len(p.Diagnostics) != 0 {
+		t.Errorf("expected no diagnostics, got %v", diagMessages(p.Diagnostics))
 	}
 }
