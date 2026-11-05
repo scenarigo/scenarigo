@@ -122,6 +122,17 @@ func unitsOf(r rune, _ positionEncoding) int {
 	return 1
 }
 
+// decodePosition converts a position received from the client into the
+// internal byte-based form.
+func (s *Server) decodePosition(text string, p Position) Position {
+	line := lineAt(text, p.Line)
+	if line == "" {
+		return p // unknown text or an empty line: nothing to convert
+	}
+	p.Character = byteColumnFromClient(line, p.Character, s.encoding)
+	return p
+}
+
 // encodePosition converts an internal byte-based position into the client's
 // encoding.
 func (s *Server) encodePosition(text string, p Position) Position {

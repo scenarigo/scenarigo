@@ -68,8 +68,13 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	PositionEncoding string `json:"positionEncoding,omitempty"`
-	TextDocumentSync int    `json:"textDocumentSync"`
+	PositionEncoding   string             `json:"positionEncoding,omitempty"`
+	TextDocumentSync   int                `json:"textDocumentSync"`
+	CompletionProvider *CompletionOptions `json:"completionProvider,omitempty"`
+}
+
+type CompletionOptions struct {
+	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
 }
 
 type TextDocumentIdentifier struct {
@@ -105,10 +110,56 @@ type DidCloseTextDocumentParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 }
 
+type CompletionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+	Context      *CompletionContext     `json:"context,omitempty"`
+}
+
+// CompletionContext tells how completion was triggered.
+type CompletionContext struct {
+	TriggerKind      int    `json:"triggerKind"`
+	TriggerCharacter string `json:"triggerCharacter,omitempty"`
+}
+
+// CompletionTriggerKind values.
+const (
+	CompletionTriggerKindInvoked          = 1
+	CompletionTriggerKindTriggerCharacter = 2
+)
+
 type Position struct {
 	Line      int `json:"line"`      // 0-based
 	Character int `json:"character"` // 0-based
 }
+
+type CompletionList struct {
+	IsIncomplete bool             `json:"isIncomplete"`
+	Items        []CompletionItem `json:"items"`
+}
+
+type CompletionItem struct {
+	Label         string    `json:"label"`
+	Kind          int       `json:"kind,omitempty"`
+	Detail        string    `json:"detail,omitempty"`
+	Documentation string    `json:"documentation,omitempty"`
+	InsertText    string    `json:"insertText,omitempty"`
+	TextEdit      *TextEdit `json:"textEdit,omitempty"`
+	SortText      string    `json:"sortText,omitempty"`
+}
+
+// CompletionItemKind values.
+const (
+	CompletionItemKindFunction = 3
+	CompletionItemKindField    = 5
+	CompletionItemKindVariable = 6
+	CompletionItemKindModule   = 9
+	CompletionItemKindProperty = 10
+	CompletionItemKindValue    = 12
+	CompletionItemKindKeyword  = 14
+	CompletionItemKindFile     = 17
+	CompletionItemKindFolder   = 19
+)
 
 // Diagnostic types.
 
@@ -134,3 +185,8 @@ const (
 	DiagnosticSeverityInformation = 3
 	DiagnosticSeverityHint        = 4
 )
+
+type TextEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}

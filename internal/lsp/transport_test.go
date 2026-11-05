@@ -154,6 +154,14 @@ func TestServer_ProtocolErrors(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid params", func(t *testing.T) {
+		client.sendRaw(`{"jsonrpc":"2.0","id":3,"method":"textDocument/completion","params":"oops"}`)
+		resp := client.readError()
+		if resp.Error.Code != codeInvalidParams {
+			t.Errorf("code = %d, want %d", resp.Error.Code, codeInvalidParams)
+		}
+	})
+
 	t.Run("unknown notification is ignored", func(t *testing.T) {
 		client.sendRaw(`{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":1}}`)
 		client.sendRequest(4, "shutdown", nil)

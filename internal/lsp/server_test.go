@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -105,6 +106,19 @@ func (c *testClient) readResponse() json.RawMessage {
 	return b
 }
 
+func (c *testClient) openDocument(uri, text string) {
+	c.t.Helper()
+	c.sendNotification("textDocument/didOpen", DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{
+			URI:        uri,
+			LanguageID: "yaml",
+			Version:    1,
+			Text:       text,
+		},
+	})
+	c.readMessage() // diagnostics
+}
+
 func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiagnosticsParams {
 	c.t.Helper()
 	c.sendNotification("textDocument/didOpen", DidOpenTextDocumentParams{
@@ -127,6 +141,25 @@ func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiag
 	return params
 }
 
+func (c *testClient) complete(id int, uri string, line, char int) CompletionList {
+	c.t.Helper()
+	return c.completeWith(id, CompletionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+}
+
+func (c *testClient) completeWith(id int, params CompletionParams) CompletionList {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/completion", params)
+	resp := c.readResponse()
+	var list CompletionList
+	if err := json.Unmarshal(resp, &list); err != nil {
+		c.t.Fatalf("unmarshal completion: %v", err)
+	}
+	return list
+}
+
 // --- typed helper methods ---
 
 func (c *testClient) initialize(id int, rootURI string) InitializeResult {
@@ -143,6 +176,22 @@ func (c *testClient) initializeWith(id int, params InitializeParams) InitializeR
 		c.t.Fatalf("unmarshal initialize result: %v", err)
 	}
 	return result
+}
+
+func TestServer_Initialize(t *testing.T) {
+	client := newRunningTestClient(t)
+
+	initResult := client.initialize(1, "file:///tmp")
+	if initResult.Capabilities.CompletionProvider == nil {
+		t.Fatal("expected completion provider")
+	}
+	// "{" and "." let clients that only complete on trigger characters offer
+	// candidates while {{vars. is typed.
+	for _, c := range []string{".", "{"} {
+		if !slices.Contains(initResult.Capabilities.CompletionProvider.TriggerCharacters, c) {
+			t.Errorf("trigger characters %q do not include %q", initResult.Capabilities.CompletionProvider.TriggerCharacters, c)
+		}
+	}
 }
 
 func TestServer_Fixtures(t *testing.T) {
@@ -168,6 +217,22 @@ func diagMessages(diags []Diagnostic) []string {
 		msgs = append(msgs, d.Message)
 	}
 	return msgs
+}
+
+func labelSet(items []CompletionItem) map[string]bool {
+	m := make(map[string]bool)
+	for _, item := range items {
+		m[item.Label] = true
+	}
+	return m
+}
+
+func labelList(items []CompletionItem) []string {
+	var labels []string
+	for _, item := range items {
+		labels = append(labels, item.Label)
+	}
+	return labels
 }
 
 // newWorkspace creates a temporary workspace root for a test and returns its

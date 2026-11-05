@@ -137,3 +137,11 @@ func (s *Server) writeMessage(msg any) {
 		s.logger.Printf("write body error: %v", err)
 	}
 }
+
+// invalidParams builds the error for a request whose params do not unmarshal.
+func invalidParams(method string, err error) *ResponseError {
+	return &ResponseError{
+		Code:    codeInvalidParams,
+		Message: fmt.Sprintf("invalid %s params: %v", method, err),
+	}
+}

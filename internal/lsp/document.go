@@ -78,3 +78,16 @@ func (s *documentStore) Get(uri string) *document {
 	defer s.mu.RUnlock()
 	return s.docs[uri]
 }
+
+// GetByPath returns the open document for a local file path, whatever
+// percent-encoding the client used in the URI it opened the document with.
+func (s *documentStore) GetByPath(path string) *document {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for uri, doc := range s.docs {
+		if uriToPath(uri) == path {
+			return doc
+		}
+	}
+	return nil
+}

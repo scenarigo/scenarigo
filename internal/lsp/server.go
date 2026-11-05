@@ -3,28 +3,43 @@ package lsp
 import (
 	"encoding/json"
 	"fmt"
+	goast "go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 
 	"github.com/goccy/go-yaml/ast"
 
+	"github.com/scenarigo/scenarigo/internal/lsp/yamlutil"
 	"github.com/scenarigo/scenarigo/internal/yamlschema"
+)
+
+// Template namespaces, which are also the YAML blocks that declare them.
+const (
+	nsVars    = "vars"
+	nsSecrets = "secrets"
+	nsSteps   = "steps"
+	nsPlugins = "plugins"
 )
 
 // Server is the LSP server.
 type Server struct {
-	reader            io.Reader
-	writer            io.Writer
-	logger            *log.Logger
-	docs              *documentStore
-	rootURI           string
-	encoding          positionEncoding // unit of Position.Character on the wire, see position.go
-	writeMu           sync.Mutex       // serializes writeMessage
-	shutdownRequested bool
+	reader             io.Reader
+	writer             io.Writer
+	logger             *log.Logger
+	docs               *documentStore
+	rootURI            string
+	encoding           positionEncoding // unit of Position.Character on the wire, see position.go
+	writeMu            sync.Mutex       // serializes writeMessage
+	shutdownRequested  bool
+	pluginSymbolsMu    sync.Mutex
+	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
 }
 
 // NewServer creates a new LSP server that communicates over stdio.
@@ -58,6 +73,8 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleDidChange(req)
 	case "textDocument/didClose":
 		s.handleDidClose(req)
+	case "textDocument/completion":
+		s.handleCompletion(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -87,6 +104,9 @@ func (s *Server) handleInitialize(req *Request) {
 		Capabilities: ServerCapabilities{
 			PositionEncoding: string(s.encoding),
 			TextDocumentSync: 1, // Full sync.
+			CompletionProvider: &CompletionOptions{
+				TriggerCharacters: append([]string{":", " ", "\n"}, templateTriggerCharacters...),
+			},
 		},
 	}
 	s.sendResponse(req.ID, result, nil)
@@ -136,6 +156,884 @@ func (s *Server) handleDidClose(req *Request) {
 		URI:         params.TextDocument.URI,
 		Diagnostics: []Diagnostic{},
 	})
+}
+
+func (s *Server) handleCompletion(req *Request) {
+	var params CompletionParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.sendResponse(req.ID, nil, invalidParams("completion", err))
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, CompletionList{Items: []CompletionItem{}}, nil)
+		return
+	}
+
+	pos := s.decodePosition(doc.Text, params.Position)
+	if isTemplateTrigger(params.Context) {
+		if _, ok := getTemplateContext(doc.Text, pos); !ok {
+			// Clients replace only the text after "." or "{", so a file path or
+			// value accepted here would be garbled ("steps." + "steps.yaml").
+			s.sendResponse(req.ID, CompletionList{Items: []CompletionItem{}}, nil)
+			return
+		}
+	}
+	items := s.complete(doc, pos)
+	for i := range items {
+		if items[i].TextEdit != nil {
+			items[i].TextEdit.Range = s.encodeRange(doc.Text, items[i].TextEdit.Range)
+		}
+	}
+	if items == nil {
+		items = []CompletionItem{}
+	}
+	s.sendResponse(req.ID, CompletionList{
+		IsIncomplete: false,
+		Items:        items,
+	}, nil)
+}
+
+// templateTriggerCharacters start and continue template expressions such as
+// {{vars.token}}. They trigger completion inside "{{" only.
+var templateTriggerCharacters = []string{"{", "."}
+
+// isTemplateTrigger reports whether completion was triggered by typing one of
+// templateTriggerCharacters.
+func isTemplateTrigger(c *CompletionContext) bool {
+	return c != nil && c.TriggerKind == CompletionTriggerKindTriggerCharacter &&
+		slices.Contains(templateTriggerCharacters, c.TriggerCharacter)
+}
+
+// readConfigText returns the text of scenarigo.yaml and its URI.
+// It checks the document store first, then falls back to reading from disk.
+func (s *Server) readConfigText() (string, string, bool) {
+	rootPath := uriToPath(s.rootURI)
+	if rootPath == "" {
+		return "", "", false
+	}
+	configPath := filepath.Join(rootPath, "scenarigo.yaml")
+	if doc := s.docs.GetByPath(configPath); doc != nil {
+		return doc.Text, doc.URI, true
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return "", "", false
+	}
+	return string(data), pathToURI(configPath), true
+}
+
+// pluginSymbol represents an exported symbol from a Go plugin source.
+type pluginSymbol struct {
+	Name      string
+	Signature string // e.g., "func(ctx context.Context, addr string) TestClient"
+	Doc       string // doc comment
+	IsFunc    bool
+}
+
+// pluginSymbols holds exported symbols extracted from a Go plugin source directory.
+type pluginSymbols struct {
+	Symbols []pluginSymbol
+}
+
+// parseGoPackageFiles parses the non-test Go files in dir one by one.
+// parser.ParseDir is deprecated together with ast.Package.
+func parseGoPackageFiles(fset *token.FileSet, dir string, mode parser.Mode) ([]*goast.File, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var files []*goast.File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, mode)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
+}
+
+// extractGoExportedSymbols parses Go source files in dir and returns exported symbols with signatures and docs.
+func extractGoExportedSymbols(dir string) (*pluginSymbols, error) {
+	fset := token.NewFileSet()
+	files, err := parseGoPackageFiles(fset, dir, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	var syms pluginSymbols
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *goast.FuncDecl:
+				if d.Recv == nil && d.Name.IsExported() {
+					syms.Symbols = append(syms.Symbols, pluginSymbol{
+						Name:      d.Name.Name,
+						Signature: formatFuncSignature(d),
+						Doc:       cleanDocComment(d.Doc),
+						IsFunc:    true,
+					})
+				}
+			case *goast.GenDecl:
+				if d.Tok != token.VAR {
+					continue
+				}
+				for _, spec := range d.Specs {
+					vs, ok := spec.(*goast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for _, name := range vs.Names {
+						if name.IsExported() {
+							syms.Symbols = append(syms.Symbols, pluginSymbol{
+								Name:      name.Name,
+								Signature: formatVarType(vs),
+								Doc:       cleanDocComment(firstNonNil(vs.Doc, d.Doc)),
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+	return &syms, nil
+}
+
+func firstNonNil(groups ...*goast.CommentGroup) *goast.CommentGroup {
+	for _, g := range groups {
+		if g != nil {
+			return g
+		}
+	}
+	return nil
+}
+
+// formatFuncSignature formats a function declaration's signature as a string.
+func formatFuncSignature(d *goast.FuncDecl) string {
+	var b strings.Builder
+	b.WriteString("func(")
+	if d.Type.Params != nil {
+		formatFieldList(&b, d.Type.Params)
+	}
+	b.WriteString(")")
+	if d.Type.Results != nil && len(d.Type.Results.List) > 0 {
+		if len(d.Type.Results.List) == 1 && len(d.Type.Results.List[0].Names) == 0 {
+			b.WriteString(" ")
+			formatExpr(&b, d.Type.Results.List[0].Type)
+		} else {
+			b.WriteString(" (")
+			formatFieldList(&b, d.Type.Results)
+			b.WriteString(")")
+		}
+	}
+	return b.String()
+}
+
+// formatVarType formats the type of a variable declaration.
+func formatVarType(vs *goast.ValueSpec) string {
+	if vs.Type != nil {
+		var b strings.Builder
+		formatExpr(&b, vs.Type)
+		return b.String()
+	}
+	return "var"
+}
+
+// formatFieldList formats a list of function parameters or results.
+func formatFieldList(b *strings.Builder, fl *goast.FieldList) {
+	for i, field := range fl.List {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		if len(field.Names) > 0 {
+			for j, name := range field.Names {
+				if j > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(name.Name)
+			}
+			b.WriteString(" ")
+		}
+		formatExpr(b, field.Type)
+	}
+}
+
+// formatExpr formats a Go type expression as a string.
+func formatExpr(b *strings.Builder, expr goast.Expr) {
+	switch t := expr.(type) {
+	case *goast.Ident:
+		b.WriteString(t.Name)
+	case *goast.SelectorExpr:
+		formatExpr(b, t.X)
+		b.WriteString(".")
+		b.WriteString(t.Sel.Name)
+	case *goast.StarExpr:
+		b.WriteString("*")
+		formatExpr(b, t.X)
+	case *goast.ArrayType:
+		b.WriteString("[]")
+		formatExpr(b, t.Elt)
+	case *goast.MapType:
+		b.WriteString("map[")
+		formatExpr(b, t.Key)
+		b.WriteString("]")
+		formatExpr(b, t.Value)
+	case *goast.InterfaceType:
+		b.WriteString("interface{}")
+	case *goast.Ellipsis:
+		b.WriteString("...")
+		formatExpr(b, t.Elt)
+	case *goast.FuncType:
+		b.WriteString("func(")
+		if t.Params != nil {
+			formatFieldList(b, t.Params)
+		}
+		b.WriteString(")")
+		if t.Results != nil && len(t.Results.List) > 0 {
+			b.WriteString(" ")
+			if len(t.Results.List) == 1 && len(t.Results.List[0].Names) == 0 {
+				formatExpr(b, t.Results.List[0].Type)
+			} else {
+				b.WriteString("(")
+				formatFieldList(b, t.Results)
+				b.WriteString(")")
+			}
+		}
+	default:
+		b.WriteString("any")
+	}
+}
+
+// cleanDocComment extracts and cleans a doc comment from an AST comment group.
+func cleanDocComment(doc *goast.CommentGroup) string {
+	if doc == nil {
+		return ""
+	}
+	return strings.TrimSpace(doc.Text())
+}
+
+// getPluginSymbols returns the exported symbols for a plugin source directory, using a cache.
+func (s *Server) getPluginSymbols(sourceDir string) *pluginSymbols {
+	s.pluginSymbolsMu.Lock()
+	defer s.pluginSymbolsMu.Unlock()
+
+	if s.pluginSymbolsCache != nil {
+		if syms, ok := s.pluginSymbolsCache[sourceDir]; ok {
+			return syms
+		}
+	}
+
+	syms, err := extractGoExportedSymbols(sourceDir)
+	if err != nil {
+		return nil
+	}
+
+	if s.pluginSymbolsCache == nil {
+		s.pluginSymbolsCache = make(map[string]*pluginSymbols)
+	}
+	s.pluginSymbolsCache[sourceDir] = syms
+	return syms
+}
+
+// resolvePluginSourceDir resolves the Go source directory for a plugin.
+// It maps a scenario plugin alias to a binary name, then looks up the source path in scenarigo.yaml.
+//
+// Flow: scenario "plugins: { grpc: grpc.so }" → config "plugins: { grpc.so: { src: ./plugin/src } }".
+func (s *Server) resolvePluginSourceDir(doc *document, pluginAlias string) string {
+	rootPath := uriToPath(s.rootURI)
+	if rootPath == "" {
+		return ""
+	}
+
+	// Get the binary name from the scenario's plugins block.
+	binaryName := ""
+	if doc != nil {
+		for _, key := range extractBlockKeys(doc.Text, nsPlugins) {
+			if key == pluginAlias {
+				binaryName = extractBlockValue(doc.Text, nsPlugins, key)
+				break
+			}
+		}
+	}
+	if binaryName == "" {
+		// Maybe the alias IS the binary name (config file context).
+		binaryName = pluginAlias
+	}
+
+	// Read config to find source path.
+	configText, _, ok := s.readConfigText()
+	if !ok {
+		return ""
+	}
+
+	// Extract src value for this plugin binary from config.
+	srcPath := extractPluginSrc(configText, binaryName)
+	if srcPath == "" {
+		return ""
+	}
+
+	// Resolve relative to config root.
+	if !filepath.IsAbs(srcPath) {
+		srcPath = filepath.Join(rootPath, srcPath)
+	}
+
+	// Verify directory exists.
+	if info, err := os.Stat(srcPath); err != nil || !info.IsDir() {
+		return ""
+	}
+	return srcPath
+}
+
+// extractBlockValue extracts the value for a specific key in a named block.
+// e.g., extractBlockValue(text, "plugins", "grpc") returns "grpc.so" from "plugins:\n  grpc: grpc.so".
+func extractBlockValue(text, blockName, keyName string) string {
+	lines := strings.Split(text, "\n")
+	inBlock := false
+	blockIndent := -1
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == blockName+":" {
+			inBlock = true
+			blockIndent = getLineIndent(line)
+			continue
+		}
+		if inBlock {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= blockIndent {
+				break
+			}
+			key := extractKeyFromLine(line)
+			if key == keyName {
+				_, after, ok := strings.Cut(trimmed, ":")
+				if ok {
+					val := strings.TrimSpace(after)
+					val = strings.Trim(val, `"'`)
+					return val
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// extractTopLevelValue extracts the value of a top-level key from YAML text.
+// e.g., extractTopLevelValue(text, "pluginDirectory") returns "./gen" from "pluginDirectory: ./gen".
+func extractTopLevelValue(text, key string) string {
+	for line := range strings.SplitSeq(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, key+":") {
+			val := strings.TrimSpace(trimmed[len(key)+1:])
+			return strings.Trim(val, `"'`)
+		}
+	}
+	return ""
+}
+
+// extractPluginSrc extracts the src value for a plugin binary from config text.
+// Config format: "plugins:\n  binary.so:\n    src: ./path".
+func extractPluginSrc(configText, binaryName string) string {
+	lines := strings.Split(configText, "\n")
+	inPlugins := false
+	pluginsIndent := -1
+	inPlugin := false
+	pluginIndent := -1
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		lineIndent := getLineIndent(line)
+
+		if trimmed == "plugins:" {
+			inPlugins = true
+			pluginsIndent = lineIndent
+			inPlugin = false
+			continue
+		}
+
+		if inPlugins && lineIndent <= pluginsIndent {
+			break
+		}
+
+		if inPlugins && !inPlugin {
+			key := extractKeyFromLine(line)
+			if key == binaryName {
+				inPlugin = true
+				pluginIndent = lineIndent
+				// Check if src is on the same line (inline mapping).
+				continue
+			}
+		}
+
+		if inPlugin {
+			if lineIndent <= pluginIndent {
+				break // Left this plugin's block.
+			}
+			key := extractKeyFromLine(line)
+			if key == "src" {
+				_, after, ok := strings.Cut(trimmed, ":")
+				if ok {
+					val := strings.TrimSpace(after)
+					val = strings.Trim(val, `"'`)
+					return val
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func (s *Server) complete(doc *document, pos Position) []CompletionItem {
+	sch := yamlschema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		return nil
+	}
+
+	// Check if cursor is inside a template expression {{ }}.
+	if tmplExpr, ok := getTemplateContext(doc.Text, pos); ok {
+		return s.completeTemplate(doc, tmplExpr)
+	}
+
+	// Use the parsed document for cursor context, fall back to text-based analysis.
+	var ctx *yamlutil.CursorContext
+	if doc.Parsed != nil {
+		ctx = doc.Parsed.GetCursorContext(pos.Line, pos.Character)
+	}
+	if ctx == nil {
+		return nil
+	}
+
+	switch ctx.Type {
+	case yamlutil.CursorContextKey:
+		items := s.completeKeys(sch, ctx, pos)
+		if items != nil {
+			return items
+		}
+		// If no key completions found, the parent might be a file-path array
+		// (e.g. "scenarios: \n  - <cursor>"). Fall through to file path completion.
+		return s.completeFilePathFromContext(sch, ctx, doc.URI)
+	case yamlutil.CursorContextValue:
+		return s.completeValues(sch, ctx, doc.URI)
+	default:
+		return nil
+	}
+}
+
+// getTemplateContext checks if the cursor is inside {{ }} and returns the
+// partial expression being typed.
+func getTemplateContext(text string, pos Position) (string, bool) {
+	lines := strings.Split(text, "\n")
+	if pos.Line >= len(lines) {
+		return "", false
+	}
+	line := lines[pos.Line]
+	if pos.Character > len(line) {
+		return "", false
+	}
+	// Look backwards from cursor for "{{".
+	prefix := line[:pos.Character]
+	openIdx := strings.LastIndex(prefix, "{{")
+	if openIdx < 0 {
+		return "", false
+	}
+	// Check there's no closing "}}" between {{ and cursor.
+	between := prefix[openIdx+2:]
+	if strings.Contains(between, "}}") {
+		return "", false
+	}
+	return strings.TrimSpace(between), true
+}
+
+func (s *Server) completeTemplate(doc *document, expr string) []CompletionItem {
+	// Parse the expression to determine what to complete.
+	// "vars" → complete top-level template variables
+	// "vars." → complete after dot
+	// "" → complete all top-level names
+
+	// For function call syntax like "plugins.myplugin.CreateClient(vars.api",
+	// complete the argument sub-expression after the last "(".
+	if parenIdx := strings.LastIndex(expr, "("); parenIdx >= 0 {
+		expr = strings.TrimSpace(expr[parenIdx+1:])
+	}
+
+	// Top-level template names available in scenarigo.
+	topLevel := []templateCandidate{
+		{name: "ctx", detail: "Execution context (for plugin functions)", kind: CompletionItemKindVariable},
+		{name: nsVars, detail: "Scenario/step variables", kind: CompletionItemKindVariable},
+		{name: nsSecrets, detail: "Secret variables", kind: CompletionItemKindVariable},
+		{name: nsPlugins, detail: "Plugin exports", kind: CompletionItemKindVariable},
+		{name: "request", detail: "Request data (protocol-specific)", kind: CompletionItemKindVariable},
+		{name: "response", detail: "Response data (protocol-specific)", kind: CompletionItemKindVariable},
+		{name: nsSteps, detail: "Results from previous steps", kind: CompletionItemKindVariable},
+		{name: "env", detail: "Environment variable", kind: CompletionItemKindVariable},
+		{name: "assert", detail: "Assertion functions", kind: CompletionItemKindModule},
+		{name: "size", detail: "func(v any) int", doc: "Get size of collection", kind: CompletionItemKindFunction},
+		{name: "type", detail: "func(v any) string", doc: "Get type name of value", kind: CompletionItemKindFunction},
+		{name: "int", detail: "func(v any) int64", doc: "Convert value to int", kind: CompletionItemKindFunction},
+		{name: "uint", detail: "func(v any) uint64", doc: "Convert value to uint", kind: CompletionItemKindFunction},
+		{name: "float", detail: "func(v any) float64", doc: "Convert value to float", kind: CompletionItemKindFunction},
+		{name: "bool", detail: "func(v any) bool", doc: "Convert value to bool", kind: CompletionItemKindFunction},
+		{name: "string", detail: "func(v any) string", doc: "Convert value to string", kind: CompletionItemKindFunction},
+		{name: "bytes", detail: "func(v any) []byte", doc: "Convert value to bytes", kind: CompletionItemKindFunction},
+		{name: "time", detail: "func(v any) time.Time", doc: "Convert value to time.Time", kind: CompletionItemKindFunction},
+		{name: "duration", detail: "func(v any) time.Duration", doc: "Convert value to time.Duration", kind: CompletionItemKindFunction},
+	}
+
+	// If there's a dot, we need to complete after the prefix.
+	dotIdx := strings.LastIndex(expr, ".")
+	if dotIdx >= 0 {
+		prefix := expr[:dotIdx]
+		partial := expr[dotIdx+1:]
+		return s.completeTemplateDot(doc, prefix, partial)
+	}
+
+	// Complete top-level names.
+	var items []CompletionItem
+	for _, c := range topLevel {
+		if expr != "" && !strings.HasPrefix(c.name, expr) {
+			continue
+		}
+		doc := c.doc
+		if doc == "" {
+			doc = c.detail
+		}
+		items = append(items, CompletionItem{
+			Label:         c.name,
+			Kind:          c.kind,
+			Detail:        c.detail,
+			Documentation: doc,
+		})
+	}
+	return items
+}
+
+type templateCandidate struct {
+	name   string
+	detail string // short signature shown inline (e.g., "func(expected any)")
+	doc    string // longer documentation (e.g., doc comment)
+	kind   int
+}
+
+// assertCandidates lists the assertion helpers exposed under {{assert.}}.
+func assertCandidates() []templateCandidate {
+	return []templateCandidate{
+		{name: "and", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with AND — all must pass", kind: CompletionItemKindFunction},
+		{name: "or", detail: "func(assertions ...any) any", doc: "Combine multiple assertions with OR — at least one must pass", kind: CompletionItemKindFunction},
+		{name: "any", detail: "any", doc: "Accept any value (always passes)", kind: CompletionItemKindFunction},
+		{name: "contains", detail: "func(expected any) any", doc: "Assert value contains the expected substring or element", kind: CompletionItemKindFunction},
+		{name: "notContains", detail: "func(value any) any", doc: "Assert value does not contain the given substring or element", kind: CompletionItemKindFunction},
+		{name: "regexp", detail: "func(pattern string) any", doc: "Assert value matches the regular expression pattern", kind: CompletionItemKindFunction},
+		{name: "notZero", detail: "any", doc: "Assert value is not the zero value of its type", kind: CompletionItemKindFunction},
+		{name: "greaterThan", detail: "func(n any) any", doc: "Assert value is greater than the threshold", kind: CompletionItemKindFunction},
+		{name: "greaterThanOrEqual", detail: "func(n any) any", doc: "Assert value is greater than or equal to the threshold", kind: CompletionItemKindFunction},
+		{name: "lessThan", detail: "func(n any) any", doc: "Assert value is less than the threshold", kind: CompletionItemKindFunction},
+		{name: "lessThanOrEqual", detail: "func(n any) any", doc: "Assert value is less than or equal to the threshold", kind: CompletionItemKindFunction},
+		{name: "length", detail: "func(n int) any", doc: "Assert collection has the specified length", kind: CompletionItemKindFunction},
+	}
+}
+
+// pluginSymbolCandidates lists the exported symbols of a plugin for {{plugins.<alias>.}}.
+func (s *Server) pluginSymbolCandidates(doc *document, alias string) []templateCandidate {
+	sourceDir := s.resolvePluginSourceDir(doc, alias)
+	if sourceDir == "" {
+		return nil
+	}
+	syms := s.getPluginSymbols(sourceDir)
+	if syms == nil {
+		return nil
+	}
+	var candidates []templateCandidate
+	for _, sym := range syms.Symbols {
+		kind := CompletionItemKindVariable
+		if sym.IsFunc {
+			kind = CompletionItemKindFunction
+		}
+		candidates = append(candidates, templateCandidate{
+			name:   sym.Name,
+			detail: sym.Signature,
+			doc:    sym.Doc,
+			kind:   kind,
+		})
+	}
+	return candidates
+}
+
+func (s *Server) completeTemplateDot(doc *document, prefix, partial string) []CompletionItem {
+	// Known sub-completions.
+	var candidates []templateCandidate
+
+	switch prefix {
+	case "assert":
+		candidates = assertCandidates()
+	case nsVars, nsSecrets:
+		if doc != nil {
+			for _, key := range extractBlockKeys(doc.Text, prefix) {
+				candidates = append(candidates, templateCandidate{name: key, kind: CompletionItemKindVariable})
+			}
+			// Also include keys from bind.vars / bind.secrets blocks.
+			for _, bk := range extractBindKeys(doc.Text, prefix) {
+				candidates = append(candidates, templateCandidate{name: bk.key, detail: "(from bind)", kind: CompletionItemKindVariable})
+			}
+		}
+		// Also look for keys in the config file (scenarigo.yaml).
+		for _, key := range s.configBlockKeys(prefix) {
+			candidates = append(candidates, templateCandidate{name: key, detail: "(from scenarigo.yaml)", kind: CompletionItemKindVariable})
+		}
+	case nsSteps:
+		if doc != nil {
+			for _, id := range extractStepIDs(doc.Text) {
+				candidates = append(candidates, templateCandidate{name: id, detail: "Step result", kind: CompletionItemKindVariable})
+			}
+		}
+	case nsPlugins:
+		if doc != nil {
+			for _, name := range extractBlockKeys(doc.Text, nsPlugins) {
+				candidates = append(candidates, templateCandidate{name: name, detail: "Plugin", kind: CompletionItemKindModule})
+			}
+		}
+		// Also look for plugins defined in the config file.
+		for _, name := range s.configBlockKeys(nsPlugins) {
+			candidates = append(candidates, templateCandidate{name: name, detail: "Plugin (from scenarigo.yaml)", kind: CompletionItemKindModule})
+		}
+	default:
+		// Handle plugins.<name> — complete exported symbols from plugin source.
+		if alias, ok := strings.CutPrefix(prefix, "plugins."); ok {
+			candidates = s.pluginSymbolCandidates(doc, alias)
+		}
+	}
+
+	if candidates == nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var items []CompletionItem
+	for _, c := range candidates {
+		if partial != "" && !strings.HasPrefix(c.name, partial) {
+			continue
+		}
+		if seen[c.name] {
+			continue
+		}
+		seen[c.name] = true
+		doc := c.doc
+		if doc == "" {
+			doc = c.detail
+		}
+		items = append(items, CompletionItem{
+			Label:         c.name,
+			Kind:          c.kind,
+			Detail:        c.detail,
+			Documentation: doc,
+		})
+	}
+	return items
+}
+
+func (s *Server) completeKeys(sch *yamlschema.Schema, ctx *yamlutil.CursorContext, pos Position) []CompletionItem {
+	fields := sch.ChildFields(ctx.Path, ctx.SiblingValues)
+	if fields == nil {
+		return nil
+	}
+
+	// Filter out keys that already exist at this level.
+	existing := make(map[string]bool)
+	for _, k := range ctx.ParentKeys {
+		existing[k] = true
+	}
+
+	// TextEdit range: from the start of the partial key to the cursor position.
+	startChar := pos.Character - len(ctx.PartialKey)
+	editRange := Range{
+		Start: Position{Line: pos.Line, Character: startChar},
+		End:   Position{Line: pos.Line, Character: pos.Character},
+	}
+
+	var items []CompletionItem
+	for i, f := range fields {
+		if existing[f.Name] {
+			continue
+		}
+		if ctx.PartialKey != "" && !strings.HasPrefix(f.Name, ctx.PartialKey) {
+			continue
+		}
+
+		insertText := f.Name + ": "
+		switch f.Type {
+		case yamlschema.FieldTypeObject:
+			insertText = f.Name + ":"
+		case yamlschema.FieldTypeArray:
+			insertText = f.Name + ":"
+		}
+
+		items = append(items, CompletionItem{
+			Label:         f.Name,
+			Kind:          CompletionItemKindField,
+			Detail:        f.Type.String(),
+			Documentation: f.Description,
+			InsertText:    insertText,
+			TextEdit:      &TextEdit{Range: editRange, NewText: insertText},
+			SortText:      fmt.Sprintf("%03d_%s", i, f.Name),
+		})
+	}
+	return items
+}
+
+func (s *Server) completeValues(sch *yamlschema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
+	if len(ctx.Path) == 0 {
+		return nil
+	}
+
+	field := sch.FindField(ctx.Path)
+	if field == nil {
+		// For map-type fields like plugins, the full path (e.g., ["plugins", "myplugin"])
+		// won't match a schema field. Check if the parent is a file-path map field.
+		if len(ctx.Path) >= 2 {
+			parentField := sch.FindField(ctx.Path[:len(ctx.Path)-1])
+			if parentField != nil && parentField.Type == yamlschema.FieldTypeMap && parentField.IsFilePath {
+				if dir := s.resolvePluginBuildDir(); dir != "" {
+					return completeFilePathInDir(dir, ctx.PartialValue)
+				}
+				return s.completeFilePath(docURI, ctx.PartialValue)
+			}
+		}
+		return nil
+	}
+
+	// Enum values.
+	if len(field.EnumValues) > 0 {
+		var items []CompletionItem
+		for _, v := range field.EnumValues {
+			if ctx.PartialValue != "" && !strings.HasPrefix(v, ctx.PartialValue) {
+				continue
+			}
+			items = append(items, CompletionItem{
+				Label:  v,
+				Kind:   CompletionItemKindValue,
+				Detail: field.Description,
+			})
+		}
+		return items
+	}
+
+	// Bool values.
+	if field.Type == yamlschema.FieldTypeBool {
+		return []CompletionItem{
+			{Label: "true", Kind: CompletionItemKindValue},
+			{Label: "false", Kind: CompletionItemKindValue},
+		}
+	}
+
+	// File path completion.
+	if field.IsFilePath {
+		return s.completeFilePath(docURI, ctx.PartialValue)
+	}
+
+	return nil
+}
+
+// completeFilePathFromContext checks if the current path refers to a file-path
+// array field (e.g., scenarios) and offers filesystem completion.
+func (s *Server) completeFilePathFromContext(sch *yamlschema.Schema, ctx *yamlutil.CursorContext, docURI string) []CompletionItem {
+	if len(ctx.Path) == 0 {
+		return nil
+	}
+	field := sch.FindField(ctx.Path)
+	if field == nil || !field.IsFilePath {
+		return nil
+	}
+	return s.completeFilePath(docURI, ctx.PartialKey)
+}
+
+func (s *Server) completeFilePath(docURI, partial string) []CompletionItem {
+	docPath := uriToPath(docURI)
+	if docPath == "" {
+		return nil
+	}
+	return completeFilePathInDir(filepath.Dir(docPath), partial)
+}
+
+// resolvePluginBuildDir returns the absolute path of pluginDirectory from config.
+func (s *Server) resolvePluginBuildDir() string {
+	configText, _, ok := s.readConfigText()
+	if !ok {
+		return ""
+	}
+	rootPath := uriToPath(s.rootURI)
+
+	dir := extractTopLevelValue(configText, "pluginDirectory")
+	if dir == "" {
+		return ""
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(rootPath, dir)
+	}
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return ""
+	}
+	return dir
+}
+
+// completeFilePathInDir lists files in the given base directory for file path completion.
+func completeFilePathInDir(dir, partial string) []CompletionItem {
+	searchDir := dir
+	prefix := partial
+	if partial != "" {
+		absPartial := filepath.Join(dir, partial)
+		info, err := os.Stat(absPartial)
+		if err == nil && info.IsDir() {
+			searchDir = absPartial
+			prefix = ""
+		} else {
+			searchDir = filepath.Dir(absPartial)
+			prefix = filepath.Base(absPartial)
+		}
+	}
+
+	entries, err := os.ReadDir(searchDir)
+	if err != nil {
+		return nil
+	}
+
+	relDir, err := filepath.Rel(dir, searchDir)
+	if err != nil {
+		return nil
+	}
+
+	var items []CompletionItem
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		if prefix != "" && !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		relPath := name
+		if relDir != "." {
+			relPath = filepath.Join(relDir, name)
+		}
+		kind := CompletionItemKindFile
+		if entry.IsDir() {
+			kind = CompletionItemKindFolder
+			relPath += "/"
+		}
+		items = append(items, CompletionItem{
+			Label:      relPath,
+			Kind:       kind,
+			InsertText: relPath,
+		})
+	}
+	return items
 }
 
 func (s *Server) publishDiagnostics(uri string) {
@@ -433,4 +1331,170 @@ func describeNodeType(node ast.Node) string {
 	default:
 		return nodeTypeUnknown
 	}
+}
+
+// extractKeyFromLine extracts the YAML key from a line like "  myKey: value" or "  - myKey: value".
+func extractKeyFromLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if after, ok := strings.CutPrefix(trimmed, "- "); ok {
+		trimmed = after
+	}
+	before, _, ok := strings.Cut(trimmed, ":")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(before)
+}
+
+// extractBlockKeys extracts top-level keys under the given block name (e.g. "vars", "secrets").
+func extractBlockKeys(text, blockName string) []string {
+	lines := strings.Split(text, "\n")
+	var keys []string
+	inBlock := false
+	blockIndent := -1
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == blockName+":" {
+			inBlock = true
+			blockIndent = getLineIndent(line)
+			continue
+		}
+		if inBlock {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= blockIndent {
+				break
+			}
+			key := extractKeyFromLine(line)
+			if key != "" {
+				keys = append(keys, key)
+			}
+		}
+	}
+	return keys
+}
+
+// bindKeyInfo represents a key found in a bind.vars or bind.secrets block, with its line number.
+type bindKeyInfo struct {
+	key  string
+	line int
+}
+
+// extractBindKeys scans the document for all bind.vars or bind.secrets keys.
+// blockName should be "vars" or "secrets".
+// Returns keys in document order (top to bottom).
+func extractBindKeys(text, blockName string) []bindKeyInfo {
+	lines := strings.Split(text, "\n")
+	var result []bindKeyInfo
+
+	// State machine: look for "bind:" → blockName+":" → keys.
+	inBind := false
+	bindIndent := -1
+	inTargetBlock := false
+	targetBlockIndent := -1
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		lineIndent := getLineIndent(line)
+
+		// Check if we left the bind block.
+		if inBind && lineIndent <= bindIndent {
+			inBind = false
+			inTargetBlock = false
+		}
+
+		// Check if we left the target block (vars/secrets under bind).
+		if inTargetBlock && lineIndent <= targetBlockIndent {
+			inTargetBlock = false
+		}
+
+		if inTargetBlock {
+			key := extractKeyFromLine(line)
+			if key != "" {
+				result = append(result, bindKeyInfo{key: key, line: i})
+			}
+			continue
+		}
+
+		if inBind && trimmed == blockName+":" {
+			inTargetBlock = true
+			targetBlockIndent = lineIndent
+			continue
+		}
+
+		// Detect "bind:" (could appear at any step level).
+		if trimmed == "bind:" {
+			inBind = true
+			bindIndent = lineIndent
+			inTargetBlock = false
+			continue
+		}
+		// Also handle "- bind:" at a list item start.
+		stripped := strings.TrimPrefix(trimmed, "- ")
+		if stripped == "bind:" && stripped != trimmed {
+			inBind = true
+			bindIndent = lineIndent + 2 // indent past the "- "
+			inTargetBlock = false
+			continue
+		}
+	}
+	return result
+}
+
+// extractStepIDs extracts step IDs from the "steps" block of a document.
+func extractStepIDs(text string) []string {
+	lines := strings.Split(text, "\n")
+	var ids []string
+	inSteps := false
+	stepsIndent := -1
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "steps:" {
+			inSteps = true
+			stepsIndent = getLineIndent(line)
+			continue
+		}
+		if inSteps {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= stepsIndent {
+				break
+			}
+			// Look for "id: <value>" lines.
+			key := extractKeyFromLine(line)
+			if key == "id" {
+				_, after, ok := strings.Cut(trimmed, ":")
+				if ok {
+					val := strings.TrimSpace(after)
+					// Remove surrounding quotes if present.
+					val = strings.Trim(val, `"'`)
+					if val != "" {
+						ids = append(ids, val)
+					}
+				}
+			}
+		}
+	}
+	return ids
+}
+
+// configBlockKeys reads keys from the given block in the config file (scenarigo.yaml).
+func (s *Server) configBlockKeys(blockName string) []string {
+	configText, _, ok := s.readConfigText()
+	if !ok {
+		return nil
+	}
+	return extractBlockKeys(configText, blockName)
+}
+
+func getLineIndent(line string) int {
+	return len(line) - len(strings.TrimLeft(line, " "))
 }

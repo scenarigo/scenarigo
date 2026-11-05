@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/goccy/go-yaml"
 )
@@ -23,9 +24,15 @@ type lspTestCase struct {
 }
 
 type lspExpect struct {
+	CompletionLabels   *labelMatcher   `yaml:"completionLabels"`
 	DiagnosticMessages *messageMatcher `yaml:"diagnosticMessages"`
 	Diagnostics        []diagMatcher   `yaml:"diagnostics"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
+}
+
+type labelMatcher struct {
+	Contains []string `yaml:"contains"`
+	Excludes []string `yaml:"excludes"`
 }
 
 type messageMatcher struct {
@@ -46,14 +53,22 @@ type diagMatcher struct {
 }
 
 // parseCursorMarker finds and removes the $0 cursor marker from the document text.
-func parseCursorMarker(doc string) string {
+// Returns the cleaned text, 0-based line, 0-based character, and whether a marker was found.
+func parseCursorMarker(doc string) (string, int, int, bool) {
 	before, after, ok := strings.Cut(doc, "$0")
 	if !ok {
-		return doc
+		return doc, 0, 0, false
 	}
 
 	text := before + after
-	return text
+
+	// Calculate the line from the byte offset. The character is counted in
+	// UTF-16 code units: the test client offers no encoding in initialize,
+	// so the server falls back to the LSP default.
+	prefix := before
+	line := strings.Count(prefix, "\n")
+	char := len(utf16.Encode([]rune(prefix[strings.LastIndex(prefix, "\n")+1:])))
+	return text, line, char, true
 }
 
 // loadFixtures reads all YAML documents from the given file, each separated by "---".
@@ -96,13 +111,60 @@ func runLSPTestFixtures(t *testing.T, fixturePath string) {
 func runSingleFixture(t *testing.T, tc lspTestCase) {
 	t.Helper()
 
-	docText := parseCursorMarker(tc.Document)
+	docText, cursorLine, cursorChar, hasCursor := parseCursorMarker(tc.Document)
 
 	switch tc.Operation {
+	case "completion":
+		if !hasCursor {
+			t.Fatal("completion test requires $0 cursor marker in document")
+		}
+		runCompletionFixture(t, tc, docText, cursorLine, cursorChar)
 	case "diagnostics":
 		runDiagnosticsFixture(t, tc, docText)
 	default:
 		t.Fatalf("unknown operation: %s", tc.Operation)
+	}
+}
+
+func runCompletionFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	// Use a temp dir when auxiliary files are specified (e.g. file path completion).
+	rootDir := t.TempDir()
+	if len(tc.Files) > 0 {
+		for name, content := range tc.Files {
+			p := filepath.Join(rootDir, name)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+				t.Fatalf("write file %s: %v", name, err)
+			}
+		}
+	}
+
+	client := newRunningTestClient(t)
+
+	rootURI := "file://" + rootDir
+	client.initialize(1, rootURI)
+
+	uri := "file://" + rootDir + "/test.yaml"
+	client.openDocument(uri, docText)
+
+	list := client.complete(2, uri, line, char)
+
+	if tc.Expect.CompletionLabels != nil {
+		labels := labelSet(list.Items)
+		for _, want := range tc.Expect.CompletionLabels.Contains {
+			if !labels[want] {
+				t.Errorf("expected %q in completions, got: %v", want, labelList(list.Items))
+			}
+		}
+		for _, exclude := range tc.Expect.CompletionLabels.Excludes {
+			if labels[exclude] {
+				t.Errorf("should not have %q in completions", exclude)
+			}
+		}
 	}
 }
 
