@@ -92,6 +92,9 @@ func (c *testClient) readMessage() json.RawMessage {
 func (c *testClient) readResponse() json.RawMessage {
 	c.t.Helper()
 	raw := c.readMessage()
+	for isNotification(raw) {
+		raw = c.readMessage() // e.g. diagnostics republished for other documents
+	}
 	var resp Response
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		c.t.Fatalf("unmarshal response: %v", err)
@@ -104,6 +107,16 @@ func (c *testClient) readResponse() json.RawMessage {
 		c.t.Fatalf("marshal result: %v", err)
 	}
 	return b
+}
+
+// isNotification reports whether a message is a notification, which has a
+// method and no id.
+func isNotification(raw json.RawMessage) bool {
+	var msg struct {
+		ID     *json.RawMessage `json:"id"`
+		Method string           `json:"method"`
+	}
+	return json.Unmarshal(raw, &msg) == nil && msg.ID == nil && msg.Method != ""
 }
 
 func (c *testClient) openDocument(uri, text string) {
@@ -129,16 +142,26 @@ func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiag
 			Text:       text,
 		},
 	})
-	raw := c.readMessage()
-	var notif Notification
-	if err := json.Unmarshal(raw, &notif); err != nil {
-		c.t.Fatalf("unmarshal notification: %v", err)
+	return c.readDiagnostics(uri)
+}
+
+// readDiagnostics reads messages until the diagnostics of uri arrive: a
+// change can publish those of other documents first.
+func (c *testClient) readDiagnostics(uri string) PublishDiagnosticsParams {
+	c.t.Helper()
+	for {
+		var notif Notification
+		if err := json.Unmarshal(c.readMessage(), &notif); err != nil {
+			c.t.Fatalf("unmarshal notification: %v", err)
+		}
+		var params PublishDiagnosticsParams
+		if err := json.Unmarshal(notif.Params, &params); err != nil {
+			c.t.Fatalf("unmarshal diagnostics: %v", err)
+		}
+		if params.URI == uri {
+			return params
+		}
 	}
-	var params PublishDiagnosticsParams
-	if err := json.Unmarshal(notif.Params, &params); err != nil {
-		c.t.Fatalf("unmarshal diagnostics: %v", err)
-	}
-	return params
 }
 
 func (c *testClient) complete(id int, uri string, line, char int) CompletionList {

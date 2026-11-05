@@ -1,6 +1,8 @@
 package lsp
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 
@@ -70,6 +72,9 @@ func (s *documentStore) Update(uri string, version int, text string) {
 func (s *documentStore) Close(uri string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if doc := s.docs[uri]; doc != nil {
+		forgetLines(doc.Text)
+	}
 	delete(s.docs, uri)
 }
 
@@ -77,6 +82,13 @@ func (s *documentStore) Get(uri string) *document {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.docs[uri]
+}
+
+// URIs returns the URIs of the open documents, sorted.
+func (s *documentStore) URIs() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return slices.Sorted(maps.Keys(s.docs))
 }
 
 // GetByPath returns the open document for a local file path, whatever

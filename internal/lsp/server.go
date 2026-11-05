@@ -40,6 +40,8 @@ type Server struct {
 	shutdownRequested  bool
 	pluginSymbolsMu    sync.Mutex
 	pluginSymbolsCache map[string]*pluginSymbols // source dir → exported symbols
+	includeIndexMu     sync.Mutex
+	includeIndex       *includeIndex // see include.go
 }
 
 // NewServer creates a new LSP server that communicates over stdio.
@@ -144,6 +146,7 @@ func (s *Server) handleDidOpen(req *Request) {
 	}
 	s.docs.Open(params.TextDocument.URI, params.TextDocument.Version, params.TextDocument.Text)
 	s.publishDiagnostics(params.TextDocument.URI)
+	s.publishDependentDiagnostics(params.TextDocument.URI)
 }
 
 func (s *Server) handleDidChange(req *Request) {
@@ -162,6 +165,7 @@ func (s *Server) handleDidChange(req *Request) {
 		s.docs.Update(params.TextDocument.URI, params.TextDocument.Version, text)
 	}
 	s.publishDiagnostics(params.TextDocument.URI)
+	s.publishDependentDiagnostics(params.TextDocument.URI)
 }
 
 func (s *Server) handleDidClose(req *Request) {
@@ -176,6 +180,7 @@ func (s *Server) handleDidClose(req *Request) {
 		URI:         params.TextDocument.URI,
 		Diagnostics: []Diagnostic{},
 	})
+	s.publishDependentDiagnostics(params.TextDocument.URI)
 }
 
 func (s *Server) handleCompletion(req *Request) {
@@ -768,11 +773,29 @@ func (s *Server) readConfigText() (string, string, bool) {
 	if doc := s.docs.GetByPath(configPath); doc != nil {
 		return doc.Text, doc.URI, true
 	}
-	data, err := os.ReadFile(configPath)
-	if err != nil {
+	data, ok := readScannedFile(configPath)
+	if !ok {
 		return "", "", false
 	}
 	return string(data), pathToURI(configPath), true
+}
+
+// maxScannedFileSize bounds a YAML file read for its names.
+const maxScannedFileSize = 4 << 20
+
+// readScannedFile reads a regular file of a reasonable size: diagnostics read
+// files on every change, where a FIFO would block the server and a device
+// would not end.
+func readScannedFile(path string) ([]byte, bool) {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxScannedFileSize {
+		return nil, false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	return data, true
 }
 
 // findConfigDefinition searches for a variable definition in scenarigo.yaml.
@@ -1777,6 +1800,7 @@ func (s *Server) publishDiagnostics(uri string) {
 		})
 	default:
 		diagnostics = append(diagnostics, s.validateDocument(doc)...)
+		diagnostics = append(diagnostics, s.templateDiagnostics(doc)...)
 	}
 
 	for i := range diagnostics {

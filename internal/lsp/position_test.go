@@ -1,6 +1,9 @@
 package lsp
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestColumnConversions(t *testing.T) {
 	// "日本語" is 3 runes, 9 bytes, 3 UTF-16 units; "😀" is 1 rune, 4 bytes, 2 UTF-16 units.
@@ -80,5 +83,83 @@ func TestTokenRange(t *testing.T) {
 	want := Range{Start: Position{Line: 1, Character: 24}, End: Position{Line: 1, Character: 32}}
 	if r != want {
 		t.Errorf("tokenRange = %+v, want %+v", r, want)
+	}
+}
+
+// TestLineAtTextsInTurn checks lines of texts looked up in turn: lineAt
+// keeps the line index of the last text, which must not answer for another
+// one, even of the same length.
+func TestLineAtTextsInTurn(t *testing.T) {
+	tests := []struct {
+		text string
+		line int
+		want string
+	}{
+		{"a\nbc\n", 0, "a"},
+		{"ab\nc\n", 0, "ab"}, // the same length, other line breaks
+		{"a\nbc\n", 1, "bc"},
+		{"ab\nc\n", 1, "c"},
+		{"a\nbc\n", 2, ""},
+		{"a\nbc\n", 3, ""},
+		{"a\nbc\n", -1, ""},
+		{"a\r\nb", 0, "a\r"},
+		{"a\r\nb", 1, "b"},
+		{"", 0, ""},
+		{"no newline", 0, "no newline"},
+	}
+	for _, tt := range tests {
+		if got := lineAt(tt.text, tt.line); got != tt.want {
+			t.Errorf("lineAt(%q, %d) = %q, want %q", tt.text, tt.line, got, tt.want)
+		}
+	}
+}
+
+// TestLineIndexColumns compares the column conversions of the line index,
+// which start from the last mark on lines that are not ASCII only, with
+// walking the line from its start, at every column of lines shorter and
+// longer than the marks, past their end, and of a line past the last one.
+func TestLineIndexColumns(t *testing.T) {
+	lines := []string{
+		"",
+		"plain ascii",
+		strings.Repeat("a", 3*markEvery+5),
+		strings.Repeat("あ", 3*markEvery), // a multiple of markEvery runes
+		strings.Repeat("あ", 3*markEvery+1),
+		"x" + strings.Repeat("😀é", 2*markEvery), // surrogate pairs and two-byte runes
+		strings.Repeat("a", markEvery-1) + "é" + strings.Repeat("b", markEvery+2),
+		// Invalid UTF-8, a rune of one byte each: a lone byte, a truncated
+		// rune, a surrogate.
+		"\xff" + strings.Repeat("a\xe3\x81", markEvery) + "\xed\xa0\x80",
+		"tab\tand\r",
+	}
+	text := strings.Join(lines, "\n") // the last line has no line break
+	idx := newLineIndex(text)
+	for i, l := range append(lines, "") {
+		errs := 0
+		for col := -2; col <= len(l)+3 && errs < 5; col++ {
+			if got, want := idx.byteColumn(text, i, col), byteColumnFromRune(l, col); got != want {
+				t.Errorf("line %d: byteColumn(%d) = %d, want %d", i, col, got, want)
+				errs++
+			}
+			for _, enc := range []positionEncoding{encodingUTF16, encodingUTF8, ""} {
+				if got, want := idx.clientColumn(text, i, col, enc), clientColumnFromByte(l, col, enc); got != want {
+					t.Errorf("line %d: clientColumn(%d, %q) = %d, want %d", i, col, enc, got, want)
+					errs++
+				}
+			}
+		}
+	}
+}
+
+func TestDocumentStore_CloseForgetsLines(t *testing.T) {
+	store := newDocumentStore()
+	text := strings.Repeat("line\n", 3)
+	store.Open("file:///a.yaml", 1, text)
+	lineAt(text, 1)
+	store.Close("file:///a.yaml")
+	lastLines.Lock()
+	defer lastLines.Unlock()
+	if sameString(lastLines.text, text) {
+		t.Error("the line index keeps the text of a closed document")
 	}
 }
