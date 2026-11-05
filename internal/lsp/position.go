@@ -122,6 +122,22 @@ func unitsOf(r rune, _ positionEncoding) int {
 	return 1
 }
 
+// encodePosition converts an internal byte-based position into the client's
+// encoding.
+func (s *Server) encodePosition(text string, p Position) Position {
+	line := lineAt(text, p.Line)
+	if line == "" {
+		return p // unknown text or an empty line: nothing to convert
+	}
+	p.Character = clientColumnFromByte(line, p.Character, s.encoding)
+	return p
+}
+
+// encodeRange converts an internal byte-based range into the client's encoding.
+func (s *Server) encodeRange(text string, r Range) Range {
+	return Range{Start: s.encodePosition(text, r.Start), End: s.encodePosition(text, r.End)}
+}
+
 // tokenRange builds the internal range of a token whose text spans length
 // bytes, converting the rune column reported by goccy/go-yaml.
 func tokenRange(text string, line, runeCol, length int) Range {

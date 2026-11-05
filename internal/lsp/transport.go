@@ -110,6 +110,15 @@ func (s *Server) sendResponse(id *json.RawMessage, result any, respErr *Response
 	s.writeMessage(Response{JSONRPC: "2.0", ID: id, Result: result})
 }
 
+func (s *Server) sendNotification(method string, params any) {
+	p, err := json.Marshal(params)
+	if err != nil {
+		s.logger.Printf("marshal %s params: %v", method, err)
+		return
+	}
+	s.writeMessage(Notification{JSONRPC: "2.0", Method: method, Params: p})
+}
+
 // writeMessage frames and writes one message. Requests are handled one at a
 // time today, but the mutex keeps the framing intact if that ever changes.
 func (s *Server) writeMessage(msg any) {

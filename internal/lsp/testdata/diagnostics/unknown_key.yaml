@@ -1,0 +1,230 @@
+---
+name: "unknown fields produce diagnostics"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  unknownField: hello
+  steps:
+    - title: step1
+      protocol: http
+      badKey: value
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'unknown field "unknownField"'
+      - 'unknown field "badKey"'
+---
+name: "a merge key is not an unknown field and may bring required fields"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    request: &request
+      method: GET
+      url: http://example.com
+  steps:
+    - protocol: http
+      request:
+        <<: *request
+        header:
+          Accept: application/json
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a comment after a key is not part of its name"
+document: |
+  schemaVersion: scenario/v1
+  steps: # all
+    - protocol: http # plain
+      request: # go
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a quoted key is the key itself"
+document: |
+  schemaVersion: scenario/v1
+  "steps":
+    - 'protocol': http
+      "request":
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a merged protocol selects the request fields"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    grpc: &grpc
+      protocol: grpc
+  steps:
+    - <<: *grpc
+      request:
+        target: localhost:50051
+        service: echo.Echo
+        method: Echo
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a quoted schemaVersion is a schemaVersion"
+document: |
+  "schemaVersion": scenario/v1
+  nope: 1
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'unknown field "nope"'
+---
+name: "a schemaVersion in a flow mapping is a schemaVersion"
+document: |
+  {schemaVersion: scenario/v1, nope: 1}
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'unknown field "nope"'
+---
+name: "a nested schemaVersion does not make a scenario"
+document: |
+  {a: {schemaVersion: scenario/v1, nope: 1}}
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "YAML that does not parse is reported from the schemaVersion line"
+document: |
+  schemaVersion: scenario/v1
+  steps: [
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: 'Invalid YAML syntax'
+---
+name: "the fields of a protocol a plugin registers are not known"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: noop
+      request:
+        body: 1
+        foo: 2
+      expect:
+        bar: 3
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: '"noop" is not a built-in value for field "protocol" (built-in: http, grpc)'
+---
+name: "a merged protocol of a plugin"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    noop: &noop
+      protocol: noop
+  steps:
+    - <<: *noop
+      request:
+        foo: 2
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a tag decides the type of a value"
+document: |
+  schemaVersion: scenario/v1
+  title: !!str 1
+  steps:
+    - id: !!str q
+      continueOnError: !!bool true
+      protocol: http
+      request: !!map
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a merge key wins over the keys before it"
+document: |
+  schemaVersion: scenario/v1
+  anchors:
+    p: &p
+      protocol: grpc
+  steps:
+    - request:
+        target: localhost:50051
+        service: echo.Echo
+        method: Echo
+      <<: *p
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an HTTP request defaults to GET and takes any method"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a method that is not a built-in value is only information"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: PURGE
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 1
+  diagnostics:
+    - message: '"PURGE" is not a built-in value for field "method" (built-in: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)'
+      severity: 3
+---
+name: "a ytt template with a key on both branches is not reported as broken"
+document: |
+  schemaVersion: scenario/v1
+  #@ if x:
+  title: a
+  #@ else:
+  title: b
+  #@ end
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "a quoted unknown key is reported on its name"
+document: |
+  schemaVersion: scenario/v1
+  "nope": 1
+  'nop2': 2
+operation: diagnostics
+expect:
+  diagnosticCount: 2
+  diagnostics:
+    - message: 'unknown field "nope"'
+      severity: 2
+      startLine: 1
+      startChar: 1
+      endLine: 1
+      endChar: 5
+    - message: 'unknown field "nop2"'
+      severity: 2
+      startLine: 2
+      startChar: 1
+      endLine: 2
+      endChar: 5

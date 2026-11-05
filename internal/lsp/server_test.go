@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -44,6 +45,19 @@ func (c *testClient) sendRequest(id int, method string, params any) {
 	}
 }
 
+func (c *testClient) sendNotification(method string, params any) {
+	c.t.Helper()
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		c.t.Fatalf("marshal params: %v", err)
+	}
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","method":%q,"params":%s}`, method, paramsJSON)
+	msg := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(body), body)
+	if _, err := io.WriteString(c.inW, msg); err != nil {
+		c.t.Fatalf("write notification: %v", err)
+	}
+}
+
 func (c *testClient) readMessage() json.RawMessage {
 	c.t.Helper()
 	contentLength := -1
@@ -72,6 +86,97 @@ func (c *testClient) readMessage() json.RawMessage {
 		c.t.Fatalf("read body: %v", err)
 	}
 	return body
+}
+
+func (c *testClient) readResponse() json.RawMessage {
+	c.t.Helper()
+	raw := c.readMessage()
+	var resp Response
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		c.t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Error != nil {
+		c.t.Fatalf("response error: %s", resp.Error.Message)
+	}
+	b, err := json.Marshal(resp.Result)
+	if err != nil {
+		c.t.Fatalf("marshal result: %v", err)
+	}
+	return b
+}
+
+func (c *testClient) openDocumentAndGetDiagnostics(uri, text string) PublishDiagnosticsParams {
+	c.t.Helper()
+	c.sendNotification("textDocument/didOpen", DidOpenTextDocumentParams{
+		TextDocument: TextDocumentItem{
+			URI:        uri,
+			LanguageID: "yaml",
+			Version:    1,
+			Text:       text,
+		},
+	})
+	raw := c.readMessage()
+	var notif Notification
+	if err := json.Unmarshal(raw, &notif); err != nil {
+		c.t.Fatalf("unmarshal notification: %v", err)
+	}
+	var params PublishDiagnosticsParams
+	if err := json.Unmarshal(notif.Params, &params); err != nil {
+		c.t.Fatalf("unmarshal diagnostics: %v", err)
+	}
+	return params
+}
+
+// --- typed helper methods ---
+
+func (c *testClient) initialize(id int, rootURI string) InitializeResult {
+	c.t.Helper()
+	return c.initializeWith(id, InitializeParams{RootURI: rootURI})
+}
+
+func (c *testClient) initializeWith(id int, params InitializeParams) InitializeResult {
+	c.t.Helper()
+	c.sendRequest(id, "initialize", params)
+	resp := c.readResponse()
+	var result InitializeResult
+	if err := json.Unmarshal(resp, &result); err != nil {
+		c.t.Fatalf("unmarshal initialize result: %v", err)
+	}
+	return result
+}
+
+func TestServer_Fixtures(t *testing.T) {
+	fixtureFiles, err := filepath.Glob("testdata/*/*.yaml")
+	if err != nil {
+		t.Fatalf("glob fixtures: %v", err)
+	}
+	if len(fixtureFiles) == 0 {
+		t.Fatal("no fixture files found")
+	}
+	for _, f := range fixtureFiles {
+		t.Run(filepath.Base(filepath.Dir(f))+"/"+strings.TrimSuffix(filepath.Base(f), ".yaml"), func(t *testing.T) {
+			runLSPTestFixtures(t, f)
+		})
+	}
+}
+
+// --- helpers ---
+
+func diagMessages(diags []Diagnostic) []string {
+	var msgs []string
+	for _, d := range diags {
+		msgs = append(msgs, d.Message)
+	}
+	return msgs
+}
+
+// newWorkspace creates a temporary workspace root for a test and returns its
+// URI together with a helper that builds URIs of files below it, so that
+// tests never depend on files that happen to exist under /tmp.
+func newWorkspace(t *testing.T) (string, func(string) string) {
+	t.Helper()
+	dir := t.TempDir()
+	return pathToURI(dir), func(name string) string { return pathToURI(filepath.Join(dir, name)) }
 }
 
 // newRunningTestClient starts a server on in-process pipes and returns its

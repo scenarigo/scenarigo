@@ -72,3 +72,9 @@ func (s *documentStore) Close(uri string) {
 	defer s.mu.Unlock()
 	delete(s.docs, uri)
 }
+
+func (s *documentStore) Get(uri string) *document {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.docs[uri]
+}

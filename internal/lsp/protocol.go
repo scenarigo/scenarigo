@@ -40,6 +40,12 @@ const (
 	codeInvalidParams  = -32602
 )
 
+type Notification struct {
+	JSONRPC string          `json:"jsonrpc"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
 // LSP protocol types (subset needed for MVP).
 
 type InitializeParams struct {
@@ -104,7 +110,27 @@ type Position struct {
 	Character int `json:"character"` // 0-based
 }
 
+// Diagnostic types.
+
+type PublishDiagnosticsParams struct {
+	URI         string       `json:"uri"`
+	Diagnostics []Diagnostic `json:"diagnostics"`
+}
+
+type Diagnostic struct {
+	Range    Range  `json:"range"`
+	Severity int    `json:"severity,omitempty"`
+	Message  string `json:"message"`
+}
+
 type Range struct {
 	Start Position `json:"start"`
 	End   Position `json:"end"`
 }
+
+const (
+	DiagnosticSeverityError       = 1
+	DiagnosticSeverityWarning     = 2
+	DiagnosticSeverityInformation = 3
+	DiagnosticSeverityHint        = 4
+)

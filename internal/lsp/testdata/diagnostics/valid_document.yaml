@@ -1,0 +1,14 @@
+---
+name: "valid document has no diagnostics"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+      request:
+        method: GET
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
