@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [v0.29.0](https://github.com/scenarigo/scenarigo/compare/v0.28.1...v0.29.0) - 2026-11-04
+
+### New Features
+- feat(context): expose the root directory of the run via Context.RootDir by @zoncoen in https://github.com/scenarigo/scenarigo/pull/872
+### Dependency Upgrades
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/847
+- chore(deps): bump golang.org/x/tools to read Go tip's export data by @zoncoen in https://github.com/scenarigo/scenarigo/pull/874
+- chore(deps): bump go.opentelemetry.io/proto/otlp from 1.11.0 to 1.11.1 in the go-patch group by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/870
+- chore(deps): bump indirect modules by @scenarigo-bot[bot] in https://github.com/scenarigo/scenarigo/pull/871
+- chore(deps): bump google.golang.org/grpc from 1.84.0 to 1.85.0 in /plugin/testdata/wasm/src in the go-minor group across 1 directory by @dependabot[bot] in https://github.com/scenarigo/scenarigo/pull/873
+
 ## [v0.28.1](https://github.com/scenarigo/scenarigo/compare/v0.28.0...v0.28.1) - 2026-10-27
 
 ### New Features
