@@ -1,8 +1,10 @@
 package lsp
 
 import (
-	"strings"
+	"sort"
+	"sync"
 	"unicode/utf8"
+	"unsafe"
 )
 
 // Column units.
@@ -36,20 +38,183 @@ func negotiateEncoding(offered []string) positionEncoding {
 
 // lineAt returns the text of the zero-based line, or "" past the end.
 func lineAt(text string, line int) string {
-	if line < 0 {
+	return linesOf(text).text(text, line)
+}
+
+// lastLines is the line index of the text linesOf looked up last. The server converts the positions of a document one at a time, many
+// of them for one publication of its diagnostics, and going through the text
+// from its start for each made large files quadratic.
+var lastLines struct {
+	sync.Mutex
+	text  string
+	lines lineIndex
+}
+
+// linesOf returns the line index of text, reusing the last one built for
+// the same string. Strings are compared by their data and length, which is
+// immediate on every platform, where comparing their bytes is not; holding
+// the text keeps its memory from being reused for another string.
+func linesOf(text string) lineIndex {
+	lastLines.Lock()
+	defer lastLines.Unlock()
+	if lastLines.lines.starts == nil || !sameString(lastLines.text, text) {
+		lastLines.text, lastLines.lines = text, newLineIndex(text)
+	}
+	return lastLines.lines
+}
+
+// forgetLines drops the line index of a text, if it is the one looked up last,
+// so that it does not stay in memory when its document closes. A document
+// edited since that lookup stays until the next one replaces it.
+func forgetLines(text string) {
+	lastLines.Lock()
+	defer lastLines.Unlock()
+	if sameString(lastLines.text, text) {
+		lastLines.text, lastLines.lines = "", lineIndex{}
+	}
+}
+
+func sameString(a, b string) bool {
+	return len(a) == len(b) && unsafe.StringData(a) == unsafe.StringData(b)
+}
+
+// lineIndex holds the byte offset at which each line of a text starts, and
+// which lines are ASCII only: on those, byte, rune and UTF-16 columns are
+// the same, and converting a column does not walk the line. On the other
+// lines, the byte and UTF-16 columns of every markEvery-th rune are kept, so
+// that a conversion walks markEvery runes at most: walking a long line from
+// its start for each of its values made it quadratic.
+type lineIndex struct {
+	starts []int
+	ascii  []bool
+	marks  map[int][]lineMark // by line, for lines that are not ASCII only
+}
+
+// lineMark holds the byte and UTF-16 columns of the k-th multiple of
+// markEvery runes of a line, at index k-1 of its marks.
+type lineMark struct {
+	bytes, units int
+}
+
+const markEvery = 64
+
+func newLineIndex(text string) lineIndex {
+	idx := lineIndex{starts: []int{0}}
+	ascii := true
+	for i := range len(text) {
+		switch c := text[i]; {
+		case c == '\n':
+			idx.starts = append(idx.starts, i+1)
+			idx.ascii = append(idx.ascii, ascii)
+			ascii = true
+		case c >= utf8.RuneSelf:
+			ascii = false
+		}
+	}
+	idx.ascii = append(idx.ascii, ascii)
+	for line, ascii := range idx.ascii {
+		if ascii {
+			continue
+		}
+		// Runes are counted as byteColumnFromRune and clientColumnFromByte
+		// count them: an invalid byte is a rune of one byte.
+		var marks []lineMark
+		runes, units := 0, 0
+		for i, r := range idx.text(text, line) {
+			if runes > 0 && runes%markEvery == 0 {
+				marks = append(marks, lineMark{bytes: i, units: units})
+			}
+			runes++
+			units += unitsOf(r, encodingUTF16)
+		}
+		if marks != nil {
+			if idx.marks == nil {
+				idx.marks = map[int][]lineMark{}
+			}
+			idx.marks[line] = marks
+		}
+	}
+	return idx
+}
+
+// lineStart returns the byte offset of the start of a 0-based line, or -1.
+func (idx lineIndex) lineStart(line int) int {
+	if line < 0 || line >= len(idx.starts) {
+		return -1
+	}
+	return idx.starts[line]
+}
+
+// isASCII reports whether a 0-based line holds ASCII characters only.
+func (idx lineIndex) isASCII(line int) bool {
+	return line >= 0 && line < len(idx.ascii) && idx.ascii[line]
+}
+
+// byteColumn converts a rune column of a 0-based line of text into a byte
+// column, as byteColumnFromRune does.
+func (idx lineIndex) byteColumn(text string, line, runeCol int) int {
+	l := idx.text(text, line)
+	if idx.isASCII(line) {
+		return min(max(runeCol, 0), len(l))
+	}
+	start, runes := 0, 0
+	if marks := idx.marks[line]; runeCol >= markEvery && len(marks) > 0 {
+		k := min(runeCol/markEvery, len(marks))
+		start, runes = marks[k-1].bytes, k*markEvery
+	}
+	return start + byteColumnFromRune(l[start:], runeCol-runes)
+}
+
+// clientColumn converts a byte column of a 0-based line of text into a
+// column of the client's encoding, as clientColumnFromByte does.
+func (idx lineIndex) clientColumn(text string, line, byteCol int, enc positionEncoding) int {
+	l := idx.text(text, line)
+	if idx.isASCII(line) || enc == encodingUTF8 {
+		return min(max(byteCol, 0), len(l))
+	}
+	if byteCol <= 0 {
+		return 0
+	}
+	byteCol = min(byteCol, len(l))
+	marks := idx.marks[line]
+	k := sort.Search(len(marks), func(i int) bool { return marks[i].bytes > byteCol })
+	start, units := 0, 0
+	if k > 0 {
+		start, units = marks[k-1].bytes, marks[k-1].units
+	}
+	return units + clientColumnFromByte(l[start:], byteCol-start, enc)
+}
+
+// text returns a 0-based line of the text the index was built from, without
+// its "\n", or "" past the end. Unlike lineAt, it does not depend on
+// which text was looked up last.
+func (idx lineIndex) text(text string, line int) string {
+	start := idx.lineStart(line)
+	if start < 0 || start > len(text) {
 		return ""
 	}
-	for range line {
-		nl := strings.IndexByte(text, '\n')
-		if nl < 0 {
-			return ""
-		}
-		text = text[nl+1:]
+	end := len(text)
+	if line+1 < len(idx.starts) {
+		end = min(idx.starts[line+1]-1, len(text))
 	}
-	if before, _, ok := strings.Cut(text, "\n"); ok {
-		return before
+	return text[start:max(end, start)]
+}
+
+// offset converts a goccy/go-yaml position (1-based line, 1-based rune
+// column) into a byte offset of text, or -1.
+func (idx lineIndex) offset(text string, line, runeCol int) int {
+	start := idx.lineStart(line - 1)
+	if start < 0 {
+		return -1
 	}
-	return text
+	return start + idx.byteColumn(text, line-1, runeCol-1)
+}
+
+// position converts a byte offset into an internal position.
+func (idx lineIndex) position(offset int) Position {
+	line := sort.Search(len(idx.starts), func(i int) bool { return idx.starts[i] > offset }) - 1
+	line = max(line, 0)
+	return Position{Line: line, Character: offset - idx.starts[line]}
 }
 
 // byteColumnFromRune converts a rune index within line to a byte index.
@@ -136,11 +301,11 @@ func (s *Server) decodePosition(text string, p Position) Position {
 // encodePosition converts an internal byte-based position into the client's
 // encoding.
 func (s *Server) encodePosition(text string, p Position) Position {
-	line := lineAt(text, p.Line)
-	if line == "" {
+	lines := linesOf(text)
+	if lines.text(text, p.Line) == "" {
 		return p // unknown text or an empty line: nothing to convert
 	}
-	p.Character = clientColumnFromByte(line, p.Character, s.encoding)
+	p.Character = lines.clientColumn(text, p.Line, p.Character, s.encoding)
 	return p
 }
 
@@ -179,7 +344,7 @@ func (s *Server) textOf(uri string) string {
 // bytes, converting the rune column reported by goccy/go-yaml.
 func tokenRange(text string, line, runeCol, length int) Range {
 	l := line - 1
-	start := byteColumnFromRune(lineAt(text, l), runeCol-1)
+	start := linesOf(text).byteColumn(text, l, runeCol-1)
 	return Range{
 		Start: Position{Line: l, Character: start},
 		End:   Position{Line: l, Character: start + length},

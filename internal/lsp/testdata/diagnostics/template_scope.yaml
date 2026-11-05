@@ -415,6 +415,26 @@ expect:
       severity: 3
       startLine: 10
 ---
+name: "a step var named like a scenario var or a bound var leaves the name defined"
+document: |
+  schemaVersion: scenario/v1
+  vars:
+    shared: 1
+  steps:
+    - vars:
+        shared: 2
+        own: 3
+      protocol: http
+      request: {method: GET, url: '{{vars.shared}}/{{vars.own}}'}
+      bind:
+        vars:
+          own: '{{response.body}}'
+    - protocol: http
+      request: {method: GET, url: '{{vars.shared}}/{{vars.own}}'}
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
 name: "a string index after another index reads a value, not a name"
 document: |
   schemaVersion: scenario/v1

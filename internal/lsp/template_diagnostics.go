@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -65,6 +64,24 @@ func (d templateDefinitions) clone() templateDefinitions {
 func (d templateDefinitions) add(set map[string]bool, names []string) {
 	for _, n := range names {
 		set[n] = true
+	}
+}
+
+// addNew adds names to a set and returns those it did not hold yet.
+func (d templateDefinitions) addNew(set map[string]bool, names []string) []string {
+	var added []string
+	for _, n := range names {
+		if !set[n] {
+			set[n] = true
+			added = append(added, n)
+		}
+	}
+	return added
+}
+
+func removeNames(set map[string]bool, names []string) {
+	for _, n := range names {
+		delete(set, n)
 	}
 }
 
@@ -135,13 +152,15 @@ func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode,
 
 	for _, step := range v.sequence(v.entryValue(body, nsSteps)) {
 		entries := v.entries(step)
-		stepDefs := defs.clone()
-		c.defs = stepDefs
+		// The vars and secrets of a step are added for the step only and
+		// removed after it: copying the definitions for each step made
+		// scenarios of many steps quadratic.
+		c.defs = defs
 		c.walkShared(v.entryValue(entries, "if"))
 		c.walkShared(v.entryValue(entries, nsVars))
-		stepDefs.add(stepDefs.vars, v.keys(v.entryValue(entries, nsVars)))
+		stepVars := defs.addNew(defs.vars, v.keys(v.entryValue(entries, nsVars)))
 		c.walkShared(v.entryValue(entries, nsSecrets))
-		stepDefs.add(stepDefs.secrets, v.keys(v.entryValue(entries, nsSecrets)))
+		stepSecrets := defs.addNew(defs.secrets, v.keys(v.entryValue(entries, nsSecrets)))
 		include := v.stringValue(v.entryValue(entries, "include"))
 		if include == "" { // the runner returns before the other fields
 			for _, n := range v.entryValues(entries, stepEvaluatedFields) {
@@ -154,18 +173,21 @@ func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode,
 		// on top of these.
 		bind := v.entryValue(entries, "bind")
 		if include != "" {
-			bindDefs := stepDefs.clone()
 			included, ok := templateDefinitions{}, false
 			if docPath != "" {
-				included, ok = s.scenarioNames(includedPath(docPath, include), false)
+				included, ok = s.includedNames(c, includedPath(docPath, include))
 			}
-			bindDefs.steps = included.steps
-			bindDefs.merge(templateDefinitions{vars: included.vars, secrets: included.secrets, plugins: included.plugins})
-			c.defs = bindDefs
+			c.defs.steps = included.steps // c.defs is a copy of defs, sharing its sets
+			c.bound = included
 			c.unresolved = unresolved || !ok
+			c.walkShared(bind)
+			c.unresolved = unresolved
+			c.defs, c.bound = defs, templateDefinitions{}
+		} else {
+			c.walkShared(bind)
 		}
-		c.walkShared(bind)
-		c.unresolved = unresolved
+		removeNames(defs.vars, stepVars)
+		removeNames(defs.secrets, stepSecrets)
 
 		bindEntries := v.entries(bind)
 		defs.add(defs.vars, v.keys(v.entryValue(bindEntries, nsVars)))
@@ -174,6 +196,27 @@ func (s *Server) checkScenario(c *templateChecker, body []*ast.MappingValueNode,
 			defs.steps[id] = true
 		}
 	}
+}
+
+// includedNames returns the names of the scenario at path, reading each
+// file once per checker: a scenario that includes a file many times would
+// otherwise read and parse it for each include step. The names are only
+// read, never changed.
+func (s *Server) includedNames(c *templateChecker, path string) (templateDefinitions, bool) {
+	if r, ok := c.included[path]; ok {
+		return r.defs, r.ok
+	}
+	defs, ok := s.scenarioNames(path, false)
+	if c.included == nil {
+		c.included = map[string]includedScenario{}
+	}
+	c.included[path] = includedScenario{defs: defs, ok: ok}
+	return defs, ok
+}
+
+type includedScenario struct {
+	defs templateDefinitions
+	ok   bool
 }
 
 // configDefinitions returns the names scenarigo.yaml defines.
@@ -220,6 +263,12 @@ type templateChecker struct {
 	absorbing bool
 	// branches counts the operands around the expression that may not run.
 	branches int
+	// bound holds, in the bind of an include step, the names of the
+	// included scenario, seen on top of defs without adding them to defs for
+	// each include step.
+	bound templateDefinitions
+	// included holds the names of the scenarios included so far, by path.
+	included map[string]includedScenario
 }
 
 // includerScope holds the names of the scenarios that include a file.
@@ -261,7 +310,7 @@ func (c *templateChecker) walkYAML(node ast.Node) {
 			c.walkYAML(v)
 		}
 	case *ast.StringNode:
-		if tok := n.GetToken(); tok != nil {
+		if tok := n.GetToken(); tok != nil && strings.Contains(n.Value, "{{") {
 			c.checkString(n.Value, c.lines.offset(c.text, tok.Position.Line, tok.Position.Column))
 		}
 	case *ast.LiteralNode:
@@ -522,10 +571,11 @@ func (c *templateChecker) checkPath(expr tmplast.Expr, m valueMap, optional bool
 	}
 }
 
-// defined reports whether a name is defined: in scope or, for all we know, by
-// a scenario that includes this file.
+// defined reports whether a name is defined: in scope, by the included
+// scenario in the bind of an include step, or, for all we know, by a scenario
+// that includes this file.
 func (c *templateChecker) defined(root, name string) bool {
-	if c.defs.set(root)[name] {
+	if c.defs.set(root)[name] || c.bound.set(root)[name] {
 		return true
 	}
 	scope := c.includers()
@@ -560,44 +610,6 @@ func (d templateDefinitions) set(root string) map[string]bool {
 		return d.steps
 	}
 	return d.plugins
-}
-
-// lineIndex holds the byte offset at which each line of a text starts.
-type lineIndex []int
-
-func newLineIndex(text string) lineIndex {
-	idx := lineIndex{0}
-	for i := range len(text) {
-		if text[i] == '\n' {
-			idx = append(idx, i+1)
-		}
-	}
-	return idx
-}
-
-// lineStart returns the byte offset of the start of a 0-based line, or -1.
-func (idx lineIndex) lineStart(line int) int {
-	if line < 0 || line >= len(idx) {
-		return -1
-	}
-	return idx[line]
-}
-
-// offset converts a goccy/go-yaml position (1-based line, 1-based rune
-// column) into a byte offset of text, or -1.
-func (idx lineIndex) offset(text string, line, runeCol int) int {
-	start := idx.lineStart(line - 1)
-	if start < 0 {
-		return -1
-	}
-	return start + byteColumnFromRune(lineAt(text, line-1), runeCol-1)
-}
-
-// position converts a byte offset into an internal position.
-func (idx lineIndex) position(offset int) Position {
-	line := sort.Search(len(idx), func(i int) bool { return idx[i] > offset }) - 1
-	line = max(line, 0)
-	return Position{Line: line, Character: offset - idx[line]}
 }
 
 // valueMap maps rune indexes of a decoded YAML string value to positions in
@@ -649,7 +661,7 @@ func (m valueMap) runeRange(from, to int) Range {
 		// Unknown layout: point at the rest of the first line of the scalar.
 		start := m.lines.position(m.start)
 		end := start
-		end.Character += len(lineAt(m.text, start.Line)) - start.Character
+		end.Character += len(m.lines.text(m.text, start.Line)) - start.Character
 		return Range{Start: start, End: end}
 	}
 	end := len(m.offsets) - 1 // index of the end of the value
