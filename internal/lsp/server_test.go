@@ -187,6 +187,25 @@ func (c *testClient) hover(id int, uri string, line, char int) json.RawMessage {
 	return c.readResponse()
 }
 
+func (c *testClient) definition(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/definition", DefinitionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) references(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/references", ReferenceParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+		Context:      ReferenceContext{IncludeDeclaration: true},
+	})
+	return c.readResponse()
+}
+
 func (c *testClient) signatureHelp(id int, uri string, line, char int) json.RawMessage {
 	c.t.Helper()
 	c.sendRequest(id, "textDocument/signatureHelp", SignatureHelpParams{

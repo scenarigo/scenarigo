@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -147,6 +148,26 @@ func (s *Server) encodePosition(text string, p Position) Position {
 // encodeRange converts an internal byte-based range into the client's encoding.
 func (s *Server) encodeRange(text string, r Range) Range {
 	return Range{Start: s.encodePosition(text, r.Start), End: s.encodePosition(text, r.End)}
+}
+
+// encodeLocation converts the range of a location that may point at another
+// file into the client's encoding.
+func (s *Server) encodeLocation(loc Location) Location {
+	loc.Range = s.encodeRange(s.textOf(loc.URI), loc.Range)
+	return loc
+}
+
+// textOf returns the text of an open document, or of the file behind the
+// URI when it is not open, or "" when neither is available.
+func (s *Server) textOf(uri string) string {
+	if doc := s.docs.Get(uri); doc != nil {
+		return doc.Text
+	}
+	data, err := os.ReadFile(uriToPath(uri))
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // tokenRange builds the internal range of a token whose text spans length

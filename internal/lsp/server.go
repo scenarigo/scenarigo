@@ -77,8 +77,12 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleCompletion(req)
 	case "textDocument/hover":
 		s.handleHover(req)
+	case "textDocument/definition":
+		s.handleDefinition(req)
 	case "textDocument/signatureHelp":
 		s.handleSignatureHelp(req)
+	case "textDocument/references":
+		s.handleReferences(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -111,7 +115,9 @@ func (s *Server) handleInitialize(req *Request) {
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: append([]string{":", " ", "\n"}, templateTriggerCharacters...),
 			},
-			HoverProvider: true,
+			HoverProvider:      true,
+			DefinitionProvider: true,
+			ReferencesProvider: true,
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
 			},
@@ -235,6 +241,29 @@ func (s *Server) handleHover(req *Request) {
 	s.sendResponse(req.ID, hover, nil)
 }
 
+func (s *Server) handleDefinition(req *Request) {
+	var params DefinitionParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.sendResponse(req.ID, nil, invalidParams("definition", err))
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	params.Position = s.decodePosition(doc.Text, params.Position)
+	loc := s.definition(doc, params)
+	if loc == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+	*loc = s.encodeLocation(*loc)
+	s.sendResponse(req.ID, loc, nil)
+}
+
 func (s *Server) handleSignatureHelp(req *Request) {
 	var params SignatureHelpParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -350,6 +379,128 @@ func (s *Server) signatureHelp(doc *document, pos Position) *SignatureHelp {
 	return nil
 }
 
+func (s *Server) definition(doc *document, params DefinitionParams) *Location {
+	if doc.Parsed == nil {
+		return nil
+	}
+	if yamlschema.DetectSchemaType(doc.Text) == nil {
+		return nil
+	}
+
+	// Check if cursor is inside a template expression (e.g., {{vars.token}}).
+	if loc := s.templateVarDefinition(doc, params); loc != nil {
+		return loc
+	}
+
+	// Get cursor context to determine which field we're on.
+	ctx := doc.Parsed.GetCursorContext(params.Position.Line, params.Position.Character)
+	if ctx == nil || len(ctx.Path) == 0 {
+		return nil
+	}
+
+	lastKey := ctx.Path[len(ctx.Path)-1]
+
+	// Handle "include" field: jump to the referenced scenario file.
+	// Handle "plugins" values: jump to the plugin source.
+	// Handle "scenarios" values: jump to scenario files.
+	switch {
+	case lastKey == "include":
+		// Value is a file path relative to the current document.
+		return s.resolveFileLocation(params.TextDocument.URI, ctx.PartialValue)
+	case ctx.Type == yamlutil.CursorContextValue:
+		// Check if we're in a plugins mapping or scenarios array.
+		for _, key := range ctx.Path {
+			if key == nsPlugins || key == "scenarios" {
+				return s.resolveFileLocation(params.TextDocument.URI, ctx.PartialValue)
+			}
+		}
+	}
+
+	return nil
+}
+
+// templateVarDefinition handles definition jump for template variable references
+// like {{vars.token}} or {{secrets.apiKey}}.
+// It first looks for the definition in the current document, then falls back to
+// the scenarigo.yaml config file.
+func (s *Server) templateVarDefinition(doc *document, params DefinitionParams) *Location {
+	tmplExpr, ok := getFullTemplateExpr(doc.Text, params.Position)
+	if !ok {
+		return nil
+	}
+	tmplExpr = strings.TrimSpace(tmplExpr)
+	if tmplExpr == "" {
+		return nil
+	}
+
+	// Handle "<-" operator: only consider the left-hand side.
+	if arrowIdx := strings.Index(tmplExpr, "<-"); arrowIdx >= 0 {
+		tmplExpr = strings.TrimSpace(tmplExpr[:arrowIdx])
+	}
+
+	// For function call syntax like plugins.myplugin.CreateClient(vars.apiEndpoint),
+	// resolve the sub-expression under the cursor:
+	//   cursor on CreateClient → plugins.myplugin.CreateClient
+	//   cursor on apiEndpoint  → vars.apiEndpoint
+	resolveExpr := tmplExpr
+	if parenIdx := strings.Index(tmplExpr, "("); parenIdx >= 0 {
+		lines := strings.Split(doc.Text, "\n")
+		if params.Position.Line < len(lines) {
+			line := lines[params.Position.Line]
+			prefix := line[:params.Position.Character]
+			openIdx := strings.LastIndex(prefix, "{{")
+			if openIdx >= 0 {
+				cursorInRaw := params.Position.Character - (openIdx + 2)
+				rawParenIdx := strings.Index(line[openIdx+2:], "(")
+				if rawParenIdx >= 0 && cursorInRaw > rawParenIdx {
+					// Cursor is inside the argument list.
+					closeIdx := strings.LastIndex(tmplExpr, ")")
+					if closeIdx > parenIdx {
+						resolveExpr = strings.TrimSpace(tmplExpr[parenIdx+1 : closeIdx])
+					}
+				} else {
+					// Cursor is on the function/variable part.
+					resolveExpr = tmplExpr[:parenIdx]
+				}
+			}
+		}
+	}
+
+	parts := strings.Split(resolveExpr, ".")
+	if len(parts) < 2 {
+		return nil
+	}
+	root := parts[0]
+	if root != nsVars && root != nsSecrets && root != nsPlugins {
+		return nil
+	}
+	name := parts[1]
+
+	// Try to find the definition in the current document.
+	if root == nsPlugins {
+		if len(parts) >= 3 {
+			// plugins.<name>.<symbol> — jump to Go source definition.
+			return s.findPluginSymbolDefinition(doc, name, parts[2])
+		}
+		// plugins.<name> — jump to plugin declaration.
+		if r := findBlockKeyRange(doc.Text, nsPlugins, name); r != nil {
+			return &Location{URI: params.TextDocument.URI, Range: *r}
+		}
+		return s.findConfigDefinition(nsPlugins, name)
+	}
+
+	symbolPath := []string{root, name}
+	if dr := findDeclRange(doc, symbolPath); dr != nil {
+		return &Location{
+			URI:   params.TextDocument.URI,
+			Range: *dr,
+		}
+	}
+
+	// Fall back to scenarigo.yaml config file.
+	return s.findConfigDefinition(root, name)
+}
+
 // readConfigText returns the text of scenarigo.yaml and its URI.
 // It checks the document store first, then falls back to reading from disk.
 func (s *Server) readConfigText() (string, string, bool) {
@@ -366,6 +517,104 @@ func (s *Server) readConfigText() (string, string, bool) {
 		return "", "", false
 	}
 	return string(data), pathToURI(configPath), true
+}
+
+// findConfigDefinition searches for a variable definition in scenarigo.yaml.
+func (s *Server) findConfigDefinition(blockName, keyName string) *Location {
+	configText, configURI, ok := s.readConfigText()
+	if !ok {
+		return nil
+	}
+	if r := findBlockKeyRange(configText, blockName, keyName); r != nil {
+		return &Location{URI: configURI, Range: *r}
+	}
+	return nil
+}
+
+// findPluginSymbolDefinition finds the Go source location of an exported symbol in a plugin.
+func (s *Server) findPluginSymbolDefinition(doc *document, pluginAlias, symbolName string) *Location {
+	sourceDir := s.resolvePluginSourceDir(doc, pluginAlias)
+	if sourceDir == "" {
+		return nil
+	}
+
+	// Parse Go files to find the symbol's location.
+	fset := token.NewFileSet()
+	files, err := parseGoPackageFiles(fset, sourceDir, 0)
+	if err != nil {
+		return nil
+	}
+
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *goast.FuncDecl:
+				if d.Recv == nil && d.Name.Name == symbolName {
+					pos := fset.Position(d.Name.Pos())
+					return &Location{
+						URI: pathToURI(pos.Filename),
+						Range: Range{
+							Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
+							End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
+						},
+					}
+				}
+			case *goast.GenDecl:
+				if d.Tok != token.VAR {
+					continue
+				}
+				for _, spec := range d.Specs {
+					vs, ok := spec.(*goast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for _, name := range vs.Names {
+						if name.Name == symbolName {
+							pos := fset.Position(name.Pos())
+							return &Location{
+								URI: pathToURI(pos.Filename),
+								Range: Range{
+									Start: Position{Line: pos.Line - 1, Character: pos.Column - 1},
+									End:   Position{Line: pos.Line - 1, Character: pos.Column - 1 + len(symbolName)},
+								},
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// findBlockKeyRange finds the range of a specific key within a named block in YAML text.
+func findBlockKeyRange(text, blockName, keyName string) *Range {
+	lines := strings.Split(text, "\n")
+	inBlock := false
+	blockIndent := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == blockName+":" {
+			inBlock = true
+			blockIndent = getLineIndent(line)
+			continue
+		}
+		if inBlock {
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			lineIndent := getLineIndent(line)
+			if lineIndent <= blockIndent {
+				break
+			}
+			key := extractKeyFromLine(line)
+			if key == keyName {
+				r := keyRange(i, line, keyName)
+				return &r
+			}
+		}
+	}
+	return nil
 }
 
 // pluginSymbol represents an exported symbol from a Go plugin source.
@@ -734,6 +983,34 @@ func extractPluginSrc(configText, binaryName string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Server) resolveFileLocation(docURI, filePath string) *Location {
+	if filePath == "" {
+		return nil
+	}
+
+	// Convert document URI to directory path.
+	docPath := uriToPath(docURI)
+	if docPath == "" {
+		return nil
+	}
+
+	dir := filepath.Dir(docPath)
+	resolved := filepath.Join(dir, filePath)
+
+	// Check if file exists.
+	if _, err := os.Stat(resolved); err != nil {
+		return nil
+	}
+
+	return &Location{
+		URI: pathToURI(resolved),
+		Range: Range{
+			Start: Position{Line: 0, Character: 0},
+			End:   Position{Line: 0, Character: 0},
+		},
+	}
 }
 
 func (s *Server) complete(doc *document, pos Position) []CompletionItem {
@@ -1514,6 +1791,205 @@ func describeNodeType(node ast.Node) string {
 	}
 }
 
+// --- textDocument/references ---
+
+func (s *Server) handleReferences(req *Request) {
+	var params ReferenceParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.sendResponse(req.ID, nil, invalidParams("references", err))
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, []Location{}, nil)
+		return
+	}
+
+	params.Position = s.decodePosition(doc.Text, params.Position)
+	locs := s.references(doc, params)
+	for i := range locs {
+		locs[i] = s.encodeLocation(locs[i])
+	}
+	if locs == nil {
+		locs = []Location{}
+	}
+	s.sendResponse(req.ID, locs, nil)
+}
+
+// templateRef represents a reference to a dotted path inside a template expression.
+type templateRef struct {
+	path     []string // e.g., ["vars", "myVar"] or ["steps", "login", "response"]
+	line     int      // 0-based
+	startCol int      // 0-based, column of path start (e.g., "vars" in "{{vars.myVar}}")
+	endCol   int      // 0-based, column past the last char of the matched prefix
+}
+
+// scanTemplateRefs scans the document text for all template expressions and extracts
+// dotted path references from them.
+func scanTemplateRefs(text string) []templateRef {
+	var refs []templateRef
+	lines := strings.Split(text, "\n")
+
+	for lineIdx, line := range lines {
+		pos := 0
+		for {
+			openIdx := strings.Index(line[pos:], "{{")
+			if openIdx < 0 {
+				break
+			}
+			openIdx += pos
+			closeIdx := strings.Index(line[openIdx+2:], "}}")
+			if closeIdx < 0 {
+				break
+			}
+			closeIdx += openIdx + 2
+
+			expr := line[openIdx+2 : closeIdx]
+
+			// Handle "<-" operator: only process the left-hand side.
+			if arrowIdx := strings.Index(expr, "<-"); arrowIdx >= 0 {
+				expr = expr[:arrowIdx]
+			}
+
+			expr = strings.TrimSpace(expr)
+			if expr == "" {
+				pos = closeIdx + 2
+				continue
+			}
+
+			// Parse dotted path.
+			parts := strings.Split(expr, ".")
+			if len(parts) == 0 {
+				pos = closeIdx + 2
+				continue
+			}
+
+			// Find the column where this path starts within the line.
+			// The path starts after "{{" + any leading whitespace.
+			exprStart := openIdx + 2
+			for exprStart < closeIdx && line[exprStart] == ' ' {
+				exprStart++
+			}
+
+			// Calculate end column: covers parts[0].parts[1] (the first 2 segments).
+			pathStr := expr
+			endColOffset := exprStart + len(pathStr)
+
+			refs = append(refs, templateRef{
+				path:     parts,
+				line:     lineIdx,
+				startCol: exprStart,
+				endCol:   endColOffset,
+			})
+
+			pos = closeIdx + 2
+		}
+	}
+	return refs
+}
+
+// identifySymbol determines what symbol the cursor is on.
+// Returns a 2-element path like ["vars", "myVar"] or ["steps", "login"], and the declaration range.
+// identifyTemplateSymbol resolves the vars/secrets/steps symbol named by a
+// template expression, or nil when the expression names something else.
+func identifyTemplateSymbol(doc *document, tmplExpr string) ([]string, *Range) {
+	tmplExpr = strings.TrimSpace(tmplExpr)
+	// Handle "<-" operator: only consider the left-hand side.
+	if before, _, ok := strings.Cut(tmplExpr, "<-"); ok {
+		tmplExpr = strings.TrimSpace(before)
+	}
+	parts := strings.Split(tmplExpr, ".")
+	if len(parts) < 2 {
+		return nil, nil
+	}
+	root := parts[0]
+	if root != nsVars && root != nsSecrets && root != nsSteps {
+		return nil, nil
+	}
+	sp := []string{root, parts[1]}
+	return sp, findDeclRange(doc, sp)
+}
+
+func identifySymbol(doc *document, pos Position) ([]string, *Range) {
+	if doc.Parsed == nil {
+		return nil, nil
+	}
+
+	// First check if cursor is inside a template expression.
+	// Use getFullTemplateExpr to get the complete expression (not just up to cursor).
+	if tmplExpr, ok := getFullTemplateExpr(doc.Text, pos); ok {
+		return identifyTemplateSymbol(doc, tmplExpr)
+	}
+
+	// Check YAML structure: is cursor on a vars/secrets key or step id value?
+	ctx := doc.Parsed.GetCursorContext(pos.Line, pos.Character)
+	if ctx == nil || len(ctx.Path) == 0 {
+		return nil, nil
+	}
+
+	lines := strings.Split(doc.Text, "\n")
+	currentLine := ""
+	if pos.Line < len(lines) {
+		currentLine = lines[pos.Line]
+	}
+
+	// Check if cursor is on a child key of vars/secrets.
+	if len(ctx.Path) >= 1 {
+		parent := ctx.Path[len(ctx.Path)-1]
+		if (parent == nsVars || parent == nsSecrets) && ctx.Type == yamlutil.CursorContextKey {
+			keyName := extractKeyFromLine(currentLine)
+			if keyName != "" {
+				r := keyRange(pos.Line, currentLine, keyName)
+				return []string{parent, keyName}, &r
+			}
+		}
+	}
+
+	// Check if this is a key under vars/secrets when we're on the value side.
+	if len(ctx.Path) >= 2 {
+		grandParent := ctx.Path[len(ctx.Path)-2]
+		if grandParent == nsVars || grandParent == nsSecrets {
+			keyName := ctx.Path[len(ctx.Path)-1]
+			r := keyRange(pos.Line, currentLine, keyName)
+			return []string{grandParent, keyName}, &r
+		}
+	}
+
+	// Case 2: Cursor on a step's "id" value.
+	if ctx.Type == yamlutil.CursorContextValue {
+		lastKey := ctx.Path[len(ctx.Path)-1]
+		if lastKey == "id" && ctx.PartialValue != "" {
+			// Verify it's under steps.
+			if slices.Contains(ctx.Path, nsSteps) {
+				idValue := ctx.PartialValue
+				r := valueRange(pos.Line, currentLine, idValue)
+				return []string{nsSteps, idValue}, &r
+			}
+		}
+	}
+
+	// Case 3: Cursor on the key "id" itself, get the value.
+	if ctx.Type == yamlutil.CursorContextKey {
+		keyName := extractKeyFromLine(currentLine)
+		if keyName == "id" {
+			// Get the value from the same line.
+			_, after, ok := strings.Cut(currentLine, ":")
+			if ok {
+				val := strings.TrimSpace(after)
+				if val != "" {
+					if slices.Contains(ctx.Path, nsSteps) {
+						r := valueRange(pos.Line, currentLine, val)
+						return []string{nsSteps, val}, &r
+					}
+				}
+			}
+		}
+	}
+
+	return nil, nil
+}
+
 // extractKeyFromLine extracts the YAML key from a line like "  myKey: value" or "  - myKey: value".
 func extractKeyFromLine(line string) string {
 	trimmed := strings.TrimSpace(line)
@@ -1676,6 +2152,161 @@ func (s *Server) configBlockKeys(blockName string) []string {
 	return extractBlockKeys(configText, blockName)
 }
 
+// keyRange returns a Range covering the key name on the given line.
+func keyRange(line int, lineText, keyName string) Range {
+	idx := strings.Index(lineText, keyName)
+	if idx < 0 {
+		return Range{Start: Position{Line: line, Character: 0}, End: Position{Line: line, Character: 0}}
+	}
+	return Range{
+		Start: Position{Line: line, Character: idx},
+		End:   Position{Line: line, Character: idx + len(keyName)},
+	}
+}
+
+// valueRange returns a Range covering the value on the given line (after ":").
+func valueRange(line int, lineText, value string) Range {
+	colonIdx := strings.Index(lineText, ":")
+	if colonIdx < 0 {
+		return Range{Start: Position{Line: line, Character: 0}, End: Position{Line: line, Character: 0}}
+	}
+	// Find value after colon.
+	afterColon := lineText[colonIdx+1:]
+	valIdx := strings.Index(afterColon, value)
+	if valIdx < 0 {
+		return Range{Start: Position{Line: line, Character: 0}, End: Position{Line: line, Character: 0}}
+	}
+	start := colonIdx + 1 + valIdx
+	return Range{
+		Start: Position{Line: line, Character: start},
+		End:   Position{Line: line, Character: start + len(value)},
+	}
+}
+
+func (s *Server) references(doc *document, params ReferenceParams) []Location {
+	if yamlschema.DetectSchemaType(doc.Text) == nil {
+		return nil
+	}
+
+	symbolPath, declRange := identifySymbol(doc, params.Position)
+	if len(symbolPath) < 2 {
+		return nil
+	}
+
+	refs := scanTemplateRefs(doc.Text)
+
+	var locs []Location
+
+	// If includeDeclaration, add the declaration location.
+	if params.Context.IncludeDeclaration && declRange != nil {
+		locs = append(locs, Location{
+			URI:   params.TextDocument.URI,
+			Range: *declRange,
+		})
+	}
+
+	// Match template refs whose first 2 path elements match symbolPath.
+	for _, ref := range refs {
+		if len(ref.path) < 2 {
+			continue
+		}
+		if ref.path[0] == symbolPath[0] && ref.path[1] == symbolPath[1] {
+			// Highlight just the matched prefix (e.g., "vars.myVar" portion).
+			matchEnd := min(ref.startCol+len(ref.path[0])+1+len(ref.path[1]), ref.endCol)
+			locs = append(locs, Location{
+				URI: params.TextDocument.URI,
+				Range: Range{
+					Start: Position{Line: ref.line, Character: ref.startCol},
+					End:   Position{Line: ref.line, Character: matchEnd},
+				},
+			})
+		}
+	}
+
+	return locs
+}
+
+// findDeclRange searches the document for the declaration of a symbol and returns its range.
+// For vars/secrets, it uses last-write-wins: the last definition (top-level or bind) wins.
+func findDeclRange(doc *document, symbolPath []string) *Range {
+	if len(symbolPath) < 2 || doc.Parsed == nil {
+		return nil
+	}
+
+	root := symbolPath[0]
+	name := symbolPath[1]
+	lines := strings.Split(doc.Text, "\n")
+
+	switch root {
+	case nsVars, nsSecrets:
+		// Last-write-wins: collect all definitions (top-level + bind), return the last one.
+		var lastRange *Range
+
+		// Scan top-level block.
+		if r := findBlockKeyRange(doc.Text, root, name); r != nil {
+			lastRange = r
+		}
+
+		// Scan bind blocks — these appear later and override top-level.
+		for _, bk := range extractBindKeys(doc.Text, root) {
+			if bk.key == name {
+				r := keyRange(bk.line, lines[bk.line], name)
+				lastRange = &r
+			}
+		}
+
+		return lastRange
+	case nsSteps:
+		// Find the step with id: <name>.
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			// Look for "id: <name>" or "- id: <name>".
+			s := trimmed
+			if after, ok := strings.CutPrefix(s, "- "); ok {
+				s = after
+			}
+			if after, ok := strings.CutPrefix(s, "id:"); ok {
+				val := strings.TrimSpace(after)
+				if val == name {
+					r := valueRange(i, line, name)
+					return &r
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func getLineIndent(line string) int {
 	return len(line) - len(strings.TrimLeft(line, " "))
+}
+
+// getFullTemplateExpr returns the full template expression surrounding the cursor.
+// Unlike getTemplateContext which returns text up to the cursor, this returns the entire expression.
+func getFullTemplateExpr(text string, pos Position) (string, bool) {
+	lines := strings.Split(text, "\n")
+	if pos.Line >= len(lines) {
+		return "", false
+	}
+	line := lines[pos.Line]
+	if pos.Character > len(line) {
+		return "", false
+	}
+	// Look backwards from cursor for "{{".
+	prefix := line[:pos.Character]
+	openIdx := strings.LastIndex(prefix, "{{")
+	if openIdx < 0 {
+		return "", false
+	}
+	// Check there's no closing "}}" between {{ and cursor.
+	between := prefix[openIdx+2:]
+	if strings.Contains(between, "}}") {
+		return "", false
+	}
+	// Find the closing "}}" after the opening.
+	closeIdx := strings.Index(line[openIdx+2:], "}}")
+	if closeIdx < 0 {
+		return "", false
+	}
+	return strings.TrimSpace(line[openIdx+2 : openIdx+2+closeIdx]), true
 }

@@ -72,6 +72,8 @@ type ServerCapabilities struct {
 	TextDocumentSync      int                   `json:"textDocumentSync"`
 	CompletionProvider    *CompletionOptions    `json:"completionProvider,omitempty"`
 	HoverProvider         bool                  `json:"hoverProvider,omitempty"`
+	DefinitionProvider    bool                  `json:"definitionProvider,omitempty"`
+	ReferencesProvider    bool                  `json:"referencesProvider,omitempty"`
 	SignatureHelpProvider *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
 }
 
@@ -209,6 +211,30 @@ const (
 type TextEdit struct {
 	Range   Range  `json:"range"`
 	NewText string `json:"newText"`
+}
+
+// Definition types.
+
+type DefinitionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
+type Location struct {
+	URI   string `json:"uri"`
+	Range Range  `json:"range"`
+}
+
+// References types.
+
+type ReferenceParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+	Context      ReferenceContext       `json:"context"`
+}
+
+type ReferenceContext struct {
+	IncludeDeclaration bool `json:"includeDeclaration"`
 }
 
 // SignatureHelp types.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,10 +30,12 @@ type lspExpect struct {
 	DiagnosticMessages *messageMatcher `yaml:"diagnosticMessages"`
 	Diagnostics        []diagMatcher   `yaml:"diagnostics"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
+	DefinitionURI      *uriMatcher     `yaml:"definitionUri"`
 	HoverContains      []string        `yaml:"hoverContains"`
 	HoverIsNull        *bool           `yaml:"hoverIsNull"`
 	SignatureLabel     *string         `yaml:"signatureLabel"`
 	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
+	ReferenceCount     *int            `yaml:"referenceCount"`
 }
 
 type labelMatcher struct {
@@ -51,6 +54,14 @@ type messageMatcher struct {
 type diagMatcher struct {
 	Message   string `yaml:"message"`
 	Severity  *int   `yaml:"severity"`
+	StartLine *int   `yaml:"startLine"`
+	StartChar *int   `yaml:"startChar"`
+	EndLine   *int   `yaml:"endLine"`
+	EndChar   *int   `yaml:"endChar"`
+}
+
+type uriMatcher struct {
+	Suffix    string `yaml:"suffix"`
 	StartLine *int   `yaml:"startLine"`
 	StartChar *int   `yaml:"startChar"`
 	EndLine   *int   `yaml:"endLine"`
@@ -131,11 +142,21 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 			t.Fatal("hover test requires $0 cursor marker in document")
 		}
 		runHoverFixture(t, tc, docText, cursorLine, cursorChar)
+	case "definition":
+		if !hasCursor {
+			t.Fatal("definition test requires $0 cursor marker in document")
+		}
+		runDefinitionFixture(t, tc, docText, cursorLine, cursorChar)
 	case "signatureHelp":
 		if !hasCursor {
 			t.Fatal("signatureHelp test requires $0 cursor marker in document")
 		}
 		runSignatureHelpFixture(t, tc, docText, cursorLine, cursorChar)
+	case "references":
+		if !hasCursor {
+			t.Fatal("references test requires $0 cursor marker in document")
+		}
+		runReferencesFixture(t, tc, docText, cursorLine, cursorChar)
 	default:
 		t.Fatalf("unknown operation: %s", tc.Operation)
 	}
@@ -295,6 +316,65 @@ func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char in
 	}
 }
 
+func runDefinitionFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+
+	// Create auxiliary files.
+	for name, content := range tc.Files {
+		p := filepath.Join(tmpDir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+			t.Fatalf("write file %s: %v", name, err)
+		}
+	}
+
+	client := newRunningTestClient(t)
+
+	rootURI := fmt.Sprintf("file://%s", tmpDir)
+	client.initialize(1, rootURI)
+
+	docURI := "file://" + filepath.Join(tmpDir, "test.yaml")
+	client.openDocument(docURI, docText)
+
+	resp := client.definition(2, docURI, line, char)
+
+	if tc.Expect.DefinitionURI != nil {
+		var loc Location
+		if err := json.Unmarshal(resp, &loc); err != nil {
+			t.Fatalf("unmarshal location: %v", err)
+		}
+		if tc.Expect.DefinitionURI.Suffix != "" {
+			if !strings.HasSuffix(loc.URI, tc.Expect.DefinitionURI.Suffix) {
+				t.Errorf("expected URI ending with %q, got: %s", tc.Expect.DefinitionURI.Suffix, loc.URI)
+			}
+		}
+		if tc.Expect.DefinitionURI.StartLine != nil {
+			if loc.Range.Start.Line != *tc.Expect.DefinitionURI.StartLine {
+				t.Errorf("expected start line %d, got %d", *tc.Expect.DefinitionURI.StartLine, loc.Range.Start.Line)
+			}
+		}
+		if tc.Expect.DefinitionURI.StartChar != nil {
+			if loc.Range.Start.Character != *tc.Expect.DefinitionURI.StartChar {
+				t.Errorf("expected start char %d, got %d", *tc.Expect.DefinitionURI.StartChar, loc.Range.Start.Character)
+			}
+		}
+		if tc.Expect.DefinitionURI.EndLine != nil {
+			if loc.Range.End.Line != *tc.Expect.DefinitionURI.EndLine {
+				t.Errorf("expected end line %d, got %d", *tc.Expect.DefinitionURI.EndLine, loc.Range.End.Line)
+			}
+		}
+		if tc.Expect.DefinitionURI.EndChar != nil {
+			if loc.Range.End.Character != *tc.Expect.DefinitionURI.EndChar {
+				t.Errorf("expected end char %d, got %d", *tc.Expect.DefinitionURI.EndChar, loc.Range.End.Character)
+			}
+		}
+	}
+}
+
 func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
 	t.Helper()
 
@@ -325,6 +405,32 @@ func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line,
 		}
 		if help.Signatures[0].Label != *tc.Expect.SignatureLabel {
 			t.Errorf("expected signature label %q, got %q", *tc.Expect.SignatureLabel, help.Signatures[0].Label)
+		}
+	}
+}
+
+func runReferencesFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	client := newRunningTestClient(t)
+
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	client.openDocument(uri, docText)
+
+	resp := client.references(2, uri, line, char)
+
+	if tc.Expect.ReferenceCount != nil {
+		var locs []Location
+		if string(resp) != "null" {
+			if err := json.Unmarshal(resp, &locs); err != nil {
+				t.Fatalf("unmarshal locations: %v", err)
+			}
+		}
+		if len(locs) != *tc.Expect.ReferenceCount {
+			t.Errorf("expected %d references, got %d: %v", *tc.Expect.ReferenceCount, len(locs), locs)
 		}
 	}
 }
