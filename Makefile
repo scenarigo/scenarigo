@@ -113,6 +113,10 @@ coverage/module:
 test/e2e:
 	@$(GO) test ./test/e2e/...
 
+.PHONY: test/lsp-e2e
+test/lsp-e2e:
+	@$(GO) test -tags e2e_lsp -count=1 -timeout=120s ./internal/lsp/...
+
 .PHONY: test/examples
 test/examples:
 	@failure=false; \

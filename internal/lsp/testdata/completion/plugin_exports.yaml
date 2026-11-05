@@ -1,0 +1,56 @@
+---
+name: "plugin export completion from Go source"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    myplugin: myplugin.so
+  steps:
+    - title: step1
+      request:
+        client: '{{plugins.myplugin.$0'
+operation: completion
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      myplugin.so:
+        src: ./plugin/src
+  plugin/src/main.go: |
+    package main
+
+    var ServerAddr string
+    var DefaultTimeout int
+
+    func CreateClient() {}
+    func Cleanup() {}
+expect:
+  completionLabels:
+    contains: [ServerAddr, DefaultTimeout, CreateClient, Cleanup]
+---
+name: "plugin export completion partial filter"
+document: |
+  schemaVersion: scenario/v1
+  plugins:
+    myplugin: myplugin.so
+  steps:
+    - title: step1
+      request:
+        client: '{{plugins.myplugin.Create$0'
+operation: completion
+files:
+  scenarigo.yaml: |
+    schemaVersion: config/v1
+    plugins:
+      myplugin.so:
+        src: ./plugin/src
+  plugin/src/main.go: |
+    package main
+
+    var ServerAddr string
+
+    func CreateClient() {}
+    func Cleanup() {}
+expect:
+  completionLabels:
+    contains: [CreateClient]
+    excludes: [ServerAddr, Cleanup]

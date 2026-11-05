@@ -1,0 +1,97 @@
+---
+name: "unknown protocol value produces an information diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: ftp
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - '"ftp" is not a built-in value for field "protocol" (built-in: http, grpc)'
+---
+name: "valid protocol value has no enum diagnostic"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: step1
+      protocol: http
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    excludes:
+      - '"http" is not a built-in value for field "protocol" (built-in: http, grpc)'
+---
+name: "unknown schemaVersion defaults to scenario schema"
+document: |
+  schemaVersion: invalid/v99
+  title: test
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'invalid value "invalid/v99" for field "schemaVersion" (allowed: scenario/v1, config/v1, ytt/v1)'
+---
+name: "unknown telemetry exporter is an error"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    tracing:
+      exporter: jaeger
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - 'invalid value "jaeger" for field "exporter" (allowed: none, otlp)'
+---
+name: "valid telemetry config has no diagnostics"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    tracing:
+      exporter: otlp
+    propagation:
+      traceparent: true
+      baggage: false
+      legacyHeaders: false
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an empty exporter means the default"
+document: |
+  schemaVersion: config/v1
+  telemetry:
+    tracing:
+      exporter: ""
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an empty HTTP method means GET"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: http
+      request:
+        method: ""
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticCount: 0
+---
+name: "an empty protocol is still reported"
+document: |
+  schemaVersion: scenario/v1
+  steps:
+    - protocol: ""
+      request:
+        url: http://example.com
+operation: diagnostics
+expect:
+  diagnosticMessages:
+    contains:
+      - '"" is not a built-in value for field "protocol" (built-in: http, grpc)'

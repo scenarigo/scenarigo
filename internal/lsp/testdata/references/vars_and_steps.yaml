@@ -1,0 +1,93 @@
+---
+name: "vars key definition finds template references"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    $0myVar: hello
+  steps:
+    - title: step1
+      expect:
+        body:
+          message: "{{vars.myVar}}"
+operation: references
+expect:
+  referenceCount: 2
+---
+name: "secrets key definition finds template references"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  secrets:
+    $0token: xxx
+  steps:
+    - title: step1
+      request:
+        header:
+          Authorization: "Bearer {{secrets.token}}"
+operation: references
+expect:
+  referenceCount: 2
+---
+name: "step id finds template references"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  steps:
+    - title: login
+      $0id: login
+      request:
+        method: POST
+    - title: use login
+      request:
+        header:
+          Authorization: "{{steps.login.response.body.token}}"
+operation: references
+expect:
+  referenceCount: 2
+---
+name: "reverse lookup from template expression"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    myVar: hello
+  steps:
+    - title: step1
+      expect:
+        body:
+          message: "{{vars.$0myVar}}"
+operation: references
+expect:
+  referenceCount: 2
+---
+name: "no references returns empty"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    $0unused: value
+  steps:
+    - title: step1
+      expect:
+        body:
+          message: hello
+operation: references
+expect:
+  referenceCount: 1
+---
+name: "multiple references to same var"
+document: |
+  schemaVersion: scenario/v1
+  title: test
+  vars:
+    $0myVar: hello
+  steps:
+    - title: step1
+      expect:
+        body:
+          a: "{{vars.myVar}}"
+          b: "{{vars.myVar}}"
+operation: references
+expect:
+  referenceCount: 3

@@ -1,0 +1,12 @@
+---
+name: "hover on a child of a map field"
+document: |
+  schemaVersion: config/v1
+  plugins:
+    myplugin:
+      s$0rc: ./plugin
+operation: hover
+expect:
+  hoverContains:
+    - src
+    - plugin source

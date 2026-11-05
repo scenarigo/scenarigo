@@ -1,0 +1,26 @@
+---
+name: "schemaVersion value completion when empty"
+document: |
+  schemaVersion: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [scenario/v1, config/v1]
+---
+name: "schemaVersion value completion offers ytt/v1"
+document: |
+  schemaVersion: $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [scenario/v1, config/v1, ytt/v1]
+---
+name: "ytt/v1 key completion"
+document: |
+  schemaVersion: ytt/v1
+  $0
+operation: completion
+expect:
+  completionLabels:
+    contains: [files]
+    excludes: [steps, title]
