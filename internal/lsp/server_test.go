@@ -178,6 +178,26 @@ func (c *testClient) initializeWith(id int, params InitializeParams) InitializeR
 	return result
 }
 
+func (c *testClient) changeDocument(uri string, version int, newText string) {
+	c.t.Helper()
+	c.sendNotification("textDocument/didChange", DidChangeTextDocumentParams{
+		TextDocument: VersionedTextDocumentIdentifier{
+			TextDocumentIdentifier: TextDocumentIdentifier{URI: uri},
+			Version:                version,
+		},
+		ContentChanges: []TextDocumentContentChangeEvent{{Text: newText}},
+	})
+	c.readMessage() // diagnostics after change
+}
+
+func (c *testClient) closeDocument(uri string) {
+	c.t.Helper()
+	c.sendNotification("textDocument/didClose", DidCloseTextDocumentParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	})
+	c.readMessage() // clear diagnostics notification
+}
+
 func (c *testClient) hover(id int, uri string, line, char int) json.RawMessage {
 	c.t.Helper()
 	c.sendRequest(id, "textDocument/hover", HoverParams{
@@ -231,6 +251,12 @@ func (c *testClient) signatureHelp(id int, uri string, line, char int) json.RawM
 		Position:     Position{Line: line, Character: char},
 	})
 	return c.readResponse()
+}
+
+func (c *testClient) shutdown(id int) {
+	c.t.Helper()
+	c.sendRequest(id, "shutdown", struct{}{})
+	c.readResponse()
 }
 
 func TestServer_Initialize(t *testing.T) {
