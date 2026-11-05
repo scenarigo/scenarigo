@@ -75,6 +75,10 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleDidClose(req)
 	case "textDocument/completion":
 		s.handleCompletion(req)
+	case "textDocument/hover":
+		s.handleHover(req)
+	case "textDocument/signatureHelp":
+		s.handleSignatureHelp(req)
 	default:
 		if req.ID != nil {
 			// Unknown request - return method not found.
@@ -106,6 +110,10 @@ func (s *Server) handleInitialize(req *Request) {
 			TextDocumentSync: 1, // Full sync.
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: append([]string{":", " ", "\n"}, templateTriggerCharacters...),
+			},
+			HoverProvider: true,
+			SignatureHelpProvider: &SignatureHelpOptions{
+				TriggerCharacters: []string{"<"},
 			},
 		},
 	}
@@ -204,6 +212,142 @@ var templateTriggerCharacters = []string{"{", "."}
 func isTemplateTrigger(c *CompletionContext) bool {
 	return c != nil && c.TriggerKind == CompletionTriggerKindTriggerCharacter &&
 		slices.Contains(templateTriggerCharacters, c.TriggerCharacter)
+}
+
+func (s *Server) handleHover(req *Request) {
+	var params HoverParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.sendResponse(req.ID, nil, invalidParams("hover", err))
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	hover := s.hover(doc, s.decodePosition(doc.Text, params.Position))
+	if hover == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+	s.sendResponse(req.ID, hover, nil)
+}
+
+func (s *Server) handleSignatureHelp(req *Request) {
+	var params SignatureHelpParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.sendResponse(req.ID, nil, invalidParams("signatureHelp", err))
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+
+	help := s.signatureHelp(doc, s.decodePosition(doc.Text, params.Position))
+	if help == nil {
+		s.sendResponse(req.ID, nil, nil)
+		return
+	}
+	s.sendResponse(req.ID, help, nil)
+}
+
+// templateSignature describes a scenarigo template function.
+type templateSignature struct {
+	name   string
+	label  string
+	doc    string
+	params []ParameterInformation
+}
+
+var templateSignatures = []templateSignature{
+	{
+		name: "assert.contains", label: "assert.contains <- expected",
+		doc:    "Assert that the value contains the expected substring or element",
+		params: []ParameterInformation{{Label: "expected", Documentation: "Substring or element to find"}},
+	},
+	{
+		name: "assert.notContains", label: "assert.notContains <- value",
+		doc:    "Assert that the value does not contain the given substring or element",
+		params: []ParameterInformation{{Label: "value", Documentation: "Substring or element that should not be present"}},
+	},
+	{
+		name: "assert.regexp", label: "assert.regexp <- pattern",
+		doc:    "Assert that the value matches the regular expression pattern",
+		params: []ParameterInformation{{Label: "pattern", Documentation: "Regular expression pattern"}},
+	},
+	{
+		name: "assert.greaterThan", label: "assert.greaterThan <- threshold",
+		doc:    "Assert that the value is greater than the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.greaterThanOrEqual", label: "assert.greaterThanOrEqual <- threshold",
+		doc:    "Assert that the value is greater than or equal to the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.lessThan", label: "assert.lessThan <- threshold",
+		doc:    "Assert that the value is less than the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.lessThanOrEqual", label: "assert.lessThanOrEqual <- threshold",
+		doc:    "Assert that the value is less than or equal to the threshold",
+		params: []ParameterInformation{{Label: "threshold", Documentation: "Threshold value"}},
+	},
+	{
+		name: "assert.length", label: "assert.length <- n",
+		doc:    "Assert that the collection has exactly n elements",
+		params: []ParameterInformation{{Label: "n", Documentation: "Expected length"}},
+	},
+	{
+		name: "assert.and", label: "assert.and <- [assertions...]",
+		doc:    "Combine multiple assertions with AND (all must pass)",
+		params: []ParameterInformation{{Label: "assertions", Documentation: "List of assertions"}},
+	},
+	{
+		name: "assert.or", label: "assert.or <- [assertions...]",
+		doc:    "Combine multiple assertions with OR (at least one must pass)",
+		params: []ParameterInformation{{Label: "assertions", Documentation: "List of assertions"}},
+	},
+}
+
+func (s *Server) signatureHelp(doc *document, pos Position) *SignatureHelp {
+	// Only active inside {{ }} template expressions, after "<-".
+	tmplExpr, ok := getTemplateContext(doc.Text, pos)
+	if !ok {
+		return nil
+	}
+
+	// Look for "<-" in the expression.
+	arrowIdx := strings.LastIndex(tmplExpr, "<-")
+	if arrowIdx < 0 {
+		return nil
+	}
+
+	funcName := strings.TrimSpace(tmplExpr[:arrowIdx])
+
+	for _, sig := range templateSignatures {
+		if sig.name == funcName {
+			return &SignatureHelp{
+				Signatures: []SignatureInformation{
+					{
+						Label:         sig.label,
+						Documentation: sig.doc,
+						Parameters:    sig.params,
+					},
+				},
+				ActiveSignature: 0,
+				ActiveParameter: 0,
+			}
+		}
+	}
+	return nil
 }
 
 // readConfigText returns the text of scenarigo.yaml and its URI.
@@ -1034,6 +1178,43 @@ func completeFilePathInDir(dir, partial string) []CompletionItem {
 		})
 	}
 	return items
+}
+
+func (s *Server) hover(doc *document, pos Position) *Hover {
+	sch := yamlschema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		return nil
+	}
+	if doc.Parsed == nil {
+		return nil
+	}
+
+	// Find node at position (convert from 0-based to 1-based).
+	nodePath := doc.Parsed.FindNodeAtPosition(pos.Line+1, runeColumnFromByte(lineAt(doc.Text, pos.Line), pos.Character)+1)
+	if nodePath == nil || len(nodePath.Keys) == 0 {
+		return nil
+	}
+
+	field := sch.FindField(nodePath.Keys)
+	if field == nil {
+		return nil
+	}
+
+	content := fmt.Sprintf("**%s** (`%s`)\n\n%s", field.Name, field.Type, field.Description)
+	if len(field.EnumValues) > 0 {
+		label := "Allowed values"
+		if field.OpenEnum {
+			label = "Built-in values"
+		}
+		content += fmt.Sprintf("\n\n%s: `%s`", label, strings.Join(field.EnumValues, "`, `"))
+	}
+
+	return &Hover{
+		Contents: MarkupContent{
+			Kind:  "markdown",
+			Value: content,
+		},
+	}
 }
 
 func (s *Server) publishDiagnostics(uri string) {

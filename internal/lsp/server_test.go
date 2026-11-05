@@ -178,6 +178,24 @@ func (c *testClient) initializeWith(id int, params InitializeParams) InitializeR
 	return result
 }
 
+func (c *testClient) hover(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/hover", HoverParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) signatureHelp(id int, uri string, line, char int) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/signatureHelp", SignatureHelpParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: char},
+	})
+	return c.readResponse()
+}
+
 func TestServer_Initialize(t *testing.T) {
 	client := newRunningTestClient(t)
 

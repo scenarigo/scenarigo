@@ -68,9 +68,15 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	PositionEncoding   string             `json:"positionEncoding,omitempty"`
-	TextDocumentSync   int                `json:"textDocumentSync"`
-	CompletionProvider *CompletionOptions `json:"completionProvider,omitempty"`
+	PositionEncoding      string                `json:"positionEncoding,omitempty"`
+	TextDocumentSync      int                   `json:"textDocumentSync"`
+	CompletionProvider    *CompletionOptions    `json:"completionProvider,omitempty"`
+	HoverProvider         bool                  `json:"hoverProvider,omitempty"`
+	SignatureHelpProvider *SignatureHelpOptions `json:"signatureHelpProvider,omitempty"`
+}
+
+type SignatureHelpOptions struct {
+	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -161,6 +167,20 @@ const (
 	CompletionItemKindFolder   = 19
 )
 
+type HoverParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
+type Hover struct {
+	Contents MarkupContent `json:"contents"`
+}
+
+type MarkupContent struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
+}
+
 // Diagnostic types.
 
 type PublishDiagnosticsParams struct {
@@ -189,4 +209,28 @@ const (
 type TextEdit struct {
 	Range   Range  `json:"range"`
 	NewText string `json:"newText"`
+}
+
+// SignatureHelp types.
+
+type SignatureHelpParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
+type SignatureHelp struct {
+	Signatures      []SignatureInformation `json:"signatures"`
+	ActiveSignature int                    `json:"activeSignature"`
+	ActiveParameter int                    `json:"activeParameter"`
+}
+
+type SignatureInformation struct {
+	Label         string                 `json:"label"`
+	Documentation string                 `json:"documentation,omitempty"`
+	Parameters    []ParameterInformation `json:"parameters,omitempty"`
+}
+
+type ParameterInformation struct {
+	Label         string `json:"label"`
+	Documentation string `json:"documentation,omitempty"`
 }

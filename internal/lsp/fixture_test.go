@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -28,6 +29,10 @@ type lspExpect struct {
 	DiagnosticMessages *messageMatcher `yaml:"diagnosticMessages"`
 	Diagnostics        []diagMatcher   `yaml:"diagnostics"`
 	DiagnosticCount    *int            `yaml:"diagnosticCount"`
+	HoverContains      []string        `yaml:"hoverContains"`
+	HoverIsNull        *bool           `yaml:"hoverIsNull"`
+	SignatureLabel     *string         `yaml:"signatureLabel"`
+	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
 }
 
 type labelMatcher struct {
@@ -121,6 +126,16 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 		runCompletionFixture(t, tc, docText, cursorLine, cursorChar)
 	case "diagnostics":
 		runDiagnosticsFixture(t, tc, docText)
+	case "hover":
+		if !hasCursor {
+			t.Fatal("hover test requires $0 cursor marker in document")
+		}
+		runHoverFixture(t, tc, docText, cursorLine, cursorChar)
+	case "signatureHelp":
+		if !hasCursor {
+			t.Fatal("signatureHelp test requires $0 cursor marker in document")
+		}
+		runSignatureHelpFixture(t, tc, docText, cursorLine, cursorChar)
 	default:
 		t.Fatalf("unknown operation: %s", tc.Operation)
 	}
@@ -243,6 +258,73 @@ func matchDiagnostic(t *testing.T, want diagMatcher, diags []Diagnostic) {
 	} {
 		if f.want != nil && *f.want != f.got {
 			t.Errorf("diagnostic %q: %s = %d, want %d (range %+v)", want.Message, f.name, f.got, *f.want, got.Range)
+		}
+	}
+}
+
+func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	client := newRunningTestClient(t)
+
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	client.openDocument(uri, docText)
+
+	resp := client.hover(2, uri, line, char)
+
+	if tc.Expect.HoverIsNull != nil && *tc.Expect.HoverIsNull {
+		if string(resp) != "null" {
+			t.Errorf("expected null hover, got: %s", resp)
+		}
+		return
+	}
+
+	if len(tc.Expect.HoverContains) > 0 {
+		var hoverResult Hover
+		if err := json.Unmarshal(resp, &hoverResult); err != nil {
+			t.Fatalf("unmarshal hover: %v", err)
+		}
+		for _, want := range tc.Expect.HoverContains {
+			if !strings.Contains(hoverResult.Contents.Value, want) {
+				t.Errorf("expected hover to contain %q, got: %s", want, hoverResult.Contents.Value)
+			}
+		}
+	}
+}
+
+func runSignatureHelpFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {
+	t.Helper()
+
+	client := newRunningTestClient(t)
+
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	client.openDocument(uri, docText)
+
+	resp := client.signatureHelp(2, uri, line, char)
+
+	if tc.Expect.SignatureIsNull != nil && *tc.Expect.SignatureIsNull {
+		if string(resp) != "null" {
+			t.Errorf("expected null signature help, got: %s", resp)
+		}
+		return
+	}
+
+	if tc.Expect.SignatureLabel != nil {
+		var help SignatureHelp
+		if err := json.Unmarshal(resp, &help); err != nil {
+			t.Fatalf("unmarshal signature help: %v", err)
+		}
+		if len(help.Signatures) == 0 {
+			t.Fatal("expected at least one signature")
+		}
+		if help.Signatures[0].Label != *tc.Expect.SignatureLabel {
+			t.Errorf("expected signature label %q, got %q", *tc.Expect.SignatureLabel, help.Signatures[0].Label)
 		}
 	}
 }
