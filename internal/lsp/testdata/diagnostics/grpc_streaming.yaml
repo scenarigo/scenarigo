@@ -3,6 +3,8 @@ name: "grpc streaming messages are known fields"
 document: |
   schemaVersion: scenario/v1
   title: streaming
+  vars:
+    client: client
   steps:
     - title: bidi
       protocol: grpc

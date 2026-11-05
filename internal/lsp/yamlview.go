@@ -120,6 +120,13 @@ func (v *yamlView) expand(node ast.Node, seen map[ast.Node]bool) []*ast.MappingV
 	return out
 }
 
+func (v *yamlView) sequence(node ast.Node) []ast.Node {
+	if s, ok := v.unwrap(node).(*ast.SequenceNode); ok {
+		return s.Values
+	}
+	return nil
+}
+
 // keyName returns the name of a mapping key. Key.String() keeps the quotes
 // of the key and the comment after it.
 func keyName(key ast.MapKeyNode) string {
@@ -138,6 +145,16 @@ func (v *yamlView) entryValue(entries []*ast.MappingValueNode, key string) ast.N
 	return nil
 }
 
+func (v *yamlView) entryValues(entries []*ast.MappingValueNode, keys []string) []ast.Node {
+	var out []ast.Node
+	for _, mv := range entries {
+		if mv.Key != nil && slices.Contains(keys, keyName(mv.Key)) && mv.Value != nil {
+			out = append(out, mv.Value)
+		}
+	}
+	return out
+}
+
 func (v *yamlView) stringValue(node ast.Node) string {
 	switch s := v.unwrap(node).(type) {
 	case *ast.StringNode:
@@ -150,6 +167,16 @@ func (v *yamlView) stringValue(node ast.Node) string {
 		}
 	}
 	return ""
+}
+
+func (v *yamlView) keys(node ast.Node) []string {
+	var out []string
+	for _, mv := range v.entries(node) {
+		if mv.Key != nil {
+			out = append(out, keyName(mv.Key))
+		}
+	}
+	return out
 }
 
 // isScenarigoDocument reports whether a file holds scenarigo documents. The

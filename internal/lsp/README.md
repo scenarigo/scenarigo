@@ -83,7 +83,7 @@ vim.api.nvim_create_autocmd("FileType", {
 | `textDocument/completion` | Supported | Key, value, and template completion |
 | `textDocument/hover` | Supported | Field description, type, and enum values |
 | `textDocument/definition` | Supported | Jump to included files |
-| `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors |
+| `textDocument/publishDiagnostics` | Supported | Unknown key warnings, enum validation, YAML syntax errors, template expression errors |
 | `textDocument/documentSymbol` | Supported | Hierarchical outline tree |
 | `textDocument/codeAction` | Supported | "Did you mean?" quick fix for unknown fields |
 | `textDocument/references` | Supported | Find references to variables |
@@ -114,6 +114,9 @@ vim.api.nvim_create_autocmd("FileType", {
 | YAML syntax errors | Supported | Reports parse failures; a text estimated to cost the parser too much memory or stack counts as one |
 | Type checking | Supported | Type mismatches (string/int/bool/object/array); template expressions are accepted |
 | Required field validation | Supported | Warns when required fields are missing (e.g., `url` in HTTP request) |
+| Template syntax errors | Supported | Parses `{{ }}` with scenarigo's own template parser and reports an error where `scenarigo run` would fail; only fields scenarigo evaluates are checked (`vars`, `secrets`, and the steps' `vars`, `secrets`, `if`, `request`, `expect`, `bind`, `ref`) |
+| Template names | Supported | Warns on unknown root names (other than `ctx`, `vars`, `secrets`, `plugins`, `steps`, `request`, `response`, `env`, `assert`, `$` and the built-in functions), unknown `assert.x`, `steps.<id>` without a step of that id in the scenario, and `plugins.<name>` not declared in the file or `scenarigo.yaml`; an undefined `vars.x`/`secrets.x` is only information because a plugin setup can add variables. Names inside `defined()` and on the left of `??` are not reported |
+| ytt templates | Supported | `ytt/v1` documents have their own schema, also next to scenario documents in one file; a null value followed by a `#@` annotation (`title: #@ params.title`) is filled in by ytt and not type-checked; a file with `#@` that does not parse is not reported, because it is YAML only after ytt evaluates it |
 
 ### Other Features
 
@@ -123,7 +126,6 @@ vim.api.nvim_create_autocmd("FileType", {
 | Definition | Supported | Jump from `include` to target file, `{{vars.x}}`/`{{secrets.x}}` to declaration (including bind, last-write-wins), `{{plugins.name}}` to plugin declaration, `{{plugins.name.Symbol}}` to Go source |
 | Document Symbol | Supported | Hierarchical symbol tree from YAML structure; steps use their `title` as the symbol name |
 | Code Action | Supported | Suggests quick fixes for unknown fields using Levenshtein distance (<= 3) |
-| ytt templates | Supported | `ytt/v1` documents have their own schema, also next to scenario documents in one file; a null value followed by a `#@` annotation (`title: #@ params.title`) is filled in by ytt and not type-checked; a file with `#@` that does not parse is not reported, because it is YAML only after ytt evaluates it |
 | Schema auto-detection | Supported | Detects config, scenario, or ytt input from the `schemaVersion` value |
 | Non-scenarigo YAML coexistence | Supported | Silent when `schemaVersion` key is absent; skips files with `# yaml-language-server:` modeline |
 | Broken YAML handling | Supported | Caches last successful AST + text-based analysis hybrid |
@@ -162,6 +164,7 @@ internal/lsp/
   transport.go          # JSON-RPC framing over stdio
   position.go           # Column unit conversions (bytes, runes, UTF-16)
   uri.go                # file URI <-> path conversions
+  template_diagnostics.go # Template expression diagnostics ({{ }})
   yamlview.go           # Alias and merge key resolution
   ytt.go                # ytt annotation handling
   yamlutil/
@@ -186,7 +189,7 @@ The LSP server has three tiers of tests, each with a different purpose and cost.
 
 #### Unit / Fuzz Tests
 
-Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateContext`, `FuzzCompleteTemplate`, `FuzzGetCursorContext`) detect panics and edge cases via random input.
+Pure function calls without starting the server. Fuzz tests (`FuzzGetTemplateContext`, `FuzzCompleteTemplate`, `FuzzTemplateDiagnostics`, `FuzzGetCursorContext`) detect panics and edge cases via random input. The drift tests in `template_diagnostics_test.go` compare the template names the server knows with `assert/template_helpers.go`, `context/extract.go` and the template package.
 
 #### Fixture Tests (data-driven)
 
@@ -212,7 +215,8 @@ internal/lsp/
   server_test.go          # testClient (helpers, typed methods), TestServer_Initialize
   fixture_test.go         # YAML fixture loader, parseCursorMarker, per-operation runners
   integration_test.go     # Multi-step session tests (TestEditorSession_*)
-  server_fuzz_test.go     # FuzzGetTemplateContext, FuzzCompleteTemplate
+  server_fuzz_test.go     # FuzzGetTemplateContext, FuzzCompleteTemplate, FuzzTemplateDiagnostics
+  template_diagnostics_test.go # Drift tests: assert helpers, context roots, built-in functions; diagnostics scale linearly
   yamlview_test.go        # Aliases, merge keys and key names
   position_test.go        # Column conversions between bytes, runes and UTF-16
   transport_test.go       # Message framing and protocol error responses
@@ -257,22 +261,23 @@ A diagnostics fixture can check the severity and range of a diagnostic, and crea
 
 ```yaml
 ---
-name: "unknown field"
+name: "unknown root name"
 files:
   scenarigo.yaml: |
     schemaVersion: config/v1
 document: |
   schemaVersion: scenario/v1
-  titel: a
+  vars:
+    a: '{{hots}}'
 operation: diagnostics
 expect:
   diagnostics:
-    - message: 'unknown field "titel"'
+    - message: 'unknown template name "hots"'
       severity: 2
-      startLine: 1
-      startChar: 0
-      endLine: 1
-      endChar: 5
+      startLine: 2
+      startChar: 8
+      endLine: 2
+      endChar: 12
 ```
 
 ### Running Tests

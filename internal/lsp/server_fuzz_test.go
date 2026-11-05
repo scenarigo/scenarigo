@@ -1,7 +1,10 @@
 package lsp
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/scenarigo/scenarigo/internal/lsp/yamlutil"
 )
 
 func FuzzGetTemplateContext(f *testing.F) {
@@ -34,5 +37,28 @@ func FuzzCompleteTemplate(f *testing.F) {
 	srv := &Server{}
 	f.Fuzz(func(t *testing.T, expr string) {
 		srv.completeTemplate(nil, expr)
+	})
+}
+
+func FuzzTemplateDiagnostics(f *testing.F) {
+	f.Add("schemaVersion: scenario/v1\nsteps:\n  - request:\n      url: '{{vars.host'\n")
+	f.Add("schemaVersion: scenario/v1\nsteps:\n  - if: '{{steps.x.result == \"passed\" && defined(vars.y) ?? z}}'\n")
+	f.Add("schemaVersion: scenario/v1\nsteps:\n  - request:\n      body: |\n        {{plugins.p.F(vars.a[0].b, f()[1])}}\n")
+	f.Add("schemaVersion: scenario/v1\nsteps:\n  - request:\n      body: >-\n        a\n        {{assert.x <-}}\n")
+	f.Add("schemaVersion: scenario/v1\nsteps:\n  - expect:\n      body:\n        '{{assert.and <-}}':\n        - '{{$ != \"\"}}'\n")
+	f.Add("schemaVersion: scenario/v1\nvars:\n  a: \"日本\\\"{{hots}}\\n{{\"\n")
+	f.Add("schemaVersion: config/v1\nvars:\n  a: '{{vars.'\n---\nschemaVersion: scenario/v1\nanchors:\n  x: &x '{{1 + }}'\n")
+	f.Add("schemaVersion: scenario/v1\nsteps:\n- vars: {a: '{{a}}', b: [\"{{b}\"]}\n")
+
+	f.Fuzz(func(t *testing.T, text string) {
+		doc := &document{Text: text, Parsed: yamlutil.Parse(text)}
+		lines := strings.Split(text, "\n")
+		for _, d := range (&Server{}).templateDiagnostics(doc) {
+			for _, p := range []Position{d.Range.Start, d.Range.End} {
+				if p.Line < 0 || p.Line >= len(lines) || p.Character < 0 || p.Character > len(lines[p.Line]) {
+					t.Fatalf("diagnostic %q at %+v is outside the document", d.Message, d.Range)
+				}
+			}
+		}
 	})
 }
