@@ -33,6 +33,7 @@ type lspExpect struct {
 	DefinitionURI      *uriMatcher     `yaml:"definitionUri"`
 	HoverContains      []string        `yaml:"hoverContains"`
 	HoverIsNull        *bool           `yaml:"hoverIsNull"`
+	SymbolNames        *labelMatcher   `yaml:"symbolNames"`
 	SignatureLabel     *string         `yaml:"signatureLabel"`
 	SignatureIsNull    *bool           `yaml:"signatureIsNull"`
 	ReferenceCount     *int            `yaml:"referenceCount"`
@@ -142,6 +143,8 @@ func runSingleFixture(t *testing.T, tc lspTestCase) {
 			t.Fatal("hover test requires $0 cursor marker in document")
 		}
 		runHoverFixture(t, tc, docText, cursorLine, cursorChar)
+	case "documentSymbol":
+		runDocumentSymbolFixture(t, tc, docText)
 	case "definition":
 		if !hasCursor {
 			t.Fatal("definition test requires $0 cursor marker in document")
@@ -281,6 +284,64 @@ func matchDiagnostic(t *testing.T, want diagMatcher, diags []Diagnostic) {
 			t.Errorf("diagnostic %q: %s = %d, want %d (range %+v)", want.Message, f.name, f.got, *f.want, got.Range)
 		}
 	}
+}
+
+func runDocumentSymbolFixture(t *testing.T, tc lspTestCase, docText string) {
+	t.Helper()
+
+	client := newRunningTestClient(t)
+
+	root, file := newWorkspace(t)
+	client.initialize(1, root)
+
+	uri := file("test.yaml")
+	client.openDocument(uri, docText)
+
+	resp := client.documentSymbol(2, uri)
+
+	if tc.Expect.SymbolNames != nil {
+		var symbols []DocumentSymbol
+		if err := json.Unmarshal(resp, &symbols); err != nil {
+			t.Fatalf("unmarshal symbols: %v", err)
+		}
+		names := collectSymbolNames(symbols)
+		for _, want := range tc.Expect.SymbolNames.Contains {
+			if !names[want] {
+				t.Errorf("expected symbol %q, got: %v", want, symbolNameList(symbols))
+			}
+		}
+		for _, exclude := range tc.Expect.SymbolNames.Excludes {
+			if names[exclude] {
+				t.Errorf("should not have symbol %q", exclude)
+			}
+		}
+	}
+}
+
+func collectSymbolNames(symbols []DocumentSymbol) map[string]bool {
+	names := make(map[string]bool)
+	var walk func([]DocumentSymbol)
+	walk = func(syms []DocumentSymbol) {
+		for _, s := range syms {
+			names[s.Name] = true
+			walk(s.Children)
+		}
+	}
+	walk(symbols)
+	return names
+}
+
+func symbolNameList(symbols []DocumentSymbol) []string {
+	var names []string
+	var walk func([]DocumentSymbol)
+	walk = func(syms []DocumentSymbol) {
+		for _, s := range syms {
+			names = append(names, s.Name)
+			walk(s.Children)
+		}
+	}
+	walk(symbols)
+	return names
 }
 
 func runHoverFixture(t *testing.T, tc lspTestCase, docText string, line, char int) {

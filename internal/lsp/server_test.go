@@ -206,6 +206,24 @@ func (c *testClient) references(id int, uri string, line, char int) json.RawMess
 	return c.readResponse()
 }
 
+func (c *testClient) documentSymbol(id int, uri string) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/documentSymbol", DocumentSymbolParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	})
+	return c.readResponse()
+}
+
+func (c *testClient) codeAction(id int, uri string, r Range, diags []Diagnostic) json.RawMessage {
+	c.t.Helper()
+	c.sendRequest(id, "textDocument/codeAction", CodeActionParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Range:        r,
+		Context:      CodeActionContext{Diagnostics: diags},
+	})
+	return c.readResponse()
+}
+
 func (c *testClient) signatureHelp(id int, uri string, line, char int) json.RawMessage {
 	c.t.Helper()
 	c.sendRequest(id, "textDocument/signatureHelp", SignatureHelpParams{

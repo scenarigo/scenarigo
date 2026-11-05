@@ -157,6 +157,15 @@ func (s *Server) encodeLocation(loc Location) Location {
 	return loc
 }
 
+// encodeSymbols converts the ranges of a symbol tree into the client's encoding.
+func (s *Server) encodeSymbols(text string, syms []DocumentSymbol) {
+	for i := range syms {
+		syms[i].Range = s.encodeRange(text, syms[i].Range)
+		syms[i].SelectionRange = s.encodeRange(text, syms[i].SelectionRange)
+		s.encodeSymbols(text, syms[i].Children)
+	}
+}
+
 // textOf returns the text of an open document, or of the file behind the
 // URI when it is not open, or "" when neither is available.
 func (s *Server) textOf(uri string) string {

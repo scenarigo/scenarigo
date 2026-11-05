@@ -79,6 +79,10 @@ func (s *Server) handleMessage(req *Request) {
 		s.handleHover(req)
 	case "textDocument/definition":
 		s.handleDefinition(req)
+	case "textDocument/documentSymbol":
+		s.handleDocumentSymbol(req)
+	case "textDocument/codeAction":
+		s.handleCodeAction(req)
 	case "textDocument/signatureHelp":
 		s.handleSignatureHelp(req)
 	case "textDocument/references":
@@ -115,9 +119,11 @@ func (s *Server) handleInitialize(req *Request) {
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: append([]string{":", " ", "\n"}, templateTriggerCharacters...),
 			},
-			HoverProvider:      true,
-			DefinitionProvider: true,
-			ReferencesProvider: true,
+			HoverProvider:          true,
+			DefinitionProvider:     true,
+			DocumentSymbolProvider: true,
+			CodeActionProvider:     true,
+			ReferencesProvider:     true,
 			SignatureHelpProvider: &SignatureHelpOptions{
 				TriggerCharacters: []string{"<"},
 			},
@@ -264,6 +270,101 @@ func (s *Server) handleDefinition(req *Request) {
 	s.sendResponse(req.ID, loc, nil)
 }
 
+func (s *Server) handleDocumentSymbol(req *Request) {
+	var params DocumentSymbolParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.sendResponse(req.ID, nil, invalidParams("documentSymbol", err))
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil || doc.Parsed == nil || doc.Parsed.File == nil {
+		s.sendResponse(req.ID, []DocumentSymbol{}, nil)
+		return
+	}
+
+	sch := yamlschema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		s.sendResponse(req.ID, []DocumentSymbol{}, nil)
+		return
+	}
+
+	symbols := s.documentSymbols(doc)
+	s.encodeSymbols(doc.Text, symbols)
+	s.sendResponse(req.ID, symbols, nil)
+}
+
+func (s *Server) handleCodeAction(req *Request) {
+	var params CodeActionParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.sendResponse(req.ID, nil, invalidParams("codeAction", err))
+		return
+	}
+
+	doc := s.docs.Get(params.TextDocument.URI)
+	if doc == nil || doc.Parsed == nil {
+		s.sendResponse(req.ID, []CodeAction{}, nil)
+		return
+	}
+
+	sch := yamlschema.DetectSchemaType(doc.Text)
+	if sch == nil {
+		s.sendResponse(req.ID, []CodeAction{}, nil)
+		return
+	}
+
+	var actions []CodeAction
+
+	for _, diag := range params.Context.Diagnostics {
+		if !strings.HasPrefix(diag.Message, "unknown field ") {
+			continue
+		}
+
+		// Extract the unknown field name from the diagnostic message.
+		unknownKey := strings.TrimPrefix(diag.Message, `unknown field "`)
+		unknownKey = strings.TrimSuffix(unknownKey, `"`)
+
+		// Get valid fields at this position using cursor context.
+		start := s.decodePosition(doc.Text, diag.Range.Start)
+		ctx := doc.Parsed.GetCursorContext(start.Line, start.Character)
+		if ctx == nil {
+			continue
+		}
+
+		var validFields []*yamlschema.FieldInfo
+		if ctx.Type == yamlutil.CursorContextKey || ctx.Type == yamlutil.CursorContextUnknown {
+			validFields = sch.ChildFields(ctx.Path, ctx.SiblingValues)
+		}
+		if validFields == nil {
+			validFields = sch.Fields
+		}
+
+		// Find similar field names.
+		for _, f := range validFields {
+			if levenshtein(unknownKey, f.Name) <= 3 {
+				action := CodeAction{
+					Title:       fmt.Sprintf("Did you mean %q?", f.Name),
+					Kind:        CodeActionKindQuickFix,
+					Diagnostics: []Diagnostic{diag},
+					Edit: &WorkspaceEdit{
+						Changes: map[string][]TextEdit{
+							params.TextDocument.URI: {
+								{
+									Range:   diag.Range,
+									NewText: f.Name,
+								},
+							},
+						},
+					},
+				}
+				actions = append(actions, action)
+			}
+		}
+	}
+
+	s.sendResponse(req.ID, actions, nil)
+}
+
 func (s *Server) handleSignatureHelp(req *Request) {
 	var params SignatureHelpParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -377,6 +478,161 @@ func (s *Server) signatureHelp(doc *document, pos Position) *SignatureHelp {
 		}
 	}
 	return nil
+}
+
+// levenshtein computes the edit distance between two strings.
+func levenshtein(a, b string) int {
+	la, lb := len(a), len(b)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
+}
+
+func (s *Server) documentSymbols(doc *document) []DocumentSymbol {
+	if doc.Parsed == nil || doc.Parsed.File == nil {
+		return nil
+	}
+	var symbols []DocumentSymbol
+	for _, d := range doc.Parsed.File.Docs {
+		if d.Body == nil {
+			continue
+		}
+		symbols = append(symbols, s.nodeToSymbols(doc.Text, d.Body)...)
+	}
+	return symbols
+}
+
+func (s *Server) nodeToSymbols(text string, node ast.Node) []DocumentSymbol {
+	if node == nil {
+		return nil
+	}
+
+	switch n := node.(type) {
+	case *ast.MappingNode:
+		var syms []DocumentSymbol
+		for _, mv := range n.Values {
+			syms = append(syms, s.mappingValueToSymbol(text, mv))
+		}
+		return syms
+	case *ast.MappingValueNode:
+		sym := s.mappingValueToSymbol(text, n)
+		return []DocumentSymbol{sym}
+	default:
+		return nil
+	}
+}
+
+func (s *Server) mappingValueToSymbol(text string, mv *ast.MappingValueNode) DocumentSymbol {
+	keyName := mv.Key.String()
+	tok := mv.Key.GetToken()
+
+	var selRange Range
+	if tok != nil {
+		selRange = tokenRange(text, tok.Position.Line, tok.Position.Column, len(keyName))
+	}
+
+	sym := DocumentSymbol{
+		Name:           keyName,
+		Kind:           symbolKindForNode(mv.Value),
+		Range:          nodeRange(text, mv),
+		SelectionRange: selRange,
+	}
+
+	// Add detail for simple values.
+	if mv.Value != nil {
+		switch v := mv.Value.(type) {
+		case *ast.StringNode:
+			sym.Detail = v.Value
+		case *ast.IntegerNode:
+			sym.Detail = v.Token.Value
+		case *ast.BoolNode:
+			sym.Detail = v.Token.Value
+		}
+	}
+
+	// Recurse into children.
+	if mv.Value != nil {
+		switch v := mv.Value.(type) {
+		case *ast.MappingNode:
+			for _, child := range v.Values {
+				sym.Children = append(sym.Children, s.mappingValueToSymbol(text, child))
+			}
+		case *ast.SequenceNode:
+			for i, item := range v.Values {
+				if m, ok := item.(*ast.MappingNode); ok {
+					// Sequence item with mapping: create a symbol for the item.
+					itemSym := DocumentSymbol{
+						Name:           fmt.Sprintf("[%d]", i),
+						Kind:           SymbolKindObject,
+						Range:          nodeRange(text, m),
+						SelectionRange: nodeRange(text, m),
+					}
+					// Use "title" as the name if available.
+					for _, child := range m.Values {
+						if child.Key.String() == "title" {
+							if sv, ok := child.Value.(*ast.StringNode); ok {
+								itemSym.Name = sv.Value
+							}
+						}
+						itemSym.Children = append(itemSym.Children, s.mappingValueToSymbol(text, child))
+					}
+					sym.Children = append(sym.Children, itemSym)
+				}
+			}
+		}
+	}
+
+	return sym
+}
+
+func symbolKindForNode(node ast.Node) int {
+	if node == nil {
+		return SymbolKindProperty
+	}
+	switch node.(type) {
+	case *ast.MappingNode:
+		return SymbolKindObject
+	case *ast.SequenceNode:
+		return SymbolKindArray
+	case *ast.StringNode:
+		return SymbolKindString
+	case *ast.IntegerNode:
+		return SymbolKindNumber
+	case *ast.BoolNode:
+		return SymbolKindBoolean
+	default:
+		return SymbolKindProperty
+	}
+}
+
+func nodeRange(text string, node ast.Node) Range {
+	tok := node.GetToken()
+	if tok == nil {
+		return Range{}
+	}
+	// Approximate end position from the token.
+	return tokenRange(text, tok.Position.Line, tok.Position.Column, len(tok.Value))
 }
 
 func (s *Server) definition(doc *document, params DefinitionParams) *Location {
