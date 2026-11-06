@@ -4,7 +4,7 @@ go 1.26.0
 
 toolchain go1.27.3
 
-require github.com/scenarigo/scenarigo v0.28.1
+require github.com/scenarigo/scenarigo v0.29.0
 
 require (
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
