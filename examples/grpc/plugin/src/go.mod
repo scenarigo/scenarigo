@@ -2,10 +2,10 @@ module github.com/scenarigo/scenarigo/examples/grpc/plugin/src
 
 go 1.26.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
-	github.com/scenarigo/scenarigo v0.28.1
+	github.com/scenarigo/scenarigo v0.29.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 )

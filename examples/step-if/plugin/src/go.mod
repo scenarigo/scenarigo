@@ -2,11 +2,11 @@ module github.com/scenarigo/scenarigo/examples/step-if/plugin
 
 go 1.26.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/scenarigo/scenarigo v0.28.1
+	github.com/scenarigo/scenarigo v0.29.0
 )
 
 require (
